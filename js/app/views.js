@@ -22,7 +22,7 @@
 // (settings-ui / state-machine read it) so it is not imported here.
 import { showAudioPlayer, hideAudioBar } from "./audio-player.js";
 // Copy-attribution translation label shared with the lectionary view and the verse-select bar (verse-spec.js).
-import { citationSource, halfVerseMark } from "./verse-spec.js";
+import { citationSource, halfVerseMark, verseInstanceKeys } from "./verse-spec.js";
 
 const { _$, el, clearNode, chUnit, hangingQuoteClass, emptyState } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
@@ -819,8 +819,8 @@ function renderChapterList(book, books) {
 }
 
 // ── BEGIN VERSE_NUMBER ──
-// Exercised by tests/unit/views.test.js. Pure: derives the displayed
-// verse label/number from a verse object — no DOM, no global state.
+// Exercised by tests/unit/views.test.js. Pure: derives the displayed and the
+// spoken verse label/number from a verse object — no DOM, no global state.
 
 // `mark` writes a data half verse's part letter — as is for `data-vref` (「8a」, the letter of the address and stored
 // grammar), the printed letter for the verse number on screen (「8ㄱ」 — formatVerseNumber).
@@ -843,6 +843,28 @@ function formatVerseNumber(v) {
   let dataV = v.chapter_ref ? `${v.chapter_ref}:${label}` : label;
   if (v.alt_ref != null) dataV += `(${v.alt_ref})`;
   return dataV;
+}
+
+// What a screen reader says when a verse is tapped (renderChapter): the verse that formatVerseNumber shows, in words.
+// The number on screen is aria-hidden, so this is the only way such a user hears it (docs/topics/routing.md 「확정
+// 사실」). Built like formatVerseNumber so the two name the same verse; the number alone named another verse of the
+// same chapter (known-issues §17.1).
+// 사용자 결정 2026-11-07: 쌍점과 괄호를 뜻으로 읽는다. 옮겨 실린 절은 「41장 6절」, 그리스어 추가 본문은 「그리스어 추가
+// 본문 24절」, 다니 3장의 히브리 본문은 「24절, 그리스어 번호 91」, 에스델 추가 본문은 「17절 추가 본문 1」이다. 그 밖의
+// 절은 화면의 번호에 「절」을 붙인다. 줄 글자 없이 「3절」이고(「3a절」이 아니다), 데이터의 반쪽 절은 화면의 번호처럼
+// 「8ㄱ절」이다(사용자 결정 2026-10-22).
+// `alt_ref` is the Greek (LXX) number in both books that have it (data ADR-003, pattern 4), but it marks two kinds of
+// verse: 다니 3:24-33 are Hebrew verses whose Greek numbers are 91-100, while an Esther `alt_ref` verse is a Greek
+// addition set at the Hebrew verse whose number it carries (4:17 and 4:17(1)-(30) are 31 verses). The data writes both
+// as [N_M] and has no field that tells them apart, so the book does. Any other book reads as Daniel does, the meaning
+// data ADR-003 gives `alt_ref`.
+/** @param {BibleVerse} v @param {string} bookId @returns {string} */
+function spokenVerseNumber(v, bookId) {
+  const label = formatVerseLabel(v, halfVerseMark);
+  if (v.lxx_only) return `그리스어 추가 본문 ${label}절`;
+  const verse = v.chapter_ref ? `${v.chapter_ref}장 ${label}절` : `${label}절`;
+  if (v.alt_ref == null) return verse;
+  return bookId === "esth" ? `${verse} 추가 본문 ${v.alt_ref}` : `${verse}, 그리스어 번호 ${v.alt_ref}`;
 }
 // The element a verse deep-link should scroll to. The exact id wins; otherwise
 // the first rendered span whose number matches. The fallback is what makes
@@ -1477,6 +1499,10 @@ function renderChapter(data, book, opts) {
 
   // Announce verse number on click/tap for screen reader users,
   // or toggle verse selection when in select mode.
+  // The words come from the tapped line's verse (spokenVerseNumber), found by the instance key that starts its
+  // `data-vkey` — the same keys appendVerses drew the lines with. `data-vref` holds the number alone, which two verses
+  // of one chapter can share (이사 40장의 41:6과 40:6, known-issues §17.1).
+  const verseOfKey = new Map(verseInstanceKeys(data.verses).map((key, i) => [key, data.verses[i]]));
   article.addEventListener("click", (e) => {
     const t = e.target;
     if (!(t instanceof Element)) return;
@@ -1486,9 +1512,9 @@ function renderChapter(data, book, opts) {
       e.stopPropagation(); // selection is handled by pointer events
       return;
     }
-    // 줄 글자 없이 절 번호로 — 「3a절」이 아니라 「3절」, 데이터의 반쪽 절은 화면의 번호처럼 「8ㄱ절」(사용자 결정 2026-10-22)
-    const half = /^\d+([a-p])/.exec(vs.getAttribute("data-vkey") ?? "");
-    announce(`${(vs.getAttribute("data-vref") ?? "").replace(/[a-p]+$/, "")}${half ? halfVerseMark(half[1]) : ""}절`);
+    const vkey = vs.getAttribute("data-vkey") ?? "";
+    const verse = verseOfKey.get(vkey.slice(0, vkey.indexOf("/")));
+    if (verse) announce(spokenVerseNumber(verse, book.id));
   });
 
   // ── Verse selection gestures ──

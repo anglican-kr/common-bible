@@ -26,6 +26,8 @@
 //     inclusive range, either direction, verse-unit boundary expansion).
 //   - VERSE_NUMBER block — formatVerseNumber. Verse-number display string:
 //     plain / dual [N_M] / LXX-only [_N] / cross-ref / range / half verse (「2ㄱ」).
+//     spokenVerseNumber — what a tap on a verse announces, the same verse in words: 「41장 6절」 /
+//     「그리스어 추가 본문 24절」 / 「24절, 그리스어 번호 91」 / 「17절 추가 본문 1」, otherwise 「8ㄱ절」.
 //   - PIECE_SPACE block — pieceTrailingSpace. The space drawn after a verse piece, and the
 //     pieces that get none (before a cite chip, punctuation only, ends with an opening quote).
 //   - FAILURE_TEXT block — bibleFailureText. The copy of the Bible screens' full-screen failure
@@ -320,7 +322,7 @@ function loadVerseNumber() {
   vm.runInContext(extractBlock("VERSE_NUMBER"), ctx, {
     filename: "views-verse-number.js",
   });
-  return { formatVerseNumber: ctx.formatVerseNumber };
+  return { formatVerseNumber: ctx.formatVerseNumber, spokenVerseNumber: ctx.spokenVerseNumber };
 }
 
 // ── PIECE_SPACE loader ───────────────────────────────────────────────────────
@@ -1266,6 +1268,46 @@ test("formatVerseNumber: 데이터의 반쪽 절은 인쇄본대로 「2ㄱ」 �
   const { formatVerseNumber } = loadVerseNumber();
   assert.equal(formatVerseNumber({ number: 2, part: "a" }), "2ㄱ");
   assert.equal(formatVerseNumber({ number: 2, part: "b" }), "2ㄴ");
+});
+
+// 절을 누르면 읽어 주는 말(known-issues §17.1). 종전에는 `data-vref`의 번호만 읽어, 아래 네 경우가 같은 장의 다른 절과
+// 같게 들렸다(「6절」, 「24절」, 「24절」, 「17절」). 사용자 결정 2026-11-07: 쌍점과 괄호를 뜻으로 읽는다.
+test("spokenVerseNumber: 화면의 「41:6」 「(24)」 「24(91)」 「17(1)」을 뜻으로 읽는다(사용자 결정 2026-11-07)", () => {
+  const { spokenVerseNumber } = loadVerseNumber();
+  // 이사 40장에 옮겨 실린 41:6과 이 장의 6절
+  assert.equal(spokenVerseNumber({ number: 6, chapter_ref: 41 }, "isa"), "41장 6절");
+  assert.equal(spokenVerseNumber({ number: 6 }, "isa"), "6절");
+  // 다니 3장의 그리스어 추가 본문 (24)와 히브리 본문 24(91)
+  assert.equal(spokenVerseNumber({ number: 24, lxx_only: true }, "dan"), "그리스어 추가 본문 24절");
+  assert.equal(spokenVerseNumber({ number: 24, alt_ref: 91 }, "dan"), "24절, 그리스어 번호 91");
+  // 에스 4장의 추가 본문 17(1)과 히브리 본문 17절
+  assert.equal(spokenVerseNumber({ number: 17, alt_ref: 1 }, "esth"), "17절 추가 본문 1");
+  assert.equal(spokenVerseNumber({ number: 17 }, "esth"), "17절");
+});
+
+test("spokenVerseNumber: 같은 `alt_ref`가 에스델에서만 추가 본문이고, 다른 책은 ADR-003의 뜻대로 그리스어 번호로 읽는다", () => {
+  const { spokenVerseNumber } = loadVerseNumber();
+  assert.equal(spokenVerseNumber({ number: 8, alt_ref: 1 }, "esth"), "8절 추가 본문 1");
+  assert.equal(spokenVerseNumber({ number: 33, alt_ref: 100 }, "dan"), "33절, 그리스어 번호 100");
+  assert.equal(spokenVerseNumber({ number: 3, alt_ref: 4 }, "tob"), "3절, 그리스어 번호 4");
+});
+
+test("spokenVerseNumber: 그 밖의 절은 지금처럼 화면의 번호에 「절」을 붙인다(반쪽 절 「8ㄱ절」, 병합 절 「7-8절」, ¶ 구절은 물려받은 번호)", () => {
+  const { spokenVerseNumber } = loadVerseNumber();
+  assert.equal(spokenVerseNumber({ number: 16 }, "john"), "16절");
+  assert.equal(spokenVerseNumber({ number: 8, part: "a" }, "isa"), "8ㄱ절");
+  assert.equal(spokenVerseNumber({ number: 8, part: "b" }, "isa"), "8ㄴ절");
+  assert.equal(spokenVerseNumber({ number: 7, range_end: 8 }, "nah"), "7-8절");
+  assert.equal(spokenVerseNumber({ number: 5, versicle: true }, "lps"), "5절");
+});
+
+test("spokenVerseNumber: 표지가 겹치면 화면의 번호와 같은 차례로 이어 읽는다(데이터에는 아직 없다, 2026-11-07 전수)", () => {
+  const { spokenVerseNumber } = loadVerseNumber();
+  assert.equal(spokenVerseNumber({ number: 6, part: "a", chapter_ref: 41 }, "isa"), "41장 6ㄱ절");
+  assert.equal(spokenVerseNumber({ number: 6, range_end: 7, chapter_ref: 41 }, "isa"), "41장 6-7절");
+  assert.equal(spokenVerseNumber({ number: 24, part: "b", lxx_only: true }, "dan"), "그리스어 추가 본문 24ㄴ절");
+  assert.equal(spokenVerseNumber({ number: 17, part: "a", alt_ref: 2 }, "esth"), "17ㄱ절 추가 본문 2");
+  assert.equal(spokenVerseNumber({ number: 9, chapter_ref: 2, alt_ref: 30 }, "dan"), "2장 9절, 그리스어 번호 30");
 });
 
 // ── PIECE_SPACE ──────────────────────────────────────────────────────────────
