@@ -28,6 +28,7 @@
 //     plain / dual [N_M] / LXX-only [_N] / cross-ref / range / half verse (「2ㄱ」).
 //     spokenVerseNumber — what a tap on a verse announces, the same verse in words: 「41장 6절」 /
 //     「그리스어 추가 본문 24절」 / 「24절, 그리스어 번호 91」 / 「17절 추가 본문 1」, otherwise 「8ㄱ절」.
+//     dualNumberingNote — the note above a chapter with bracketed numbers; Esther's names the addition.
 //   - PIECE_SPACE block — pieceTrailingSpace. The space drawn after a verse piece, and the
 //     pieces that get none (before a cite chip, punctuation only, ends with an opening quote).
 //   - FAILURE_TEXT block — bibleFailureText. The copy of the Bible screens' full-screen failure
@@ -322,7 +323,11 @@ function loadVerseNumber() {
   vm.runInContext(extractBlock("VERSE_NUMBER"), ctx, {
     filename: "views-verse-number.js",
   });
-  return { formatVerseNumber: ctx.formatVerseNumber, spokenVerseNumber: ctx.spokenVerseNumber };
+  return {
+    formatVerseNumber: ctx.formatVerseNumber,
+    spokenVerseNumber: ctx.spokenVerseNumber,
+    dualNumberingNote: ctx.dualNumberingNote,
+  };
 }
 
 // ── PIECE_SPACE loader ───────────────────────────────────────────────────────
@@ -1290,6 +1295,16 @@ test("spokenVerseNumber: 같은 `alt_ref`가 에스델에서만 추가 본문이
   assert.equal(spokenVerseNumber({ number: 8, alt_ref: 1 }, "esth"), "8절 추가 본문 1");
   assert.equal(spokenVerseNumber({ number: 33, alt_ref: 100 }, "dan"), "33절, 그리스어 번호 100");
   assert.equal(spokenVerseNumber({ number: 3, alt_ref: 4 }, "tob"), "3절, 그리스어 번호 4");
+});
+
+test("dualNumberingNote: 에스델의 안내만 괄호가 붙은 절을 추가 본문이라고 밝힌다(사용자 결정 2026-11-07, known-issues §49)", () => {
+  const { dualNumberingNote, spokenVerseNumber } = loadVerseNumber();
+  assert.equal(dualNumberingNote("esth"), "※ 괄호 안 번호는 70인역 그리스어 사본에 있는 추가 본문의 절 번호입니다.");
+  assert.equal(dualNumberingNote("dan"), "※ 괄호 안 번호는 70인역 그리스어 사본의 절 번호입니다.");
+  // 절을 누를 때의 안내와 같은 낱말을 쓴다. 다니엘은 추가 본문이 아니라 같은 절의 그리스어 번호다.
+  assert.ok(dualNumberingNote("esth").includes("추가 본문"));
+  assert.ok(spokenVerseNumber({ number: 17, alt_ref: 1 }, "esth").includes("추가 본문"));
+  assert.ok(!dualNumberingNote("dan").includes("추가 본문"));
 });
 
 test("spokenVerseNumber: 그 밖의 절은 지금처럼 화면의 번호에 「절」을 붙인다(반쪽 절 「8ㄱ절」, 병합 절 「7-8절」, ¶ 구절은 물려받은 번호)", () => {
