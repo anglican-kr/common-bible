@@ -8,7 +8,9 @@ Covers:
   - in: operator restricts to a book / supports OR / tolerates whitespace
 """
 
-from .conftest import wait_app_ready
+import pytest
+
+from .conftest import emulate_status_bar, wait_app_ready
 
 BASE_URL = "http://localhost:8080"
 SEARCH_URL = f"{BASE_URL}/search?q=%EC%B0%BD%EC%84%B8%201%3A1"
@@ -23,6 +25,25 @@ def test_keyword_search_shows_results(page, base_url):
 
     page.wait_for_selector(".search-count, .search-empty", timeout=8000)
     assert page.locator(".search-result-item").count() > 0
+
+
+@pytest.mark.only_browser("chromium")
+def test_page_size_counts_the_status_bar_in_the_top_bar(mobile_context):
+    """한 쪽의 결과 수는 상단 바 아래에 남는 화면 높이로 어림한다(결과 하나에 80px). 상단 바의 아래쪽은 잰다(helpers.js `barBottom`).
+    Chromium에서 상태 표시줄 높이를 62px로 정해, 아이폰 홈 화면 앱이 상태 표시줄 밑까지 그리는 상태를 시뮬레이션한다. 헤더 요소(`#app-header`)만 재던
+    때는 상단 바 묶음(`#sticky-group`)의 위 여백인 상태 표시줄 높이를 빼지 않아, 한 쪽에 결과가 하나 더 들어갔다(844px 화면에서 8건이 아니라 9건)."""
+    page = mobile_context.new_page()
+    emulate_status_bar(page, 62)
+    page.goto(f"{BASE_URL}/search?q=%EC%82%AC%EB%9E%91")   # 사랑 — 결과가 여러 쪽이다
+    page.wait_for_selector(".search-pagination", timeout=20_000)
+    state = page.evaluate("""() => ({
+        items: document.querySelectorAll('.search-result-item').length,
+        bar: document.getElementById('sticky-group').getBoundingClientRect().bottom,
+        header: document.getElementById('app-header').getBoundingClientRect().height,
+        height: window.innerHeight,
+    })""")
+    assert state["bar"] > state["header"] + 60, state   # 상태 표시줄 높이가 상단 바에 들어 있다
+    assert state["items"] == max(5, (state["height"] - state["bar"] - 40) // 80), state
 
 
 def test_verse_reference_navigates_to_chapter(page, base_url):

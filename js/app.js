@@ -11,7 +11,7 @@
 // DOMContentLoaded bootstrap that kicks off route() and the deferred
 // init chain. Everything else lives in js/app/*.js or js/sync/*.js.
 
-const { _$, el } = window.appHelpers;
+const { _$, el, publishBarHeight } = window.appHelpers;
 const {
   loadFontSize, loadTheme, loadColorScheme, loadCiteShow,
 } = window.appStorage;
@@ -310,6 +310,10 @@ window.addEventListener("DOMContentLoaded", () => {
   if (location.hash.startsWith("#/")) {
     history.replaceState(null, "", location.hash.slice(1));
   }
+
+  // The top bar's height in CSS (`--top-bar-h`) before the first view paints — the calendar list leaves the bar
+  // out of its scroll anchoring with it, and a list opened first gets its web fonts late (helpers.js).
+  publishBarHeight();
 
   // 1. Prioritize UI rendering — once the stored bookmarks' pre-#205 verse ranges are in today's form, so the first
   //    view already reads them (coding-pitfalls §38). Only a start with something to move waits (for the book list).

@@ -920,6 +920,15 @@ export interface AppHelpers {
    * 포커스가 body 일 때만 — 다시 그리는 사이 독자가 다른 데(머리 검색 · 팝오버 · 탭 바)로 옮겼으면 아무것도 하지 않는다.
    */
   restoreFocusSpot: (spot: FocusSpot | null, root: Element | null) => HTMLElement | null;
+  /** 상단 바(`#sticky-group`)의 아래쪽 — 화면 위에서 잰 px. 그 위는 상단 바가 가린다. 호출할 때마다 잰다. */
+  barBottom: () => number;
+  /**
+   * 그 요소의 위쪽이 상단 바 바로 아래에 오게 스크롤한다. 데스크톱은 윗줄이 접힌 뒤 한 번 더 맞추고, 그사이 독자가 스크롤을 시작하면 맞추지 않는다.
+   * 캘린더 목록의 주소 줄과 이어 읽기의 절이 쓴다.
+   */
+  scrollUnderBar: (target: Element) => void;
+  /** 상단 바의 높이를 `:root`의 `--top-bar-h`에 넣고, 높이가 바뀔 때마다 고친다(CSS용). app.js가 시작할 때 한 번 호출한다. */
+  publishBarHeight: () => void;
 }
 
 /**

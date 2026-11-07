@@ -114,7 +114,7 @@ window.tabHistory = (() => {
   // route()가 새 경로 렌더를 마친 직후 호출(중복/리다이렉트는 route의 시퀀스 검사가
   // 거른다) — 새 경로를 해당 탭의 마지막 경로로 기록하고, **복원이 요청된 경우에만**
   // 기억된 스크롤을 복원한다. 일반 링크 이동(PUSH)에선 복원하지 않아 뷰가 정한
-  // 스크롤(renderChapter 의 최상단/하이라이트·resume scrollIntoView)을 보존한다.
+  // 스크롤(renderChapter 가 정한 맨 위, 하이라이트의 scrollIntoView, resume 의 scrollUnderBar)을 보존한다.
   function onRouteEnd() {
     const path = fullPath();
     currentPath = path;

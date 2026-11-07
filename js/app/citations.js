@@ -69,7 +69,7 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
       .join(";");
   }
 
-  const { el, clearNode, hangingQuoteClass, headerIcon, HEADER_ICON_PATHS } = window.appHelpers;
+  const { el, clearNode, hangingQuoteClass, headerIcon, HEADER_ICON_PATHS, barBottom } = window.appHelpers;
   const { createOverlay, attachSheetDrag, attachSheetResize } = window.appOverlay;
 
   /**
@@ -365,8 +365,7 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const GAP = 8;
-    const barBottom = document.getElementById("sticky-group")?.getBoundingClientRect().bottom ?? 0;
-    const minTop = Math.max(0, barBottom) + GAP;
+    const minTop = Math.max(0, barBottom()) + GAP;   // helpers.js — measured on every call
     let top = aRect.top - ttRect.height - GAP;
     let placedAbove = true;
     if (top < minTop) {

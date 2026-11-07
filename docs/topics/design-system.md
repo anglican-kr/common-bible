@@ -6,9 +6,14 @@
 
 ## 지금 동작
 
+- **상단 바 높이는 숫자로 적지 않고 잰다** (2026-11-07, `DESIGN.md` §4 「레이아웃」).
+  - 상단 바 묶음(`#sticky-group`)의 높이는 글자 크기(16px에서 약 57px, 24px에서 약 70px), 상태 표시줄 높이, 데스크톱에서 스크롤하면 접히는 윗줄, 이어 읽기 배너와 구분 탭에 따라 바뀐다.
+  - 스크립트는 상단 바의 아래쪽을 쓸 때마다 잰다(`helpers.js`의 `barBottom`). 읽던 절 저장(`routing.js`), 검색 결과 한 쪽의 개수(`search.js`), 다시 그린 뒤 포커스 복원의 「화면 밖」 판정(`helpers.js`의 `restoreFocusSpot`)이 이 값을 쓴다. 대상을 상단 바 바로 아래에 두는 스크롤(`scrollUnderBar`)도 이 값을 쓰고, 캘린더 목록의 주소 줄과 이어 읽기의 절이 그 스크롤을 쓴다.
+  - CSS는 `:root`의 변수 `--top-bar-h`를 쓴다. 앱이 시작할 때부터 `ResizeObserver`(요소의 크기가 바뀌면 알려 주는 브라우저 기능)가 상단 바를 지켜보며 높이를 넣는다(`helpers.js`의 `publishBarHeight`). 지금은 캘린더 목록의 스크롤 여백(`scroll-padding-top`)만 쓴다.
+  - 테스트: 유닛 +4(`helpers.test.js`의 `barBottom`, `publishBarHeight`), e2e +4(`test_search.py` 1, `test_calendar_view.py` 3). 읽던 절과 포커스 복원의 시험은 `topics/routing.md`에 있다.
 - **상단 바 묶음은 상태 표시줄 높이를 안쪽 위 여백으로 둔다** (2026-11-07, `DESIGN.md` §4 「레이아웃」, 원장 `docs/changes/2026-11-07-header-safe-area.md`).
   - 상단 바 묶음(`#sticky-group`)은 맨 위에 고정되고, 상태 표시줄 높이(`env(safe-area-inset-top)`)는 묶음의 안쪽 위 여백(`padding-top`)이다. 아이폰 홈 화면 앱이 화면을 상태 표시줄 밑까지 그려 이 값이 약 60px이 되면, 본문이 그만큼 내려가고 상태 표시줄 자리는 상단 바 배경이 덮는다. 값이 0인 평소 화면은 그대로다.
-  - 캘린더 목록의 스크롤 여백(`scroll-padding-top`)은 접힌 상단 바 60px에 이 높이를 더한 값이다.
+  - 상단 바 높이를 재어 쓰는 곳(캘린더 목록의 스크롤 여백 등)은 이 여백을 함께 센다(위 항목).
   - 테스트: e2e +2(`test_lectionary_view.py`, `test_calendar_view.py`. Chromium에서 상태 표시줄 높이를 62px로 정해 시뮬레이션한다).
   - 실제 아이폰: dev 배포 뒤 사용자가 홈 화면 앱에서 맨 위의 제목, 스크롤한 본문과 시계 자리, 상태가 바뀌는 순간 읽던 줄의 밀림을 보고 특이점이 없다고 했다(2026-11-07).
 - **설정 화면은 이름 붙은 섹션 다섯이다** (2026-11-05, ADR-041 §1, 사용자 결정).

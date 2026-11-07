@@ -266,6 +266,71 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   const SCROLL_ANCHORING = typeof CSS !== "undefined" && typeof CSS.supports === "function"
     && CSS.supports("overflow-anchor", "auto");
 
+  // ── The top bar (#sticky-group) ──
+  // Its height is never a number in the code: it grows with the font-size setting (rem), with the status-bar
+  // inset (its padding-top, env(safe-area-inset-top) — about 62px when an iPhone Home Screen app draws under
+  // the status bar), with the desktop top row that collapses on scroll (views.js initCompactHeader) and with
+  // the resume banner and division tabs it holds. JS measures it with barBottom; CSS reads `--top-bar-h`,
+  // which publishBarHeight keeps up to date. The bar is pinned at `top: 0` and sits at the very top of the
+  // document, so its height and its bottom edge on screen are the same number.
+
+  /**
+   * The bottom edge of the top bar, in px from the top of the viewport — what lies above it is covered.
+   * Measured on every call, so it is right at that moment.
+   * @returns {number}
+   */
+  function barBottom() {
+    return document.getElementById("sticky-group")?.getBoundingClientRect().bottom ?? 0;
+  }
+
+  // How long scrollUnderBar waits for the desktop top row to collapse: the 0.25s transition plus the late start of
+  // the scroll listener that collapses it (views.js initCompactHeader).
+  const BAR_COLLAPSE_WAIT_MS = 1000;
+
+  /**
+   * Scroll the page so the top of `target` sits right under the top bar — the calendar list's row of the address
+   * (calendar.js), the verse a resumed chapter goes back to (views.js renderChapter). On desktop the scroll can
+   * collapse the bar's top row; a browser with scroll anchoring holds the target where it was through the collapse,
+   * which opens a gap under the bar, so the target is placed again once the collapse ends. Not once the reader has
+   * started to scroll (wheel, touch, pointer, key), and not after BAR_COLLAPSE_WAIT_MS.
+   * @param {Element} target
+   */
+  function scrollUnderBar(target) {
+    const place = () => {
+      if (!target.isConnected) return;
+      window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top - barBottom(), behavior: "instant" });
+    };
+    place();
+    requestAnimationFrame(place);
+    const waiting = new AbortController();
+    const { signal } = waiting;
+    const stop = () => waiting.abort();
+    const collapsing = document.getElementById("breadcrumb-row");
+    collapsing?.addEventListener("transitionend", (e) => {
+      if (e.target !== collapsing) return;   // not a transition of the search field inside it
+      stop();
+      place();
+    }, { signal });
+    for (const type of ["wheel", "touchstart", "pointerdown", "keydown"]) {
+      window.addEventListener(type, stop, { passive: true, signal });
+    }
+    setTimeout(stop, BAR_COLLAPSE_WAIT_MS);
+  }
+
+  /**
+   * Mirror the top bar's height into `--top-bar-h` on the root element, for CSS rules that must leave the bar
+   * out (the calendar list's scroll-padding-top). CSS cannot read another element's size. A ResizeObserver
+   * writes the first value before the first paint and a new one whenever the height changes; the border box
+   * counts the status-bar padding. app.js starts it once at boot.
+   */
+  function publishBarHeight() {
+    const bar = document.getElementById("sticky-group");
+    if (!bar || typeof ResizeObserver !== "function") return;
+    new ResizeObserver(() => {
+      document.documentElement.style.setProperty("--top-bar-h", `${bar.getBoundingClientRect().height}px`);
+    }).observe(bar, { box: "border-box" });
+  }
+
   /**
    * Where the pressed control of a same-view redraw sat (WCAG 2.4.3). A link
    * tagged `data-focus-key` redraws the view it belongs to — the router measures
@@ -352,15 +417,18 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     // Still off-screen: the control was already out of view when it was activated (a keyboard user read on
     // with Space / Page Down, focus left on the link, then pressed Enter), or — without scroll anchoring —
     // the re-expanded header pushed it below the fold. Bring it to the middle. (A shorter page never does
-    // this: the scroll clamp only moves an in-flow control toward the viewport.)
+    // this: the scroll clamp only moves an in-flow control toward the viewport.) Out of view above means
+    // covered by the top bar; a control in the bar itself (the division tabs, the date steps) is in view.
     const r = target.getBoundingClientRect();
-    if (r.bottom < 0 || r.top > window.innerHeight) target.scrollIntoView({ block: "center", behavior: "instant" });
+    const underBar = r.bottom <= barBottom() && !document.getElementById("sticky-group")?.contains(target);
+    if (underBar || r.top > window.innerHeight) target.scrollIntoView({ block: "center", behavior: "instant" });
     return target;
   }
 
   return {
     _$, chUnit, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
-    HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot, SCROLL_ANCHORING,
+    HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot, SCROLL_ANCHORING, barBottom, scrollUnderBar,
+    publishBarHeight,
   };
 })();
 

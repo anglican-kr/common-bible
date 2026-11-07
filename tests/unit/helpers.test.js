@@ -19,6 +19,7 @@
 //   - headerIcon · HEADER_ICON_PATHS (page-title icon SVG — one spec and one path per glyph for every header control)
 //   - isModifiedClick (modifier / non-primary clicks the page leaves to the browser)
 //   - focusSpotOf · restoreFocusSpot (the router puts focus back on the pressed control after a redraw)
+//   - barBottom · publishBarHeight (the top bar's measured bottom for JS, its height as `--top-bar-h` for CSS)
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -1001,4 +1002,160 @@ test("restoreFocusSpot: 다시 그리는 사이 독자가 포커스를 다른 �
   h.dom.setActive(h.dom.document.body);
   assert.equal(h.helpers.restoreFocusSpot(spot, root), byKey["set:2"]);
   assert.equal(h.dom.getActive(), byKey["set:2"]);
+});
+
+// ── barBottom · publishBarHeight ────────────────────────────────────────────
+
+/** 상단 바 묶음(#sticky-group) — 높이는 상태 표시줄 여백을 담은 값(62 + 60). */
+function withBar(h, height = 122.5) {
+  const bar = h.helpers.el("div", { id: "sticky-group" });
+  bar._height = height;
+  return bar;
+}
+
+test("barBottom: 상단 바 묶음(#sticky-group)의 아래쪽을 호출할 때마다 잰다 — 높이가 바뀌면 바로 따라간다", () => {
+  const h = loadHelpers();
+  const bar = withBar(h);
+  assert.equal(h.helpers.barBottom(), 122.5);
+  bar._height = 60;   // 데스크톱에서 윗줄이 접혔다
+  assert.equal(h.helpers.barBottom(), 60);
+});
+
+test("barBottom: 상단 바가 없으면 0 — 가린 곳이 없다", () => {
+  assert.equal(loadHelpers().helpers.barBottom(), 0);
+});
+
+test("publishBarHeight: 상단 바의 높이를 :root 의 --top-bar-h 에 넣고 높이가 바뀔 때마다 고친다 — 테두리 상자를 지켜봐 상태 표시줄 여백도 센다", () => {
+  const h = loadHelpers();
+  const bar = withBar(h);
+  /** @type {Array<{ cb: Function, target: any, opts: any }>} */
+  const observers = [];
+  h.ctx.ResizeObserver = class {
+    constructor(cb) { this.cb = cb; }
+    observe(target, opts) { observers.push({ cb: this.cb, target, opts }); }
+  };
+  const props = /** @type {Record<string, string>} */ ({});
+  h.dom.document.documentElement.style = { setProperty(k, v) { props[k] = v; } };
+  h.helpers.publishBarHeight();
+  assert.equal(observers.length, 1);
+  assert.equal(observers[0].target, bar);
+  assert.deepEqual({ ...observers[0].opts }, { box: "border-box" });
+  observers[0].cb([]);   // 브라우저가 첫 크기를 알린다(첫 화면을 그리기 전)
+  assert.equal(props["--top-bar-h"], "122.5px");
+  bar._height = 60;
+  observers[0].cb([]);
+  assert.equal(props["--top-bar-h"], "60px");
+});
+
+test("publishBarHeight: 상단 바나 ResizeObserver 가 없으면 아무것도 하지 않는다", () => {
+  const h = loadHelpers();
+  h.helpers.publishBarHeight();   // ResizeObserver 없음 — 던지지 않는다
+  let made = 0;
+  h.ctx.ResizeObserver = class { constructor() { made++; } observe() {} };
+  h.helpers.publishBarHeight();   // 상단 바 없음
+  assert.equal(made, 0);
+});
+
+/** 화면 맨 위에 고정된 상단 바(sticky) — 스크롤해도 화면 위치가 그대로다. */
+function pinnedBar(h, height) {
+  const bar = withBar(h, height);
+  bar.getBoundingClientRect = () => ({ top: 0, bottom: bar._height, height: bar._height });
+  return bar;
+}
+
+test("restoreFocusSpot: 같은 자리가 상단 바 밑이면(가려진 링크에서 Enter) 가운데로 — 상단 바 안의 컨트롤(구분 탭)은 그대로", () => {
+  const h = loadHelpers();
+  pinnedBar(h, 122);
+  // 누른 때: 스크롤 1000, 「다음날」은 문서 1040 — 화면 위 40, 상단 바(아래쪽 122)에 다 가려져 있었다
+  const { root, byKey } = viewWith(h.helpers, 100, [["next", 940]]);
+  h.helpers.restoreFocusSpot(spotOf({ key: "next", y: 1000, top: 40, offset: 940 }), root);
+  assert.deepEqual(h.dom.view.scrolls.map((s) => s.behavior), ["instant", "instant"], "같은 자리 → 가운데");
+  assert.equal(byKey.next.getBoundingClientRect().top, 390);
+  // 상단 바 안의 컨트롤은 상단 바 아래쪽보다 위에 있어도 보인다
+  const h2 = loadHelpers();
+  const bar2 = pinnedBar(h2, 122);
+  const tab = h2.helpers.el("a", { href: "/new_testament", "data-focus-key": "div:new_testament" }, "신약");
+  bar2.appendChild(tab);
+  tab.getBoundingClientRect = () => ({ top: 70, bottom: 110, height: 40 });
+  const v2 = viewWith(h2.helpers, 100, []);
+  assert.equal(h2.helpers.restoreFocusSpot(spotOf({ key: "div:new_testament", y: 300, top: 70, offset: null }), v2.root), tab);
+  assert.deepEqual(h2.dom.view.scrolls, []);
+});
+
+// ── scrollUnderBar ──────────────────────────────────────────────────────────
+
+/**
+ * scrollUnderBar 가 쓰는 브라우저 기능 — 다음 프레임, 시간, 창의 이벤트(AbortSignal 로 떼어 낸다), 윗줄(#breadcrumb-row)의 전환 끝.
+ * 상단 바는 고정(높이 106 — 데스크톱의 펼친 상단 바)이고 대상은 문서 2000.
+ */
+function scrollEnv(h) {
+  const frames = /** @type {Function[]} */ ([]);
+  const timers = /** @type {Array<{ cb: Function, ms: number }>} */ ([]);
+  const winListeners = new Map();
+  h.ctx.requestAnimationFrame = (cb) => { frames.push(cb); return frames.length; };
+  h.ctx.setTimeout = (cb, ms) => { timers.push({ cb, ms }); return timers.length; };
+  h.ctx.AbortController = AbortController;
+  const listen = (map, type, fn, opts) => {
+    if (!map.has(type)) map.set(type, new Set());
+    map.get(type).add(fn);
+    opts?.signal?.addEventListener("abort", () => map.get(type).delete(fn));
+  };
+  h.ctx.addEventListener = (type, fn, opts) => listen(winListeners, type, fn, opts);
+  const bar = pinnedBar(h, 106);
+  const row = h.helpers.el("div", { id: "breadcrumb-row" });
+  const rowListeners = new Map();
+  row.addEventListener = (type, fn, opts) => listen(rowListeners, type, fn, opts);
+  const target = h.helpers.el("span", { className: "verse" });
+  target._docTop = 2000;
+  target.isConnected = true;
+  const fire = (map, type, evt) => { for (const fn of [...(map.get(type) ?? [])]) fn(evt); };
+  return {
+    bar, row, target, frames, timers,
+    /** 윗줄이 접혔다 — 상단 바가 60 이 되고, 스크롤 고정이 대상을 화면의 그 자리에 둔다. */
+    collapse() { bar._height = 60; fire(rowListeners, "transitionend", { target: row }); },
+    input(type) { fire(winListeners, type, { type }); },
+    rowTransitionFrom(node) { fire(rowListeners, "transitionend", { target: node }); },
+  };
+}
+
+test("scrollUnderBar: 대상의 위쪽을 상단 바 바로 아래에 두고(즉시 스크롤), 다음 프레임에 한 번 더 맞춘다", () => {
+  const h = loadHelpers();
+  const env = scrollEnv(h);
+  h.helpers.scrollUnderBar(env.target);
+  assert.equal(env.target.getBoundingClientRect().top, 106);
+  assert.deepEqual(h.dom.view.scrolls, [{ y: 1894, behavior: "instant" }]);
+  assert.equal(env.frames.length, 1);
+  env.frames[0]();
+  assert.equal(env.target.getBoundingClientRect().top, 106);
+  assert.equal(env.timers[0].ms, 1000);
+});
+
+test("scrollUnderBar: 데스크톱에서 윗줄이 접히면(전환 끝) 접힌 상단 바 바로 아래로 다시 맞춘다 — 한 번만", () => {
+  const h = loadHelpers();
+  const env = scrollEnv(h);
+  h.helpers.scrollUnderBar(env.target);
+  env.collapse();
+  assert.equal(env.target.getBoundingClientRect().top, 60);
+  const scrolls = h.dom.view.scrolls.length;
+  env.collapse();   // 다시 펼쳤다 접은 것은 독자의 스크롤이다
+  assert.equal(h.dom.view.scrolls.length, scrolls);
+});
+
+test("scrollUnderBar: 그사이 독자가 스크롤을 시작했거나(휠 · 터치 · 포인터 · 키) 1초가 지났으면 다시 맞추지 않는다 — 윗줄 안 검색 칸의 전환도 보지 않는다", () => {
+  for (const type of ["wheel", "touchstart", "pointerdown", "keydown"]) {
+    const h = loadHelpers();
+    const env = scrollEnv(h);
+    h.helpers.scrollUnderBar(env.target);
+    env.input(type);
+    env.collapse();
+    assert.equal(env.target.getBoundingClientRect().top, 106, type);
+  }
+  const h = loadHelpers();
+  const env = scrollEnv(h);
+  h.helpers.scrollUnderBar(env.target);
+  env.rowTransitionFrom(h.helpers.el("input", { id: "search-input" }));
+  assert.equal(h.dom.view.scrolls.length, 1);
+  env.timers[0].cb();
+  env.collapse();
+  assert.equal(env.target.getBoundingClientRect().top, 106);
 });
