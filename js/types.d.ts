@@ -574,6 +574,10 @@ export interface BibleVerse {
   notes?: BibleVerseNote[];
 }
 
+// One run of a copy citation's verse numbers (verse-spec.js `selectionCitation` → `formatVerseRanges`): whole verses
+// `[first, last]`, or one half of a data half verse `[n, n, part]` — `part` is the verse's `part` letter ("a" → 「8ㄱ」).
+export type VerseRun = [number, number, string?];
+
 // ADR-027 §2: a chapter-level parallel-passage marker. `range` is a verse-spec
 // string (same grammar as `<cite src>`'s verse part: "<ch>", "<ch>:<v>-<v>",
 // "<ch>:<v>-<ch>:<v>"). `src` carries one or more parallel sources with optional

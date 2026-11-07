@@ -18,7 +18,7 @@ const { _$ } = window.appHelpers;
 const { readingContext } = window;
 
 import {
-  selectionCitation, citationVerseSpec, serializeVerseRange, citationSource,
+  selectionCitation, formatVerseRanges, serializeVerseRange, citationSource,
 } from "./verse-spec.js";
 import { openSaveModal } from "./bookmark-modals.js";
 
@@ -73,12 +73,13 @@ function exitVerseSelectMode() {
 
 function updateVerseSelectBar() {
   const count = readingContext.selectedVerses.size;
-  const { chapter, refs } = selectionCitation(readingContext.selectedVerses, document.querySelector("article.chapter-text"));
-  if (refs.length === 0) {
+  const { chapter, runs } = selectionCitation(readingContext.selectedVerses, document.querySelector("article.chapter-text"));
+  if (runs.length === 0) {
     $verseSelectCount.textContent = "구절을 눌러서 선택";
   } else {
-    // 옮겨 실린 절만이면 그 장을 붙인다 — 「41:6절 선택됨」(「6절」은 이 장의 6절로 읽힌다)
-    $verseSelectCount.textContent = `${chapter != null ? `${chapter}:` : ""}${citationVerseSpec(refs).replace(/,/g, ', ')}절 선택됨`;
+    // 옮겨 실린 절만이면 그 장을 붙인다(「41:6절 선택됨」). 「6절」만 적으면 이 장의 6절로 읽힌다. 구간 표기는 복사
+    // 출처와 같다(「7-8, 9ㄱ」, 사용자 결정 2026-11-07).
+    $verseSelectCount.textContent = `${chapter != null ? `${chapter}:` : ""}${formatVerseRanges(runs)}절 선택됨`;
   }
   $verseSelectBookmarkBtn.disabled = count === 0;
   $verseSelectCopyBtn.disabled = count === 0;
@@ -114,9 +115,10 @@ async function copySelectedVerses() {
 
   const textParts = groups.map(([first, last]) => serializeVerseRange(first, last));
 
+  // 장 본문 복사와 같은 함수로 적는다(views.js bindCopyAttribution — 사용자 결정 2026-11-07, known-issues §16.1)
   const cite = selectionCitation(readingContext.selectedVerses, article);
-  if (!cite.refs.length) return;
-  const spec = citationVerseSpec(cite.refs);
+  if (!cite.runs.length) return;
+  const spec = formatVerseRanges(cite.runs);
   const book = (window.getBooksCache() ?? []).find((b) => b.id === readingContext.bookId);
   const bookName = book ? book.name_ko : readingContext.bookId;
   // 전례시편 · 송가는 기도서 번역 — 「(대한성공회 기도서)」(사용자 결정 2026-10-13; 종전엔 언제나 「(공동번역성서)」였다).

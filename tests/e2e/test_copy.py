@@ -588,17 +588,18 @@ def test_half_verse_numbers_show_printed_letters(page):
 
 
 def test_verse_select_half_verses_cite_printed_letters(page):
-    """재현 표(2026-10-21)의 네 장과 나훔 1. 범위 끝이 반쪽 절에 닿으면 그 반쪽 절에서 멈추고, 출처는 「ㄱ · ㄴ」으로 적는다."""
+    """재현 표(2026-10-21)의 네 장과 나훔 1. 범위 끝이 반쪽 절이면 그 반쪽 절에서 멈추고, 출처는 「ㄱ · ㄴ」으로 적는다.
+    막대와 출처의 구간은 쉼표와 한 칸으로 나눈다(사용자 결정 2026-11-07 — 종전 출처는 「이사야 7:7,8ㄱ」)."""
     page.context.grant_permissions(["clipboard-read", "clipboard-write"])
     cases = [
-        ("isa/7", "v7", "v8a", ["v7", "v8a"], "7, 8ㄱ", "이사야 7:7,8ㄱ"),
-        ("isa/7", "v7", "v9a", ["v7", "v8a", "v9a"], "7, 8ㄱ, 9ㄱ", "이사야 7:7,8ㄱ,9ㄱ"),
+        ("isa/7", "v7", "v8a", ["v7", "v8a"], "7, 8ㄱ", "이사야 7:7, 8ㄱ"),
+        ("isa/7", "v7", "v9a", ["v7", "v8a", "v9a"], "7, 8ㄱ, 9ㄱ", "이사야 7:7, 8ㄱ, 9ㄱ"),
         ("isa/7", "v7", "v9b", ["v7", "v8a", "v9a", "v8b", "v9b"], "7-9", "이사야 7:7-9"),
-        ("isa/10", "v15", "v16a", ["v15", "v16a"], "15, 16ㄱ", "이사야 10:15,16ㄱ"),
-        ("isa/33", "v22", "v23a", ["v23a", "v22"], "22, 23ㄱ", "이사야 33:22,23ㄱ"),
+        ("isa/10", "v15", "v16a", ["v15", "v16a"], "15, 16ㄱ", "이사야 10:15, 16ㄱ"),
+        ("isa/33", "v22", "v23a", ["v23a", "v22"], "22, 23ㄱ", "이사야 33:22, 23ㄱ"),
         ("job/31", "v40a", None, ["v40a"], "40ㄱ", "욥기 31:40ㄱ"),
-        ("nah/1", "v1", "v2a", ["v1", "v2a"], "1, 2ㄱ", "나훔 1:1,2ㄱ"),
-        ("nah/1", "v1", "v9", ["v1", "v2a", "v3", "v4", "v5", "v6", "v7", "v9"], "1, 2ㄱ, 3-9", "나훔 1:1,2ㄱ,3-9"),
+        ("nah/1", "v1", "v2a", ["v1", "v2a"], "1, 2ㄱ", "나훔 1:1, 2ㄱ"),
+        ("nah/1", "v1", "v9", ["v1", "v2a", "v3", "v4", "v5", "v6", "v7", "v9"], "1, 2ㄱ, 3-9", "나훔 1:1, 2ㄱ, 3-9"),
         ("nah/1", "v1", "v2b", ["v1", "v2a", "v3", "v4", "v5", "v6", "v7", "v9", "v2b"], "1-9", "나훔 1:1-9"),
     ]
     for path, first, last, want_ids, want_label, want_cite in cases:
@@ -631,3 +632,51 @@ def test_verse_select_one_half_verse_is_its_own_unit(page):
       return out;
     }""")
     assert ["job", 31, "40"] in specs, specs
+
+
+# ── 두 복사의 출처를 같게 (known-issues §16.1 — 사용자 결정 2026-11-07) ──────────────────────────────
+# 절 선택 복사와 장 본문 복사가 같은 함수(verse-spec.js selectionCitation, formatVerseRanges)로 출처를 적는다. 종전엔 같은
+# 선택을 세 군데 다르게 적었다. 이 번역에 없는 절 번호를 지나는 구간(절 선택 「9:43,45,47-48」, 장 본문 「9:43-48」), 쉼표 뒤
+# 띄어쓰기(「7-8,9ㄱ」, 「6-7, 19-20」), 데이터의 반쪽 절(「7:7,8ㄱ」, 「7:7-8」)이다.
+
+_SELECT_WITHIN = """
+  const v = [...document.querySelectorAll('article.chapter-text .verse[data-vref]')].find(v => v.getAttribute('data-vref') === '%A%');
+  const w = document.createTreeWalker(v, NodeFilter.SHOW_TEXT);
+  let t; while ((t = w.nextNode()) && !/[^\\s\\u2060]/.test(t.textContent));
+  const r = document.createRange();
+  r.setStart(t, 1);
+  r.setEnd(t, Math.min(4, t.length));
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+"""
+
+
+def test_verse_select_bridges_verse_numbers_absent_in_translation(page):
+    """마르 9장에는 44절과 46절이 없다. 절 선택으로 43절부터 48절까지 고르면 막대와 출처가 장 본문 복사처럼 한 구간
+    「43-48」이다(사용자 결정 2026-10-14 · 11-07 — 종전 「43, 45, 47-48」)."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    ids, label = _verse_select(page, "mark/9", "v43", "v48")
+    assert ids == ["v43", "v45", "v47", "v48"], ids
+    assert label == "43-48절 선택됨", label
+    text = _copy_selection(page)
+    assert text.endswith("\n\n— 마르코의 복음서 9:43-48 (공동번역성서)"), text[-80:]
+
+
+def test_drag_copy_cites_data_half_verses_like_verse_select(page):
+    """이사 7장은 8ㄱ, 9ㄱ, 8ㄴ, 9ㄴ 순서로 싣는다. 장 본문을 끌어 고른 복사도 반쪽 절 줄의 글자를 조금이라도 고르면 그
+    반쪽을 고른 것으로 보고 「8ㄱ」으로 적는다(종전 「7:7-8」). 두 반쪽의 글자를 모두 고르면 그 절이다. 범위는 반쪽 절에서 멈춘다."""
+    _open_chapter(page, "isa/7")
+    # 7절 가운데부터 8ㄱ 첫 줄의 세 글자까지 — 절 선택으로 7절과 8ㄱ을 고른 출처와 같다
+    text = _copy_text(page, _SELECT_LINES.replace("%A%", "7a").replace("%B%", "8aa"))
+    assert text.endswith("\n\n— 이사야 7:7, 8ㄱ (공동번역성서)"), text[-80:]
+    # 8ㄱ 첫 줄 안의 세 글자
+    text = _copy_text(page, _SELECT_WITHIN.replace("%A%", "8aa"))
+    assert text.endswith("\n\n— 이사야 7:8ㄱ (공동번역성서)"), text[-80:]
+    # 8ㄱ 둘째 줄부터 8ㄴ 첫 줄까지 — 8은 두 반쪽의 글자를 다 골랐고 9는 ㄱ만
+    text = _copy_text(page, _SELECT_LINES.replace("%A%", "8ab").replace("%B%", "8ba"))
+    assert text.endswith("\n\n— 이사야 7:8, 9ㄱ (공동번역성서)"), text[-80:]
+    # 나훔 1 — 2ㄱ 은 1절 뒤에 실린다. 절 선택의 「1, 2ㄱ」과 같다
+    _open_chapter(page, "nah/1")
+    text = _copy_text(page, _SELECT_LINES.replace("%A%", "1").replace("%B%", "2ab"))
+    assert text.endswith("\n\n— 나훔 1:1, 2ㄱ (공동번역성서)"), text[-80:]

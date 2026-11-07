@@ -1052,6 +1052,18 @@ def test_copy_across_readings_keeps_every_section(desktop_context):
     assert text.rstrip().endswith("(공동번역성서)") and "요한의 복음서 20:1" in text
 
 
+def test_copy_cites_data_half_verse_with_printed_letter(desktop_context):
+    """연중 15주 화 짝수해(2026-07-14)의 제1독서 이사 7:1-9 — 끌어 고른 복사도 장 본문 복사, 절 선택 복사와 같이 데이터의
+    반쪽 절 하나는 「8ㄱ」으로 적는다(사용자 결정 2026-11-07, known-issues §16.1 — 종전 「7:7-8」). 두 반쪽을 다 고른 독서
+    전체는 「7:1-9」 그대로다. 독서표의 반절 「상 · 하」와는 다른 표기다."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-07-14")
+    first = ".lect-reading[data-slot='first'] article.chapter-text"
+    text = page.evaluate(_LECT_COPY_ACROSS, [f"{first} .verse[data-vkey='7/7a']", f"{first} .verse[data-vkey='8a/8aa']"])
+    assert text.endswith("\n\n— 이사야 7:7, 8ㄱ (공동번역성서)"), text[-80:]
+    assert page.evaluate(_LECT_COPY_SLOT, "first").endswith("\n\n— 이사야 7:1-9 (공동번역성서)")
+
+
 def test_preload_failure_shows_lectionary_error_not_previous_header(browser):
     """교회력 자료를 받지 못하면(오프라인 · 캐시 없음) 전례독서 실패 화면 — 앞 화면(창세기 1장)의 제목 · 헤더가 남지 않는다(자체 리뷰 2026-10-13)."""
     ctx = browser.new_context(service_workers="block")
