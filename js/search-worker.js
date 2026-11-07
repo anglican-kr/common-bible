@@ -48,12 +48,15 @@
  * @property {string} name
  * @property {string} url
  *
+ * @typedef VerseRefPart
+ * @property {number} chapter
+ * @property {string} verses  as typed, spaces and half-verse marks dropped: "16", "18-19,16".
+ *   An end of 999 runs to the end of the chapter: "10-999", the whole chapter "1-999".
+ *
  * @typedef VerseRef
  * @property {string} bookId
- * @property {number} chapter
- * @property {number} verse
- * @property {number | null} verseEnd
  * @property {string} bookNameKo
+ * @property {VerseRefPart[]} parts  one per chapter, in the order first named
  *
  * @typedef ParsedQuery
  * @property {string} keyword
@@ -171,8 +174,26 @@ function loadChunk(name, url) {
 // loadedChunks), no worker globals — sliced + unit-tested in
 // tests/unit/search-worker.test.js with stubbed meta/loadedChunks.
 
-// Verse reference pattern: "창세 1:3" or "창세 1:3-11"
-const REF_RE = /^([가-힣a-zA-Z0-9\s]+?)\s*(\d+)\s*:\s*(\d+)(?:\s*[-–]\s*(\d+))?\s*$/;
+// Verse reference: a book, then chapters ("시편 116", "시편 42, 43") or chapters and verses ("창세 1:3-11",
+// "요한 3:16, 18-19", "사무상 18:6-9, 19:1-7", "이사 61:10-62:3").
+// 쉼표는 검색어 전체가 이 형식일 때만 구분자다. 낱말 검색에서는 본문 글자로 남는다. 절 뒤의 「상」 「하」 「ㄱ」 「ㄴ」과
+// 로마자는 절의 반쪽 표시라 지우고 절 전체를 연다(ADR-005 「구절 표기와 구절 바로가기」, 사용자 결정 2026-11-07).
+// Numbers stop at three digits, like the address check (ADR-040): that bounds the chapters a range can span, and keeps
+// this linear on a long run of digits.
+const REF_NUM = "\\d{1,3}";
+const REF_DASH = "\\s*[-–]\\s*";
+const REF_VERSE = `${REF_NUM}[상하ㄱㄴa-z]?`;
+const REF_POINT = `(?:${REF_NUM}\\s*:\\s*)?${REF_VERSE}`;
+const REF_RANGE = `${REF_POINT}(?:${REF_DASH}${REF_POINT})?`;
+const REF_VERSES = `${REF_NUM}\\s*:\\s*${REF_VERSE}(?:${REF_DASH}${REF_POINT})?(?:\\s*,\\s*${REF_RANGE})*`;
+const REF_CHAPTERS = `${REF_NUM}(?:\\s*,\\s*${REF_NUM})*`;
+const REF_RE = new RegExp(`^([가-힣a-zA-Z0-9\\s]+?)\\s*(${REF_VERSES}|${REF_CHAPTERS})\\s*$`);
+// The end of a range that runs to the end of its chapter: the largest number an address takes (the highest verse
+// number is 176). The chapter view clips it to the chapter's last verse. js/app/search.js verseRefTargets reads it too.
+const REF_CHAPTER_END = 999;
+// More segments than a reference can mean: the longest book has 150 chapters, and a lectionary label has at most 5
+// segments. A long enough list otherwise builds a million segments that the app sorts on the main thread.
+const REF_MAX_SEGMENTS = 200;
 
 // Operator: in:<book-alias>  (one or more, OR'd). Greedy on alias to allow
 // hangul/letters/digits without spaces. Whitespace between `in:` and the
@@ -275,6 +296,62 @@ function parseQuery(raw) {
 }
 
 /**
+ * One end of a range: "18", "19:1상".
+ * @param {string} text
+ * @returns {{ chapter: number | null, verse: number }}
+ */
+function refPoint(text) {
+  const m = /** @type {RegExpExecArray} */ (/(?:(\d+)\s*:\s*)?(\d+)/.exec(text));
+  return { chapter: m[1] ? parseInt(m[1], 10) : null, verse: parseInt(m[2], 10) };
+}
+
+/**
+ * The chapters and verses REF_RE matched, one part per chapter. A range or verse with no chapter of its own belongs to
+ * the chapter the one before it ended in ("9:35-10:1, 5-8" → 10:5-8). null when it names no real span: chapter 0, a
+ * range with an end of verse 0 (a lone verse 0 still opens the chapter), a range that ends in an earlier chapter, or
+ * more than REF_MAX_SEGMENTS segments.
+ * @param {string} body
+ * @returns {VerseRefPart[] | null}
+ */
+function refParts(body) {
+  /** @type {Map<number, string[]>} */
+  const byChapter = new Map();
+  let segmentCount = 0;
+  /** @param {number} chapter @param {string} segment */
+  const add = (chapter, segment) => {
+    segmentCount++;
+    const segments = byChapter.get(chapter);
+    if (segments) segments.push(segment);
+    else byChapter.set(chapter, [segment]);
+  };
+  if (body.includes(":")) {
+    let chapter = 0;
+    for (const item of body.split(",")) {
+      const [from, to] = item.split(/[-–]/).map(refPoint);
+      chapter = from.chapter ?? chapter;
+      const endChapter = to ? to.chapter ?? chapter : chapter;
+      if (!to) {
+        add(chapter, `${from.verse}`);
+      } else if (endChapter < chapter || from.verse === 0 || to.verse === 0) {
+        return null;
+      } else if (endChapter === chapter) {
+        add(chapter, `${from.verse}-${to.verse}`);
+      } else {
+        add(chapter, `${from.verse}-${REF_CHAPTER_END}`);
+        for (let c = chapter + 1; c < endChapter; c++) add(c, `1-${REF_CHAPTER_END}`);
+        add(endChapter, `1-${to.verse}`);
+        chapter = endChapter;
+      }
+      if (segmentCount > REF_MAX_SEGMENTS) return null;
+    }
+  } else {
+    for (const item of body.split(",")) add(parseInt(item, 10), `1-${REF_CHAPTER_END}`);
+  }
+  if (byChapter.has(0) || segmentCount > REF_MAX_SEGMENTS) return null;
+  return [...byChapter].map(([chapter, segments]) => ({ chapter, verses: segments.join(",") }));
+}
+
+/**
  * @param {string} query
  * @returns {VerseRef | null}
  */
@@ -283,9 +360,6 @@ function tryVerseRef(query) {
   if (!match) return null;
 
   const bookQuery = match[1].trim();
-  const chapter = parseInt(match[2], 10);
-  const verse = parseInt(match[3], 10);
-  const verseEnd = match[4] ? parseInt(match[4], 10) : null;
 
   const m = /** @type {SearchMeta} */ (meta);
 
@@ -299,7 +373,8 @@ function tryVerseRef(query) {
   }
   if (!bookId || !m.books[bookId]) return null;
 
-  return { bookId, chapter, verse, verseEnd, bookNameKo: m.books[bookId].ko };
+  const parts = refParts(match[2]);
+  return parts && { bookId, bookNameKo: m.books[bookId].ko, parts };
 }
 
 /**

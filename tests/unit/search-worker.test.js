@@ -117,14 +117,118 @@ test("parseQuery: 중복 공백은 단일 공백으로 정리", () => {
 
 test("tryVerseRef: 별칭 + 단일 절", () => {
   assert.deepEqual(ctx.tryVerseRef("창세 1:3"), {
-    bookId: "genesis", chapter: 1, verse: 3, verseEnd: null, bookNameKo: "창세기",
+    bookId: "genesis", bookNameKo: "창세기", parts: [{ chapter: 1, verses: "3" }],
   });
 });
 
+// 장마다 [장, 절 목록]으로 줄여 비교한다.
+const partsOf = (q) => {
+  const r = ctx.tryVerseRef(q);
+  return r && r.parts.map((p) => [p.chapter, p.verses]);
+};
+
 test("tryVerseRef: 절 범위(하이픈)", () => {
-  const r = ctx.tryVerseRef("창세 1:3-11");
-  assert.equal(r.verse, 3);
-  assert.equal(r.verseEnd, 11);
+  assert.deepEqual(partsOf("창세 1:3-11"), [[1, "3-11"]]);
+});
+
+test("tryVerseRef: 쉼표로 이은 절 목록(공백은 빼고 넘긴다)", () => {
+  assert.deepEqual(partsOf("요한 3:16, 18-19"), [[3, "16,18-19"]]);
+  assert.deepEqual(partsOf("요한 3:16,18-19"), [[3, "16,18-19"]]);
+  assert.deepEqual(partsOf("요한 3 : 16 , 18 – 19"), [[3, "16,18-19"]]);
+  assert.deepEqual(partsOf("요한 3:1, 3, 5-7, 9"), [[3, "1,3,5-7,9"]]);
+});
+
+test("tryVerseRef: 순서는 친 그대로 넘긴다(주소 표기로 바꾸는 것은 앱의 verseRefTargets)", () => {
+  assert.deepEqual(partsOf("요한 3:18-19, 16"), [[3, "18-19,16"]]);
+});
+
+test("tryVerseRef: 장만 적으면 그 장 전체", () => {
+  assert.deepEqual(partsOf("요한 3"), [[3, "1-999"]]);
+  assert.deepEqual(partsOf("요한3"), [[3, "1-999"]]);
+  assert.deepEqual(partsOf("요한 42, 43"), [[42, "1-999"], [43, "1-999"]]);
+});
+
+test("tryVerseRef: 뒤에 장을 다시 적으면 장마다 나눈다", () => {
+  assert.deepEqual(partsOf("창세 18:6-9, 19:1-7"), [[18, "6-9"], [19, "1-7"]]);
+  assert.deepEqual(partsOf("창세 9:1-4, 17-19, 10:1"), [[9, "1-4,17-19"], [10, "1"]]);
+  assert.deepEqual(partsOf("창세 6:5-8, 7:1-5, 10"), [[6, "5-8"], [7, "1-5,10"]]);
+});
+
+test("tryVerseRef: 같은 장을 나중에 다시 적으면 처음 적은 자리에 합친다", () => {
+  assert.deepEqual(partsOf("창세 6:5, 7:1, 6:9"), [[6, "5,9"], [7, "1"]]);
+});
+
+test("tryVerseRef: 장을 넘는 범위는 앞 장은 끝까지, 사이의 장은 전체, 끝 장은 1절부터", () => {
+  assert.deepEqual(partsOf("창세 61:10-62:3"), [[61, "10-999"], [62, "1-3"]]);
+  assert.deepEqual(partsOf("창세 1:20-3:4"), [[1, "20-999"], [2, "1-999"], [3, "1-4"]]);
+});
+
+test("tryVerseRef: 장을 넘는 범위 뒤의 구간은 끝 장의 절이다", () => {
+  assert.deepEqual(partsOf("창세 9:35-10:1, 5-8"), [[9, "35-999"], [10, "1-1,5-8"]]);
+  assert.deepEqual(partsOf("창세 13:1-2, 25-14:1, 26-35"), [[13, "1-2,25-999"], [14, "1-1,26-35"]]);
+});
+
+test("tryVerseRef: 절의 반쪽 표시는 지운다", () => {
+  assert.deepEqual(partsOf("요한 2:42-47상"), [[2, "42-47"]]);
+  assert.deepEqual(partsOf("창세 45:6하-8, 18, 21하"), [[45, "6-8,18,21"]]);
+  assert.deepEqual(partsOf("창세 7:8ㄱ"), [[7, "8"]]);
+  assert.deepEqual(partsOf("창세 1:1–2:4a"), [[1, "1-999"], [2, "1-4"]]);
+  assert.deepEqual(partsOf("창세 63:19하-64:8"), [[63, "19-999"], [64, "1-8"]]);
+});
+
+test("tryVerseRef: 빈 구간, 없는 장, 거꾸로 된 장은 구절로 읽지 않는다", () => {
+  for (const q of ["요한 3:16,", "요한 3:16,,18", "요한 3:,16", "없는책 1:1, 3", "요한 0", "요한 0:5", "요한 5:1-3:2", "요한 3:1:2"]) {
+    assert.equal(ctx.tryVerseRef(q), null, q);
+  }
+});
+
+test("tryVerseRef: 범위의 한쪽 끝이 0이면 구절로 읽지 않는다", () => {
+  // 「요한 3:16,18-0」을 읽으면 주소가 「0-18」이 되어 따로 적은 16절까지 강조되지 않았다.
+  for (const q of ["요한 3:16,18-0", "요한 3:5-0", "요한 3:0-5", "창세 61:10-62:0", "창세 61:0-62:3"]) {
+    assert.equal(ctx.tryVerseRef(q), null, q);
+  }
+});
+
+test("tryVerseRef: 0절 하나는 그 장을 여는 표기로 남는다", () => {
+  assert.deepEqual(partsOf("창세 1:0"), [[1, "0"]]);
+});
+
+test("tryVerseRef: 번호는 세 자리까지다", () => {
+  for (const q of ["요한 1000", "요한 3:1000", "요한 3:1-1000:1"]) {
+    assert.equal(ctx.tryVerseRef(q), null, q);
+  }
+});
+
+test("tryVerseRef: 낱말 검색의 쉼표는 본문 글자로 남는다", () => {
+  for (const q of ["나의 목자, 아쉬울 것", "요한, 야고보", "요한 3, 사랑", "사랑 3:16"]) {
+    assert.equal(ctx.tryVerseRef(q), null, q);
+  }
+});
+
+test("tryVerseRef: 긴 입력에서도 바로 끝난다", () => {
+  const start = Date.now();
+  assert.equal(ctx.tryVerseRef(`창세 1:${"1, ".repeat(50_000)}사랑`), null);
+  assert.equal(ctx.tryVerseRef("1".repeat(100_000)), null);
+  assert.equal(ctx.tryVerseRef(`창세 ${"1 ".repeat(50_000)}`), null);
+  assert.ok(Date.now() - start < 1000);
+});
+
+test("tryVerseRef: 구간은 200개까지다", () => {
+  const verses = (n) => Array.from({ length: n }, (_, i) => `${i + 1}:1`).join(", ");
+  assert.equal(partsOf(`창세 ${verses(200)}`).length, 200);
+  assert.equal(ctx.tryVerseRef(`창세 ${verses(201)}`), null);
+  const chapters = (n) => Array.from({ length: n }, (_, i) => i + 1).join(", ");
+  assert.equal(partsOf(`창세 ${chapters(200)}`).length, 200);
+  assert.equal(ctx.tryVerseRef(`창세 ${chapters(201)}`), null);
+  // 가장 긴 책 한 권을 모두 적는 범위는 읽고, 그보다 훨씬 긴 범위는 읽지 않는다.
+  assert.equal(partsOf("창세 1:1-150:6").length, 150);
+  assert.equal(ctx.tryVerseRef("창세 1:1-999:1"), null);
+});
+
+test("tryVerseRef: 큰 범위를 되풀이한 검색어는 펼치다가 바로 멈춘다", () => {
+  const start = Date.now();
+  assert.equal(ctx.tryVerseRef(`창세 ${Array(1000).fill("1:1-999:1").join(", ")}`), null);
+  assert.ok(Date.now() - start < 100);
 });
 
 test("tryVerseRef: 전체 한글 책 이름(meta.books.ko)으로도 매칭", () => {

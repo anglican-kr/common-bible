@@ -28,16 +28,17 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SEARCH_PATH = path.resolve(__dirname, "../../js/app/search.js");
 const SEARCH_SOURCE = fs.readFileSync(SEARCH_PATH, "utf8");
+const VERSE_SPEC_SOURCE = fs.readFileSync(path.resolve(__dirname, "../../js/app/verse-spec.js"), "utf8");
 
-function extractBlock(name) {
+function extractBlock(name, source = SEARCH_SOURCE) {
   const begin = `// ── BEGIN ${name} ──`;
   const end = `// ── END ${name} ──`;
-  const startIdx = SEARCH_SOURCE.indexOf(begin);
-  const endIdx = SEARCH_SOURCE.indexOf(end);
+  const startIdx = source.indexOf(begin);
+  const endIdx = source.indexOf(end);
   if (startIdx < 0 || endIdx < 0) {
-    throw new Error(`marker block ${name} not found in js/app/search.js`);
+    throw new Error(`marker block ${name} not found`);
   }
-  return SEARCH_SOURCE.slice(startIdx, endIdx + end.length);
+  return source.slice(startIdx, endIdx + end.length);
 }
 
 // ── Minimal DOM stub ─────────────────────────────────────────────────────────
@@ -252,10 +253,13 @@ function loadPureHelpers() {
     encodeURIComponent, Date, isNaN,
   };
   vm.createContext(ctx);
+  vm.runInContext(extractBlock("VERSE_SPEC", VERSE_SPEC_SOURCE), ctx, { filename: "verse-spec.js" });
   vm.runInContext(EL_SHIM + extractBlock("PURE HELPERS"), ctx, { filename: "search-pure-helpers.js" });
   return {
     ctx,
     document,
+    verseRefTargets: ctx.verseRefTargets,
+    isWellFormedSpec: ctx.isWellFormedSpec,
     appendTextWithHighlight: ctx.appendTextWithHighlight,
     splitPiecesByMatches: ctx.splitPiecesByMatches,
     highlightTextNodes: ctx.highlightTextNodes,
@@ -477,6 +481,67 @@ test("buildSnippet: returns DocumentFragment containing one span", () => {
   assert.strictEqual(frag.nodeType, 11);
   assert.strictEqual(frag.children.length, 1);
   assert.strictEqual(frag.children[0].tagName, "SPAN");
+});
+
+// ── verseRefTargets: 구절 바로가기의 주소와 표시 ─────────────────────────────
+
+const target1 = (helpers, verses, chapter = 3) =>
+  helpers.verseRefTargets({ bookId: "john", parts: [{ chapter, verses }] })[0];
+
+test("verseRefTargets: 쉼표 목록은 여러 구간 주소와 표시가 된다", () => {
+  const r = target1(loadPureHelpers(), "16,18-19");
+  assert.strictEqual(r.path, "/john/3/16,18-19");
+  assert.strictEqual(r.verses, "16, 18-19절");
+  assert.strictEqual(r.chapter, 3);
+});
+
+test("verseRefTargets: 절 하나와 범위 하나는 예전 주소 그대로다", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(target1(h, "3").path, "/john/3/3");
+  assert.strictEqual(target1(h, "3-11").path, "/john/3/3-11");
+  assert.strictEqual(target1(h, "3-11").verses, "3-11절");
+});
+
+test("verseRefTargets: 친 순서가 뒤섞이고 겹쳐도 주소 검사를 통과하는 표기로 쓴다", () => {
+  const h = loadPureHelpers();
+  for (const [typed, spec] of [
+    ["18-19,16", "16,18-19"],
+    ["16-18,17-20", "16-20"],
+    ["16,16", "16"],
+    ["16,17", "16-17"],
+    ["19-18,16", "16,18-19"],
+    ["25-999,1-2", "1-2,25-999"],
+    ["1-1,5-8", "1,5-8"],
+  ]) {
+    assert.strictEqual(target1(h, typed).path, `/john/3/${spec}`, typed);
+    assert.ok(h.isWellFormedSpec(spec), spec);
+  }
+});
+
+test("verseRefTargets: 장의 끝까지 가는 구간은 「부터」로 적는다", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(target1(h, "10-999").path, "/john/3/10-999");
+  assert.strictEqual(target1(h, "10-999").verses, "10절부터");
+  assert.strictEqual(target1(h, "1-2,25-999").verses, "1-2, 25절부터");
+});
+
+test("verseRefTargets: 장 전체와 0절은 절 없이 장으로 간다", () => {
+  const h = loadPureHelpers();
+  for (const verses of ["1-999", "0"]) {
+    const r = target1(h, verses);
+    assert.strictEqual(r.path, "/john/3", verses);
+    assert.strictEqual(r.verses, "", verses);
+  }
+});
+
+test("verseRefTargets: 장마다 하나씩 적은 차례대로 돌려준다", () => {
+  const { verseRefTargets } = loadPureHelpers();
+  const r = verseRefTargets({
+    bookId: "1sam",
+    parts: [{ chapter: 18, verses: "6-9" }, { chapter: 19, verses: "1-7" }],
+  });
+  assert.deepEqual(Array.from(r, (t) => t.path), ["/1sam/18/6-9", "/1sam/19/1-7"]);
+  assert.deepEqual(Array.from(r, (t) => t.verses), ["6-9절", "1-7절"]);
 });
 
 // ── buildSearchUrl (ADR-033) ─────────────────────────────────────────────────

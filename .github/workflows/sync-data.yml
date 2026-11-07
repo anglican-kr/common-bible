@@ -134,7 +134,8 @@ jobs:
                       tests/unit/liturgical-fixtures.data.test.js \
                       tests/unit/lectionary.data.test.js \
                       tests/unit/calendar.data.test.js \
-                      tests/unit/citations.data.test.js
+                      tests/unit/citations.data.test.js \
+                      tests/unit/search-worker.data.test.js
 
       # 앞 실행이 만든 자동 PR은 테스트를 기다리느라 아직 머지되지 않았을 수 있다. 그때 main은
       # 옛 포인터라 바뀐 것이 있는 것처럼 보인다. 그래서 같은 포인터로 올리는 자동 PR이 이미
