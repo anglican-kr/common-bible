@@ -3,7 +3,8 @@
 
 // Audio Player — extracted from views.js (ADR-034 PR1, follow-up to
 // ADR-018 Phase 7). Owns the per-chapter MP3 player UI, playback state, and the
-// #audio-bar lifecycle (build / teardown / live toggle / unavailable message).
+// #audio-bar lifecycle (build / teardown / live toggle / the notice shown when
+// the mp3 cannot load).
 //
 // Dependencies point downward only: appHelpers (el / clearNode / _$),
 // appStorage (audio time + show flag + persist hint), window.bibleAudioCache
@@ -39,6 +40,119 @@ function formatTime(sec) {
   const s = Math.floor(sec % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
+
+// ── BEGIN AUDIO_ERROR_NOTICE ── (tests/unit/audio-player.test.js가 이 블록을 잘라 내어 검증한다)
+// Which notice the audio bar shows when a chapter's mp3 fails to load (ADR-016 D4). The media error cannot say why:
+// Chromium reports a 404, a dropped connection and an offline device with the same MediaError (code 4), so the reasons
+// are checked one by one, cheapest first, and the network is asked only when the first two leave "offline" possible.
+// 오프라인이고, 오디오가 있는 장인데 이 기기에 저장되어 있지 않아 불러오지 못하면 「인터넷에 연결하면 들을 수 있습니다.」를,
+// 그 밖에는 「오디오 파일을 준비 중입니다.」를 보인다. 캐시에서 지운 장과 한 번도 듣지 않은 장은 구별하지 않는다
+// (사용자 결정 2026-11-07, known-issues §26).
+
+/** @typedef {"offline" | "unavailable"} AudioNotice */
+
+/** @type {Record<AudioNotice, string>} */
+const AUDIO_NOTICE_TEXT = {
+  offline: "인터넷에 연결하면 들을 수 있습니다.",
+  unavailable: "오디오 파일을 준비 중입니다.",
+};
+
+const AUDIO_MANIFEST_URL = "/data/audio-manifest.json";
+// On a Wi-Fi with no internet a request can hang for a long time; past this, treat the server as unreachable.
+const NETWORK_WAIT_MS = 5000;
+
+/**
+ * Key of a chapter's mp3 in `audio-manifest.json` entries. Chapter 0 is a book's prologue (`sir-0`).
+ * @param {string} bookId @param {number} chapter
+ */
+function audioManifestKey(bookId, chapter) {
+  return `audio/${bookId}-${chapter}.mp3`;
+}
+
+/**
+ * fetch() that gives up after NETWORK_WAIT_MS, or as soon as `signal` aborts (the player was torn down).
+ * @param {string} url @param {RequestInit} init @param {AbortSignal} signal
+ * @returns {Promise<Response>}
+ */
+async function _fetchWithin(url, init, signal) {
+  const ctl = new AbortController();
+  const stop = () => ctl.abort();
+  const timer = setTimeout(stop, NETWORK_WAIT_MS);
+  if (signal.aborted) stop();
+  else signal.addEventListener("abort", stop);
+  try {
+    return await fetch(url, { ...init, signal: ctl.signal });
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", stop);
+  }
+}
+
+/**
+ * Does the audio manifest list this mp3? sw.js precaches the manifest into its shell cache and refreshes that copy on
+ * every online start, so Cache Storage is read first and the answer never waits on the network. The network is asked
+ * only when no worker has cached it (first visit, or no service worker). Unreadable → false (the 「준비 중」 notice).
+ * @param {string} key @param {AbortSignal} signal @returns {Promise<boolean>}
+ */
+async function audioListed(key, signal) {
+  try {
+    /** @type {Response | undefined} */
+    let res;
+    try {
+      res = await caches.match(AUDIO_MANIFEST_URL);
+    } catch { /* no Cache Storage (insecure context, some private modes): ask the network */ }
+    if (!res) res = await _fetchWithin(AUDIO_MANIFEST_URL, {}, signal);
+    if (!res.ok) return false;
+    const manifest = await res.json();
+    const entries = manifest && manifest.entries;
+    return typeof entries === "object" && entries !== null && Object.prototype.hasOwnProperty.call(entries, key);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Is the mp3 saved on this device? Looks it up in Cache Storage as sw.js does before playing it; ignoreVary so a
+ * response stored with a Vary header still counts as saved. Unreadable → false.
+ * @param {string} src @returns {Promise<boolean>}
+ */
+async function audioStored(src) {
+  try {
+    return !!(await caches.match(src, { ignoreVary: true }));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Can the app reach its server right now? navigator.onLine is false only when the device has no network at all; it
+ * stays true on a Wi-Fi with no internet, so the server is asked. A HEAD request skips the service worker (sw.js handles
+ * GET only), and any HTTP answer, 404 included, means the network works.
+ * @param {string} src @param {AbortSignal} signal @returns {Promise<boolean>}
+ */
+async function serverReachable(src, signal) {
+  if (navigator.onLine === false) return false;
+  try {
+    await _fetchWithin(src, { method: "HEAD", cache: "no-store" }, signal);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Pick the notice for a chapter whose mp3 failed to load. Never rejects.
+ * @param {string} src  the mp3 path the player requested
+ * @param {string} key  its manifest key (audioManifestKey)
+ * @param {AbortSignal} signal  the player's signal; leaving the chapter cancels the pending requests
+ * @returns {Promise<AudioNotice>}
+ */
+async function audioErrorNotice(src, key, signal) {
+  if (!(await audioListed(key, signal))) return "unavailable"; // no recording for this chapter: connecting will not help
+  if (await audioStored(src)) return "unavailable"; // the saved file itself failed: connecting will not help either
+  return (await serverReachable(src, signal)) ? "unavailable" : "offline";
+}
+// ── END AUDIO_ERROR_NOTICE ──
 
 function _teardownAudio() {
   if (_audioController) { _audioController.abort(); _audioController = null; }
@@ -193,21 +307,29 @@ function showAudioPlayer(bookId, chapter) {
     seekingByUser = false;
   });
 
-  // Error: audio not found → show unavailable message
+  // Error: the mp3 did not load (preload="metadata" fetches it when the chapter opens, before any play). Find out why,
+  // then replace the player with the matching notice.
   audio.addEventListener("error", () => {
-    _teardownAudio();
-    showAudioUnavailable();
+    audioErrorNotice(src, audioManifestKey(bookId, chapter), signal).then((notice) => {
+      // Leaving the chapter or turning the player off while the checks ran aborted this signal; this chapter's notice
+      // must not replace the bar the next chapter has built.
+      if (signal.aborted) return;
+      _teardownAudio();
+      showAudioUnavailable(notice);
+    });
   }, { signal });
 
   $audioBar.appendChild(container);
   $audioBar.hidden = false;
 }
 
-function showAudioUnavailable() {
+/** @param {AudioNotice} notice */
+function showAudioUnavailable(notice) {
   clearNode($audioBar);
   const msg = el("p", { className: "audio-unavailable" });
+  // 두 안내 모두 같은 아이콘을 쓴다.
   msg.appendChild(el("span", { className: "audio-unavailable-icon", "aria-hidden": "true" }));
-  msg.appendChild(document.createTextNode(" 오디오 파일을 준비 중입니다."));
+  msg.appendChild(document.createTextNode(` ${AUDIO_NOTICE_TEXT[notice]}`));
   $audioBar.appendChild(msg);
   $audioBar.hidden = false;
 }
