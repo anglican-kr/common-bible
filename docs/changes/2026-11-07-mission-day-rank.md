@@ -32,3 +32,7 @@ title: "fix: 9.29 선교 기념일을 주요축일로 되돌림"
 - `docs/design/liturgical-engine/05-lookup-layer.md`: facts 블록, 날짜 조인 수, 폴백 표, 후보 상태 ③.
 - `docs/design/liturgical-engine/06-rank-transfer-color.md`: 고정일끼리의 겹침.
 - `docs/design/liturgical-engine/09-open-items.md`: 미결18, 미결49.
+
+## 리뷰 반영
+
+- 1회차(Copilot): 독서를 빌려 준 후보가 옮겨 갔거나 생략되었거나, 본기도 없는 두 후보가 서로를 근거로 삼으면 그 독서를 고를 곳이 없어진다는 지적. 맞다. 빌려 준 쪽을 「그날 지키고(`proper`) 자기 본기도가 있는 후보」로 좁혔다. 세 경우를 합성 시험 하나로 묶었다(유닛 1,566건 통과). 9.29 화면은 그대로다.

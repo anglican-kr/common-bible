@@ -884,9 +884,12 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   // 자기 독서가 없이 같은 날 이름 있는 다른 전례일의 독서 레코드를 그대로 받는 후보도 본문 없는 날로 본다 — 본기도가 없고 독서는 남의
   // 것이라 눌러도 그 전례일과 같은 화면이다. 9.29 대한성공회 선교 기념일(주요축일C)이 성 미카엘의 독서를 받는다(날짜 조인, 설계서 §5.4
   // 미결12). 2025-2050에 이 날뿐이다(사용자 결정 2026-11-07, ADR-041 §6).
+  // 빌려 준 쪽은 그날 지키고(`proper`) 자기 본기도가 있는 후보여야 한다 — 그래야 그 독서가 화면에 남는다. 옮겨 갔거나 생략된 후보와 같다고
+  // 감추면 그 독서를 고를 곳이 없어지고, 본기도 없는 두 후보가 서로를 근거로 함께 사라질 수 있다(PR #510 리뷰).
   const readingIds = (/** @type {Candidate} */ c) => groupsOf(c).map((g) => g.id).join();
   const borrowsReadings = (/** @type {Candidate} */ c) => !isGrid(c) && !!readingIds(c)
-    && resolved.candidates.some((o) => o !== c && !isGrid(o) && readingIds(o) === readingIds(c));
+    && resolved.candidates.some((o) => o !== c && !isGrid(o) && o.status === "proper" && !o.evening
+      && collectsFor(collectEntries, o).length > 0 && readingIds(o) === readingIds(c));
   const textless = (/** @type {Candidate} */ c) => c !== initial && (!groupsOf(c).length || borrowsReadings(c))
     && !collectsFor(collectEntries, c).length;
   // 기념만 하거나 생략하는 후보는 누를 수 없는 글이다 — 고유 독서가 있어도 그날 화면을 옮기지 않는다(사용자 결정 2026-11-04). 기리는
