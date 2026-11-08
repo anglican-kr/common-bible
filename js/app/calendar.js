@@ -47,7 +47,7 @@ const $app = _$("app");
 // 이름은 views.js에 있다 — 이 모듈을 받지 못했을 때 라우터가 같은 제목으로 실패 화면을 그린다.
 const PAGE_TITLE = LITURGICAL_VIEWS.calendar.title;
 
-/** parsePath 가 /calendar 에서 내는 서술자(routing.js PARSE_PATH — 정의는 types.d.ts `Route`). @typedef {import("../types.js").CalendarRoute} CalendarRoute */
+/** parsePath가 /calendar에서 내는 서술자(routing.js PARSE_PATH — 정의는 types.d.ts `Route`). @typedef {import("../types.js").CalendarRoute} CalendarRoute */
 /**
  * 이름 하나 — 목록 줄의 이름 줄 원소. `away` 는 그날 지키지 않는 후보(옮겨 감 · 생략)라 흐리게 그린다.
  * @typedef {{ name: string, title: string, suffix: string, away: boolean }} CalendarName

@@ -8,7 +8,7 @@
 
 | 겹 | 도구 | 무엇을 보나 | 어디서 실행하나 | 규모 |
 |---|---|---|---|---|
-| **유닛** | `node --test` (의존성 0) | 순수 로직(함수의 입출력, 상태 계산)과 문서와 픽스처의 일관성 | **CI 자동** (PR마다) | 38파일, 1663케이스 |
+| **유닛** | `node --test` (의존성 0) | 순수 로직(함수의 입출력, 상태 계산)과 문서와 픽스처의 일관성 | **CI 자동** (PR마다) | 39파일, 1669케이스 |
 | **타입 검사** | `tsc --noEmit` (JSDoc, `js/` 전체, `checkJs`) | 타입 불일치와 오타 | **CI 자동**(「Unit tests」 잡)과 로컬 훅 | 설정 2종(앱, 검색 워커) |
 | **E2E** | Playwright (실제 브라우저) | 화면, 상호작용, 모듈 간 연결 | **로컬 전용**(수동) | 32파일, 597케이스 |
 | **데이터** | pytest (`common-bible-data` 서브모듈) | 성경 본문과 검색 인덱스의 일관성 | 그 저장소 CI | 별도 저장소 |
@@ -25,7 +25,7 @@
 
 ## 1. 유닛 테스트: `tests/unit/`
 
-순수 JS 로직을 Node의 내장 테스트 러너와 자체 `vm` 하네스로 검증한다. 의존성은 없고, CI가 PR마다 자동으로 실행한다. 모듈 하나에 테스트 파일 하나를 둔다(`<소스이름>.test.js`). 실데이터(`data/`의 표)를 읽어야 하는 케이스는 `<소스이름>.data.test.js`로 따로 두고, 데이터가 없으면 건너뛰는 조건(`haveData`)을 붙여 `engine-data.yml`과 `sync-data.yml`에서 실행한다. 공개 CI의 `Unit tests` 잡은 비공개 `data/` 서브모듈을 받지 않기 때문이다(선례 `liturgical-engine.data.test.js` · `lectionary.data.test.js`, 설계서 §7). 테스트 파일 안은 `// ── <영역> ──` 주석으로 구역을 나눈다(ADR-013). 상세 규약은 [ADR-013](../docs/decisions/013-client-js-unit-tests.md). 예외는 둘이다. 문서를 읽는 테스트(`docs-*.test.js`: 설계서 `facts` 블록과 실데이터의 대조, 설계 문서 교차 참조, 저장소 문서의 참조 검사)와 픽스처 테스트(`liturgical-fixtures.test.js`: `tests/fixtures/liturgical/`는 교회력 엔진이 실제 연도에서 내야 할 값의 **기준**이고, 스키마는 그 README와 설계서 §1.4에 있다)다. 이들이 함께 쓰는 문서 앵커 추출기와 설계서를 읽는 함수(목차와 장 파일을 이어 붙인다)는 `unit/docs-anchors.js`에 한 벌만 둔다(`harness.js`처럼 `*.test.js` 글롭 밖의 공용 모듈). 사본을 두면 곧 어긋나기 때문이다. 픽스처의 전례일 식별자가 실데이터에 실재하는지는 `liturgical-fixtures.data.test.js`가 `engine-data.yml`과 `sync-data.yml`에서 확인한다.
+순수 JS 로직을 Node의 내장 테스트 러너와 자체 `vm` 하네스로 검증한다. 의존성은 없고, CI가 PR마다 자동으로 실행한다. 모듈 하나에 테스트 파일 하나를 둔다(`<소스이름>.test.js`). 실데이터(`data/`의 표)를 읽어야 하는 케이스는 `<소스이름>.data.test.js`로 따로 두고, 데이터가 없으면 건너뛰는 조건(`haveData`)을 붙여 `engine-data.yml`과 `sync-data.yml`에서 실행한다. 공개 CI의 `Unit tests` 잡은 비공개 `data/` 서브모듈을 받지 않기 때문이다(선례 `liturgical-engine.data.test.js` · `lectionary.data.test.js`, 설계서 §7). 테스트 파일 안은 `// ── <영역> ──` 주석으로 구역을 나눈다(ADR-013). 상세 규약은 [ADR-013](../docs/decisions/013-client-js-unit-tests.md). 예외는 둘이다. 문서를 읽는 테스트(`docs-*.test.js`: 설계서 `facts` 블록과 실데이터의 대조, 설계 문서 교차 참조, 저장소 문서의 참조 검사)와 픽스처 테스트(`liturgical-fixtures.test.js`: `tests/fixtures/liturgical/`는 교회력 엔진이 실제 연도에서 내야 할 값의 **기준**이고, 스키마는 그 README와 설계서 §1.4에 있다)다. 이들이 함께 쓰는 문서 앵커 추출기와 설계서를 읽는 함수(목차와 장 파일을 이어 붙인다)는 `unit/docs-anchors.js`에 한 벌만 둔다(`harness.js`처럼 `*.test.js` 글롭 밖의 공용 모듈). 사본을 두면 곧 어긋나기 때문이다. 같은 까닭으로 `sw.test.js`와 `tsconfig.test.js`가 함께 쓰는 모듈 그래프 읽기(주석과 문자열을 걸러 내는 `codeView`, `import`를 끝까지 따라가는 `importClosure`)도 `unit/module-graph.js`에 한 벌만 둔다. 픽스처의 전례일 식별자가 실데이터에 실재하는지는 `liturgical-fixtures.data.test.js`가 `engine-data.yml`과 `sync-data.yml`에서 확인한다.
 
 ```bash
 node --test tests/unit/*.test.js          # 전체 (CI와 동일)
@@ -65,6 +65,7 @@ node --test tests/unit/storage.test.js    # 개별 파일
 | `tabbar.test.js` | 모바일 탭 바 — 활성 표시·인디케이터 | 12 |
 | `tab-history.test.js` | 탭별 히스토리 복원(ADR-031) — `tabOf` 분류(`/lectionary`·`/calendar`는 캘린더 탭) | 17 |
 | `sw.test.js` | 서비스 워커 정적 검증 — `SHELL_FILES` 존재·`index.html` 패리티·`import` 닫힘(정적 `import`와 지정자가 글자 그대로인 동적 `import()`, 주석과 문자열을 뺀 코드에서 읽는다, 그 파서의 엣지 케이스 포함)과 거꾸로(프리캐시한 스크립트는 `Worker`·`importScripts` 대상만 빼고 `import`로 이어진다)·지연 로드(`js/`의 `import()`는 모두 글자 그대로 · `import()`로 불러오는 모듈은 부팅 그래프 밖 · `routing.js`의 한꺼번에 묶음은 그 화면 모듈의 정적 `import`에서 부팅 그래프를 뺀 것과 같다 — ADR-038 §2)·`cacheNameFor` 라우팅·매니페스트 대조(`data/` 없으면 건너뜀, `sync-data.yml`에서 실행) | 12 |
+| `tsconfig.test.js` | TypeScript의 모듈 판정 전제(ADR-012 「컴파일러 옵션」). 브라우저가 모듈로 부르는 `js/` 파일(`<script type="module">`, 정적과 동적 `import`)에는 `import`나 `export`가 있고, 일반 스크립트로 부르는 파일(`type`이 없는 `<script>`, `new Worker`, `importScripts`)에는 없다. 모든 `js/` 파일이 꼭 한쪽으로 불린다. 두 tsconfig의 `moduleDetection`이 `legacy`다. 선언만 세는 판정 함수(`hasModuleSyntax`) | 6 |
 | `docs-data-consistency.test.js` | 설계서 `facts` 블록 ↔ `data/lectionary` 실측 대조(`data/` 없으면 건너뜀, `sync-data.yml`에서 실행) | 2 |
 | `docs-crossref.test.js` | 교회력 설계 문서 5종(설계서·검토 문서·ADR-036/037/038)와 status/architecture의 교차 참조 — `§n.m`·`미결n`·`C-/X-/I-`·`R-` 규칙 마커·픽스처 식별자가 실재하는 앵커를 가리키는지(참조원 둘도 같은 검사 — 폐지된 `Qn`은 검토 문서 §6의 Q→미결 대응표로 풀고 Q1-Q14를 전부 덮는지 본다), 설계서 § 헤딩 목록·§9 항목(§9.1 열림과 §9.2 닫힘을 합쳐 1..N, 각 목록 번호순, §9.1은 일곱 필드 전부, §9.2는 한 줄 + 닫힘 날짜)·ADR 미결 번호가 문서 순서대로 1..n(재부여 · 건너뜀 · 순서 바꿈 금지) · ADR 「미결 사항」 각 항목이 닫힘 또는 「→ 설계서 미결n」로 이어받음(그 목록이 옛 ADR 미결 번호의 대응표), R- 마커 1회 정의, 검토 문서 §6이 설계서 §9.1의 「확인 주체 = 사제」 뷰와 같은지(미결 집합 · 상태 첫 낱말). 표기 금지 게이트는 인라인 코드를 뺀 산문만 보며 **문서 단위로** 켠다 — ②(2026-10-09)에서 기준 문장(전 문서) · 동그라미 참조 · Qn · 편집 원칙(설계서)을 켰고 ③(2026-10-10)이 검토 문서를, ④(2026-10-10)가 ADR 셋을 더하며 ADR 미결 번호 참조 게이트를 켰다(면제 줄 없음 — 다섯 문서 모두) | 14 |
 | `docs-wiki.test.js` | 저장소 문서의 참조(docs 재구성, 2026-10-22) — 「pitfalls §N」 「known-issues §N」 참조가 지금 문서의 절로 풀리는지, 본문의 `docs/…` 경로(glob 포함)와 마크다운 상대 링크가 실재하는지, `docs/index.md`가 인용한 파일과 ADR이 실재하는지. 주제 문서(`docs/topics/`)는 대장 줄과 정의가 하나씩 맞는지, 정한 틀(`## ` 제목의 종류와 순서, 「소유 코드:」)을 지키는지, 모든 `js/` 파일을 정확히 한 주제가 소유하는지도 본다. 범위는 git이 아는 텍스트 파일에서 `docs/changes/`(머지된 원장) · `docs/archive/` · `data/` · `tests/fixtures/`를 뺀 것. 일부러 지운 파일의 이력 언급은 테스트의 `RETIRED` 목록으로 허용한다 | 7 |
