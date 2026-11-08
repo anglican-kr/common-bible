@@ -67,10 +67,10 @@
 | `docs/decisions/019-esm-module-system.md` | 65 | #475 |
 | `docs/decisions/020-monorepo-split.md` | 62 | #475 |
 | `docs/decisions/021-pwa-versioning-content-hash.md` | 98 | #475 |
-| `docs/decisions/022-citations-and-annotations.md` | 182 | 대기 |
-| `docs/decisions/023-settings-toggle-switches.md` | 50 | 대기 |
-| `docs/decisions/024-book-list-tabs-and-header-nav.md` | 55 | 대기 |
-| `docs/decisions/025-header-scroll-elevation.md` | 59 | 대기 |
+| `docs/decisions/022-citations-and-annotations.md` | 182 | #529 |
+| `docs/decisions/023-settings-toggle-switches.md` | 50 | #529 |
+| `docs/decisions/024-book-list-tabs-and-header-nav.md` | 55 | #529 |
+| `docs/decisions/025-header-scroll-elevation.md` | 59 | #529 |
 | `docs/decisions/027-source-dsl-and-parallel-passages.md` | 128 | 대기 |
 | `docs/decisions/028-design-system.md` | 93 | 대기 |
 | `docs/decisions/029-mobile-tab-bar.md` | 89 | 대기 |
