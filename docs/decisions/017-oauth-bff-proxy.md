@@ -34,7 +34,7 @@ nginx   → POST https://oauth2.googleapis.com/token
               body: 위 + &client_secret={server-only-value}
 ```
 
-가상 호스트(vhost)마다(`bible.anglican.kr`, `dev.anglican.kr`) 자기 OAuth 클라이언트의 비밀값을 별도 파일(`/etc/nginx/snippets/oauth-secret-{bible,dev}.conf`)에 두고, 사이트 설정 파일이 그 파일을 불러온다(`include`). 비밀값 파일은 root만 읽을 수 있다(2026-07-28부터). SPA 번들, git 이력, CDN 어디에도 비밀값이 없다.
+가상 호스트(vhost)마다(`bible.anglican.kr`, `dev.anglican.kr`) 자기 OAuth 클라이언트의 비밀값을 별도 파일(`/etc/nginx/snippets/oauth-secret-{bible,dev}.conf`)에 두고, 사이트 설정 파일이 그 파일을 불러온다(`include`). 비밀값 파일은 서버 관리자(root)만 읽을 수 있다(2026-07-28부터). SPA 번들, git 이력, CDN 어디에도 비밀값이 없다.
 
 `proxy_pass`는 Google 주소를 변수(`$google_oauth`)로 받고, nginx가 요청 때 DNS 서버(`resolver`)에 물어 주소를 찾는다. 설정을 읽을 때 DNS가 응답하지 않아도 nginx가 시작된다(2026-07-28부터, 아래 대안 E).
 
@@ -89,7 +89,7 @@ Google이 발급하는 OAuth 클라이언트 가운데 「Desktop app」이나 �
 
 ## 채택 근거
 
-1. **비밀값을 격리한다**: 브라우저, git, CDN 어디에도 `client_secret`이 없다. 서버의 비밀값 파일(`/etc/nginx/snippets/oauth-secret-{bible,dev}.conf`, 파일 권한 0600, 소유자 root:root)에만 있다. 사이트 설정 파일(`/etc/nginx/sites-available/{bible,dev}`, 파일 권한 0644)에는 비밀값이 없다. nginx는 설정을 root 권한으로 읽으므로 비밀값 파일을 읽을 수 있고, 요청을 처리하는 nginx 작업 프로세스(`www-data` 사용자)는 읽지 못한다.
+1. **비밀값을 격리한다**: 브라우저, git, CDN 어디에도 `client_secret`이 없다. 서버의 비밀값 파일(`/etc/nginx/snippets/oauth-secret-{bible,dev}.conf`, 파일 권한 0600, 소유자 root:root)에만 있다. 사이트 설정 파일(`/etc/nginx/sites-available/{bible,dev}`, 파일 권한 0644)에는 비밀값이 없다. nginx는 설정을 서버 관리자(root) 권한으로 읽으므로 비밀값 파일을 읽을 수 있고, 요청을 처리하는 nginx 작업 프로세스(`www-data` 사용자)는 읽지 못한다.
 2. **인프라 비용이 들지 않는다**: 이미 nginx로 정적 파일을 제공하고 있어 `location` 블록 하나를 더하면 된다. 새 서버나 런타임이 필요 없다.
 3. **운영이 단순하다**: 비밀값을 바꿀 때는 비밀값 파일을 고치고 `nginx -s reload` 한 줄이면 된다. 코드 빌드나 배포와 상관없다.
 4. **검수에 영향이 없다**: 클라이언트 ID가 그대로이므로 `drive.appdata` 검수 결과도 그대로 유효하다.
