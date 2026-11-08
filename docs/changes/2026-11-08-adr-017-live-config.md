@@ -1,4 +1,5 @@
 ---
+pr: 533
 date: 2026-11-08
 branch: docs/adr-017-live-config
 title: "docs: ADR-017을 운영 서버의 지금 설정에 맞춤"
