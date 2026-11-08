@@ -72,6 +72,9 @@ import fs from "node:fs";
 import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  codeView, parseStaticImports, parseDynamicImports, resolveSpec, readSite, importClosure, listJsFiles,
+} from "./module-graph.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "../..");
@@ -147,165 +150,7 @@ test("index.html이 로드하는 모든 로컬 script/style이 SHELL_FILES에 �
 // 아니라 지정자가 글자 그대로인 동적 import()도 따라간다 — routing.js가 캘린더 · 전례독서
 // 모듈을 그 화면에 처음 갈 때 그렇게 불러온다(ADR-038 §2 「구현」). 그 모듈이나 그것이
 // import하는 모듈이 빠지면 오프라인에서 그 화면만 「다시 불러오기」 실패 화면이 된다.
-
-// Source with everything but code blanked to spaces — comments, and the text inside string / template / regex
-// literals (their delimiters stay) — at the same offsets and line breaks. The import patterns below run on this
-// view, so an import in a comment, a JSDoc type (`@type {typeof import("./calendar.js")}`) or a string's text is
-// not an edge; reading the raw text counted those, which could hide a computed specifier from invariant 5 (PR #355
-// review, 2026-10-18). A `/` starts a regex literal where an expression can start (after an operator, an opening
-// bracket or a keyword like `return`), else it divides — the usual heuristic; the "codeView" cases below pin it.
-const REGEX_AFTER_WORD = new Set([
-  "return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw", "case", "do", "else", "yield", "await",
-]);
-
-function codeView(src) {
-  const out = src.split("");
-  const blank = (from, to) => { for (let k = from; k < to; k++) if (out[k] !== "\n") out[k] = " "; };
-  const subs = [];   // brace depth at which each open template substitution `${` began
-  let depth = 0;     // depth of { } in code
-  let prev = "";     // the last code character that isn't white space
-  let word = "";     // the identifier or keyword `prev` ends, if it ends one
-  let i = 0;
-  while (i < src.length) {
-    const c = src[i];
-    if (c === "/" && src[i + 1] === "/") {
-      const nl = src.indexOf("\n", i);
-      const stop = nl < 0 ? src.length : nl;
-      blank(i, stop);
-      i = stop;
-      continue;
-    }
-    if (c === "/" && src[i + 1] === "*") {
-      const close = src.indexOf("*/", i + 2);
-      const stop = close < 0 ? src.length : close + 2;
-      blank(i, stop);
-      i = stop;
-      continue;
-    }
-    if (c === '"' || c === "'") {
-      let j = i + 1;
-      while (j < src.length && src[j] !== c && src[j] !== "\n") j += src[j] === "\\" ? 2 : 1;
-      blank(i + 1, j);
-      i = j + 1;
-      prev = c;
-      word = "";
-      continue;
-    }
-    if (c === "`" || (c === "}" && subs.length && subs[subs.length - 1] === depth)) {
-      // Template text runs from here to the closing backtick or the next `${` (whose code is scanned as code).
-      if (c === "}") subs.pop();
-      let j = i + 1;
-      while (j < src.length && src[j] !== "`" && !(src[j] === "$" && src[j + 1] === "{")) j += src[j] === "\\" ? 2 : 1;
-      blank(i + 1, j);
-      if (src[j] === "$") {
-        subs.push(depth);
-        i = j + 2;
-        prev = "{";
-      } else {
-        i = j + 1;
-        prev = "`";
-      }
-      word = "";
-      continue;
-    }
-    if (c === "/" && (prev === "" || "([{,;:=!&|?+-*%<>~^".includes(prev) || REGEX_AFTER_WORD.has(word))) {
-      let j = i + 1;
-      let inClass = false;
-      while (j < src.length && src[j] !== "\n" && (inClass || src[j] !== "/")) {
-        if (src[j] === "\\") j++;
-        else if (src[j] === "[") inClass = true;
-        else if (src[j] === "]") inClass = false;
-        j++;
-      }
-      if (src[j] === "/") {   // a regex literal — a line break first means it was a division after all
-        blank(i + 1, j);
-        i = j + 1;
-        prev = "/";
-        word = "";
-        continue;
-      }
-    }
-    if (c === "{") depth++;
-    else if (c === "}") depth--;
-    if (/[\w$]/.test(c)) {
-      word = /[\w$]/.test(src[i - 1] ?? "") ? word + c : c;
-      prev = c;
-    } else if (!/\s/.test(c)) {
-      prev = c;
-      word = "";
-    }
-    i++;
-  }
-  return out.join("");
-}
-
-// The literal at `q` (a quote's offset — code view and source agree on offsets): its text, and the offset just past
-// its closing delimiter. The code view keeps the delimiters but blanks the text, so the first matching delimiter after
-// `q` closes it. A template with a substitution keeps its `${` in the code view — the caller treats that as computed.
-function literalAt(src, code, q) {
-  const close = code.indexOf(code[q], q + 1);
-  return { text: src.slice(q + 1, close), inner: code.slice(q + 1, close), end: close + 1 };
-}
-
-const RELATIVE_JS = /^\.{1,2}\/.+\.js$/;
-
-// Static ESM specifiers — `from "./x.js"` (import … from, export … from) and bare `import "./x.js"`.
-function parseStaticImports(src) {
-  const code = codeView(src);
-  const specs = [];
-  for (const m of code.matchAll(/(?<![\w$.])(?:import|from)\s*(["'])/g)) {
-    const { text } = literalAt(src, code, m.index + m[0].length - 1);
-    if (RELATIVE_JS.test(text)) specs.push(text);
-  }
-  return specs;
-}
-
-// Dynamic imports. `specs` are the literal relative `.js` specifiers with their offsets; `computed` lists every
-// import() whose module this can't name — a computed or concatenated specifier, a template with a substitution, or
-// a literal that isn't a relative `.js` path. Invariants 3 and 5 can only follow the first kind.
-function parseDynamicImports(src) {
-  const code = codeView(src);
-  const specs = [];
-  const computed = [];
-  for (const m of code.matchAll(/(?<![\w$.])import\s*\(\s*/g)) {
-    const q = m.index + m[0].length;
-    const line = src.slice(0, m.index).split("\n").length;
-    if (!`"'\``.includes(code[q])) {
-      computed.push(`line ${line}`);
-      continue;
-    }
-    const lit = literalAt(src, code, q);
-    const after = code.slice(lit.end).match(/^\s*([),])/);
-    if (lit.inner.includes("${") || !after || !RELATIVE_JS.test(lit.text)) computed.push(`line ${line}`);
-    else specs.push({ spec: lit.text, at: m.index });
-  }
-  return { specs, computed };
-}
-
-const resolveSpec = (from, spec) => path.posix.normalize(path.posix.join(path.posix.dirname(from), spec));
-const readSite = (p) => fs.readFileSync(path.join(REPO_ROOT, p.slice(1)), "utf8");
-
-// Transitive closure of the imports reachable from `entries` (site-absolute paths) — static ones only (what the page
-// loads at boot), or static + dynamic (everything it can load). Also counts the static import edges it followed: a
-// parser sanity check, kept apart from the dynamic ones so routing.js's import() calls can't make a broken static
-// parser look alive (PR #355 review).
-function importClosure(entries, { dynamic }) {
-  const reachable = new Set();
-  const queue = [...entries];
-  let staticEdges = 0;
-  while (queue.length) {
-    const p = queue.shift();
-    if (reachable.has(p)) continue;
-    reachable.add(p);
-    if (!fs.existsSync(path.join(REPO_ROOT, p.slice(1)))) continue; // existence is invariant 1's job
-    const src = readSite(p);
-    const statics = parseStaticImports(src);
-    staticEdges += statics.length;
-    const specs = dynamic ? [...statics, ...parseDynamicImports(src).specs.map((d) => d.spec)] : statics;
-    for (const spec of specs) queue.push(resolveSpec(p, spec));
-  }
-  return { reachable, staticEdges };
-}
+// 그래프를 읽는 코드(codeView, importClosure)는 module-graph.js에 있다. tsconfig.test.js와 함께 쓴다.
 
 const BOOT_ENTRIES = parseHtmlLocalRefs(INDEX_HTML).filter((p) => p.endsWith(".js"));
 const BOOT_GRAPH = importClosure(BOOT_ENTRIES, { dynamic: false });
@@ -348,10 +193,6 @@ function dynamicTargets() {
   return targets;
 }
 
-function listJsFiles(dir) {
-  return fs.readdirSync(path.join(REPO_ROOT, dir), { withFileTypes: true }).flatMap((e) =>
-    e.isDirectory() ? listJsFiles(`${dir}/${e.name}`) : e.name.endsWith(".js") ? [`${dir}/${e.name}`] : []);
-}
 
 test("js/의 import()는 모두 지정자가 글자 그대로다 — 오프라인 목록 · 부팅 그래프 검사가 따라갈 수 있다", () => {
   const computed = listJsFiles("js").flatMap((f) =>
