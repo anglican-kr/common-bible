@@ -193,7 +193,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | `js/search-worker.js` | Web Worker. 청크 불러오기, 절 검색, 페이지네이션                                                                                    | ~390    |
 | `js/drive-sync.js`    | Drive 동기화 파사드(조정 모듈). PKCE 콜백 처리, 업로드 디바운스, 로그아웃, 「파일도 삭제」(자격 증명을 먼저 지운다), 다른 탭의 로그아웃 감지, 동기화 스낵바(라이브 영역에도 알린다) | ~285    |
 | `js/types.d.ts`       | 도메인 타입을 정의하는 한 곳 ([ADR-012](decisions/012-typescript-incremental-adoption.md))                                               | —       |
-| `js/package.json`     | 타입 검사가 `js/`를 ES 모듈로 읽게 한다(`"type": "module"`). 그래서 확장자 없는 상대 경로가 타입 오류가 된다 ([ADR-012](decisions/012-typescript-incremental-adoption.md) 「컴파일러 옵션」) | —       |
+| `js/package.json`     | 타입 검사가 `js/`의 `import` 경로를 ES 모듈 규칙으로 찾게 한다(`"type": "module"`). 그래서 확장자 없는 상대 경로가 타입 오류가 된다 ([ADR-012](decisions/012-typescript-incremental-adoption.md) 「컴파일러 옵션」) | —       |
 
 **`js/app/` 도메인 모듈 28개** (ADR-018 1차 분할, ADR-022 인용과 주석, ADR-034 2차 분할, `bookmark.js` 분할, 교회력 엔진, 전례독서 뷰, 캘린더 탭):
 
@@ -240,7 +240,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | `js/sync/refresh-store.js` | OAuth 갱신 토큰(refresh token)을 암호화해 저장하는 IndexedDB(AES-GCM 비추출 키)                                              | ~190    |
 | `js/sync/debug-log.js`     | 오래된 줄부터 덮어쓰는 진단 로그                                                                           | ~160    |
 
-위 파일 말고도 `js/types.d.ts`와 `js/package.json`이 있다. 둘 다 TS 컴파일러만 읽는다. `types.d.ts`는 `@typedef`와 `@type`이 참조하고, `package.json`은 `js/`를 ES 모듈로 정한다. 브라우저는 둘 다 읽지 않는다. 의존 순서나 로드 모드를 바꿀 때는 [ADR-019](decisions/019-esm-module-system.md)를 본다.
+위 파일 말고도 `js/types.d.ts`와 `js/package.json`이 있다. 둘 다 TS 컴파일러만 읽는다. `types.d.ts`는 `@typedef`와 `@type`이 참조하고, `package.json`은 `js/`의 `import` 경로를 ES 모듈 규칙으로 찾게 한다. 브라우저는 둘 다 읽지 않는다. 의존 순서나 로드 모드를 바꿀 때는 [ADR-019](decisions/019-esm-module-system.md)를 본다.
 
 ### 4.1 라우팅 (History API SPA)
 
