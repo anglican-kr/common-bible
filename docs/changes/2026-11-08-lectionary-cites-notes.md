@@ -1,4 +1,5 @@
 ---
+pr: 534
 date: 2026-11-08
 branch: feat/lectionary-cites-notes
 title: "feat: 전례독서에서 인용과 주석 표시"
