@@ -36,6 +36,8 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언했고, ADR-005, 010, 01
 - **파일별로 켜기(`checkJs: false` + 파일마다 `// @ts-check`)**: 채택 안 함(2026-10-17, 2026-05-06부터 쓰던 방식). 이유: 지시문이 문 뒤에 오면 그 파일이 오류 없이 검사에서 빠진다(위 「맥락」). 실패가 조용하다. `checkJs: true`에서는 빼는 쪽(`// @ts-nocheck`)이 명시적이고, 그 줄을 잘못 두면 파일이 검사돼 오류로 드러난다. 재검토: 없음.
 - **파일 첫 줄을 보는 유닛 테스트(지시문 순서 검사)**: 채택 안 함(2026-10-17, PR #353 리뷰가 낸 둘째 안). 이유: 지시문 위치만 지킬 뿐, 타입 오류 자체는 여전히 CI 밖이다. 기본 검사와 CI의 타입 검사로 둘 다 해결된다. 재검토: 없음.
 - **타입 검사는 로컬 훅과 수동으로만**: 채택 안 함(2026-10-17). 이유: 훅은 저장소 루트에서 연 Claude Code 세션에서만 실행된다. 사람이 고친 PR이나 상위 폴더에서 연 세션의 PR은 타입 오류가 남은 채 머지될 수 있었다. 재검토: 없음.
+- **TypeScript 6.0에 머무르기**: 채택 안 함(2026-11-08). 이유: TypeScript에는 장기 지원판(LTS)이 없고, 고침판은 지금의 안정판에만 나온다(공식 출시 방침). 6.0은 JS로 만든 마지막 판이다. 재검토: TypeScript를 안에서 불러 쓰는 도구(ESLint 등)를 들일 때. 7.0에는 그런 도구가 쓰는 API가 없어서, 6.0 호환 패키지 `@typescript/typescript6`을 함께 둔다.
+- **`moduleResolution: "nodenext"`와 `js/package.json`(`"type": "module"`)**: 채택 안 함(2026-11-08). TypeScript 안내서가 번들러 없이 브라우저에서 실행하는 코드에 권하는 조합으로, 상대 경로에 확장자를 꼭 쓰게 한다. 시험해 보니 오류가 207건이었다. 147건은 JSDoc의 `import("../types")`에 확장자가 없어서였고, 60건은 암시적 `any` 오류였다. 실제 `import` 문은 이미 모두 `.js`를 적었으므로 버전을 올리는 일과 떼어 미뤘다. 재검토: 확장자 없는 실제 `import`가 문제를 일으킬 때. `"type"` 없이 `nodenext`만 쓰면 오류는 0건이지만 `js/`를 CommonJS로 읽고 확장자도 검사하지 않아서, `bundler`보다 나은 점이 없다.
 - **느슨한 별도 설정으로 큰 파일을 먼저 검사(임시 `tsconfig.app.json`, `checkJs: true`, `noImplicitAny: false`)**: 2026-05-09에 두고 2026-05-10에 지움. 이유: 5,800줄짜리 `js/app.js`에 엄격 모드를 한 번에 켜면 암시적 `any` 타입 오류가 약 262건이라, 느슨한 설정으로 단계를 나눠 검증했다. 모듈 분할(ADR-018) 뒤에는 모듈마다 엄격 모드로 들이는 편이 자연스러웠다. 재검토: 없음.
 
 ## 적용 방식
@@ -84,6 +86,16 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언했고, ADR-005, 010, 01
 - `noEmit: true`: 산출물이 없다. 브라우저는 원본 `.js`를 그대로 불러온다
 - `strict: true`, `noImplicitAny`, `strictNullChecks`: 새 코드는 엄격 모드
 - `skipLibCheck: true`: 외부 타입(특히 `lib.dom.d.ts`와 Web Worker의 충돌) 검사를 건너뛴다
+- `moduleResolution: "bundler"`: 모듈 경로를 찾는 규칙이다. 7.0이 옛 값 `node`(node10)를 없애서 2026-11-08에 바꿨다. 옛 값처럼 확장자 없는 상대 경로를 막지 않는다. 실제 `import` 문은 모두 `.js`를 적는다.
+
+### TypeScript 7
+
+2026-11-08부터 TypeScript 7을 쓴다. 7.0은 컴파일러를 Go로 다시 만든 판이고, JSDoc을 TypeScript 파일과 같은 기준으로 읽는다. 바뀐 점 가운데 이 저장소에서 오류가 난 것은 둘이다.
+
+- `arguments`로 인자를 받는 함수도 받는 인자를 선언해야 한다. 7.0은 `arguments`를 보고 매개변수를 짐작하지 않는다. 나머지 매개변수(`...args`)를 적는다(`gtag-init.js`).
+- 타입 술어(`v is number`)를 돌려주는 함수는 `@returns {v is T}`를 함수에 단다. 변수의 `@type`으로 달면 참과 거짓만 돌려주는 본문이 그 타입에 맞지 않는다는 오류가 난다(`liturgical-engine.js`의 `int`).
+
+그 밖에 7.0이 JSDoc에서 받지 않는 것(Closure 방식의 `function(string): void`, 타입 자리의 값, `@enum`, `@class`, 생성자 함수)은 공식 변경 목록 [typescript-go `CHANGES.md`](https://github.com/microsoft/typescript-go/blob/main/CHANGES.md)에 있다.
 
 ## 검증
 
