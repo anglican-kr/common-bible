@@ -19,7 +19,7 @@
 
 ## 결정
 
-- ADR-022 「본문 인용·주석 표현과 단일 토글 렌더」
+- ADR-022 「본문 인용과 주석 표현, 단일 토글 렌더」
 - ADR-027 「Source markup DSL 위치 잡기 + `<parallel>` element 도입」
 - 본문 데이터의 결정(ADR-002, 003, 006)은 `common-bible-data` 저장소에 있다.
 
