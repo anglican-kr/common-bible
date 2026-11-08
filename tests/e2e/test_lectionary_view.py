@@ -1184,18 +1184,47 @@ def test_other_canticles_are_named_one_way(desktop_context):
     assert re.search(r"\n\n— 하느님 찬미송가 1 \(대한성공회 기도서\)$", text), text[-80:]
 
 
-def test_psalm_copy_keeps_liturgical_marks_and_section_headings(desktop_context):
-    """대림 4주일(2026-12-20) 시편 89:1-4, 19-27 을 통째로 복사하면 ◯ · ¶ · 부 소제목이 다 실린다 — 「(1)」 · 「(2)」는 제 줄,
-    ¶ 뒤 한 칸, 출처는 「(대한성공회 기도서)」(사용자 결정 2026-10-13 — known-issues §4). 종전엔 「(1)」이 빠지고 「(2)그 옛날」로
-    붙어 절 번호처럼 읽혔다. 시편 89는 둘째 세트다(data#42가 성모송가를 첫 세트로 두었다)."""
+def test_psalm_copy_keeps_liturgical_marks(desktop_context):
+    """대림 4주일(2026-12-20) 시편 89:1-4, 19-27 을 통째로 복사하면 ◯ · ¶ 가 실린다 — ¶ 뒤 한 칸, 출처는 「(대한성공회 기도서)」
+    (사용자 결정 2026-10-13 — known-issues §4). 부 소제목 「(1)」 · 「(2)」는 봉독면에 그리지 않아 복사에도 없다(사용자 결정
+    2026-11-08). 시편 89는 둘째 세트다(data#42가 성모송가를 첫 세트로 두었다)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-12-20?set=2")
     verses = ".lect-reading[data-slot='psalm'] article.chapter-text .verse[data-vref]"
     text = page.evaluate(_LECT_COPY_ACROSS, [verses, f"{verses}:last-of-type"])
-    assert text.startswith("(1)\n주여, 내가 당신의 사랑을 영원히 노래하리이다. ◯\n"), text[:120]
-    assert "왕노릇하게 하리라.”\n\n(2)\n그 옛날, 당신께서 스스로 나타나시어, ◯\n" in text, text
+    assert text.startswith("주여, 내가 당신의 사랑을 영원히 노래하리이다. ◯\n"), text[:120]
+    assert "왕노릇하게 하리라.”\n\n그 옛날, 당신께서 스스로 나타나시어, ◯\n" in text, text
     assert "\n¶ “나는 용사들 위에" in text, text
     assert text.endswith("\n\n— 전례시편 89:1-4, 19-27 (대한성공회 기도서)"), text[-80:]
+
+
+def test_reading_hides_psalm_section_headings(desktop_context):
+    """긴 시편의 부 소제목 「(1)」 「(2)」는 봉독면에 그리지 않는다(사용자 결정 2026-11-08). 장 본문 /lps/89 에는 남는다."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-12-20?set=2")
+    psalm = ".lect-reading[data-slot='psalm'] article.chapter-text"
+    assert page.locator(f"{psalm} .verse").count() > 0
+    assert page.locator(".lectionary .psalm-section").count() == 0
+    assert not re.search(r"^\(\d+\)$", page.inner_text(psalm), re.M)
+    page.goto(f"{BASE}/lps/89")
+    page.wait_for_selector("article.chapter-text .verse")
+    assert page.locator(".psalm-section").count() == 2
+
+
+def test_song_reading_hides_speaker_lines(desktop_context):
+    """성 막달라 마리아(07-22) 제1독서 아가 3:1-4 — 4절 끝의 화자 줄 「(신랑)」을 그리지 않고, 그 앞의 연 구분도 남기지 않는다
+    (사용자 결정 2026-11-08). 장 본문 /song/3 에는 남는다."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-07-22")
+    first = ".lect-reading[data-slot='first'] article.chapter-text"
+    assert page.inner_text(".lectionary .lect-reading[data-slot='first'] .lect-ref") == "아가 3:1-4"
+    text = page.inner_text(first)
+    assert "바로 이 방으로 들어왔다네" in text, text
+    assert "(신랑)" not in text, text
+    assert page.eval_on_selector(first, "a => a.lastElementChild.classList.contains('verse')")
+    page.goto(f"{BASE}/song/3")
+    page.wait_for_selector("article.chapter-text .verse")
+    assert "(신랑)" in page.inner_text("article.chapter-text")
 
 
 def test_verse_ids_are_unique_across_slots_and_chapters(desktop_context):
