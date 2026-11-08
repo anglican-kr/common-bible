@@ -15,6 +15,7 @@
   - 코드에 JSDoc으로 타입을 적고 `tsc --noEmit`으로 검사한다. `js/`의 모든 클라이언트 JS를 검사한다(`checkJs: true`, 2026-10-17).
   - CI의 필수 「Unit tests」 잡이 `npm run typecheck`(앱 설정과 워커 설정 둘)를 돌리고, 오류가 없어야 머지된다.
   - TypeScript 7을 쓴다(2026-11-08부터). Go로 다시 만든 판이라 JSDoc을 TypeScript 파일과 같은 기준으로 읽는다. 타입 술어는 `@returns {v is T}`로 달고, 받는 인자는 `arguments` 대신 나머지 매개변수로 선언한다(ADR-012 「TypeScript 7」).
+  - 상대 경로에는 확장자를 꼭 적는다(2026-11-08부터). 모듈 경로 규칙이 `nodenext`이고 `js/package.json`이 `js/`를 ES 모듈로 정해서, 확장자 없는 `import` 경로를 타입 검사가 오류로 잡는다. 브라우저는 그런 경로의 파일을 찾지 못한다. 타입 주석도 `import("../types.js")`로 적는다(ADR-012 「컴파일러 옵션」).
   - 예전에 파일마다 지시문으로 검사를 켜던 때, 지시문이 둘째 줄에 있어 검사 밖이던 파일이 22개 있었다. 2026-10-17 묶음 ① 16개, 2026-10-18 묶음 ② 2개(`views`, `search`)와 묶음 ③ 4개(bookmark 계열)로 모두 검사에 넣었다. `// @ts-nocheck`로 빠진 파일은 없다.
   - 서비스 워커 `sw.js`만 아직 어느 설정에도 들지 않는다(`known-issues.md` §7, 아래 「남은 일」의 known-issues §7.1).
 - **app.js 모듈 분할** (2026-05-10, ADR-018). `js/app.js`를 6,082줄에서 283줄로 줄이고 아홉 개 도메인 모듈로 나눴다. 모듈은 ESM이다(ADR-019). 자세한 내용은 `docs/archive/design/app-modularization.md`에 있다.
