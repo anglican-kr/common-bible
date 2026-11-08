@@ -40,6 +40,7 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언했고, ADR-005, 010, 01
 - **`moduleResolution: "bundler"`**: 채택 안 함(2026-11-08). 7.0이 옛 값 `node`를 없애서 #531에서 대신 들였던 값이다. 이유: 확장자 없는 상대 경로를 받아 준다. 브라우저는 그런 경로의 파일을 찾지 못해 모듈을 불러오지 못하는데, 타입 검사는 통과한다. 재검토: 번들러를 들일 때.
 - **`nodenext`만 쓰고 `"type": "module"`은 두지 않기**: 채택 안 함(2026-11-08). 이유: TypeScript가 `js/`를 CommonJS로 읽어 확장자를 검사하지 않는다. 오류는 0건이지만 `bundler`보다 나은 점이 없다. 재검토: 없음.
 - **`"type": "module"`을 저장소 맨 위 `package.json`에 적기**: 채택 안 함(2026-11-08). 이유: Node가 `tests/`와 `scripts/`의 파일도 ES 모듈로 읽는다. `require`를 쓰는 유닛 테스트 둘(`routing.test.js`, `search-worker.test.js`)이 실행되지 않는다. `js/package.json`은 `js/`에만 적용된다. 재검토: 없음.
+- **`moduleDetection` 기본값(`auto`)**: 채택 안 함(2026-11-08, #532의 첫 판에서 썼다). 이유: `"type": "module"` 아래에서는 `import`나 `export`가 없는 일반 스크립트도 모듈로 본다. 브라우저에서는 일반 스크립트끼리 맨 바깥 이름을 함께 쓰는데, 그 이름이 겹쳐도 검사가 잡지 못했다. 재검토: TypeScript가 `legacy`를 없앨 때.
 - **느슨한 별도 설정으로 큰 파일을 먼저 검사(임시 `tsconfig.app.json`, `checkJs: true`, `noImplicitAny: false`)**: 2026-05-09에 두고 2026-05-10에 지움. 이유: 5,800줄짜리 `js/app.js`에 엄격 모드를 한 번에 켜면 암시적 `any` 타입 오류가 약 262건이라, 느슨한 설정으로 단계를 나눠 검증했다. 모듈 분할(ADR-018) 뒤에는 모듈마다 엄격 모드로 들이는 편이 자연스러웠다. 재검토: 없음.
 
 ## 적용 방식
@@ -88,7 +89,8 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언했고, ADR-005, 010, 01
 - `noEmit: true`: 산출물이 없다. 브라우저는 원본 `.js`를 그대로 불러온다
 - `strict: true`, `noImplicitAny`, `strictNullChecks`: 새 코드는 엄격 모드
 - `skipLibCheck: true`: 외부 타입(특히 `lib.dom.d.ts`와 Web Worker의 충돌) 검사를 건너뛴다
-- `module`과 `moduleResolution`(모듈 경로를 찾는 규칙)은 `"nodenext"`다(2026-11-08). `js/package.json`의 `"type": "module"`과 함께, TypeScript가 `js/`의 파일을 ES 모듈로 읽고 상대 경로에 확장자를 꼭 쓰게 한다. 브라우저는 확장자 없는 경로의 파일을 찾지 못하므로, 그 실수를 타입 검사가 잡는다(TS2835). TypeScript 안내서가 번들러 없이 브라우저에서 실행하는 코드에 권하는 조합이다.
+- `module`과 `moduleResolution`(모듈 경로를 찾는 규칙)은 `"nodenext"`다(2026-11-08). `js/package.json`의 `"type": "module"`과 함께, TypeScript가 `js/`의 `import` 경로를 ES 모듈 규칙으로 찾게 한다. 이 규칙은 상대 경로에 확장자를 꼭 쓰게 한다. 브라우저는 확장자 없는 경로의 파일을 찾지 못하므로, 그 실수를 타입 검사가 잡는다(TS2835). TypeScript 안내서가 번들러 없이 브라우저에서 실행하는 코드에 권하는 조합이다.
+- `moduleDetection: "legacy"`: 어느 파일이 모듈인지를 `import`나 `export`가 있는지로 정한다(2026-11-08). 브라우저에서 모듈로 불러오는 파일은 모두 `import`나 `export`를 갖고(내놓는 것이 없으면 `export {};`를 둔다. ADR-019), 일반 스크립트(`pre-fetch.js`, `audio-cache.js`, `manifest-sync.js`, 검색 워커)는 갖지 않는다. 그래서 이 판정이 브라우저와 맞고, 일반 스크립트끼리 맨 바깥 이름이 겹치면 타입 검사가 잡는다(TS2451).
 - `js/package.json`은 TypeScript만 읽는다. 브라우저는 읽지 않고, 유닛 테스트는 `js/` 파일을 Node 모듈로 불러오지 않고 내용을 읽어 `vm`으로 실행한다.
 
 ### TypeScript 7
@@ -106,8 +108,6 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언했고, ADR-005, 010, 01
 - 설정이나 네임스페이스 객체의 반환 타입을 바꿀 때는 타입 오류를 일부러 하나 넣어, `npm run typecheck`가 그 파일에서 잡는지 본다.
 - 브라우저 동작: 바뀌지 않는다(원본 `.js`를 불러오고, JSDoc은 주석이다).
 - 사각지대: 모듈에서 `import`를 빠뜨려도 그 이름이 전역으로 선언돼 있으면 통과한다. 이것은 로드 스모크와 e2e가 맡는다(`tests/README.md` §2, ADR-019).
-- 사각지대: 일반 스크립트(`type="module"` 없이 불러오는 `pre-fetch.js`, `audio-cache.js`, `manifest-sync.js`와 검색 워커)도 `js/package.json` 때문에 모듈로 검사한다(2026-11-08부터). 브라우저에서는 일반 스크립트끼리 맨 바깥의 이름을 함께 쓰는데, 그 이름이 겹쳐도 검사가 잡지 못한다. 지금 넷은 맨 바깥에 이름을 두지 않는다. 앞의 셋은 `window`의 속성만 만들고, 검색 워커는 워커에서 혼자 실행된다. 새 일반 스크립트도 맨 바깥에 이름을 두지 않는다.
-
 ## 채택 이유 요약
 
 - **빌드 파이프라인을 바꾸지 않는다**: ADR-001의 SPA 아키텍처를 해치지 않는다. 서비스 워커 캐시와 배포 파일(zip) 구성도 그대로다.
