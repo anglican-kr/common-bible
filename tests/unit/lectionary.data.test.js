@@ -762,7 +762,7 @@ test("반절 경계 표 — 전례독서 · 성인 공통의 반절 참조마다
     const v = data.verses.find((x) => x.number === e.verse && !x.part && !x.lxx_only && x.chapter_ref == null && x.alt_ref == null && !x.versicle);
     assert.ok(v, k);
     // 인용 칩은 절의 마지막 줄 뒤에 붙는데, `trimHalfVerses`는 그 칩을 지우지 않는다(ADR-038 §3 「독서 렌더」, 2026-11-08).
-    // 인용이 든 절을 반절로 자르게 되면 그 칩 처리를 먼저 더한다. 주석은 줄 안에 있어 함께 잘리므로 막지 않는다(창세 28:19상).
+    // 인용이 든 절을 반절로 자르게 되면 그 칩 처리를 먼저 더한다. 주석은 아래에서 따로 본다.
     assert.ok(!(v.segments || []).some((/** @type {any} */ s) => s.cite), `${k} — 인용이 든 절을 반절로 자르면 칩이 남는다`);
     // appendVerses 의 줄 — segments 를 줄바꿈으로 나누고 빈 줄(연 구분)은 빼며, 줄 머리의 ¶ 는 표지로 떼어 그린다
     const lines = (v.segments || [{ text: v.text || "" }]).flatMap((/** @type {any} */ s) => s.text.split("\n"))
@@ -771,6 +771,27 @@ test("반절 경계 표 — 전례독서 · 성인 공통의 반절 참조마다
     if (e.whole) { assert.strictEqual(keep, null, k); continue; }
     assert.ok(keep, `${k} — 경계가 절을 나누지 않는다`);
     if (keep.text) assert.strictEqual(lines[keep.cut].split(keep.text).length, 2, `${k} — 「${keep.text}」가 ${keep.cut + 1}줄에 한 번 나와야 한다`);
+    // 주석은 반절 자르기 앞에 감싼다(lectionary.js buildReading, 2026-11-08). 어절 없는 주석의 ※는 절 마지막 줄 끝에 붙어 상으로
+    // 자르면 소리 없이 사라지고, 어절이 경계에 걸친 주석은 앱이 풀어 보통 글자로 둔다(cutLineText). 지금 데이터(창세 28:19상의
+    // 「베델」은 남는 쪽)에는 둘 다 없다.
+    for (const note of v.notes || []) {
+      assert.ok((note.anchor || "").trim(), `${k} — 반절로 자르는 절에 어절 없는 주석(※)이 있다. 자른 절에서 ※를 어디에 둘지 먼저 정해 lectionary.js trimHalfVerses에 더한다`);
+      // 그 어절의 n번째(anchor_occurrence, 기본 1) — citations.js _wrapAnchor 처럼 줄마다 앞에서부터 겹치지 않게 센다
+      /** @type {{ line: number, start: number, end: number } | null} */
+      let at = null;
+      let seen = 0;
+      lines.forEach((/** @type {string} */ l, /** @type {number} */ li) => {
+        for (let i = l.indexOf(note.anchor); i >= 0 && !at; i = l.indexOf(note.anchor, i + note.anchor.length)) {
+          if (++seen === (note.anchor_occurrence || 1)) at = { line: li, start: i, end: i + note.anchor.length };
+        }
+      });
+      // 줄 경계로 자르면 어절은 남는 줄이나 버리는 줄에 통째로 있다. 줄 안의 경계만 어절을 나눌 수 있다.
+      if (!at || keep.text === null || at.line !== keep.cut) continue;
+      const p = lines[keep.cut].indexOf(keep.text);
+      const b = e.half === "a" ? p + keep.text.length : p;
+      assert.ok(at.end <= b || at.start >= b, `${k} — 주석 어절 「${note.anchor}」이 반절 경계에 걸친다. 앱은 그 주석을 풀어 보통 글자로 그린다. `
+        + "데이터 저장소의 경계 문구(liturgical/half-verses.md)나 주석의 어절을 먼저 고친다");
+    }
   }
 });
 

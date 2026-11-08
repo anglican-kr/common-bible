@@ -1401,6 +1401,11 @@ function buildGloria() {
 /**
  * 괄호 선택 구절 표시 — 선택 구절인 절 span 에 `lect-optional` 을 달고, 이어진 묶음의 앞뒤에 〔 〕 를 넣는다
  * (책자의 「(9-23)」 표기 — 사용자 결정 2026-10-12). `appendVerses` 가 그린 뒤에 돈다.
+ * 인용 칩과 병행 본문 ※는 절 span 의 형제라서, 괄호를 span 안에만 넣으면 묶음 마지막 절의 칩이 〕 밖에, 첫 절 앞의 ※가
+ * 〔 밖에 선다. 그래서 〕는 그 칩 뒤에, 〔는 그 ※ 앞에 둔다. 칩과 ※가 감춰지면(설정 끔, `body.cites-shown` 없음) 괄호가
+ * 본문에 바로 붙어 전과 같다. 운문 칩은 제 줄에 서므로 〕를 칩 줄 끝에 두고, 칩이 감춰질 때 보일 〕를 절 끝에 하나 더
+ * 둔다(`.lect-bracket--chips-off`). 운문 절은 블록이라 그 앞의 ※는 절과 다른 줄에 서므로 〔는 절 안에 남긴다.
+ * 모두 구현하며 정함(2026-11-08).
  * @param {HTMLElement} article @param {number} chapter @param {(chapter: number, n: number) => boolean} isOptional
  */
 function markOptionalVerses(article, chapter, isOptional) {
@@ -1409,12 +1414,27 @@ function markOptionalVerses(article, chapter, isOptional) {
     const n = parseInt(spans[i].getAttribute("data-vref") || "", 10);
     return Number.isFinite(n) && isOptional(chapter, n);
   };
+  // 표시 전용 — aria-hidden · user-select: none 에 더해 복사 본문에서도 뺀다(`data-copy-omit`, verse-spec.js 직렬화 — Copilot 리뷰 10회차)
+  const bracket = (/** @type {string} */ glyph, extra = "") =>
+    el("span", { className: `lect-bracket${extra}`, "aria-hidden": "true", "data-copy-omit": "" }, glyph);
   spans.forEach((span, i) => {
     if (!optAt(i)) return;
     span.classList.add("lect-optional");
-    // 표시 전용 — aria-hidden · user-select: none 에 더해 복사 본문에서도 뺀다(`data-copy-omit`, verse-spec.js 직렬화 — Copilot 리뷰 10회차)
-    if (i === 0 || !optAt(i - 1)) span.insertBefore(el("span", { className: "lect-bracket", "aria-hidden": "true", "data-copy-omit": "" }, "〔"), span.firstChild);
-    if (i === spans.length - 1 || !optAt(i + 1)) span.appendChild(el("span", { className: "lect-bracket", "aria-hidden": "true", "data-copy-omit": "" }, "〕"));
+    if (i === 0 || !optAt(i - 1)) {
+      /** @type {Element} */
+      let lead = span;
+      while (lead.previousElementSibling?.classList.contains("parallel-anchor")) lead = lead.previousElementSibling;
+      if (lead !== span && !span.classList.contains("verse-poetry")) lead.before(bracket("〔"));
+      else span.insertBefore(bracket("〔"), span.firstChild);
+    }
+    if (i === spans.length - 1 || !optAt(i + 1)) {
+      const chip = span.nextElementSibling;
+      if (!chip || !chip.classList.contains("cite-chip")) span.appendChild(bracket("〕"));
+      else if (chip.classList.contains("cite-chip--poetry")) {
+        span.appendChild(bracket("〕", " lect-bracket--chips-off"));
+        chip.appendChild(bracket("〕"));
+      } else chip.after(bracket("〕"));
+    }
   });
 }
 
@@ -1531,8 +1551,13 @@ function dropSiblings(/** @type {Element} */ from, /** @type {Element} */ to) {
 
 /**
  * 한 줄 span 안에서 경계 문구를 찾아 앞(하) 또는 뒤(상)를 지운다. 본문 글자만 센다 — 절 번호(CSS 로 그린다) ·
- * U+2060 · ¶ · ◯ 는 문구에 들지 않는다(표의 문구는 데이터의 본문 글자다). 문구가 그 줄에 꼭 한 번 나오지 않으면
- * false — 절 전체가 남는다. 상을 자르면 줄 끝 공백도 잘리므로 한 칸을 되돌려 다음 절과 띄운다(appendVerses 의 줄 끝 공백).
+ * U+2060 · ¶ · ◯ · 어절 없는 주석의 ※(`.note-anchor--variant`)는 문구에 들지 않는다(표의 문구는 데이터의 본문
+ * 글자다). 문구가 그 줄에 꼭 한 번 나오지 않으면 false — 절 전체가 남는다. 상을 자르면 줄 끝 공백도 잘리므로 한 칸을
+ * 되돌려 다음 절과 띄운다(appendVerses 의 줄 끝 공백).
+ * 주석은 이보다 먼저 감싼다(`buildReading`). 경계가 어절 주석 안에 떨어지면 그 주석을 풀어 보통 글자로 두고 자른다.
+ * 어절의 반쪽에 온전한 어절을 가리키는 주석 단추(`data-note-anchor`, `aria-label`)를 남기지 않으려는 것이고, 본문은
+ * 경계 표대로 그린다(사용자 결정 2026-10-22). 자르기를 포기하면 독서에 없는 글이 보인다. 지금 데이터에는 그런 절이 없고
+ * 실데이터 유닛 테스트가 막는다(구현하며 정함 2026-11-08).
  * @param {HTMLElement} span @param {string} text @param {boolean} keepTail 하(문구부터 남긴다)
  */
 function cutLineText(span, text, keepTail) {
@@ -1541,7 +1566,7 @@ function cutLineText(span, text, keepTail) {
   let joined = "";
   const walker = document.createTreeWalker(span, NodeFilter.SHOW_TEXT);
   for (let n = /** @type {Text | null} */ (walker.nextNode()); n; n = /** @type {Text | null} */ (walker.nextNode())) {
-    if (n.textContent === "\u2060" || n.parentElement?.closest(".verse-num, .pilcrow, .versicle-mark, .responsory-mark")) continue;
+    if (n.textContent === "\u2060" || n.parentElement?.closest(".verse-num, .pilcrow, .versicle-mark, .responsory-mark, .note-anchor--variant")) continue;
     nodes.push([n, joined.length]);
     joined += n.textContent;
   }
@@ -1551,6 +1576,14 @@ function cutLineText(span, text, keepTail) {
   const hit = nodes.filter(([, s]) => s <= pos).pop();
   if (!hit) return false;
   const [node, offset] = hit;
+  const cut = pos - offset;
+  const anchor = node.parentElement?.closest(".note-anchor");
+  if (anchor && cut > 0 && cut < node.length) anchor.replaceWith(...anchor.childNodes);
+  // At offset 0 the range stops before the line's child that holds the node, so a note anchor that begins right at the
+  // boundary goes whole to its side instead of leaving an empty button behind.
+  /** @type {Node} */
+  let top = node;
+  while (top.parentNode && top.parentNode !== span) top = top.parentNode;
   const range = document.createRange();
   if (keepTail) {
     // 절 번호 · U+2060 뒤부터 문구 앞까지 — 줄 머리의 ¶ 도 버리는 앞부분에 든다
@@ -1558,9 +1591,9 @@ function cutLineText(span, text, keepTail) {
       ? n.classList.contains("verse-num") || n.classList.contains("versicle-mark")
       : n.nodeType === Node.TEXT_NODE && n.textContent === "\u2060").pop();
     if (lead) range.setStartAfter(lead); else range.setStart(span, 0);
-    range.setEnd(node, pos - offset);
+    if (cut === 0) range.setEndBefore(top); else range.setEnd(node, cut);
   } else {
-    range.setStart(node, pos - offset);
+    if (cut === 0) range.setStartBefore(top); else range.setStart(node, cut);
     range.setEndAfter(/** @type {Node} */ (span.lastChild));
   }
   range.deleteContents();

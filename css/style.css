@@ -962,6 +962,12 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   margin: 0 0.1em;
   user-select: none;
 }
+/* A cite chip of the run's last verse sits inside the brackets (lectionary.js markOptionalVerses). A poetry chip
+   stands on its own line, so 〕 ends that line inside the chip, drawn at the text size rather than the chip's
+   0.78em (`body.cites-shown .cite-chip--poetry`) and without growing the chip's line. The spare 〕 at the verse end
+   shows only while chips are hidden. */
+.cite-chip--poetry .lect-bracket { font-size: calc(1em / 0.78); line-height: 0; }
+body.cites-shown .lect-bracket--chips-off { display: none; }
 .lect-optional-note { flex-basis: 100%; }
 /* 송영 — once, after the chosen collect (ADR-038 §3 「구현」). Same colour as the collect it closes
    (사용자 결정 2026-11-03 — it was --text-secondary). */

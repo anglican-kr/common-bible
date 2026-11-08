@@ -847,6 +847,41 @@ def test_half_verses_follow_the_boundary_table(desktop_context):
     assert "헤아릴 수 없습니다. 하느님께서는" in text and "종 다윗의 심정을" not in text, text[:200]
 
 
+# 창세 28:10-19상(연중 16주일 가해, 2026-07-19)의 19절은 「그 곳을 베델이라 불렀다.」까지다(경계 문구 「베델이라 불렀다.」). 그 절의
+# 남은 본문과 주석 단추마다 [어절(data-note-anchor), 보이는 글자]를 낸다.
+_GEN28_19_NOTES = """
+() => {
+  const a = document.querySelector(".lect-reading[data-slot='first'] article.chapter-text");
+  const v = [...a.querySelectorAll('.verse[data-vkey^="19/"]')];
+  return {
+    text: v.map((s) => s.textContent).join('').replace(/\\u2060/g, '').trim(),
+    notes: v.flatMap((s) => [...s.querySelectorAll('.note-anchor')]).map((n) => [n.getAttribute('data-note-anchor'), n.textContent]),
+  };
+}
+"""
+
+
+@pytest.mark.parametrize("extra, why", [
+    ({"anchor": "불렀다. 그", "body": "경계에 걸친 주석"}, "경계 문구가 어절 안에서 끝난다"),
+    ({"anchor": " 그 마을의", "body": "경계에서 시작하는 주석"}, "버리는 쪽 어절이 경계에서 바로 시작한다"),
+    ({"anchor": "", "body": "어절 없는 주석"}, "어절 없는 주석의 ※가 버리는 쪽 끝에 붙는다"),
+])
+def test_half_verse_cut_leaves_no_broken_note_button(desktop_context, extra, why):
+    """반절 자르기는 주석을 감싼 뒤에 돈다(lectionary.js buildReading). 경계가 어절 주석 안에 떨어지면 그 주석을 풀어 보통 글자로
+    두고, 버리는 쪽의 주석은 통째로 지운다. 반쪽 어절이나 빈 글자에 온전한 어절의 주석 단추가 남지 않는다(리뷰 2026-11-08, 구현하며
+    정함). 실데이터에는 이런 절이 없고 lectionary.data.test.js 「반절 경계 표」가 막으므로, 장 JSON에 주석을 넣어 그린다."""
+    data = json.loads((Path(__file__).resolve().parents[2] / "data" / "bible" / "gen-28.json").read_text(encoding="utf-8"))
+    v19 = next(v for v in data["verses"] if v["number"] == 19)
+    v19["notes"] = v19.get("notes", []) + [extra]
+    page = desktop_context.new_page()
+    page.route("**/data/bible/gen-28.json", lambda route: route.fulfill(json=data))
+    _open(page, "lectionary/2026-07-19")
+    got = page.evaluate(_GEN28_19_NOTES)
+    assert got["text"].replace("※", "") == "그 곳을 베델이라 불렀다.", (why, got)
+    assert ["베델", "베델"] in got["notes"], (why, got)
+    assert all(anchor == shown for anchor, shown in got["notes"]), (why, got)   # 반쪽 어절이나 빈 단추가 없다
+
+
 _WATCH_LOADING_FRAMES = """() => {
   window.__loadingFrames = 0;
   const tick = () => {
@@ -1284,6 +1319,113 @@ def test_bracket_set_merges_into_long_text_with_markers(desktop_context):
     assert page.locator(".verse.lect-optional").count() > 0
     # 선택 구절은 그 슬롯 하나에만.
     assert page.eval_on_selector_all(".lect-reading:has(.lect-bracket)", "els => els.length") == 1
+
+
+# 보이는 괄호(〔 〕)를 고치기 전의 자리 — 묶음 첫 줄 span 의 맨 앞, 마지막 줄 span 의 맨 끝 — 로 옮겨 보고, 화면에서 움직인 거리(px)를 낸다.
+# 칩과 ※가 감춰진 화면에서 0이면 괄호와 본문 사이의 간격이 전과 같다.
+_BRACKET_SHIFT_TO_OLD_PLACE = """
+(slot) => {
+  const sec = document.querySelector(`.lect-reading[data-slot='${slot}']`);
+  const shown = [...sec.querySelectorAll('.lect-bracket')].filter((b) => b.getClientRects().length > 0);   // 감춘 칩 안의 괄호도 뺀다
+  const opt = [...sec.querySelectorAll('.verse.lect-optional')];
+  const before = shown.map((b) => b.getBoundingClientRect());
+  for (const b of shown) {
+    if (b.textContent === '〔') {
+      const s = b.parentElement.classList.contains('verse') ? b.parentElement
+        : opt.find((x) => b.compareDocumentPosition(x) & Node.DOCUMENT_POSITION_FOLLOWING);
+      s.insertBefore(b, s.firstChild);
+    } else {
+      const s = b.parentElement.classList.contains('verse') ? b.parentElement
+        : opt.findLast((x) => (b.compareDocumentPosition(x) & Node.DOCUMENT_POSITION_PRECEDING) && !x.contains(b));
+      s.appendChild(b);
+    }
+  }
+  return shown.map((b, i) => {
+    const r = b.getBoundingClientRect();
+    return [b.textContent, Math.round(Math.max(Math.abs(r.left - before[i].left), Math.abs(r.top - before[i].top)) * 10) / 10];
+  });
+}
+"""
+
+# 성탄 낮 제2독서 「히브 1:1-4, 5-12」의 선택 구절 5-12절. 12절 끝의 운문 칩 「(시편 102:25-27)」(10-12절이 같은 인용이라 12절에만)과 괄호.
+_HEB1_CLOSE = """
+() => {
+  const sec = document.querySelector(".lect-reading[data-slot='second']");
+  const chip = sec.querySelector(".cite-chip[data-cite-src='시편 102:25-27']");
+  const shown = [...sec.querySelectorAll('.lect-bracket')].filter((b) => b.getClientRects().length > 0);   // 감춘 칩 안의 괄호도 뺀다
+  const close = shown.find((b) => b.textContent === '〕');
+  const label = chip.querySelector('.cite-chip-label').getBoundingClientRect();
+  const r = close.getBoundingClientRect();
+  return {
+    glyphs: shown.map((b) => b.textContent).join(''),
+    lastLine: chip.previousElementSibling.getAttribute('data-vkey'),
+    inChip: chip.contains(close),
+    inLastLine: close.parentElement === chip.previousElementSibling && close === close.parentElement.lastElementChild,
+    afterLabel: r.left >= label.right - 0.5 && r.top < label.bottom && r.bottom > label.top,
+  };
+}
+"""
+
+
+def _copy_with_and_without_brackets(page, slot):
+    """독서 하나를 복사한 글을, 괄호를 그대로 두고 한 번, 괄호를 모두 지우고 한 번 낸다. 괄호는 복사에 들지 않으므로 둘이 같아야 한다."""
+    kept = page.evaluate(_LECT_COPY_SLOT, slot)
+    page.evaluate("document.querySelectorAll('.lect-bracket').forEach((b) => b.remove())")
+    return kept, page.evaluate(_LECT_COPY_SLOT, slot)
+
+
+def test_bracket_closes_after_the_last_optional_verse_cite_chip(desktop_context):
+    """괄호 선택 구절 묶음의 마지막 절에 인용 칩이 있으면 칩까지 〔 〕 안에 든다(리뷰 2026-11-08, 구현하며 정함). 성탄 낮(2026-12-25)
+    제2독서 「히브 1:1-4, 5-12」의 12절은 운문이라 칩이 제 줄에 서고, 〕는 그 칩 줄 끝에 온다. 칩이 감춰지면(설정 끔) 〕는 전처럼 절
+    끝에 붙는다. 괄호와 칩은 복사에 들지 않는다."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-12-25")
+    second = page.locator(".lect-reading[data-slot='second']")
+    assert "히브 1:1-4, 5-12" in second.locator(".lect-ref").inner_text()
+    on = page.evaluate(_HEB1_CLOSE)
+    assert on["lastLine"] == "12/12d", on                      # 칩은 선택 구절 묶음의 마지막 줄 바로 뒤에 있다
+    assert on["glyphs"] == "〔〕" and on["inChip"] and on["afterLabel"], on
+    # 끔 흉내 — 설정을 끄면 CSS(body.cites-shown 없음)가 칩을 감춘다. 〕는 12절 끝에 보이고 자리도 전과 같다.
+    page.evaluate("document.body.classList.remove('cites-shown')")
+    off = page.evaluate(_HEB1_CLOSE)
+    assert off["glyphs"] == "〔〕" and off["inLastLine"] and not off["inChip"], off
+    assert page.evaluate(_BRACKET_SHIFT_TO_OLD_PLACE, "second") == [["〔", 0], ["〕", 0]]
+    page.evaluate("document.body.classList.add('cites-shown')")
+    kept, plain = _copy_with_and_without_brackets(page, "second")
+    assert kept == plain, (kept[-200:], plain[-200:])
+    assert "〔" not in kept and "〕" not in kept and "(시편 102" not in kept, kept[-200:]
+    assert kept.endswith("늙지 않으십니다.”\n\n— 히브리인들에게 보낸 편지 1:1-12 (공동번역성서)"), kept[-120:]
+
+
+def test_brackets_hold_a_prose_chip_and_a_parallel_marker(desktop_context):
+    """줄글 칩과 병행 본문 ※도 괄호 안에 든다(리뷰 2026-11-08, 구현하며 정함). 실데이터에는 줄글 칩이 묶음 끝에 오거나 ※가 묶음 첫 절
+    앞에 오는 곳이 없어(2026-11-08 셈), 연중 23주일 나해(2027-09-05) 제2독서 「야고 2:1-10, 11-13, 14-17」의 장 JSON에 13절 인용과
+    11-13절 병행 본문을 넣어 그린다. 〔는 ※ 앞에, 〕는 칩 뒤에 서고, 감추면 둘 다 전처럼 본문에 붙는다. 복사한 글은 그대로다."""
+    data = json.loads((Path(__file__).resolve().parents[2] / "data" / "bible" / "jas-2.json").read_text(encoding="utf-8"))
+    for v in data["verses"]:
+        if v["number"] == 13:
+            v["segments"][-1]["cite"] = "마태 5:7"
+    data["parallels"] = [{"src": [{"ref": "로마 13:9"}], "range": "2:11-13"}]
+    page = desktop_context.new_page()
+    page.route("**/data/bible/jas-2.json", lambda route: route.fulfill(json=data))
+    _open(page, "lectionary/2027-09-05")
+    assert "야고 2:1-10, 11-13, 14-17" in page.locator(".lect-reading[data-slot='second'] .lect-ref").inner_text()
+    order = page.evaluate("""() => {
+      const sec = document.querySelector(".lect-reading[data-slot='second']");
+      const par = sec.querySelector('.parallel-anchor');
+      const chip = sec.querySelector(".cite-chip[data-cite-src='마태 5:7']");
+      const name = (e) => e ? (e.classList.contains('lect-bracket') ? e.textContent : e.getAttribute('data-vkey') || e.className) : null;
+      return [name(par.previousElementSibling), name(par.nextElementSibling), name(chip.previousElementSibling), name(chip.nextElementSibling)];
+    }""")
+    assert order == ["〔", "11/11a", "13/13", "〕"], order
+    page.evaluate("document.body.classList.remove('cites-shown')")
+    assert page.evaluate(_BRACKET_SHIFT_TO_OLD_PLACE, "second") == [["〔", 0], ["〕", 0]]
+    page.reload()
+    page.wait_for_selector(".lect-reading .verse", timeout=20_000)
+    kept, plain = _copy_with_and_without_brackets(page, "second")
+    assert kept == plain, (kept[:300], plain[:300])
+    assert "〔" not in kept and "〕" not in kept and "(마태 5:7)" not in kept and "※" not in kept
+    assert "그러나 자비는 심판을 이깁니다.\n\n나의 형제 여러분" in kept, kept
 
 
 # ── ⑤ 기념일 ──
