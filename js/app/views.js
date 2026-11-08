@@ -992,16 +992,21 @@ function pieceTrailingSpace(text, noTrailingSpace) {
 }
 // ── END PIECE_SPACE ──
 
+/**
+ * The drawing options appendVerses and appendVersesWithAids share: address highlights, DOM ids.
+ * @typedef {{ hlQuery?: string|null, hlVerse?: number|null, hlVerseEnd?: number|null, hlSegments?: Array<{start:number,end:number,part?:string}>|null, instanceKeys?: ReadonlyArray<string>|null, idPrefix?: string }} VerseDrawOptions
+ */
+
 // Render a list of verses into `article` as inline verse spans + inter-verse
 // break markers + cite chips. Extracted from renderChapter so the bookmark
 // reading view (ADR-035) can render verse subsets through the same logic. Does
-// NOT wrap note anchors or run highlight-join post-processing — callers do that
-// on the finished article (note anchors match by integer verse number, so they
-// must be scoped per single-chapter article to avoid cross-chapter collisions).
+// NOT wrap note anchors or run highlight-join post-processing. A full reading
+// surface (chapter view, lectionary) draws through appendVersesWithAids, which
+// adds the parallel ※ markers and note anchors in one fixed order.
 /**
  * @param {HTMLElement} article
  * @param {ReadonlyArray<BibleVerse>} verses
- * @param {{ hlQuery?: string|null, hlVerse?: number|null, hlVerseEnd?: number|null, hlSegments?: Array<{start:number,end:number,part?:string}>|null, parallels?: ChapterParallel[]|null, chapter?: number, hideCites?: boolean, instanceKeys?: ReadonlyArray<string>|null , idPrefix?: string}} [opts]
+ * @param {VerseDrawOptions & { parallels?: ChapterParallel[]|null, chapter?: number, hideCites?: boolean }} [opts]
  */
 function appendVerses(article, verses, opts = {}) {
   // `chapter` has no null default: findParallelsStartingAt skips its chapter guard only for `undefined` — a null
@@ -1244,6 +1249,29 @@ function appendVerses(article, verses, opts = {}) {
 }
 
 /**
+ * Draw one chapter's verses with the reading aids — cite chips (ADR-022), parallel-passage ※ markers (ADR-027) and
+ * note anchors (ADR-022) — the one way the chapter view and the lectionary draw them. The aids are drawn whatever the
+ * setting 「인용·주석 표시」; `body.cites-shown` shows or hides them without a redraw (settings-ui.js applyCiteShow).
+ *
+ * `chapter` is the chapter JSON the verses come from. Its ranges (`parallels`) and number (`chapter`) go to
+ * appendVerses together: findParallelsStartingAt skips its chapter check only when the number is `undefined`, and a
+ * `null` would drop every ※ marker — a caller passing them one by one could get that wrong.
+ *
+ * Note anchors are wrapped right after the verses are drawn, on whole verses: a note's `anchor_occurrence` counts
+ * the word in the whole verse, so a caller that cuts half verses (lectionary trimHalfVerses) cuts after this. They
+ * pair with verses by number, so `article` holds this one chapter's verses only.
+ *
+ * @param {HTMLElement} article
+ * @param {ReadonlyArray<BibleVerse>} verses  the verses to draw — all of `chapter.verses` or an excerpt of them
+ * @param {BibleChapter} chapter
+ * @param {VerseDrawOptions} [opts]
+ */
+function appendVersesWithAids(article, verses, chapter, opts = {}) {
+  appendVerses(article, verses, { ...opts, parallels: chapter.parallels, chapter: chapter.chapter });
+  window.appCitations?.wrapNoteAnchorsInArticle(article, verses);
+}
+
+/**
  * Copy handler shared by the chapter view and the lectionary view: serialize the
  * selection ourselves so that stanza breaks become blank lines, and append a plain
  * verse-number reference (no line-part letters like "1a" — ADR-022 · the original
@@ -1438,16 +1466,9 @@ function renderChapter(data, book, opts) {
   // 이 번역에 없는 절 번호 — 복사 출처가 그 자리에서 구간을 끊지 않게(사용자 결정 2026-10-14, bindCopyAttribution)
   const absent = absentVerseNumbers(data.verses);
   if (absent.length) article.setAttribute("data-absent", absent.join(","));
-  appendVerses(article, data.verses, {
-    hlQuery, hlVerse, hlVerseEnd, hlSegments,
-    parallels: data.parallels, chapter: data.chapter,
-  });
-
-  // ADR-022: wrap each note anchor in a clickable button — tooltip on click
-  // shows the note body (no chapter-end section; ADR §6 개정 2026-05-24).
-  if (window.appCitations) {
-    window.appCitations.wrapNoteAnchorsInArticle(article, data.verses);
-  }
+  // Cite chips, parallel ※ markers and note anchors (tooltip on click — no chapter-end section; ADR-022 §6 개정
+  // 2026-05-24), drawn whatever the setting 「인용·주석 표시」 (appendVersesWithAids).
+  appendVersesWithAids(article, data.verses, data, { hlQuery, hlVerse, hlVerseEnd, hlSegments });
 
   // Flatten inner corners between adjacent highlighted verses so a run from
   // a search/bookmark deep link renders as a single block.
@@ -1973,6 +1994,6 @@ export {
   DIVISION_LABELS,
   renderBookList, renderChapterList, renderChapter, renderPrologue,
   renderLoading, renderBibleFailure,
-  appendVerses,
+  appendVerses, appendVersesWithAids,
   LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
 };

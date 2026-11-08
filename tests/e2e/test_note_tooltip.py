@@ -1,8 +1,11 @@
-"""E2E: 주석 툴팁의 자리 — 상단 바에 가리지 않는다(ADR-022 §6).
+"""E2E: 주석 툴팁의 자리 — 상단 바에 가리지 않는다(ADR-022 §6). 설정을 끄면 어절 주석은 툴팁을 열지 않는다.
 
 주석이 붙은 어절을 누르면 뜨는 툴팁(`#note-tooltip`)은 표지 위에 놓이고, 위에 자리가 모자라면 아래로 뒤집힌다
 (`js/app/citations.js`의 `_positionNoteTooltip`). 화면 위쪽에는 상단 바(`#sticky-group`)가 고정돼 툴팁보다
 앞에 그려지므로, 위의 자리는 화면 맨 위가 아니라 상단 바 아래쪽에서 끝난다. 열왕기상 5:6의 주석 「사천」을 쓴다.
+
+설정 「인용·주석 표시」를 끄면 어절 주석은 보통 글자다. 단추 역할, 키보드 정지점, 이름이 없고 눌러도 툴팁이 열리지
+않는다(`citations.js`의 `setNoteAnchorsActive`, 구현하며 정함 2026-11-08). 창세 28:19의 주석 「베델」을 쓴다.
 """
 import pytest
 
@@ -166,5 +169,49 @@ def test_note_tooltip_follows_its_own_height_change(browser):
         assert m["placement"] == "above", m
         assert abs(m["anchorTop"] - m["bottom"] - 8) < 1, m   # 표지를 덮지 않는다
         assert m["top"] >= m["bar"], m
+    finally:
+        ctx.close()
+
+
+# 설정 「인용·주석 표시」를 끈 기기
+_CITE_OFF = "try { localStorage.setItem('bible-cite-show', '0'); } catch (_) {}"
+
+# 어절 주석의 단추 속성. 설정을 끄면 셋 다 없다.
+_CONTROL_ATTRS = "e => [e.getAttribute('role'), e.getAttribute('tabindex'), e.getAttribute('aria-label')]"
+
+_TOOLTIP_OPEN = "() => { const t = document.getElementById('note-tooltip'); return !!t && !t.hidden; }"
+
+
+def test_note_anchor_is_plain_text_while_setting_off(browser):
+    """설정을 끈 채 창세 28장을 열면 「베델」은 단추 역할, 키보드 정지점, 이름이 없는 보통 글자이고 눌러도 툴팁이 열리지
+    않는다. 동기화처럼 `window.applyCiteShow(true)`로 켜면 같은 노드가 다시 단추가 되어 툴팁이 열리고, 툴팁이 열린 채
+    끄면 툴팁이 닫히고 다시 보통 글자가 된다. 화면은 다시 그리지 않는다."""
+    ctx = browser.new_context(viewport={"width": 1280, "height": 800})
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_COACHMARK_SEEN)
+    ctx.add_init_script(_CITE_OFF)
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/gen/28")
+        page.wait_for_selector(ANCHOR, timeout=10_000)
+        word = page.locator(ANCHOR)
+        assert word.count() == 1
+        assert word.inner_text() == "베델"
+        assert word.evaluate(_CONTROL_ATTRS) == [None, None, None]
+        assert word.evaluate("e => e.tabIndex") < 0
+        page.evaluate("() => { window.__word = document.querySelector('.note-anchor:not(.note-anchor--variant)'); }")
+        word.click()
+        page.wait_for_timeout(200)
+        assert page.evaluate(_TOOLTIP_OPEN) is False
+
+        page.evaluate("() => window.applyCiteShow(true)")
+        assert word.evaluate(_CONTROL_ATTRS) == ["button", "0", "베델 주석 보기"]
+        word.click()
+        page.wait_for_function(_TOOLTIP_OPEN)
+
+        page.evaluate("() => window.applyCiteShow(false)")
+        assert page.evaluate(_TOOLTIP_OPEN) is False
+        assert word.evaluate(_CONTROL_ATTRS) == [None, None, None]
+        assert page.evaluate("() => window.__word.isConnected && document.querySelector('.note-anchor:not(.note-anchor--variant)') === window.__word")
     finally:
         ctx.close()

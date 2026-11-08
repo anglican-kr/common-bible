@@ -191,11 +191,68 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
   // in <note>...</note>). Rendered as a small ※ button at the verse end.
   const VARIANT_MARKER = "※";
 
+  // ── Setting 「인용·주석 표시」 (ADR-022) ──
+  // The setting lives on <body> as `cites-shown` (settings-ui.js applyCiteShow sets it at boot, before the first view
+  // draws, and on every change — the settings switch and a value synced from another device). Every view draws chips,
+  // ※ markers and note anchors whatever the setting; this class shows or hides them. CSS hides chips and ※ markers
+  // (display:none takes them out of the tab order too). A word note anchor stays in the text either way, so CSS alone
+  // would leave it an invisible keyboard stop that still opens the tooltip: it is a control only while the setting is
+  // on (`_setWordAnchorActive`).
+
+  // Word note anchors — the `.note-anchor` spans that wrap a word of the text. The ※ variant marker is a <button>
+  // CSS hides, like the chips.
+  const WORD_ANCHOR_SELECTOR = ".note-anchor:not(.note-anchor--variant)";
+
+  function _citesShown() {
+    return document.body.classList.contains("cites-shown");
+  }
+
+  /**
+   * The attributes that make a word note anchor a control: a button with a name of its own.
+   * @param {string} anchorWord
+   * @returns {Record<string, string>}
+   */
+  function _wordAnchorControlAttrs(anchorWord) {
+    return { role: "button", tabindex: "0", "aria-label": `${anchorWord} 주석 보기` };
+  }
+
+  /**
+   * Make one word note anchor a control (on) or plain text (off). Off drops the name too: an aria-label left on a
+   * role-less span would have a screen reader read the word of the text under another name. `inert` is not used —
+   * it would hide the word itself from assistive technology.
+   *
+   * @param {Element} anchorEl
+   * @param {boolean} on
+   */
+  function _setWordAnchorActive(anchorEl, on) {
+    const attrs = _wordAnchorControlAttrs(anchorEl.getAttribute("data-note-anchor") || anchorEl.textContent || "");
+    for (const [k, v] of Object.entries(attrs)) {
+      if (on) anchorEl.setAttribute(k, v);
+      else anchorEl.removeAttribute(k);
+    }
+  }
+
+  /**
+   * Make the word note anchors already drawn follow the setting (settings-ui.js applyCiteShow calls this right after
+   * it sets `body.cites-shown`). Turning it off also closes an open note tooltip: what it points at — a word anchor,
+   * a ※ variant or parallel marker — is no longer a control or no longer shown. Focus is left where it is (the
+   * settings switch, or wherever the user was when a synced value came), not moved back to the anchor.
+   *
+   * @param {boolean} on
+   * @param {ParentNode} [root]  where to look — the whole document by default
+   */
+  function setNoteAnchorsActive(on, root = document) {
+    for (const a of root.querySelectorAll(WORD_ANCHOR_SELECTOR)) _setWordAnchorActive(a, on);
+    if (!on) _hideNoteTooltip();
+  }
+
   /**
    * Walk an already-rendered chapter article and wrap each note's anchor
    * occurrence with a clickable button. The note body is stashed in a data
    * attribute so the delegated click handler can show it in a tooltip
-   * (ADR-022 §6 — anchor click → 툴팁).
+   * (ADR-022 §6 — anchor click → 툴팁). A word anchor is a button only while
+   * the setting 「인용·주석 표시」 is on; drawn with it off, it starts as
+   * plain text (setNoteAnchorsActive).
    *
    * @param {HTMLElement} article  the `.chapter-text` article element
    * @param {ReadonlyArray<BibleVerse>} verses
@@ -295,13 +352,12 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
             // <button> to display:inline-block + text-align:center, which
             // makes a long anchor (e.g. a full sentence) sit on its own line
             // and centered. A span flows inline like surrounding text.
+            // A control only while the setting is on — off, the span is plain text (setNoteAnchorsActive).
             const btn = el("span", {
-              role: "button",
-              tabindex: "0",
               className: "note-anchor",
               "data-note-anchor": anchorWord,
               "data-note-body": noteBody,
-              "aria-label": `${anchorWord} 주석 보기`,
+              ...(_citesShown() ? _wordAnchorControlAttrs(anchorWord) : {}),
             }, anchorWord);
             if (before) parent.insertBefore(document.createTextNode(before), tn);
             parent.insertBefore(btn, tn);
@@ -461,14 +517,19 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
     }
   }
 
-  function closeNoteTooltip() {
+  // Hide the tooltip and stop following its anchor, leaving focus where it is.
+  function _hideNoteTooltip() {
     const tt = /** @type {HTMLElement | null} */ (document.getElementById("note-tooltip"));
     if (tt) tt.hidden = true;
     _stopFollowingNoteAnchor();
-    if (_currentNoteAnchor && typeof _currentNoteAnchor.focus === "function") {
-      _currentNoteAnchor.focus();
-    }
     _currentNoteAnchor = null;
+  }
+
+  // Close and return focus to the anchor that opened the tooltip (Escape, a click outside it).
+  function closeNoteTooltip() {
+    const anchor = _currentNoteAnchor;
+    _hideNoteTooltip();
+    if (anchor && typeof anchor.focus === "function") anchor.focus();
   }
 
   // ── ADR-022 cite sheet (bottom sheet, modal) ──────────────────────────
@@ -1055,7 +1116,8 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
       }
       // Enter / Space activates a focused cite chip or note anchor (both are
       // span role=button and need manual key handling; a native <button> would
-      // do this for us).
+      // do this for us). With the setting off a note anchor is plain text and
+      // takes no focus; the check below is a guard should one keep it anyway.
       if (e.key === "Enter" || e.key === " ") {
         const target = e.target;
         if (!(target instanceof HTMLElement)) return;
@@ -1067,7 +1129,7 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
           const tradition = target.getAttribute("data-cite-tradition") || null;
           _markCoachmarkSeen();
           openCiteSheet(src, parallels, tradition, target);
-        } else if (target.classList.contains("note-anchor")) {
+        } else if (target.classList.contains("note-anchor") && _citesShown()) {
           e.preventDefault();
           const anchor = target.getAttribute("data-note-anchor") || target.textContent || "";
           const body   = target.getAttribute("data-note-body")   || "";
@@ -1093,9 +1155,10 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
         return;
       }
 
-      // Note anchor
+      // Note anchor — only while the setting is on. Off, a word anchor is plain text (setNoteAnchorsActive): a click
+      // on it is a click on the text and falls through to the outside-click close below.
       const noteBtn = target.closest(".note-anchor");
-      if (noteBtn instanceof HTMLElement) {
+      if (noteBtn instanceof HTMLElement && _citesShown()) {
         const anchor = noteBtn.getAttribute("data-note-anchor") || noteBtn.textContent || "";
         const body   = noteBtn.getAttribute("data-note-body")   || "";
         openNoteTooltip(noteBtn, anchor, body);
@@ -1160,6 +1223,7 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
     chipText,
     buildCiteChip,
     wrapNoteAnchorsInArticle,
+    setNoteAnchorsActive,
     openCiteSheet,
     closeCiteSheet,
     openNoteTooltip,

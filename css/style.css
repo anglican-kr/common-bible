@@ -3862,7 +3862,8 @@ body.cites-shown .parallel-anchor:focus-visible {
 
 /* Note anchor: a button that wraps the anchored word. When toggle is OFF,
    it stays as plain inline text (no underline, no button affordance) so the
-   body reads identically. When ON, dotted underline + clickable. */
+   body reads identically — citations.js setNoteAnchorsActive also drops its
+   role, tab stop and name then. When ON, dotted underline + clickable. */
 .note-anchor {
   display: inline;
   background: transparent;

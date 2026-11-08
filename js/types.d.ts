@@ -1122,6 +1122,8 @@ export interface AppCitations {
     article: HTMLElement,
     verses: ReadonlyArray<BibleVerse>,
   ) => void;
+  // 설정 「인용·주석 표시」를 이미 그린 어절 주석에 적용한다(켜면 단추, 끄면 보통 글자). settings-ui.js applyCiteShow가 부른다.
+  setNoteAnchorsActive: (on: boolean, root?: ParentNode) => void;
   openNoteTooltip: (
     anchorEl: HTMLElement,
     anchor: string,
