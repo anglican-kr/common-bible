@@ -13,9 +13,9 @@
 // is effectively non-shareable: a copied link renders the recipient's own
 // bookmarks (or nothing), never the author's reading list.
 
-/** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
-/** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
-/** @typedef {import("../types").BibleChapter} BibleChapter */
+/** @typedef {import("../types.js").BookmarkTreeNode} BookmarkTreeNode */
+/** @typedef {import("../types.js").BookmarkTreeBookmark} BookmarkTreeBookmark */
+/** @typedef {import("../types.js").BibleChapter} BibleChapter */
 
 import { loadChapter, getBooksCache } from "./data-fetch.js";
 import { setTitle, appendVerses } from "./views.js";

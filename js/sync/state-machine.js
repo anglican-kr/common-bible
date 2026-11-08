@@ -36,10 +36,10 @@
 //     exchanges for access + refresh tokens, persists refresh to IDB → IDLE.
 //   • 401 mid-sync → silent refresh; if no refresh token, NEEDS_CONSENT.
 
-/** @typedef {import("../types").SyncState}      SyncState */
-/** @typedef {import("../types").SyncEvent}      SyncEvent */
-/** @typedef {import("../types").SyncMachineCtx} SyncMachineCtx */
-/** @typedef {import("../types").SyncMachine}    SyncMachine */
+/** @typedef {import("../types.js").SyncState}      SyncState */
+/** @typedef {import("../types.js").SyncEvent}      SyncEvent */
+/** @typedef {import("../types.js").SyncMachineCtx} SyncMachineCtx */
+/** @typedef {import("../types.js").SyncMachine}    SyncMachine */
 
 /** @type {Readonly<Record<SyncState, SyncState>>} */
 const S = Object.freeze({
@@ -606,9 +606,9 @@ function createSyncMachine({ onStateChange } = {}) {
   // ── v2 data operations ────────────────────────────────────────────────────
 
   /**
-   * @param {import("../types").SyncDoc} merged
+   * @param {import("../types.js").SyncDoc} merged
    * @param {boolean} hadRemoteChanges
-   * @returns {import("../types").SaveOutcome} the merged doc's save — anything but "saved" leaves this device as it was
+   * @returns {import("../types.js").SaveOutcome} the merged doc's save — anything but "saved" leaves this device as it was
    */
   function _applyMergedDoc(merged, hadRemoteChanges) {
     // 옛 버전의 북마크 절 범위(2026-06-06 #205 전의 줄 글자)는 지금 표기로 옮겨 저장한다 — per-item times unchanged,

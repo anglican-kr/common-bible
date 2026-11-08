@@ -1,0 +1,4 @@
+{
+  "//": "타입 검사용(ADR-012 「컴파일러 옵션」). moduleResolution nodenext가 js/를 ES 모듈로 읽어 상대 경로의 확장자를 검사하게 한다. 브라우저는 이 파일을 읽지 않는다.",
+  "type": "module"
+}

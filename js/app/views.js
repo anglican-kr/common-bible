@@ -9,12 +9,12 @@
 // destination. (Data fetching → data-fetch.js, Audio Player → audio-player.js,
 // page-level Pull-to-refresh removed — all ADR-034.)
 
-/** @typedef {import("../types").BooksData} BooksData */
-/** @typedef {import("../types").BookEntry} BookEntry */
-/** @typedef {import("../types").BibleChapter} BibleChapter */
-/** @typedef {import("../types").BiblePrologue} BiblePrologue */
-/** @typedef {import("../types").BibleVerse} BibleVerse */
-/** @typedef {import("../types").ChapterParallel} ChapterParallel */
+/** @typedef {import("../types.js").BooksData} BooksData */
+/** @typedef {import("../types.js").BookEntry} BookEntry */
+/** @typedef {import("../types.js").BibleChapter} BibleChapter */
+/** @typedef {import("../types.js").BiblePrologue} BiblePrologue */
+/** @typedef {import("../types.js").BibleVerse} BibleVerse */
+/** @typedef {import("../types.js").ChapterParallel} ChapterParallel */
 
 // Audio Player lives in its own module (ADR-034 PR1). Explicit ESM import —
 // the in-module callers (renderChapter / renderPrologue) bind these directly
@@ -1272,7 +1272,7 @@ function appendVerses(article, verses, opts = {}) {
  * `tail` (the lectionary's 영광송 after a psalm) is extra text inside a unit that is not a verse: when the selection
  * covers it, its text follows the unit's verses, before the reference.
  * @param {HTMLElement} root
- * @param {(unit: HTMLElement, runs: Array<{ article: HTMLElement, ranges: import("../types").VerseRun[], atStart: boolean, atEnd: boolean, chapterRef: number | null }>) => string} citeOf
+ * @param {(unit: HTMLElement, runs: Array<{ article: HTMLElement, ranges: import("../types.js").VerseRun[], atStart: boolean, atEnd: boolean, chapterRef: number | null }>) => string} citeOf
  *   the text after 「— 」 for one unit; `runs` = per article in document order — `ranges` the selected verses as runs
  *   (selectionCitation — formatVerseRanges writes them), `atStart`/`atEnd` whether the selection reached the article's
  *   first/last numbered verse, `chapterRef` the chapter the numbers belong to when it is not the article's (only
@@ -1340,7 +1340,7 @@ function overlapsText(/** @type {Range} */ range, /** @type {Node} */ node) {
  * 다른 장에서 옮겨 실린 절(`chapter_ref`)과 그리스어 추가 본문(`lxx_only`)은 이 장의 번호 체계가 아니라 세지 않는다.
  * 장 본문과 전례독서의 `<article data-absent>`가 되어, 복사 출처와 절 선택 막대가 읽는다(마르 9장은 [44, 46],
  * verse-spec.js selectionCitation).
- * @param {import("../types").BibleVerse[]} verses @returns {number[]}
+ * @param {import("../types.js").BibleVerse[]} verses @returns {number[]}
  */
 function absentVerseNumbers(verses) {
   /** @type {Set<number>} */

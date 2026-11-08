@@ -17,17 +17,17 @@
 // Cross-module dependencies:
 //   - window.appHelpers: el (DOM builder)
 
-/** @typedef {import("../types").AppCitations} AppCitations */
+/** @typedef {import("../types.js").AppCitations} AppCitations */
 
 // The return type is declared so a member missing from `AppCitations` (types.d.ts) fails typecheck here, not
 // later in whichever module destructures it (helpers.js does the same for `AppHelpers`).
 window.appCitations = (/** @returns {AppCitations} */ () => {
-  /** @typedef {import("../types").BibleVerseSegment} BibleVerseSegment */
-  /** @typedef {import("../types").BibleVerse} BibleVerse */
-  /** @typedef {import("../types").BibleVerseNote} BibleVerseNote */
-  /** @typedef {import("../types").BibleChapter} BibleChapter */
-  /** @typedef {import("../types").BooksData} BooksData */
-  /** @typedef {import("../types").CiteParallelRef} CiteParallelRef */
+  /** @typedef {import("../types.js").BibleVerseSegment} BibleVerseSegment */
+  /** @typedef {import("../types.js").BibleVerse} BibleVerse */
+  /** @typedef {import("../types.js").BibleVerseNote} BibleVerseNote */
+  /** @typedef {import("../types.js").BibleChapter} BibleChapter */
+  /** @typedef {import("../types.js").BooksData} BooksData */
+  /** @typedef {import("../types.js").CiteParallelRef} CiteParallelRef */
 
   // ADR-022 §2: a parallel entry's inline `[전통]` suffix. Same regex shape
   // as parser.py's _PARALLEL_TRADITION_RE — round-trips data-cite-parallels

@@ -27,13 +27,13 @@
 //   미결42 전례독서 목록의 이름은 괄호 설명을 뗀 이름이고, 전체 이름은 title 속성. 주기와 독서 N은 붙이지 않는다 — 제목 아래 줄과
 //          독서 카드에 있다(2026-11-04). (닫힘)
 
-/** @typedef {import("../types").ResolvedDate} ResolvedDate */
-/** @typedef {import("../types").Candidate} Candidate */
-/** @typedef {import("../types").ReadingGroup} ReadingGroup */
-/** @typedef {import("../types").ReadingSlot} ReadingSlot */
-/** @typedef {import("../types").CollectOption} CollectOption */
-/** @typedef {import("../types").CandidateCollects} CandidateCollects */
-/** @typedef {import("../types").BibleChapter} BibleChapter */
+/** @typedef {import("../types.js").ResolvedDate} ResolvedDate */
+/** @typedef {import("../types.js").Candidate} Candidate */
+/** @typedef {import("../types.js").ReadingGroup} ReadingGroup */
+/** @typedef {import("../types.js").ReadingSlot} ReadingSlot */
+/** @typedef {import("../types.js").CollectOption} CollectOption */
+/** @typedef {import("../types.js").CandidateCollects} CandidateCollects */
+/** @typedef {import("../types.js").BibleChapter} BibleChapter */
 
 import { loadChapter } from "./data-fetch.js";
 import {
@@ -60,7 +60,7 @@ const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
 // 이 화면의 링크(날짜 이동 · 전례독서 목록 · 독서 카드)는 #app을 통째로 다시 그린다 — 그 링크들은 `data-focus-key`만 달고, 라우터가
 // 누른 자리를 재 두었다가 새 화면의 같은 컨트롤로 포커스를 돌려준다(WCAG 2.4.3 — routing.js, 캘린더 · 구분 탭 · 검색과 같다).
 
-/** parsePath 가 /lectionary 에서 내는 서술자(routing.js PARSE_PATH — 정의는 types.d.ts `Route`). @typedef {import("../types").LectionaryRoute} LectionaryRoute */
+/** parsePath 가 /lectionary 에서 내는 서술자(routing.js PARSE_PATH — 정의는 types.d.ts `Route`). @typedef {import("../types.js").LectionaryRoute} LectionaryRoute */
 /** URL 쿼리에서 온 상태 — 넷 다 없을 수 있다. @typedef {{ obs: string | null, track: 1 | 2 | null, set: number | null, collect: number | null }} LectionaryQuery */
 /** 제목 아래 전례독서 목록의 줄 하나(후보 하나, 세트와 본기도가 짝지어진 후보는 세트 하나) — `name`은 괄호 설명을 뗀 이름, `suffix`는 상태 표시. @typedef {{ candidate: Candidate, name: string, suffix: string, title: string, href: string, active: boolean }} LectionaryChoice */
 /** 화면의 「독서」 선택지 하나 — `short` 는 괄호 선택 구절 세트에 합쳐진 짧은 바탕 세트(〔 〕 표시의 기준). @typedef {{ group: ReadingGroup, short: ReadingGroup | null, label: string }} ReadingOption */
@@ -510,7 +510,7 @@ function collectsFor(entries, selected) {
  * 그날 축성되거나 축복된 교회(엔진 `findDedications`) → 제목 아래 줄(사용자 결정 2026-11-04). 종류마다 한 줄이고, 교회
  * 이름을 쉼표로 이은 뒤 「축성일」 · 「축복일」을 한 번만 붙인다(「일산성당, 초지성당, 행신성당 축성일」). 축성일 줄이
  * 먼저다(`DEDICATION_LABEL`의 차례). 「북.」으로 시작하는 성당(북한에 있던 성당)은 싣지 않고, 주보성인도 보이지 않는다(같은 결정).
- * @param {import("../types").ParishDedication[]} entries @returns {string[]}
+ * @param {import("../types.js").ParishDedication[]} entries @returns {string[]}
  */
 function dedicationLines(entries) {
   return /** @type {Array<keyof typeof DEDICATION_LABEL>} */ (Object.keys(DEDICATION_LABEL)).flatMap((kind) => {
@@ -522,7 +522,7 @@ function dedicationLines(entries) {
 /**
  * 관구 설립일(엔진 `findFoundings`) → 제목 아래 줄 「1992년 9월 29일 관구설립일」(사용자 결정 2026-11-07). 설립연도가 없으면
  * 「9월 29일 관구설립일」이다.
- * @param {import("../types").ProvinceFounding[]} entries @returns {string[]}
+ * @param {import("../types.js").ProvinceFounding[]} entries @returns {string[]}
  */
 function foundingLines(entries) {
   return entries.map((f) => {
@@ -725,7 +725,7 @@ function hrefFor(date, state, defaults) {
  *   lectionary.data.test.js 가 막는다). 에스델의 `alt_ref`(추가 본문 하위 절 — 미결39)는 `lxx_only` 가
  *   없는 장이라 이 규칙에 걸리지 않는다.
  * @param {BibleChapter} chapter @param {string} verseSpec
- * @returns {{ verses: import("../types").BibleVerse[], keys: string[] }}
+ * @returns {{ verses: import("../types.js").BibleVerse[], keys: string[] }}
  */
 function selectVerses(chapter, verseSpec) {
   const all = chapter.verses || [];
@@ -733,7 +733,7 @@ function selectVerses(chapter, verseSpec) {
   const hasLxx = all.some((v) => v.lxx_only);
   const hebrewMax = hasLxx ? all.reduce((mx, v) => (v.lxx_only ? mx : Math.max(mx, v.range_end || v.number)), 0) : 0;
   const greek = hasLxx && all.some((v) => v.lxx_only && v.number > hebrewMax && specCoversVerse(verseSpec, v.number));
-  /** @type {import("../types").BibleVerse[]} */
+  /** @type {import("../types.js").BibleVerse[]} */
   const verses = [];
   /** @type {string[]} */
   const selKeys = [];
@@ -757,7 +757,7 @@ function selectVerses(chapter, verseSpec) {
  * 시편 42, 43 · 창세 6:9-22, 7:24, 8:14-19 …)에서 2장 1절이 1장 1절과 같은 키로 떨어져 조용히 빠졌다(Copilot
  * 리뷰 1회차). DOM id 는 그대로 인스턴스 키다(`appendVerses` 의 `instanceKeys`).
  * @param {ReadingSlot} slot @param {(chapter: number) => BibleChapter | null | undefined} chapterOf
- * @returns {Array<{ chapter: number, spec: string, data: BibleChapter | null, verses: import("../types").BibleVerse[], keys: string[] }>}
+ * @returns {Array<{ chapter: number, spec: string, data: BibleChapter | null, verses: import("../types.js").BibleVerse[], keys: string[] }>}
  */
 function slotVerseRuns(slot, chapterOf) {
   /** @type {Set<string>} */
@@ -766,7 +766,7 @@ function slotVerseRuns(slot, chapterOf) {
     const data = chapterOf(ref.chapter) || null;
     if (!data) return { chapter: ref.chapter, spec: ref.verseSpec, data: null, verses: [], keys: [] };
     const picked = selectVerses(data, ref.verseSpec);
-    /** @type {import("../types").BibleVerse[]} */
+    /** @type {import("../types.js").BibleVerse[]} */
     const verses = [];
     /** @type {string[]} */
     const keys = [];
@@ -786,7 +786,7 @@ function slotVerseRuns(slot, chapterOf) {
  * 상은 처음부터 경계까지, 하는 경계부터 끝까지다(사용자 결정 2026-10-22 — 데이터 `liturgical/half-verses.md`).
  * 나누지 않으면 null이다. 표에 없거나 「전체」인 반절(로마 3:22하), 표의 줄이 그려진 줄 수를 넘는 절이 그렇다 —
  * 데이터가 어긋나면 반절 대신 절 전체를 그리는 편이 낫다.
- * @param {number} lineCount @param {import("../types").HalfVerse | null | undefined} entry
+ * @param {number} lineCount @param {import("../types.js").HalfVerse | null | undefined} entry
  * @returns {{ first: number, last: number, cut: number | null, text: string | null } | null}
  */
 function halfVerseLines(lineCount, entry) {
@@ -803,7 +803,7 @@ function halfVerseLines(lineCount, entry) {
  * 「24-34, 35하」 · 「12하-20상」 · 「14상, 22-32」. 성령강림 「시편 104:24-34, 35하」를 복사하면 출처가
  * 「104:24-35」로 35절 전체를 가리켰다(2026-10-22 발견). 데이터의 반쪽 절 구간(「8ㄱ」인 `[8, 8, "a"]`, verse-spec.js
  * selectionCitation)은 `part`를 달아 그대로 둔다. 전례독서의 상, 하와 한 절에서 만나지 않는다(pitfalls §21).
- * @param {import("../types").VerseRun[]} ranges @param {ReadonlyMap<number, string>} halves 절 번호 → "a"(상) | "b"(하)
+ * @param {import("../types.js").VerseRun[]} ranges @param {ReadonlyMap<number, string>} halves 절 번호 → "a"(상) | "b"(하)
  * @returns {Array<{ a: number, b: number, aHalf: string, bHalf: string, part?: string }>}
  */
 function halfVerseRanges(ranges, halves) {
@@ -863,9 +863,9 @@ function isAlternateReading(c, initial) {
  * @param {ResolvedDate} resolved @param {LectionaryQuery} query
  * @param {(c: Candidate) => ReadingGroup[]} groupsOf @param {CandidateCollects[]} collectEntries
  * @param {1 | 2 | null} storedTrack  기억된 트랙 — 마지막으로 고른 것(해를 넘어 유지)
- * @param {import("../types").ParishDedication[] | undefined} dedications  그날 축성되거나 축복된 교회(엔진 `findDedications`)
+ * @param {import("../types.js").ParishDedication[] | undefined} dedications  그날 축성되거나 축복된 교회(엔진 `findDedications`)
  * @param {boolean} showAlternates  대체 독서의 줄을 전례독서 목록에 보이는가(설정 「대체 독서 표시」). 기본값을 두지 않는다 — 값은 설정에서 받는다
- * @param {import("../types").ProvinceFounding[]} [foundings]  그날이 관구 설립일이면 그 설립일(엔진 `findFoundings`)
+ * @param {import("../types.js").ProvinceFounding[]} [foundings]  그날이 관구 설립일이면 그 설립일(엔진 `findFoundings`)
  * @returns {LectionaryModel | null}  후보가 하나도 없으면 null(유효한 날짜에는 격자가 언제나 있어 생기지 않는다)
  */
 function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedTrack, dedications = [], showAlternates, foundings = []) {
@@ -1627,7 +1627,7 @@ function buildReading(m, slot, chapters) {
  * (「24-34, 35하」 — `halfVerseRanges`, 2026-10-22). 고른 절과 그 구간은 장 본문 복사, 절 선택 복사와 같은 함수
  * (verse-spec.js selectionCitation)가 정한다. 데이터의 반쪽 절 하나는 「7:7, 8ㄱ」처럼 적는다(사용자 결정 2026-11-07).
  * 번역 표기는 성서가 「(공동번역성서)」, 전례시편 · 송가가 「(대한성공회 기도서)」(사용자 결정 2026-10-13 — `citationSource`).
- * @param {HTMLElement} unit @param {Array<{ article: HTMLElement, ranges: import("../types").VerseRun[], atStart: boolean, atEnd: boolean }>} runs
+ * @param {HTMLElement} unit @param {Array<{ article: HTMLElement, ranges: import("../types.js").VerseRun[], atStart: boolean, atEnd: boolean }>} runs
  */
 function copyCitation(unit, runs) {
   const canticle = unit.getAttribute("data-canticle");

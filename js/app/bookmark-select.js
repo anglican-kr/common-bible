@@ -19,8 +19,8 @@
 // #bookmarks-view-tree root), so this module stays self-contained. Deps: appStorage,
 // appHelpers, bookmark-core, bookmark-modals, bookmark-gestures, window.announce.
 
-/** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
-/** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
+/** @typedef {import("../types.js").BookmarkTreeNode} BookmarkTreeNode */
+/** @typedef {import("../types.js").BookmarkTreeBookmark} BookmarkTreeBookmark */
 
 const { _$ } = window.appHelpers;
 const { loadBookmarks } = window.appStorage;

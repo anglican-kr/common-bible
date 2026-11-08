@@ -13,9 +13,9 @@
 // bookmark-modals.js import these via ESM. Deps: appHelpers (chUnit), appStorage,
 // localStorage, verse-spec.js, window.getBooksCache.
 
-/** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
-/** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
-/** @typedef {import("../types").BookmarkTreeFolder} BookmarkTreeFolder */
+/** @typedef {import("../types.js").BookmarkTreeNode} BookmarkTreeNode */
+/** @typedef {import("../types.js").BookmarkTreeBookmark} BookmarkTreeBookmark */
+/** @typedef {import("../types.js").BookmarkTreeFolder} BookmarkTreeFolder */
 
 import { wholeVerseSpec } from "./verse-spec.js";
 
@@ -410,7 +410,7 @@ function _hasActiveDescendant(folder, pathname = _renderPathname) {
 // places before known-issues §19.1 was fixed).
 /**
  * @param {{ bookId?: string | null, chapter?: number | null, verseSpec?: string }} bm
- * @param {import("../types").BooksData | null | undefined} books  without the book list the name starts with the
+ * @param {import("../types.js").BooksData | null | undefined} books  without the book list the name starts with the
  *   book id, as the save dialog's always has
  * @returns {string}
  */
@@ -430,7 +430,7 @@ function defaultBookmarkLabel(bm, books) {
  * The name is judged against the range it was made for, so it is read before the range changes.
  * @param {{ bookId?: string, chapter?: number, verseSpec?: string, label?: string }} bm  changed in place
  * @param {string} spec  the new range
- * @param {import("../types").BooksData | null | undefined} books
+ * @param {import("../types.js").BooksData | null | undefined} books
  */
 function changeBookmarkRange(bm, spec, books) {
   if (bm.label === defaultBookmarkLabel(bm, books)) bm.label = defaultBookmarkLabel({ ...bm, verseSpec: spec }, books);
@@ -448,7 +448,7 @@ function changeBookmarkRange(bm, spec, books) {
  * 이름(「책 장:옛 저장값」)과 정확히 같을 때만 새 기본 이름으로 바꾸고, 사용자가 고친 이름은 그대로 둔다.
  * Works on a tree node and on a sync store's flat item alike — both carry these fields.
  * @param {{ bookId?: string, chapter?: number, verseSpec?: string, label?: string }} bm  changed in place
- * @param {import("../types").BooksData} books
+ * @param {import("../types.js").BooksData} books
  * @returns {boolean} whether it changed
  */
 function migrateLegacyBookmark(bm, books) {
@@ -497,7 +497,7 @@ function migrateStoredBookmarks() {
  * list is usually loaded by then (search.js preloads it at boot), but a start on a view that does not need it can
  * merge first (PR #367 review). Then the document is saved as it came, and the stored list moves once the list loads
  * — the startup move, a microtask after this save.
- * @param {import("../types").SyncDoc} doc
+ * @param {import("../types.js").SyncDoc} doc
  */
 function migrateLegacyBookmarkDoc(doc) {
   const books = window.getBooksCache();

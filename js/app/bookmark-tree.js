@@ -17,9 +17,9 @@
 // appStorage, bookmark-core, bookmark-gestures, bookmark-select, bookmark-menu,
 // window.{navigate, setTitle, hideAudioBar}.
 
-/** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
-/** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
-/** @typedef {import("../types").BookmarkTreeFolder} BookmarkTreeFolder */
+/** @typedef {import("../types.js").BookmarkTreeNode} BookmarkTreeNode */
+/** @typedef {import("../types.js").BookmarkTreeBookmark} BookmarkTreeBookmark */
+/** @typedef {import("../types.js").BookmarkTreeFolder} BookmarkTreeFolder */
 
 const { _$, el, clearNode, emptyState } = window.appHelpers;
 const { loadBookmarks } = window.appStorage;

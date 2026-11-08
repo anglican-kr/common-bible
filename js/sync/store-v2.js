@@ -10,14 +10,14 @@
 //   "bible-bookmarks-v2"    { bookmarks: {items, tombstones}, settings, lastRead }
 //   "bible-drive-base-ids"  { fileId, at, days: { [day]: [id, …] } } — this device only, never uploaded
 
-/** @typedef {import("../types").SyncDoc}            SyncDoc */
-/** @typedef {import("../types").SyncFlatItem}       SyncFlatItem */
-/** @typedef {import("../types").BookmarkTreeNode}   BookmarkTreeNode */
-/** @typedef {import("../types").SettingKey}         SettingKey */
-/** @typedef {import("../types").LastReadValue}      LastReadValue */
-/** @typedef {import("../types").SaveOutcome}        SaveOutcome */
-/** @typedef {import("../types").DriveBaseIds}       DriveBaseIds */
-/** @typedef {import("../types").BaseIdsOutcome}     BaseIdsOutcome */
+/** @typedef {import("../types.js").SyncDoc}            SyncDoc */
+/** @typedef {import("../types.js").SyncFlatItem}       SyncFlatItem */
+/** @typedef {import("../types.js").BookmarkTreeNode}   BookmarkTreeNode */
+/** @typedef {import("../types.js").SettingKey}         SettingKey */
+/** @typedef {import("../types.js").LastReadValue}      LastReadValue */
+/** @typedef {import("../types.js").SaveOutcome}        SaveOutcome */
+/** @typedef {import("../types.js").DriveBaseIds}       DriveBaseIds */
+/** @typedef {import("../types.js").BaseIdsOutcome}     BaseIdsOutcome */
 
 const _META_KEY  = "bible-sync-meta";
 const _STORE_KEY = "bible-bookmarks-v2";
@@ -861,7 +861,7 @@ function mergeDocs(local, remote, _deviceId) {
 
 /**
  * @param {string} deviceId
- * @returns {import("../types").SyncPayload}
+ * @returns {import("../types.js").SyncPayload}
  */
 function buildSyncPayload(deviceId) {
   const doc = loadLocal();

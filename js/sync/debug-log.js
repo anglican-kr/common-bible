@@ -10,8 +10,8 @@
 // are merged into one entry with a repeat count, preventing high-frequency saves
 // (font-size drag, scroll lastRead) from filling the buffer before a failure.
 
-/** @typedef {import("../types").SyncLogEntry}     SyncLogEntry */
-/** @typedef {import("../types").SyncLogMaskField} SyncLogMaskField */
+/** @typedef {import("../types.js").SyncLogEntry}     SyncLogEntry */
+/** @typedef {import("../types.js").SyncLogMaskField} SyncLogMaskField */
 
 /** @type {Array<SyncLogEntry & { ts: number; _count?: number; _lastTs?: number }>} */
 const _recent = [];

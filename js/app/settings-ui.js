@@ -13,13 +13,13 @@
 //   - sync layer: window.driveSync, window.syncDebugLog
 //   - DOM anchors: $title (sync via window when needed)
 
-/** @typedef {import("../types").AppSettings} AppSettings */
+/** @typedef {import("../types.js").AppSettings} AppSettings */
 
 // The return type is declared so a member missing from `AppSettings` (types.d.ts) fails typecheck here, not
 // later in whichever module destructures it (helpers.js does the same for `AppHelpers`).
 window.appSettings = (/** @returns {AppSettings} */ () => {
-  /** @typedef {import("../types").ColorSchemeEntry} ColorSchemeEntry */
-  /** @typedef {import("../types").StartPage} StartPage */
+  /** @typedef {import("../types.js").ColorSchemeEntry} ColorSchemeEntry */
+  /** @typedef {import("../types.js").StartPage} StartPage */
 
   const { _$, el, clearNode } = window.appHelpers;
   const { createOverlay } = window.appOverlay;

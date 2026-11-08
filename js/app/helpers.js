@@ -12,8 +12,8 @@
 // on the `$announce` anchor; that anchor will move once app.js anchor
 // declarations are themselves modularized.
 
-/** @typedef {import("../types").AppHelpers} AppHelpers */
-/** @typedef {import("../types").FocusSpot} FocusSpot */
+/** @typedef {import("../types.js").AppHelpers} AppHelpers */
+/** @typedef {import("../types.js").FocusSpot} FocusSpot */
 
 // The return type is declared so a helper missing from `AppHelpers` (types.d.ts) fails typecheck here, not
 // later in whichever module destructures it.

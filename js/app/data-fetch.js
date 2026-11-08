@@ -6,9 +6,9 @@
 // appVersion) that feed Views/Routing and external modules. No DOM, no
 // app-module dependencies — the lowest layer of the views split.
 
-/** @typedef {import("../types").BooksData} BooksData */
-/** @typedef {import("../types").BibleChapter} BibleChapter */
-/** @typedef {import("../types").BiblePrologue} BiblePrologue */
+/** @typedef {import("../types.js").BooksData} BooksData */
+/** @typedef {import("../types.js").BibleChapter} BibleChapter */
+/** @typedef {import("../types.js").BiblePrologue} BiblePrologue */
 
 const DATA_DIR = "/data";
 
