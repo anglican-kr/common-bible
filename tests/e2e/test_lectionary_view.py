@@ -1227,6 +1227,26 @@ def test_song_reading_hides_speaker_lines(desktop_context):
     assert "(신랑)" in page.inner_text("article.chapter-text")
 
 
+def test_touch_device_can_select_reading_text(browser):
+    """터치 기기(`hover: none`, `pointer: coarse`)에서도 전례독서 본문은 길게 눌러 고를 수 있다 — 장 본문은 절 선택 모드
+    때문에 기기의 글자 선택을 막는데, 같은 `.chapter-text`인 전례독서까지 막혀 휴대폰에서 복사할 길이 없었다
+    (사용자 보고 2026-11-08). 고른 글자를 복사하면 데스크톱과 같이 출처가 붙는다. 장 본문은 그대로 막는다."""
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA, is_mobile=True, has_touch=True)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    _open(page, "lectionary/2026-11-08")
+    verses = ".lect-reading[data-slot='gospel'] article.chapter-text .verse[data-vref]"
+    # Chromium has no -webkit-touch-callout, so only user-select is observable here.
+    style = "e => getComputedStyle(e).userSelect"
+    assert page.eval_on_selector(verses, style) == "text"
+    text = page.evaluate(_LECT_COPY_ACROSS, [verses, f"{verses}:last-of-type"])
+    assert re.search(r"\n\n— 마태오의 복음서 25:1-\d+ \(공동번역성서\)$", text), text[-80:]
+    page.goto(f"{BASE}/matt/25")
+    page.wait_for_selector("article.chapter-text .verse")
+    assert page.eval_on_selector("article.chapter-text .verse", style) == "none"
+    ctx.close()
+
+
 def test_verse_ids_are_unique_across_slots_and_chapters(desktop_context):
     """한 화면에 슬롯 넷 · 장 여럿이 있어도 절 id 가 겹치지 않는다 — 슬롯 · 책 · 장 접두(Copilot 7회차)."""
     page = desktop_context.new_page()
