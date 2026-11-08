@@ -1,4 +1,5 @@
 ---
+pr: 531
 date: 2026-11-08
 branch: chore/typescript-7
 title: "chore: TypeScript 7로 올리기"
