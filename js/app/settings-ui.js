@@ -186,9 +186,14 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
   }
 
   // ── Cite/note visibility (ADR-022) ──
+  // The one place the setting takes effect: boot (app.js, before the first view draws), the switch below, and a value
+  // synced from another device (sync/state-machine.js calls window.applyCiteShow). Views draw chips, ※ markers and
+  // note anchors whatever the setting, so nothing is redrawn: the class shows or hides chips and ※ markers (CSS), and
+  // the word note anchors already drawn turn into buttons or back into plain words (citations.js setNoteAnchorsActive).
   /** @param {boolean} on */
   function applyCiteShow(on) {
     document.body.classList.toggle("cites-shown", !!on);
+    window.appCitations?.setNoteAnchorsActive(!!on);
   }
 
   // ── Launch screen ──
@@ -472,6 +477,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
       checked: loadCiteShow(),
       onToggle: (on) => {
         saveCiteShow(on);
+        // 장 화면과 전례독서 모두 applyCiteShow가 표시를 바꾸므로 다시 그리지 않는다. 데스크톱 설정 팝오버도 열린 채 남는다.
         applyCiteShow(on);
         announce(on ? "인용 본문·주석 표시" : "인용 본문·주석 숨김");
       },

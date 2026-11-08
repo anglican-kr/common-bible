@@ -973,7 +973,7 @@ function _verseRangeKeys(allKeys, anchorKey, targetKey, unitFn) {
 // ── BEGIN PIECE_SPACE ──
 // The chapter view draws a verse as several pieces (around a `<cite>`, one per line of a poem). Each piece
 // is its own inline element, so a space after it keeps the words apart. These pieces get none:
-//   - the piece before a cite chip — the chip's own padding is the gap (ADR-022 §6 dev-server tweak);
+//   - a prose cite piece that the next piece of the same verse continues (citePieceSpace "glue");
 //   - a piece of punctuation only — it glues to the next piece in Korean prose (a stray opening quote split
 //     off when a cite begins mid-quote: `“<cite>…</cite>`);
 //   - a piece that ends with an opening quote — the quoted text sits against it (`“너로`, not `“ 너로`).
@@ -983,25 +983,53 @@ const PIECE_PUNCT_ONLY_RE = /^[\s'"“”‘’«»‹›()…,.;:!?¶·]+$/;
 /**
  * The text drawn after a piece: one space, or "" where the next piece must sit against it.
  * @param {string} text  the piece, without its leading ¶
- * @param {boolean} [noTrailingSpace]  a cite chip follows the piece
+ * @param {boolean} [noTrailingSpace]  the caller places the gap itself (citePieceSpace)
  * @returns {string}
  */
 function pieceTrailingSpace(text, noTrailingSpace) {
   if (noTrailingSpace || PIECE_PUNCT_ONLY_RE.test(text) || /[“‘]$/.test(text)) return "";
   return " ";
 }
+
+/**
+ * Where the space after a prose cite piece (the last line of a `<cite>` segment) goes. The answer does not hang on
+ * whether a chip is drawn there, because a chip can be hidden (setting 「인용·주석 표시」 off) or dropped from a copy,
+ * and the gap must stay right without it.
+ *   - "glue": the next prose piece of the same verse continues it, chip or not. The data keeps a leading space where
+ *     the source had one; otherwise a closing quote, punctuation or a particle follows (`받으리라.”는`, `말라는`).
+ *     Count 2026-11-09: 183 closing marks, 29 leading spaces, 14 particles.
+ *   - "after-chip": a chip follows and nothing in the verse continues the piece on its line (the verse ends, or a
+ *     paragraph or poem starts) — the space goes after the chip, so hiding or dropping the chip leaves
+ *     `없었습니다. 그분은`, not `없었습니다.그분은` (79 verse ends, 2026-11-09).
+ *   - "normal": no chip and nothing continues — the usual space after a piece (pieceTrailingSpace).
+ * Poetry pieces are lines of their own and are always "normal".
+ * @param {{ type?: string, cite?: string | null }} seg
+ * @param {{ type?: string, paragraph_break?: boolean } | undefined} next  the next segment of the same verse
+ * @param {boolean} chipShows  a chip is drawn right after this segment
+ * @returns {"glue" | "after-chip" | "normal"}
+ */
+function citePieceSpace(seg, next, chipShows) {
+  if (!seg.cite || seg.type === "poetry") return "normal";
+  if (next && next.type === "prose" && !next.paragraph_break) return "glue";
+  return chipShows ? "after-chip" : "normal";
+}
 // ── END PIECE_SPACE ──
+
+/**
+ * The drawing options appendVerses and appendVersesWithAids share: address highlights, DOM ids.
+ * @typedef {{ hlQuery?: string|null, hlVerse?: number|null, hlVerseEnd?: number|null, hlSegments?: Array<{start:number,end:number,part?:string}>|null, instanceKeys?: ReadonlyArray<string>|null, idPrefix?: string }} VerseDrawOptions
+ */
 
 // Render a list of verses into `article` as inline verse spans + inter-verse
 // break markers + cite chips. Extracted from renderChapter so the bookmark
 // reading view (ADR-035) can render verse subsets through the same logic. Does
-// NOT wrap note anchors or run highlight-join post-processing — callers do that
-// on the finished article (note anchors match by integer verse number, so they
-// must be scoped per single-chapter article to avoid cross-chapter collisions).
+// NOT wrap note anchors or run highlight-join post-processing. A full reading
+// surface (chapter view, lectionary) draws through appendVersesWithAids, which
+// adds the parallel ※ markers and note anchors in one fixed order.
 /**
  * @param {HTMLElement} article
  * @param {ReadonlyArray<BibleVerse>} verses
- * @param {{ hlQuery?: string|null, hlVerse?: number|null, hlVerseEnd?: number|null, hlSegments?: Array<{start:number,end:number,part?:string}>|null, parallels?: ChapterParallel[]|null, chapter?: number, hideCites?: boolean, instanceKeys?: ReadonlyArray<string>|null , idPrefix?: string}} [opts]
+ * @param {VerseDrawOptions & { parallels?: ChapterParallel[]|null, chapter?: number, hideCites?: boolean }} [opts]
  */
 function appendVerses(article, verses, opts = {}) {
   // `chapter` has no null default: findParallelsStartingAt skips its chapter guard only for `undefined` — a null
@@ -1125,6 +1153,11 @@ function appendVerses(article, verses, opts = {}) {
       const isPoetry = seg.type === "poetry";
       const isSegChange = prevSegType !== null && prevSegType !== seg.type;
       const lines = seg.text.split("\n");
+      // ADR-022: a chip after this segment (dedup keeps only the last of a run), and where the gap after its last
+      // line goes (citePieceSpace) — the text of that line is kept for the "after-chip" space.
+      const chipShows = !!(seg.cite && _citeShowAt.has(`${vIdx}:${segIdx}`));
+      const citeSpace = citePieceSpace(seg, segs[segIdx + 1], chipShows);
+      let lastPieceText = "";
 
       for (let li = 0; li < lines.length; li++) {
         const line = lines[li];
@@ -1197,12 +1230,11 @@ function appendVerses(article, verses, opts = {}) {
         span.setAttribute("data-vkey", `${instanceKeys[vIdx]}/${vref}`);
         // A verse moved in from another chapter is cited by that chapter when it is all that was copied (이사 40 의 41:6-7).
         if (v.chapter_ref != null) span.setAttribute("data-chapter-ref", String(v.chapter_ref));
-        // Suppress trailing space on the last line of a prose cite segment
-        // — the chip that follows immediately provides its own padding gap.
-        const segWillShowChip = !!(seg.cite && _citeShowAt.has(`${vIdx}:${segIdx}`));
+        // The last line of a prose cite segment: no space of its own when the next piece glues to it, or when the
+        // space goes after the chip (citePieceSpace).
         const isLastSegLine = li === lines.length - 1;
-        const segTextOpts = (!isPoetry && segWillShowChip && isLastSegLine)
-          ? { noTrailingSpace: true } : undefined;
+        const segTextOpts = (isLastSegLine && citeSpace !== "normal") ? { noTrailingSpace: true } : undefined;
+        if (isLastSegLine) lastPieceText = line.replace(/^¶\s*/, "");
         // Hanging punctuation: pull leading quote outside the indent.
         const hqCls = isPoetry ? hangingQuoteClass(line[0]) : "";
         if (hqCls) {
@@ -1225,10 +1257,15 @@ function appendVerses(article, verses, opts = {}) {
       }
       // ADR-022: append cite chip after this segment if it carries one and
       // dedup decided this position should render (not suppressed).
-      if (seg.cite && window.appCitations && _citeShowAt.has(`${vIdx}:${segIdx}`)) {
+      if (chipShows && seg.cite && window.appCitations) {
         article.appendChild(window.appCitations.buildCiteChip(
           seg.cite, seg.parallels || null, seg.tradition || null, seg.type,
         ));
+        // The gap between verses (or before a new paragraph) sits after the chip, so a hidden chip or a copy that
+        // drops it keeps the words apart. The chip's own padding is the gap in front of it.
+        if (citeSpace === "after-chip" && pieceTrailingSpace(lastPieceText) === " ") {
+          article.appendChild(document.createTextNode(" "));
+        }
       }
 
       prevSegType = seg.type;
@@ -1241,6 +1278,29 @@ function appendVerses(article, verses, opts = {}) {
     prevVerseEndType = segs[segs.length - 1]?.type;
     isFirst = false;
   }
+}
+
+/**
+ * Draw one chapter's verses with the reading aids — cite chips (ADR-022), parallel-passage ※ markers (ADR-027) and
+ * note anchors (ADR-022) — the one way the chapter view and the lectionary draw them. The aids are drawn whatever the
+ * setting 「인용·주석 표시」; `body.cites-shown` shows or hides them without a redraw (settings-ui.js applyCiteShow).
+ *
+ * `chapter` is the chapter JSON the verses come from. Its ranges (`parallels`) and number (`chapter`) go to
+ * appendVerses together: findParallelsStartingAt skips its chapter check only when the number is `undefined`, and a
+ * `null` would drop every ※ marker — a caller passing them one by one could get that wrong.
+ *
+ * Note anchors are wrapped right after the verses are drawn, on whole verses: a note's `anchor_occurrence` counts
+ * the word in the whole verse, so a caller that cuts half verses (lectionary trimHalfVerses) cuts after this. They
+ * pair with verses by number, so `article` holds this one chapter's verses only.
+ *
+ * @param {HTMLElement} article
+ * @param {ReadonlyArray<BibleVerse>} verses  the verses to draw — all of `chapter.verses` or an excerpt of them
+ * @param {BibleChapter} chapter
+ * @param {VerseDrawOptions} [opts]
+ */
+function appendVersesWithAids(article, verses, chapter, opts = {}) {
+  appendVerses(article, verses, { ...opts, parallels: chapter.parallels, chapter: chapter.chapter });
+  window.appCitations?.wrapNoteAnchorsInArticle(article, verses);
 }
 
 /**
@@ -1438,16 +1498,9 @@ function renderChapter(data, book, opts) {
   // 이 번역에 없는 절 번호 — 복사 출처가 그 자리에서 구간을 끊지 않게(사용자 결정 2026-10-14, bindCopyAttribution)
   const absent = absentVerseNumbers(data.verses);
   if (absent.length) article.setAttribute("data-absent", absent.join(","));
-  appendVerses(article, data.verses, {
-    hlQuery, hlVerse, hlVerseEnd, hlSegments,
-    parallels: data.parallels, chapter: data.chapter,
-  });
-
-  // ADR-022: wrap each note anchor in a clickable button — tooltip on click
-  // shows the note body (no chapter-end section; ADR §6 개정 2026-05-24).
-  if (window.appCitations) {
-    window.appCitations.wrapNoteAnchorsInArticle(article, data.verses);
-  }
+  // Cite chips, parallel ※ markers and note anchors (tooltip on click — no chapter-end section; ADR-022 §6 개정
+  // 2026-05-24), drawn whatever the setting 「인용·주석 표시」 (appendVersesWithAids).
+  appendVersesWithAids(article, data.verses, data, { hlQuery, hlVerse, hlVerseEnd, hlSegments });
 
   // Flatten inner corners between adjacent highlighted verses so a run from
   // a search/bookmark deep link renders as a single block.
@@ -1973,6 +2026,6 @@ export {
   DIVISION_LABELS,
   renderBookList, renderChapterList, renderChapter, renderPrologue,
   renderLoading, renderBibleFailure,
-  appendVerses,
+  appendVerses, appendVersesWithAids,
   LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
 };

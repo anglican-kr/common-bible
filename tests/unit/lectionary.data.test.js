@@ -761,6 +761,9 @@ test("반절 경계 표 — 전례독서 · 성인 공통의 반절 참조마다
     const data = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "bible", `${e.bookId}-${e.chapter}.json`), "utf8"));
     const v = data.verses.find((x) => x.number === e.verse && !x.part && !x.lxx_only && x.chapter_ref == null && x.alt_ref == null && !x.versicle);
     assert.ok(v, k);
+    // 인용 칩은 절의 마지막 줄 뒤에 붙는데, `trimHalfVerses`는 그 칩을 지우지 않는다(ADR-038 §3 「독서 렌더」, 2026-11-08).
+    // 인용이 든 절을 반절로 자르게 되면 그 칩 처리를 먼저 더한다. 주석은 아래에서 따로 본다.
+    assert.ok(!(v.segments || []).some((/** @type {any} */ s) => s.cite), `${k} — 인용이 든 절을 반절로 자르면 칩이 남는다`);
     // appendVerses 의 줄 — segments 를 줄바꿈으로 나누고 빈 줄(연 구분)은 빼며, 줄 머리의 ¶ 는 표지로 떼어 그린다
     const lines = (v.segments || [{ text: v.text || "" }]).flatMap((/** @type {any} */ s) => s.text.split("\n"))
       .filter((/** @type {string} */ l) => l !== "").map((/** @type {string} */ l) => l.replace(/^¶\s*/, ""));
@@ -768,7 +771,68 @@ test("반절 경계 표 — 전례독서 · 성인 공통의 반절 참조마다
     if (e.whole) { assert.strictEqual(keep, null, k); continue; }
     assert.ok(keep, `${k} — 경계가 절을 나누지 않는다`);
     if (keep.text) assert.strictEqual(lines[keep.cut].split(keep.text).length, 2, `${k} — 「${keep.text}」가 ${keep.cut + 1}줄에 한 번 나와야 한다`);
+    // 주석은 반절 자르기 앞에 감싼다(lectionary.js buildReading, 2026-11-08). 어절 없는 주석의 ※는 절 마지막 줄 끝에 붙어 상으로
+    // 자르면 소리 없이 사라지고, 어절이 경계에 걸친 주석은 앱이 풀어 보통 글자로 둔다(cutLineText). 지금 데이터(창세 28:19상의
+    // 「베델」은 남는 쪽)에는 둘 다 없다.
+    for (const note of v.notes || []) {
+      assert.ok((note.anchor || "").trim(), `${k} — 반절로 자르는 절에 어절 없는 주석(※)이 있다. 자른 절에서 ※를 어디에 둘지 먼저 정해 lectionary.js trimHalfVerses에 더한다`);
+      // 그 어절의 n번째(anchor_occurrence, 기본 1) — citations.js _wrapAnchor 처럼 줄마다 앞에서부터 겹치지 않게 센다
+      /** @type {{ line: number, start: number, end: number } | null} */
+      let at = null;
+      let seen = 0;
+      lines.forEach((/** @type {string} */ l, /** @type {number} */ li) => {
+        for (let i = l.indexOf(note.anchor); i >= 0 && !at; i = l.indexOf(note.anchor, i + note.anchor.length)) {
+          if (++seen === (note.anchor_occurrence || 1)) at = { line: li, start: i, end: i + note.anchor.length };
+        }
+      });
+      // 줄 경계로 자르면 어절은 남는 줄이나 버리는 줄에 통째로 있다. 줄 안의 경계만 어절을 나눌 수 있다.
+      if (!at || keep.text === null || at.line !== keep.cut) continue;
+      const p = lines[keep.cut].indexOf(keep.text);
+      const b = e.half === "a" ? p + keep.text.length : p;
+      assert.ok(at.end <= b || at.start >= b, `${k} — 주석 어절 「${note.anchor}」이 반절 경계에 걸친다. 앱은 그 주석을 풀어 보통 글자로 그린다. `
+        + "데이터 저장소의 경계 문구(liturgical/half-verses.md)나 주석의 어절을 먼저 고친다");
+    }
   }
+});
+
+// ── 아가의 화자 줄 ↔ 주석(코드 리뷰 2026-11-09, 구현하며 정함) ──
+// 전례독서는 아가의 화자 줄(「(신부)」 「(신랑)」 「(합창단)」 「(신부와 신랑)」)을 지운다(lectionary.js dropReadingMarks, 사용자 결정 2026-11-08).
+// 주석은 그보다 먼저 감싸므로, 화자 줄에 붙는 주석은 그 줄과 함께 사라진다. 어절 없는 주석의 ※는 절 마지막 줄 끝에 붙고, 어절 주석은
+// 그 어절이 있는 줄에 붙는다. 그런 주석이 생기면 이 시험이 실패해 어디에 둘지 먼저 정하게 한다. 지금 아가에는 주석이 없다.
+
+test("아가의 화자 줄 — 화자 줄에 붙는 주석(절 마지막 줄이 화자 줄인 절의 어절 없는 주석, 화자 줄 낱말의 어절 주석)이 없다", { skip: SKIP }, () => {
+  const SPEAKER_LINE = /^\([^()]+\)$/;   // lectionary.js의 `SPEAKER_LINE`과 같다
+  const dir = path.join(ROOT, "data", "bible");
+  /** @type {string[]} */
+  const bad = [];
+  let speakerVerses = 0;
+  for (const f of fs.readdirSync(dir).filter((x) => /^song-\d+\.json$/.test(x))) {
+    const data = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8"));
+    for (const v of data.verses) {
+      // `appendVerses`가 그리는 줄이다. `segments`를 줄바꿈으로 나누고 빈 줄(연 구분)은 빼며, 줄 머리의 ¶는 표지로 떼어 그린다
+      const lines = (v.segments || [{ text: v.text || "" }]).flatMap((/** @type {any} */ s) => s.text.split("\n"))
+        .filter((/** @type {string} */ l) => l !== "").map((/** @type {string} */ l) => l.replace(/^¶\s*/, "").trim());
+      const speaker = lines.map((/** @type {string} */ l) => SPEAKER_LINE.test(l));
+      if (!speaker.some(Boolean)) continue;
+      speakerVerses++;
+      for (const note of v.notes || []) {
+        const k = `${f.replace(".json", "")}:${v.number}`;
+        const anchor = (note.anchor || "").trim();
+        if (!anchor) {
+          if (speaker[speaker.length - 1]) bad.push(`${k} 어절 없는 주석의 ※가 화자 줄에 붙는다`);
+          continue;
+        }
+        let seen = 0;
+        lines.forEach((/** @type {string} */ l, /** @type {number} */ li) => {
+          for (let i = l.indexOf(anchor); i >= 0; i = l.indexOf(anchor, i + anchor.length)) {
+            if (++seen === (note.anchor_occurrence || 1) && speaker[li]) bad.push(`${k} 주석 어절 「${anchor}」이 화자 줄에 있다`);
+          }
+        });
+      }
+    }
+  }
+  assert.ok(speakerVerses > 0, "화자 줄이 있는 절을 찾지 못했다 — 데이터 형식이 바뀌었으면 이 시험의 줄 계산을 고친다");
+  assert.deepStrictEqual(bad, [], "화자 줄과 함께 지워질 주석이다. lectionary.js dropReadingMarks에서 그 주석을 어디에 둘지 먼저 정한다");
 });
 
 test("기리는 성인의 본기도를 잇는 차례(MEMORIAL_CLASS_ORDER)는 commons.json 의 유형 정의 차례와 같다(사용자 결정 2026-11-03)", { skip: SKIP }, () => {

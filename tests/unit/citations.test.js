@@ -11,6 +11,7 @@
 //   - chipText
 //   - buildCiteChip
 //   - buildNoteElement
+//   - setNoteAnchorsActive (setting 「인용·주석 표시」 on word note anchors)
 //   - _findRelocated (ADR-003 — a verse printed in another chapter)
 
 import { test } from "node:test";
@@ -319,7 +320,57 @@ test("buildCiteChip: aria-label includes display text", () => {
 // ── Notes: anchor wrapping + tooltip ─────────────────────────────────────────
 // wrapNoteAnchorsInArticle and tooltip open/close are DOM-positioning logic
 // (TreeWalker, getBoundingClientRect, viewport math) — covered by e2e rather
-// than the vm stub harness here.
+// than the vm stub harness here (tests/e2e/test_note_tooltip.py,
+// test_lectionary_cites.py).
+
+// ── setNoteAnchorsActive (setting 「인용·주석 표시」) ─────────────────────────
+// A word note anchor stays in the text whatever the setting. Off, it is plain text — no role, tab stop or name — so
+// it is not an invisible keyboard stop; on, a button named 「<어절> 주석 보기」. settings-ui.js applyCiteShow calls this
+// on the anchors already drawn (구현하며 정함 2026-11-08).
+
+/** A drawn word anchor: `<span class="note-anchor" data-note-anchor="…">`, attributes in a Map. */
+function fakeWordAnchor(word, attrs = {}) {
+  const map = new Map(Object.entries({ "data-note-anchor": word, ...attrs }));
+  return {
+    textContent: word,
+    attrs: map,
+    getAttribute: (k) => (map.has(k) ? map.get(k) : null),
+    setAttribute: (k, v) => { map.set(k, String(v)); },
+    removeAttribute: (k) => { map.delete(k); },
+  };
+}
+
+/** A root whose querySelectorAll hands back `anchors` and records the selector asked for. */
+function fakeRoot(anchors) {
+  const asked = [];
+  return { asked, querySelectorAll: (sel) => { asked.push(sel); return anchors; } };
+}
+
+test("setNoteAnchorsActive: off → a word anchor drawn as a button turns into plain text", () => {
+  const c = loadCitations();
+  const a = fakeWordAnchor("베델", { role: "button", tabindex: "0", "aria-label": "베델 주석 보기" });
+  c.setNoteAnchorsActive(false, fakeRoot([a]));
+  assert.equal(a.getAttribute("role"), null);
+  assert.equal(a.getAttribute("tabindex"), null);
+  assert.equal(a.getAttribute("aria-label"), null);   // a role-less span keeps no name of its own
+  assert.equal(a.getAttribute("data-note-anchor"), "베델");   // the note stays for when the setting comes back on
+});
+
+test("setNoteAnchorsActive: on → a plain word anchor becomes a button named 「<어절> 주석 보기」", () => {
+  const c = loadCitations();
+  const a = fakeWordAnchor("베델");
+  c.setNoteAnchorsActive(true, fakeRoot([a]));
+  assert.equal(a.getAttribute("role"), "button");
+  assert.equal(a.getAttribute("tabindex"), "0");
+  assert.equal(a.getAttribute("aria-label"), "베델 주석 보기");
+});
+
+test("setNoteAnchorsActive: looks at word anchors only — the ※ variant marker is a <button> CSS hides", () => {
+  const c = loadCitations();
+  const root = fakeRoot([]);
+  c.setNoteAnchorsActive(true, root);
+  assert.deepEqual(root.asked, [".note-anchor:not(.note-anchor--variant)"]);
+});
 
 // ── _findRelocated (ADR-003 — a verse printed in another chapter) ────────────
 // A cite whose verse is not in its own chapter file is looked up in the neighbouring chapters by `chapter_ref`.

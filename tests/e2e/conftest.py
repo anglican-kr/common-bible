@@ -49,6 +49,13 @@ RECORD_ANNOUNCEMENTS = """() => {
 }"""
 
 
+# 설정 「인용·주석 표시」를 끈 기기(기본값은 켬, ADR-022 §6). 칩과 ※는 감춰지고 어절 주석은 보통 글자다.
+CITE_SHOW_OFF = "try { localStorage.setItem('bible-cite-show', '0'); } catch (_) {}"
+
+# 주석 툴팁(#note-tooltip)이 열려 있는가 — 어절 주석, 변형 ※, 병행 본문 ※가 함께 쓰는 툴팁이다.
+NOTE_TOOLTIP_OPEN = "() => { const t = document.getElementById('note-tooltip'); return !!t && !t.hidden; }"
+
+
 # 설정 「대체 독서 표시」를 켠 기기 — 평일 줄을 눌러 보는 시험에 쓴다(기본값은 숨김, ADR-041 §4).
 SHOW_ALT_READINGS = "try { localStorage.setItem('bible-lectionary-alt-show', '1'); } catch (_) {}"
 
