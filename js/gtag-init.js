@@ -1,7 +1,11 @@
 // @ts-check
 
 window.dataLayer = window.dataLayer || [];
-function gtag() { (window.dataLayer ??= []).push(arguments); }
+// The body pushes the `arguments` object exactly as Google's snippet does, so
+// what gtag.js receives is unchanged. The unused rest parameter only declares
+// the arity: TypeScript 7 no longer infers parameters from `arguments`.
+/** @param {...unknown} _args */
+function gtag(..._args) { (window.dataLayer ??= []).push(arguments); }
 gtag("js", new Date());
 gtag("config", "G-CWVVPW11TE");
 

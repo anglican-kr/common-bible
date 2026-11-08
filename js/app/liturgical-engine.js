@@ -481,7 +481,10 @@ function evalRule(rule, y) {
   const one = (/** @type {string | null} */ v) => (v === null || v === undefined ? [] : [v]);
   // JSON 의 숫자는 NaN·소수일 수 있다 — `days: 0.5` 는 Date 가 잘라 부활절 당일을, NaN 은
   // `0NaN-NaN-NaN` 을 냈다. §2 의 누락은 빈 결과지 그럴듯한 오답이 아니다: 정수만 받는다.
-  /** @type {(v: unknown) => v is number} */
+  /**
+   * @param {unknown} v
+   * @returns {v is number}
+   */
   const int = (v) => Number.isInteger(v);
   switch (rule.kind) {
     case "easter_offset":
