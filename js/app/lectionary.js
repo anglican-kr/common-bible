@@ -1461,6 +1461,64 @@ function trimHalfVerses(article, verseSpec, bookId, chapter) {
   if (trimmed.length) article.setAttribute("data-halves", trimmed.join(","));
 }
 
+// 아가의 화자 줄 — 데이터에서 시행 한 줄을 차지한다(「(신부)」 「(신랑)」 「(합창단)」 「(신부와 신랑)」).
+const SPEAKER_LINE = /^\([^()]+\)$/;
+// 줄 사이 구분 표지의 세기 — 화자 줄을 지운 자리에 둘이 맞닿으면 센 쪽을 남긴다.
+const BREAK_RANK = { "hemistich-break": 0, "paragraph-break": 1, "stanza-break": 2 };
+
+/** @param {Element | null} n @returns {number} 구분 표지가 아니면 -1 */
+function breakRank(n) {
+  if (!n) return -1;
+  for (const [cls, rank] of Object.entries(BREAK_RANK)) if (n.classList.contains(cls)) return rank;
+  return -1;
+}
+
+/**
+ * 봉독면에서 장 본문의 읽기 표지를 뺀다(사용자 결정 2026-11-08). 긴 시편의 부(部) 소제목 「(N)」(`.psalm-section`)과
+ * 아가의 화자 줄이다. 둘 다 장 본문(/lps, /song)에는 그대로 있다. 반절 자르기(`trimHalfVerses`)가 데이터의 줄 수를
+ * 세므로 그 뒤에, 선택 구절 괄호(`markOptionalVerses`)가 이웃 줄을 보므로 그 앞에 돈다. 화자 줄이 절의 첫 줄이면
+ * 절 번호와 id 를 그 절의 다음 줄로 옮긴다(지금 데이터에는 없다). 화자 줄 앞뒤의 구분 표지는 센 쪽 하나만 남긴다.
+ * @param {HTMLElement} article @param {string} bookId
+ */
+function dropReadingMarks(article, bookId) {
+  article.querySelectorAll(".psalm-section").forEach((n) => n.remove());
+  if (bookId !== "song") return;
+  for (const span of /** @type {HTMLElement[]} */ ([...article.querySelectorAll(".verse[data-vkey]")])) {
+    const text = [...span.childNodes]
+      .filter((n) => n.nodeType === Node.TEXT_NODE || !(n instanceof HTMLElement && n.matches(".verse-num, .versicle-mark, .pilcrow")))
+      .map((n) => n.textContent).join("").replace(/\u2060/g, "").trim();
+    if (!SPEAKER_LINE.test(text)) continue;
+    if (span.id) {
+      const key = (span.getAttribute("data-vkey") || "").split("/")[0];
+      const heir = /** @type {HTMLElement[]} */ ([...article.querySelectorAll(".verse[data-vkey]")])
+        .find((s) => (s.getAttribute("data-vkey") || "").startsWith(`${key}/`)
+          && !!(span.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING));
+      if (!heir) continue;
+      const lead = [...span.childNodes].filter((n) => n instanceof HTMLElement
+        ? n.classList.contains("verse-num") || n.classList.contains("versicle-mark")
+        : n.nodeType === Node.TEXT_NODE && n.textContent === "\u2060");
+      for (const n of lead.reverse()) heir.insertBefore(n, heir.firstChild);
+      heir.id = span.id;
+    }
+    // 빈 줄(연 구분) 뒤의 줄 앞에는 연 구분과 시행 구분이 함께 온다 — 양옆의 연속한 표지를 모두 모은다
+    /** @type {Element[]} */
+    const before = [], after = [];
+    let n = span.previousElementSibling;
+    for (; breakRank(n) >= 0; n = /** @type {Element} */ (n).previousElementSibling) before.push(/** @type {Element} */ (n));
+    const head = n;
+    n = span.nextElementSibling;
+    for (; breakRank(n) >= 0; n = /** @type {Element} */ (n).nextElementSibling) after.push(/** @type {Element} */ (n));
+    const tail = n;
+    span.remove();
+    const marks = [...before, ...after];
+    if (!head || !tail) marks.forEach((m) => m.remove());
+    else if (before.length && after.length) {
+      const keep = marks.reduce((a, b) => (breakRank(b) > breakRank(a) ? b : a));
+      marks.forEach((m) => { if (m !== keep) m.remove(); });
+    }
+  }
+}
+
 /** 형제 요소 `from`부터 `to`까지(둘 다 포함, 문서 순서) 지운다 — 버리는 줄과 그 사이의 시행 · 단락 · 연 구분 표지. */
 function dropSiblings(/** @type {Element} */ from, /** @type {Element} */ to) {
   for (let n = /** @type {Element | null} */ (from); n; ) {
@@ -1553,6 +1611,7 @@ function buildReading(m, slot, chapters) {
     // 절 id 에 슬롯 · 책 · 장 접두를 붙여 문서 안에서 유일하게(Copilot 리뷰 7회차).
     appendVerses(article, run.verses, { hideCites: true, instanceKeys: run.keys, idPrefix: `${slot.slot}-${slot.bookId}-${run.chapter}-` });
     trimHalfVerses(article, run.spec, slot.bookId, run.chapter);
+    dropReadingMarks(article, slot.bookId);
     if (shortSlot) markOptionalVerses(article, run.chapter, isOptional);
     section.appendChild(article);
   }
