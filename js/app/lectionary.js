@@ -48,7 +48,7 @@ import {
 } from "./liturgical-engine.js";
 
 const { _$, el, clearNode, emptyState, isModifiedClick, headerIcon, HEADER_ICON_PATHS } = window.appHelpers;
-const { loadLectionaryTrack, saveLectionaryTrack, loadLectionaryCardsFolded, saveLectionaryCardsFolded, loadLectionaryAltShow } = window.appStorage;
+const { loadLectionaryTrack, saveLectionaryTrack, loadLectionaryCardsFolded, saveLectionaryCardsFolded, loadLectionaryAltShow, loadCiteShow } = window.appStorage;
 
 const $app = _$("app");
 // 머리의 제목(<h1>) — 이 화면은 그 자리에 날짜 이동 줄을 그린다(commitTitleDateNav).
@@ -1592,6 +1592,9 @@ function buildReading(m, slot, chapters) {
   if (shortSlot) head.appendChild(el("span", { className: "lect-caption lect-optional-note" }, `〔 〕 안은 선택 구절 — 짧게 읽으면 ${shortSlot.label}`));
   const isOptional = optionalVerseTest(slot, shortSlot);
   section.appendChild(head);
+  // 인용 칩, 주석, 병행 본문 ※는 설정 「인용·주석 표시」를 따른다(ADR-038 §3). 꺼져 있으면 아무것도 그리지 않아
+  // 깔끔한 봉독면 그대로다. CSS(`body.cites-shown`)로만 숨기지 않는 까닭: 주석 자리가 보이지 않는 키보드 정지점으로 남는다.
+  const showAids = loadCiteShow();
 
   // ref 마다 한 <article> — 같은 장의 ref 둘이 겹치면 한 번만(키는 장 + 절 인스턴스, `slotVerseRuns`).
   for (const run of slotVerseRuns(slot, (ch) => chapters.get(`${slot.bookId}:${ch}`))) {
@@ -1607,9 +1610,14 @@ function buildReading(m, slot, chapters) {
     // 이 번역에 없는 절 번호(장 전체 기준 — 발췌가 건너뛴 절과 다르다) — 복사 출처가 그 자리에서 구간을 끊지 않게(사용자 결정 2026-10-14)
     const absent = absentVerseNumbers(run.data.verses);
     if (absent.length) article.setAttribute("data-absent", absent.join(","));
-    // Clean 봉독 surface (ADR-035): cite chips off, no parallels, no note anchors. 한 화면에 슬롯 · 장이 여럿이라
-    // 절 id 에 슬롯 · 책 · 장 접두를 붙여 문서 안에서 유일하게(Copilot 리뷰 7회차).
-    appendVerses(article, run.verses, { hideCites: true, instanceKeys: run.keys, idPrefix: `${slot.slot}-${slot.bookId}-${run.chapter}-` });
+    // 한 화면에 슬롯 · 장이 여럿이라 절 id 에 슬롯 · 책 · 장 접두를 붙여 문서 안에서 유일하게(Copilot 리뷰 7회차).
+    appendVerses(article, run.verses, {
+      hideCites: !showAids, parallels: showAids ? run.data.parallels : null, chapter: run.chapter,
+      instanceKeys: run.keys, idPrefix: `${slot.slot}-${slot.bookId}-${run.chapter}-`,
+    });
+    // 주석은 반절 자르기 앞에 감싼다 — 같은 절의 같은 말이 여럿일 때 몇 번째인지(`anchor_occurrence`)가 절 전체의 글 기준이다.
+    // 이 article 은 한 장의 절만 담는다(주석은 절 번호로 짝짓는다).
+    if (showAids) window.appCitations?.wrapNoteAnchorsInArticle(article, run.verses);
     trimHalfVerses(article, run.spec, slot.bookId, run.chapter);
     dropReadingMarks(article, slot.bookId);
     if (shortSlot) markOptionalVerses(article, run.chapter, isOptional);

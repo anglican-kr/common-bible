@@ -761,6 +761,9 @@ test("반절 경계 표 — 전례독서 · 성인 공통의 반절 참조마다
     const data = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "bible", `${e.bookId}-${e.chapter}.json`), "utf8"));
     const v = data.verses.find((x) => x.number === e.verse && !x.part && !x.lxx_only && x.chapter_ref == null && x.alt_ref == null && !x.versicle);
     assert.ok(v, k);
+    // 인용 칩은 절의 마지막 줄 뒤에 붙는데, `trimHalfVerses`는 그 칩을 지우지 않는다(ADR-038 §3 「독서 렌더」, 2026-11-08).
+    // 인용이 든 절을 반절로 자르게 되면 그 칩 처리를 먼저 더한다. 주석은 줄 안에 있어 함께 잘리므로 막지 않는다(창세 28:19상).
+    assert.ok(!(v.segments || []).some((/** @type {any} */ s) => s.cite), `${k} — 인용이 든 절을 반절로 자르면 칩이 남는다`);
     // appendVerses 의 줄 — segments 를 줄바꿈으로 나누고 빈 줄(연 구분)은 빼며, 줄 머리의 ¶ 는 표지로 떼어 그린다
     const lines = (v.segments || [{ text: v.text || "" }]).flatMap((/** @type {any} */ s) => s.text.split("\n"))
       .filter((/** @type {string} */ l) => l !== "").map((/** @type {string} */ l) => l.replace(/^¶\s*/, ""));

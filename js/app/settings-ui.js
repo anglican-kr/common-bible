@@ -473,7 +473,11 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
       onToggle: (on) => {
         saveCiteShow(on);
         applyCiteShow(on);
-        announce(on ? "인용 본문·주석 표시" : "인용 본문·주석 숨김");
+        const result = on ? "인용 본문·주석 표시" : "인용 본문·주석 숨김";
+        // 전례독서는 켜져 있을 때만 칩과 주석을 그리므로(lectionary.js buildReading) 다시 그려야 따른다. 데스크톱 팝오버는
+        // 다시 그리면 닫힌다(대체 독서 표시와 같다). 장 화면은 CSS(`body.cites-shown`)가 따라가므로 알리기만 한다.
+        if (parsePath().view === "lectionary") redrawThenAnnounce(result);
+        else announce(result);
       },
     });
 
