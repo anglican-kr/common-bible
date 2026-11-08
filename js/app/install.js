@@ -6,8 +6,8 @@
 // the ESM-preferred pattern (ADR-019): named exports + window facade for
 // legacy callers.
 
-/** @typedef {import("../types").InstallNudgeState} InstallNudgeState */
-/** @typedef {import("../types").InstallObject} InstallObject */
+/** @typedef {import("../types.js").InstallNudgeState} InstallNudgeState */
+/** @typedef {import("../types.js").InstallObject} InstallObject */
 
 const { _$, el, clearNode } = window.appHelpers;
 const { createOverlay } = window.appOverlay;

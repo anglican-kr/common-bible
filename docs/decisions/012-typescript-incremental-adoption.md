@@ -37,7 +37,10 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언했고, ADR-005, 010, 01
 - **파일 첫 줄을 보는 유닛 테스트(지시문 순서 검사)**: 채택 안 함(2026-10-17, PR #353 리뷰가 낸 둘째 안). 이유: 지시문 위치만 지킬 뿐, 타입 오류 자체는 여전히 CI 밖이다. 기본 검사와 CI의 타입 검사로 둘 다 해결된다. 재검토: 없음.
 - **타입 검사는 로컬 훅과 수동으로만**: 채택 안 함(2026-10-17). 이유: 훅은 저장소 루트에서 연 Claude Code 세션에서만 실행된다. 사람이 고친 PR이나 상위 폴더에서 연 세션의 PR은 타입 오류가 남은 채 머지될 수 있었다. 재검토: 없음.
 - **TypeScript 6.0에 머무르기**: 채택 안 함(2026-11-08). 이유: TypeScript에는 장기 지원판(LTS)이 없고, 고침판은 지금의 안정판에만 나온다(공식 출시 방침). 6.0은 JS로 만든 마지막 판이다. 재검토: TypeScript를 안에서 불러 쓰는 도구(ESLint 등)를 들일 때. 7.0에는 그런 도구가 쓰는 API가 없어서, 6.0 호환 패키지 `@typescript/typescript6`을 함께 둔다.
-- **`moduleResolution: "nodenext"`와 `js/package.json`(`"type": "module"`)**: 채택 안 함(2026-11-08). TypeScript 안내서가 번들러 없이 브라우저에서 실행하는 코드에 권하는 조합으로, 상대 경로에 확장자를 꼭 쓰게 한다. 시험해 보니 오류가 207건이었다. 147건은 JSDoc의 `import("../types")`에 확장자가 없어서였고, 60건은 암시적 `any` 오류였다. 실제 `import` 문은 이미 모두 `.js`를 적었으므로 버전을 올리는 일과 떼어 미뤘다. 재검토: 확장자 없는 실제 `import`가 문제를 일으킬 때. `"type"` 없이 `nodenext`만 쓰면 오류는 0건이지만 `js/`를 CommonJS로 읽고 확장자도 검사하지 않아서, `bundler`보다 나은 점이 없다.
+- **`moduleResolution: "bundler"`**: 채택 안 함(2026-11-08). 7.0이 옛 값 `node`를 없애서 #531에서 대신 들였던 값이다. 이유: 확장자 없는 상대 경로를 받아 준다. 브라우저는 그런 경로의 파일을 찾지 못해 모듈을 불러오지 못하는데, 타입 검사는 통과한다. 재검토: 번들러를 들일 때.
+- **`nodenext`만 쓰고 `"type": "module"`은 두지 않기**: 채택 안 함(2026-11-08). 이유: TypeScript가 `js/`를 CommonJS로 읽어 확장자를 검사하지 않는다. 오류는 0건이지만 `bundler`보다 나은 점이 없다. 재검토: 없음.
+- **`"type": "module"`을 저장소 맨 위 `package.json`에 적기**: 채택 안 함(2026-11-08). 이유: Node가 `tests/`와 `scripts/`의 파일도 ES 모듈로 읽는다. `require`를 쓰는 유닛 테스트 둘(`routing.test.js`, `search-worker.test.js`)이 실행되지 않는다. `js/package.json`은 `js/`에만 적용된다. 재검토: 없음.
+- **`moduleDetection` 기본값(`auto`)**: 채택 안 함(2026-11-08, #532의 첫 판에서 썼다). 이유: `"type": "module"` 아래에서는 `import`나 `export`가 없는 일반 스크립트도 모듈로 본다. 브라우저에서는 일반 스크립트끼리 맨 바깥 이름을 함께 쓰는데, 그 이름이 겹쳐도 검사가 잡지 못했다. 재검토: TypeScript가 `legacy`를 없앨 때.
 - **느슨한 별도 설정으로 큰 파일을 먼저 검사(임시 `tsconfig.app.json`, `checkJs: true`, `noImplicitAny: false`)**: 2026-05-09에 두고 2026-05-10에 지움. 이유: 5,800줄짜리 `js/app.js`에 엄격 모드를 한 번에 켜면 암시적 `any` 타입 오류가 약 262건이라, 느슨한 설정으로 단계를 나눠 검증했다. 모듈 분할(ADR-018) 뒤에는 모듈마다 엄격 모드로 들이는 편이 자연스러웠다. 재검토: 없음.
 
 ## 적용 방식
@@ -69,7 +72,7 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언했고, ADR-005, 010, 01
 - 라우트: `Route`(`parsePath()`의 반환값. 뷰마다 하나인 판별 유니온)
 - 네임스페이스 객체의 인터페이스(`AppHelpers`, `AppStorage`, `AppCitations` …)와 `declare global`의 전역 함수, `interface Window`
 
-다른 모듈은 JSDoc `@typedef {import("../types").Foo} Foo`로 가져와 쓴다.
+다른 모듈은 JSDoc `@typedef {import("../types.js").Foo} Foo`로 가져와 쓴다. 파일은 `types.d.ts`지만 경로는 `.js`로 적는다. `nodenext`는 확장자 없는 경로를 오류로 보고(TS2834), `.js` 경로를 같은 이름의 `.d.ts` 파일로 찾는다.
 
 ### tsconfig 분리
 
@@ -86,7 +89,9 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언했고, ADR-005, 010, 01
 - `noEmit: true`: 산출물이 없다. 브라우저는 원본 `.js`를 그대로 불러온다
 - `strict: true`, `noImplicitAny`, `strictNullChecks`: 새 코드는 엄격 모드
 - `skipLibCheck: true`: 외부 타입(특히 `lib.dom.d.ts`와 Web Worker의 충돌) 검사를 건너뛴다
-- `moduleResolution: "bundler"`: 모듈 경로를 찾는 규칙이다. 7.0이 옛 값 `node`(node10)를 없애서 2026-11-08에 바꿨다. 옛 값처럼 확장자 없는 상대 경로를 막지 않는다. 실제 `import` 문은 모두 `.js`를 적는다.
+- `module`과 `moduleResolution`(모듈 경로를 찾는 규칙)은 `"nodenext"`다(2026-11-08). `js/package.json`의 `"type": "module"`과 함께, TypeScript가 `js/`의 `import` 경로를 ES 모듈 규칙으로 찾게 한다. 이 규칙은 상대 경로에 확장자를 꼭 쓰게 한다. 브라우저는 확장자 없는 경로의 파일을 찾지 못하므로, 그 실수를 타입 검사가 잡는다(TS2835). TypeScript 안내서가 번들러 없이 브라우저에서 실행하는 코드에 권하는 조합이다.
+- `moduleDetection: "legacy"`: 어느 파일이 모듈인지를 `import`나 `export`가 있는지로 정한다(2026-11-08). 브라우저에서 모듈로 불러오는 파일은 모두 `import`나 `export`를 갖고(내놓는 것이 없으면 `export {};`를 둔다. ADR-019), 일반 스크립트(`pre-fetch.js`, `audio-cache.js`, `manifest-sync.js`, 검색 워커)는 갖지 않는다. 그래서 이 판정이 브라우저와 맞고(아래 「검증」의 `tsconfig.test.js`), 일반 스크립트끼리 맨 바깥 이름이 겹치면 타입 검사가 잡는다(TS2451).
+- `js/package.json`은 TypeScript만 읽는다. 브라우저는 읽지 않고, 유닛 테스트는 `js/` 파일을 Node 모듈로 불러오지 않고 내용을 읽어 `vm`으로 실행한다.
 
 ### TypeScript 7
 
@@ -101,9 +106,9 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언했고, ADR-005, 010, 01
 
 - `npm run typecheck`: `tsc -p tsconfig.json --noEmit`과 `tsc -p tsconfig.worker.json --noEmit`. 오류 0건. CI 「Unit tests」 잡(`.github/workflows/test.yml`)과 로컬 편집 훅이 실행한다.
 - 설정이나 네임스페이스 객체의 반환 타입을 바꿀 때는 타입 오류를 일부러 하나 넣어, `npm run typecheck`가 그 파일에서 잡는지 본다.
+- 모듈 판정: 브라우저가 모듈로 부르는 파일과 TypeScript가 모듈로 보는 파일이 같은지 유닛 테스트 `tests/unit/tsconfig.test.js`가 CI에서 본다(2026-11-08). 모듈로 부르는 파일에 `import`나 `export`가 없거나, 일반 스크립트에 있거나, 어디서도 부르지 않는 파일이 생기면 실패한다.
 - 브라우저 동작: 바뀌지 않는다(원본 `.js`를 불러오고, JSDoc은 주석이다).
 - 사각지대: 모듈에서 `import`를 빠뜨려도 그 이름이 전역으로 선언돼 있으면 통과한다. 이것은 로드 스모크와 e2e가 맡는다(`tests/README.md` §2, ADR-019).
-
 ## 채택 이유 요약
 
 - **빌드 파이프라인을 바꾸지 않는다**: ADR-001의 SPA 아키텍처를 해치지 않는다. 서비스 워커 캐시와 배포 파일(zip) 구성도 그대로다.

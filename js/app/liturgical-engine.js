@@ -31,23 +31,23 @@
 
 /** @typedef {{from: string, to: string}} Span */
 
-/** @typedef {import("../types").LiturgicalCoord} LiturgicalCoord */
-/** @typedef {import("../types").LiturgicalSeason} LiturgicalSeason */
-/** @typedef {import("../types").LiturgicalColor} LiturgicalColor */
-/** @typedef {import("../types").LiturgicalColorAlt} LiturgicalColorAlt */
-/** @typedef {import("../types").LiturgicalFast} LiturgicalFast */
-/** @typedef {import("../types").HalfVerse} HalfVerse */
-/** @typedef {import("../types").ParishDedication} ParishDedication */
-/** @typedef {import("../types").ProvinceFounding} ProvinceFounding */
-/** @typedef {import("../types").WeekdayCode} WeekdayCode */
-/** @typedef {import("../types").Observance} Observance */
-/** @typedef {import("../types").Candidate} Candidate */
-/** @typedef {import("../types").ResolvedDate} ResolvedDate */
-/** @typedef {import("../types").LiturgicalPeriod} LiturgicalPeriod */
-/** @typedef {import("../types").ReadingSlot} ReadingSlot */
-/** @typedef {import("../types").ReadingGroup} ReadingGroup */
-/** @typedef {import("../types").CollectOption} CollectOption */
-/** @typedef {import("../types").CandidateCollects} CandidateCollects */
+/** @typedef {import("../types.js").LiturgicalCoord} LiturgicalCoord */
+/** @typedef {import("../types.js").LiturgicalSeason} LiturgicalSeason */
+/** @typedef {import("../types.js").LiturgicalColor} LiturgicalColor */
+/** @typedef {import("../types.js").LiturgicalColorAlt} LiturgicalColorAlt */
+/** @typedef {import("../types.js").LiturgicalFast} LiturgicalFast */
+/** @typedef {import("../types.js").HalfVerse} HalfVerse */
+/** @typedef {import("../types.js").ParishDedication} ParishDedication */
+/** @typedef {import("../types.js").ProvinceFounding} ProvinceFounding */
+/** @typedef {import("../types.js").WeekdayCode} WeekdayCode */
+/** @typedef {import("../types.js").Observance} Observance */
+/** @typedef {import("../types.js").Candidate} Candidate */
+/** @typedef {import("../types.js").ResolvedDate} ResolvedDate */
+/** @typedef {import("../types.js").LiturgicalPeriod} LiturgicalPeriod */
+/** @typedef {import("../types.js").ReadingSlot} ReadingSlot */
+/** @typedef {import("../types.js").ReadingGroup} ReadingGroup */
+/** @typedef {import("../types.js").CollectOption} CollectOption */
+/** @typedef {import("../types.js").CandidateCollects} CandidateCollects */
 
 /**
  * 본문 레코드 — eucharist-readings · eucharist-collects 가 공유하는 전례일 키 필드와 각자의 본문 필드.
@@ -1066,7 +1066,7 @@ const SEASON_COLOR = { advent: "violet", christmas: "white", ordinary: "green", 
  * 청 둘 다), 사순 4주일은 장미. 성령강림 · 삼위일체 · 왕이신 그리스도의 색은 그 날의 이동 축일 행이
  * 지정 전례일로 덮는다 — 바탕은 절기만 안다.
  * @param {string} dateStr @param {LiturgicalCoord} coord
- * @returns {{color: LiturgicalColor, alt: import("../types").CodeField<LiturgicalColorAlt>}}
+ * @returns {{color: LiturgicalColor, alt: import("../types.js").CodeField<LiturgicalColorAlt>}}
  */
 function seasonColorOf(dateStr, coord) {
   if (inSpan(dateStr, "holyWeek")) return { color: "red", alt: null };
@@ -1632,7 +1632,7 @@ function isEmber(/** @type {Observance} */ obs) {
  * 병기한다(책자의 [자/백] 순). `colors` 는 병기 목록이라 병기가 없는 날은 `[color]` 다. `omitted` ·
  * `commemorated` 후보와 기념일은 색에 기여하지 않는다.
  * @param {string} dateStr @param {Candidate} grid @param {Candidate | null} official @param {Candidate[]} cands
- * @returns {{color: LiturgicalColor | null, colorAlt: import("../types").CodeField<LiturgicalColorAlt>, colors: LiturgicalColor[]}}
+ * @returns {{color: LiturgicalColor | null, colorAlt: import("../types.js").CodeField<LiturgicalColorAlt>, colors: LiturgicalColor[]}}
  */
 function dayColorsOf(dateStr, grid, official, cands) {
   const guarded = (inSpan(dateStr, "holyWeek") || inSpan(dateStr, "easterOctave"))

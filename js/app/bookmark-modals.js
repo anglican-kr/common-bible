@@ -12,9 +12,9 @@
 // before its own drawer/select handling. Deps: appHelpers, appOverlay,
 // appStorage, bookmark-core, window.{announce, getBooksCache}.
 
-/** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
-/** @typedef {import("../types").BookmarkTreeFolder} BookmarkTreeFolder */
-/** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
+/** @typedef {import("../types.js").BookmarkTreeBookmark} BookmarkTreeBookmark */
+/** @typedef {import("../types.js").BookmarkTreeFolder} BookmarkTreeFolder */
+/** @typedef {import("../types.js").BookmarkTreeNode} BookmarkTreeNode */
 /** @typedef {"chapter" | "verses" | "edit"} SaveMode  이 장 저장 · 절 선택 저장 · 북마크 수정 */
 
 import {
@@ -1081,7 +1081,7 @@ $bmImportInput.addEventListener("change", () => {
     }
     // The item check needs each book's chapter count (an unknown book or a chapter past the end is left out), and
     // the move of the pre-#205 verse ranges each book's name (an old default name follows its range).
-    /** @type {import("../types").BooksData} */
+    /** @type {import("../types.js").BooksData} */
     let books;
     try {
       books = await window.loadBooks();

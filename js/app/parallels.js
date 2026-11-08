@@ -25,13 +25,13 @@
 //   - window.appHelpers: el (DOM builder)
 //   - window.appCitations: openNoteTooltip, closeNoteTooltip, openCiteSheet
 
-/** @typedef {import("../types").AppParallels} AppParallels */
+/** @typedef {import("../types.js").AppParallels} AppParallels */
 
 // The return type is declared so a member missing from `AppParallels` (types.d.ts) fails typecheck here, not
 // later in whichever module destructures it (helpers.js does the same for `AppHelpers`).
 window.appParallels = (/** @returns {AppParallels} */ () => {
-  /** @typedef {import("../types").ChapterParallel} ChapterParallel */
-  /** @typedef {import("../types").CiteParallelRef} CiteParallelRef */
+  /** @typedef {import("../types.js").ChapterParallel} ChapterParallel */
+  /** @typedef {import("../types.js").CiteParallelRef} CiteParallelRef */
 
   const { el } = window.appHelpers;
 

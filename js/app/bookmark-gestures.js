@@ -20,8 +20,8 @@
 // tests/unit/bookmark.test.js, which reads this file's source. Deps: appStorage,
 // bookmark-core (_findItemInStore, getBookmarkSort).
 
-/** @typedef {import("../types").BookmarkTreeFolder} BookmarkTreeFolder */
-/** @typedef {import("../types").DragState} DragState */
+/** @typedef {import("../types.js").BookmarkTreeFolder} BookmarkTreeFolder */
+/** @typedef {import("../types.js").DragState} DragState */
 
 const { loadBookmarks } = window.appStorage;
 

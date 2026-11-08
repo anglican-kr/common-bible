@@ -1,6 +1,6 @@
 // ── Common Bible PWA — Sync Layer Types ──────────────────────────────────────
 // Type definitions for js/sync/* and js/drive-sync.js. Domain types are
-// exported (importable via JSDoc `@typedef {import("../types").Foo} Foo`),
+// exported (importable via JSDoc `@typedef {import("../types.js").Foo} Foo`),
 // while runtime singletons attached to `window.*` are augmented onto the
 // global Window interface so that `window.syncTransport.X()` is type-safe
 // from any caller.

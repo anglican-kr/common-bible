@@ -13,9 +13,9 @@
 // navigate / parsePath back; that cycle stays on the facade per ADR-034
 // (registry inversion is a later step, PR5b).
 
-/** @typedef {import("../types").BooksData} BooksData */
-/** @typedef {import("../types").BookEntry} BookEntry */
-/** @typedef {import("../types").Route} Route */
+/** @typedef {import("../types.js").BooksData} BooksData */
+/** @typedef {import("../types.js").BookEntry} BookEntry */
+/** @typedef {import("../types.js").Route} Route */
 /** @typedef {import("./views.js").BibleFailureKind} BibleFailureKind */
 
 import { loadBooks, loadChapter, loadPrologue } from "./data-fetch.js";
@@ -68,7 +68,7 @@ let _routeSeq = 0;
 // 검색의 페이지 이동)를 누른 자리(WCAG 2.4.3, ADR-031 §5). 아래 클릭 인터셉터가 이동 직전에 재고(helpers.js focusSpotOf),
 // route() 가 시작하자마자 꺼내 비운다 — 그래서 자리는 그것을 남긴 누름의 route() 에만 쓰인다(뒤로 가기 · 탭 전환 ·
 // 리다이렉트는 자리 없이 시작한다). 새 화면이 커밋된 뒤 finally 에서 그 route 가 여전히 최신이면 돌려준다.
-/** @type {import("../types").FocusSpot | null} */
+/** @type {import("../types.js").FocusSpot | null} */
 let _pendingFocusSpot = null;
 /**
  * The verse being read is the last one that starts at or above this far below the top bar. A verse whose first

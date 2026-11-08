@@ -23,8 +23,8 @@
 //   독서 성구는 달력에 싣지 않는다(설계서 미결41) — 독서 묶음(1.6MB)을 달력에서 받지 않으려고.
 //   탭 이름 · 화면 제목은 「캘린더」(사용자 「"교회력"은 "캘린더"로」 2026-10-15) — 교회력 자체를 말하는 문구는 그대로.
 
-/** @typedef {import("../types").ResolvedDate} ResolvedDate */
-/** @typedef {import("../types").Candidate} Candidate */
+/** @typedef {import("../types.js").ResolvedDate} ResolvedDate */
+/** @typedef {import("../types.js").Candidate} Candidate */
 
 import {
   parseDate, toKey, addDays, dayOfWeek, liturgicalYearOf, preloadCalendar, preloadLectionary, resolveDate,
@@ -47,7 +47,7 @@ const $app = _$("app");
 // 이름은 views.js에 있다 — 이 모듈을 받지 못했을 때 라우터가 같은 제목으로 실패 화면을 그린다.
 const PAGE_TITLE = LITURGICAL_VIEWS.calendar.title;
 
-/** parsePath 가 /calendar 에서 내는 서술자(routing.js PARSE_PATH — 정의는 types.d.ts `Route`). @typedef {import("../types").CalendarRoute} CalendarRoute */
+/** parsePath가 /calendar에서 내는 서술자(routing.js PARSE_PATH — 정의는 types.d.ts `Route`). @typedef {import("../types.js").CalendarRoute} CalendarRoute */
 /**
  * 이름 하나 — 목록 줄의 이름 줄 원소. `away` 는 그날 지키지 않는 후보(옮겨 감 · 생략)라 흐리게 그린다.
  * @typedef {{ name: string, title: string, suffix: string, away: boolean }} CalendarName

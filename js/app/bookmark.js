@@ -10,12 +10,12 @@
 // in Phase 7 territory) reach into bookmark.js via window facade
 // assignments at the bottom of this file.
 
-/** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
-/** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
-/** @typedef {import("../types").BookmarkTreeFolder} BookmarkTreeFolder */
-/** @typedef {import("../types").DragState} DragState */
-/** @typedef {import("../types").BooksData} BooksData */
-/** @typedef {import("../types").AppBookmark} AppBookmark */
+/** @typedef {import("../types.js").BookmarkTreeNode} BookmarkTreeNode */
+/** @typedef {import("../types.js").BookmarkTreeBookmark} BookmarkTreeBookmark */
+/** @typedef {import("../types.js").BookmarkTreeFolder} BookmarkTreeFolder */
+/** @typedef {import("../types.js").DragState} DragState */
+/** @typedef {import("../types.js").BooksData} BooksData */
+/** @typedef {import("../types.js").AppBookmark} AppBookmark */
 
 const { _$, el, headerIcon, HEADER_ICON_PATHS } = window.appHelpers;
 const { createOverlay, attachSheetDrag, attachSheetResize } = window.appOverlay;

@@ -73,7 +73,7 @@ window.appStorage.saveReadingPosition(...);
 
 ### TypeScript 인식
 
-`@typedef`가 모듈 범위가 되어, 파일 사이에서 전역 별칭이 충돌하던 문제가 없어진다. PR-3에서 시도했던 우회(*한 파일에만 typedef를 두고 다른 파일은 전역으로 참조*)는 필요 없다. 각 모듈이 필요한 `@typedef`를 `import("../types").Foo`로 직접 가져온다.
+`@typedef`가 모듈 범위가 되어, 파일 사이에서 전역 별칭이 충돌하던 문제가 없어진다. PR-3에서 시도했던 우회(*한 파일에만 typedef를 두고 다른 파일은 전역으로 참조*)는 필요 없다. 각 모듈이 필요한 `@typedef`를 `import("../types.js").Foo`로 직접 가져온다.
 
 ### `window.X`에 명시적으로 내놓기
 

@@ -10,8 +10,8 @@
 // named exports + window facade for legacy app.js callers (route handler at
 // `/search?q=`).
 
-/** @typedef {import("../types").SearchHistoryList} SearchHistoryList */
-/** @typedef {import("../types").BooksData} BooksData */
+/** @typedef {import("../types.js").SearchHistoryList} SearchHistoryList */
+/** @typedef {import("../types.js").BooksData} BooksData */
 
 import { verseNumberSpec } from "./verse-spec.js";
 

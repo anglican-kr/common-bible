@@ -17,7 +17,7 @@
 // on while such a router still runs would double-handle Escape and close the
 // dialog *and* whatever sits beneath it.
 
-/** @typedef {import("../types").AppOverlay} AppOverlay */
+/** @typedef {import("../types.js").AppOverlay} AppOverlay */
 
 // The return type is declared so a member missing from `AppOverlay` (types.d.ts) fails typecheck here, not
 // later in whichever module destructures it (helpers.js does the same for `AppHelpers`).

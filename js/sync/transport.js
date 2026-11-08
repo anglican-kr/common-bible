@@ -7,12 +7,12 @@
 // Phase 2h 단계 4 이후 — OAuth는 PKCE Authorization Code 단일 경로.
 // GIS Token Client / FedCM / Implicit Flow wrapper는 모두 제거됐다.
 
-/** @typedef {import("../types").DriveFetchOptions}      DriveFetchOptions */
-/** @typedef {import("../types").DriveFetchResult}       DriveFetchResult */
-/** @typedef {import("../types").DriveDownloadResult}    DriveDownloadResult */
-/** @typedef {import("../types").DriveUploadResult}      DriveUploadResult */
-/** @typedef {import("../types").RedirectCallbackResult} RedirectCallbackResult */
-/** @typedef {import("../types").SyncPayload}            SyncPayload */
+/** @typedef {import("../types.js").DriveFetchOptions}      DriveFetchOptions */
+/** @typedef {import("../types.js").DriveFetchResult}       DriveFetchResult */
+/** @typedef {import("../types.js").DriveDownloadResult}    DriveDownloadResult */
+/** @typedef {import("../types.js").DriveUploadResult}      DriveUploadResult */
+/** @typedef {import("../types.js").RedirectCallbackResult} RedirectCallbackResult */
+/** @typedef {import("../types.js").SyncPayload}            SyncPayload */
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
@@ -239,7 +239,7 @@ function consumeRedirectCallback() {
  * @param {string} code
  * @param {string} verifier
  * @param {string} clientId
- * @returns {Promise<import("../types").TokenExchangeResponse>}
+ * @returns {Promise<import("../types.js").TokenExchangeResponse>}
  */
 async function exchangeCodeForToken(code, verifier, clientId) {
   const body = new URLSearchParams({
@@ -289,7 +289,7 @@ async function exchangeCodeForToken(code, verifier, clientId) {
  *
  * @param {string} refreshToken
  * @param {string} clientId
- * @returns {Promise<import("../types").RefreshTokenResponse>}
+ * @returns {Promise<import("../types.js").RefreshTokenResponse>}
  */
 async function refreshAccessToken(refreshToken, clientId) {
   const body = new URLSearchParams({
@@ -392,7 +392,7 @@ async function driveFetch(path, { token, method = "GET", body, headers = {}, ifM
 // 「파일도 삭제」 deletes them all.
 /**
  * @param {string} token
- * @returns {Promise<import("../types").DriveFindResult>}
+ * @returns {Promise<import("../types.js").DriveFindResult>}
  */
 async function findSyncFileId(token) {
   try {

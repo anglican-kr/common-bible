@@ -16,7 +16,7 @@
 //   keys store: { id="aes" → CryptoKey (non-extractable AES-GCM 256) }
 //   tokens store: { id="refresh" → { iv: Uint8Array(12), ciphertext: ArrayBuffer } }
 
-/** @typedef {import("../types").RefreshTokenStore} RefreshTokenStore */
+/** @typedef {import("../types.js").RefreshTokenStore} RefreshTokenStore */
 
 const _DB_NAME = "bible-drive-sync";
 const _DB_VERSION = 1;

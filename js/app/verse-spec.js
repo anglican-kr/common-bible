@@ -9,7 +9,7 @@
 // serializeVerseRange uses the global `document` for a self-contained range→text
 // transform. Leaf module: no imports.
 
-/** @typedef {import("../types").VerseRun} VerseRun */
+/** @typedef {import("../types.js").VerseRun} VerseRun */
 
 // ── Verse spec utilities ──
 // ── BEGIN VERSE_SPEC ──

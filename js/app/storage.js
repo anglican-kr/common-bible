@@ -12,25 +12,25 @@
 // `loadBookmarks` collide with store-v2.js (sync layer) at the TypeScript
 // global level. See ADR-018 §"채택 방식 — module-vs-script 예외".
 
-/** @typedef {import("../types").AppStorage} AppStorage */
+/** @typedef {import("../types.js").AppStorage} AppStorage */
 
 // The return type is declared so a helper missing from `AppStorage` (types.d.ts) fails typecheck here, not
 // later in whichever module destructures it (helpers.js does the same for `AppHelpers`).
 window.appStorage = (/** @returns {AppStorage} */ () => {
-  /** @typedef {import("../types").ReadingPosition} ReadingPosition */
-  /** @typedef {import("../types").AudioPosition} AudioPosition */
-  /** @typedef {import("../types").SearchHistoryList} SearchHistoryList */
-  /** @typedef {import("../types").SearchHistoryEntry} SearchHistoryEntry */
-  /** @typedef {import("../types").ColorSchemeId} ColorSchemeId */
-  /** @typedef {import("../types").ColorSchemeEntry} ColorSchemeEntry */
-  /** @typedef {import("../types").ThemeMode} ThemeMode */
-  /** @typedef {import("../types").BookOrderKind} BookOrderKind */
-  /** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
-  /** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
-  /** @typedef {import("../types").SyncFlatItem} SyncFlatItem */
-  /** @typedef {import("../types").SaveOutcome} SaveOutcome */
-  /** @typedef {import("../types").InstallNudgeState} InstallNudgeState */
-  /** @typedef {import("../types").StartPage} StartPage */
+  /** @typedef {import("../types.js").ReadingPosition} ReadingPosition */
+  /** @typedef {import("../types.js").AudioPosition} AudioPosition */
+  /** @typedef {import("../types.js").SearchHistoryList} SearchHistoryList */
+  /** @typedef {import("../types.js").SearchHistoryEntry} SearchHistoryEntry */
+  /** @typedef {import("../types.js").ColorSchemeId} ColorSchemeId */
+  /** @typedef {import("../types.js").ColorSchemeEntry} ColorSchemeEntry */
+  /** @typedef {import("../types.js").ThemeMode} ThemeMode */
+  /** @typedef {import("../types.js").BookOrderKind} BookOrderKind */
+  /** @typedef {import("../types.js").BookmarkTreeNode} BookmarkTreeNode */
+  /** @typedef {import("../types.js").BookmarkTreeBookmark} BookmarkTreeBookmark */
+  /** @typedef {import("../types.js").SyncFlatItem} SyncFlatItem */
+  /** @typedef {import("../types.js").SaveOutcome} SaveOutcome */
+  /** @typedef {import("../types.js").InstallNudgeState} InstallNudgeState */
+  /** @typedef {import("../types.js").StartPage} StartPage */
   // ── Storage keys (private to this module) ──
   const STORAGE_KEY = "bible-last-read";
   const FONT_SIZE_KEY = "bible-font-size";
@@ -81,7 +81,7 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
       // Local form (verse: number|null) intentionally diverges from the synced
       // LastReadValue (verseSpec?: string). Excess properties on a variable
       // are not checked at the call site, so this is safe.
-      window.syncStoreV2?.saveLastRead(/** @type {import("../types").LastReadValue} */ (val));
+      window.syncStoreV2?.saveLastRead(/** @type {import("../types.js").LastReadValue} */ (val));
       if (window.driveSync) window.driveSync.scheduleUpload();
     } catch (_) {}
   }

@@ -25,10 +25,10 @@
 // then the resolve/find functions are synchronous and pure over the loaded
 // tables. See docs/design/liturgical-engine.md §3.4 for why.
 
-/** @typedef {import("../types").LiturgicalCoord} LiturgicalCoord */
-/** @typedef {import("../types").Observance} Observance */
-/** @typedef {import("../types").Candidate} Candidate */
-/** @typedef {import("../types").ResolvedDate} ResolvedDate */
+/** @typedef {import("../types.js").LiturgicalCoord} LiturgicalCoord */
+/** @typedef {import("../types.js").Observance} Observance */
+/** @typedef {import("../types.js").Candidate} Candidate */
+/** @typedef {import("../types.js").ResolvedDate} ResolvedDate */
 
 // 모듈 상태 — 블록 밖에 두고 테스트가 prelude 로 재선언한다
 const anchorCache = new Map();                 // §4.9
