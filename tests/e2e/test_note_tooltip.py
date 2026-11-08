@@ -9,7 +9,7 @@
 """
 import pytest
 
-from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, emulate_status_bar
+from .conftest import CITE_SHOW_OFF, CLEAR_APP_STORAGE, MOBILE_VIEWPORT, NOTE_TOOLTIP_OPEN, emulate_status_bar
 
 BASE = "http://localhost:8080"
 ANCHOR = ".note-anchor:not(.note-anchor--variant)"
@@ -173,13 +173,8 @@ def test_note_tooltip_follows_its_own_height_change(browser):
         ctx.close()
 
 
-# 설정 「인용·주석 표시」를 끈 기기
-_CITE_OFF = "try { localStorage.setItem('bible-cite-show', '0'); } catch (_) {}"
-
 # 어절 주석의 단추 속성. 설정을 끄면 셋 다 없다.
 _CONTROL_ATTRS = "e => [e.getAttribute('role'), e.getAttribute('tabindex'), e.getAttribute('aria-label')]"
-
-_TOOLTIP_OPEN = "() => { const t = document.getElementById('note-tooltip'); return !!t && !t.hidden; }"
 
 
 def test_note_anchor_is_plain_text_while_setting_off(browser):
@@ -189,7 +184,7 @@ def test_note_anchor_is_plain_text_while_setting_off(browser):
     ctx = browser.new_context(viewport={"width": 1280, "height": 800})
     ctx.add_init_script(CLEAR_APP_STORAGE)
     ctx.add_init_script(_COACHMARK_SEEN)
-    ctx.add_init_script(_CITE_OFF)
+    ctx.add_init_script(CITE_SHOW_OFF)
     page = ctx.new_page()
     try:
         page.goto(f"{BASE}/gen/28")
@@ -202,16 +197,51 @@ def test_note_anchor_is_plain_text_while_setting_off(browser):
         page.evaluate("() => { window.__word = document.querySelector('.note-anchor:not(.note-anchor--variant)'); }")
         word.click()
         page.wait_for_timeout(200)
-        assert page.evaluate(_TOOLTIP_OPEN) is False
+        assert page.evaluate(NOTE_TOOLTIP_OPEN) is False
 
         page.evaluate("() => window.applyCiteShow(true)")
         assert word.evaluate(_CONTROL_ATTRS) == ["button", "0", "베델 주석 보기"]
         word.click()
-        page.wait_for_function(_TOOLTIP_OPEN)
+        page.wait_for_function(NOTE_TOOLTIP_OPEN)
 
         page.evaluate("() => window.applyCiteShow(false)")
-        assert page.evaluate(_TOOLTIP_OPEN) is False
+        assert page.evaluate(NOTE_TOOLTIP_OPEN) is False
         assert word.evaluate(_CONTROL_ATTRS) == [None, None, None]
         assert page.evaluate("() => window.__word.isConnected && document.querySelector('.note-anchor:not(.note-anchor--variant)') === window.__word")
+    finally:
+        ctx.close()
+
+
+# 지금 포커스가 놓인 요소 — 절이면 그 절의 줄 번호(`data-vref`)와 임시 `tabindex`, 아니면 태그 이름
+_FOCUS = """() => {
+  const a = document.activeElement;
+  return a && a.classList.contains('verse')
+    ? { verse: a.getAttribute('data-vref'), tabindex: a.getAttribute('tabindex') }
+    : { tag: a ? a.tagName : null };
+}"""
+
+
+@pytest.mark.parametrize("path, aid, verse", [
+    ("gen/28", ANCHOR, "19"),                 # 어절 주석 「베델」 — 끄면 키보드 정지점이 사라진다
+    ("mark/13", ".cite-chip[data-cite-src='다니 7:13-14']", "26"),   # 26절 뒤의 칩 — 끄면 CSS가 감춘다
+])
+def test_turning_setting_off_keeps_keyboard_place(browser, path, aid, verse):
+    """키보드 포커스가 어절 주석이나 칩에 있을 때 다른 기기에서 「끔」이 동기화되어 오면(`window.applyCiteShow(false)`), 포커스는
+    본문(body)으로 떨어지지 않고 그 절로 간다. 절은 스크립트로만 포커스를 받고(`tabindex="-1"`), 포커스가 떠나면 그 속성도
+    없어진다(코드 리뷰 2026-11-09, 구현하며 정함)."""
+    ctx = browser.new_context(viewport={"width": 1280, "height": 800})
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_COACHMARK_SEEN)
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/{path}")
+        page.wait_for_selector(aid, timeout=10_000)
+        page.locator(aid).first.focus()
+        assert page.evaluate("(sel) => document.activeElement === document.querySelector(sel)", aid)
+        page.evaluate("() => window.applyCiteShow(false)")
+        got = page.evaluate(_FOCUS)
+        assert got.get("verse", "").startswith(verse) and got["tabindex"] == "-1", got
+        page.keyboard.press("Tab")
+        assert page.evaluate("(v) => [...document.querySelectorAll('.verse[tabindex]')].length", verse) == 0
     finally:
         ctx.close()

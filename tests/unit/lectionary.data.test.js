@@ -795,6 +795,46 @@ test("반절 경계 표 — 전례독서 · 성인 공통의 반절 참조마다
   }
 });
 
+// ── 아가의 화자 줄 ↔ 주석(코드 리뷰 2026-11-09, 구현하며 정함) ──
+// 전례독서는 아가의 화자 줄(「(신부)」 「(신랑)」 「(합창단)」 「(신부와 신랑)」)을 지운다(lectionary.js dropReadingMarks, 사용자 결정 2026-11-08).
+// 주석은 그보다 먼저 감싸므로, 화자 줄에 붙는 주석은 그 줄과 함께 사라진다. 어절 없는 주석의 ※는 절 마지막 줄 끝에 붙고, 어절 주석은
+// 그 어절이 있는 줄에 붙는다. 그런 주석이 생기면 이 시험이 실패해 어디에 둘지 먼저 정하게 한다. 지금 아가에는 주석이 없다.
+
+test("아가의 화자 줄 — 화자 줄에 붙는 주석(절 마지막 줄이 화자 줄인 절의 어절 없는 주석, 화자 줄 낱말의 어절 주석)이 없다", { skip: SKIP }, () => {
+  const SPEAKER_LINE = /^\([^()]+\)$/;   // lectionary.js의 `SPEAKER_LINE`과 같다
+  const dir = path.join(ROOT, "data", "bible");
+  /** @type {string[]} */
+  const bad = [];
+  let speakerVerses = 0;
+  for (const f of fs.readdirSync(dir).filter((x) => /^song-\d+\.json$/.test(x))) {
+    const data = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8"));
+    for (const v of data.verses) {
+      // `appendVerses`가 그리는 줄이다. `segments`를 줄바꿈으로 나누고 빈 줄(연 구분)은 빼며, 줄 머리의 ¶는 표지로 떼어 그린다
+      const lines = (v.segments || [{ text: v.text || "" }]).flatMap((/** @type {any} */ s) => s.text.split("\n"))
+        .filter((/** @type {string} */ l) => l !== "").map((/** @type {string} */ l) => l.replace(/^¶\s*/, "").trim());
+      const speaker = lines.map((/** @type {string} */ l) => SPEAKER_LINE.test(l));
+      if (!speaker.some(Boolean)) continue;
+      speakerVerses++;
+      for (const note of v.notes || []) {
+        const k = `${f.replace(".json", "")}:${v.number}`;
+        const anchor = (note.anchor || "").trim();
+        if (!anchor) {
+          if (speaker[speaker.length - 1]) bad.push(`${k} 어절 없는 주석의 ※가 화자 줄에 붙는다`);
+          continue;
+        }
+        let seen = 0;
+        lines.forEach((/** @type {string} */ l, /** @type {number} */ li) => {
+          for (let i = l.indexOf(anchor); i >= 0; i = l.indexOf(anchor, i + anchor.length)) {
+            if (++seen === (note.anchor_occurrence || 1) && speaker[li]) bad.push(`${k} 주석 어절 「${anchor}」이 화자 줄에 있다`);
+          }
+        });
+      }
+    }
+  }
+  assert.ok(speakerVerses > 0, "화자 줄이 있는 절을 찾지 못했다 — 데이터 형식이 바뀌었으면 이 시험의 줄 계산을 고친다");
+  assert.deepStrictEqual(bad, [], "화자 줄과 함께 지워질 주석이다. lectionary.js dropReadingMarks에서 그 주석을 어디에 둘지 먼저 정한다");
+});
+
 test("기리는 성인의 본기도를 잇는 차례(MEMORIAL_CLASS_ORDER)는 commons.json 의 유형 정의 차례와 같다(사용자 결정 2026-11-03)", { skip: SKIP }, () => {
   const order = vm.runInContext("MEMORIAL_CLASS_ORDER", ctx);
   assert.deepStrictEqual([...order], Object.keys(read("commons.json").classes));

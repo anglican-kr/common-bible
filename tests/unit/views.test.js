@@ -30,7 +30,8 @@
 //     「그리스어 추가 본문 24절」 / 「24절, 그리스어 번호 91」 / 「17절 추가 본문 1」, otherwise 「8ㄱ절」.
 //     dualNumberingNote — the note above a chapter with bracketed numbers; Esther's names the addition.
 //   - PIECE_SPACE block — pieceTrailingSpace. The space drawn after a verse piece, and the
-//     pieces that get none (before a cite chip, punctuation only, ends with an opening quote).
+//     pieces that get none (a cite piece the verse continues, punctuation only, ends with an opening quote).
+//     citePieceSpace — where the space after a prose cite piece goes (glue / after the chip / normal).
 //   - FAILURE_TEXT block — bibleFailureText. The copy of the Bible screens' full-screen failure
 //     (missing chapter, no such page, data not received; psalms count 편) + the shared reload subtitle.
 
@@ -337,7 +338,7 @@ function loadPieceSpace() {
   const ctx = { String, RegExp };
   vm.createContext(ctx);
   vm.runInContext(extractBlock("PIECE_SPACE"), ctx, { filename: "views-piece-space.js" });
-  return { pieceTrailingSpace: ctx.pieceTrailingSpace };
+  return { pieceTrailingSpace: ctx.pieceTrailingSpace, citePieceSpace: ctx.citePieceSpace };
 }
 
 // ── FAILURE_TEXT loader ──────────────────────────────────────────────────────
@@ -1333,9 +1334,35 @@ test("pieceTrailingSpace: 보통 조각은 끝에 공백 한 칸", () => {
   assert.equal(pieceTrailingSpace("”는 복음을 미리 전해 주었던 것입니다."), " ");
 });
 
-test("pieceTrailingSpace: 출처 칩이 뒤따르는 조각에는 공백이 없다(칩의 안쪽 여백이 간격)", () => {
+test("pieceTrailingSpace: 부르는 쪽이 간격을 따로 두면 공백이 없다(citePieceSpace의 glue, after-chip)", () => {
   const { pieceTrailingSpace } = loadPieceSpace();
   assert.equal(pieceTrailingSpace("너로 말미암아 만백성이 복을 받으리라.", true), "");
+});
+
+// 줄글 인용 조각 뒤의 공백은 칩을 그렸는지가 아니라 뒤에 무엇이 오는지로 정한다. 칩은 설정으로 감춰지고 복사에서 빠지기
+// 때문이다(코드 리뷰 2026-11-09, 구현하며 정함).
+const PROSE = { type: "prose" };
+const CITE = { type: "prose", cite: "창세 12:3" };
+
+test("citePieceSpace: 같은 절의 줄글 조각이 이어지면 칩이 있든 없든 붙인다(갈라 3:8 「받으리라.”는」)", () => {
+  const { citePieceSpace } = loadPieceSpace();
+  assert.equal(citePieceSpace(CITE, PROSE, true), "glue");
+  assert.equal(citePieceSpace(CITE, PROSE, false), "glue");   // 같은 인용이 이어져 칩을 뒤로 미룬 조각도
+});
+
+test("citePieceSpace: 절 끝의 인용 조각에 칩이 붙으면 공백은 칩 뒤로(1베드 2:22 「없었습니다. 그분은」)", () => {
+  const { citePieceSpace } = loadPieceSpace();
+  assert.equal(citePieceSpace(CITE, undefined, true), "after-chip");
+  // 새 단락이나 운문이 이어져도 같은 줄에서 잇지 않으므로 칩 뒤에 둔다
+  assert.equal(citePieceSpace(CITE, { type: "prose", paragraph_break: true }, true), "after-chip");
+  assert.equal(citePieceSpace(CITE, { type: "poetry" }, true), "after-chip");
+});
+
+test("citePieceSpace: 칩이 없고 이어지는 조각도 없으면 보통 공백, 인용이 아니거나 운문이면 늘 보통", () => {
+  const { citePieceSpace } = loadPieceSpace();
+  assert.equal(citePieceSpace(CITE, undefined, false), "normal");
+  assert.equal(citePieceSpace(PROSE, PROSE, false), "normal");
+  assert.equal(citePieceSpace({ type: "poetry", cite: "시편 2:7" }, undefined, true), "normal");
 });
 
 test("pieceTrailingSpace: 부호뿐인 조각에는 공백이 없다", () => {

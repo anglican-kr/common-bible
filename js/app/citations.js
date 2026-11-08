@@ -233,17 +233,55 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
   }
 
   /**
+   * The reading aid keyboard focus is on, if turning the setting off takes it away: a word anchor (loses its tab
+   * stop), a chip or ※ marker (CSS hides it), or a control inside the note tooltip (the tooltip closes) — then the
+   * anchor that opened the tooltip stands for it. Anything else (the settings switch) keeps its focus.
+   * @returns {HTMLElement | null}
+   */
+  function _focusedAid() {
+    const a = /** @type {HTMLElement | null} */ (document.activeElement);
+    if (!a || typeof a.matches !== "function") return null;   // nothing focused (or a test stub without focus)
+    const tt = document.getElementById("note-tooltip");
+    if (tt && tt.contains(a)) return _currentNoteAnchor;
+    return a.matches(".note-anchor, .cite-chip, .parallel-anchor") ? a : null;
+  }
+
+  /**
+   * The verse an aid belongs to: the verse span around a word anchor or ※ variant marker, the verse a chip follows,
+   * the verse a ※ parallel marker stands before.
+   * @param {HTMLElement} aid
+   * @returns {HTMLElement | null}
+   */
+  function _verseOfAid(aid) {
+    const inside = /** @type {HTMLElement | null} */ (aid.closest(".verse"));
+    if (inside) return inside;
+    const step = aid.classList.contains("parallel-anchor") ? "nextElementSibling" : "previousElementSibling";
+    for (let n = aid[step]; n; n = n[step]) if (n.classList.contains("verse")) return /** @type {HTMLElement} */ (n);
+    return null;
+  }
+
+  /**
    * Make the word note anchors already drawn follow the setting (settings-ui.js applyCiteShow calls this right after
    * it sets `body.cites-shown`). Turning it off also closes an open note tooltip: what it points at — a word anchor,
-   * a ※ variant or parallel marker — is no longer a control or no longer shown. Focus is left where it is (the
-   * settings switch, or wherever the user was when a synced value came), not moved back to the anchor.
+   * a ※ variant or parallel marker — is no longer a control or no longer shown. Focus stays where it is (the
+   * settings switch, or wherever the user was when a synced value came), unless it was on a reading aid that goes
+   * away: then it moves to that aid's verse, so a keyboard or screen reader user keeps the place instead of falling
+   * back to the page (코드 리뷰 2026-11-09, 구현하며 정함).
    *
    * @param {boolean} on
    * @param {ParentNode} [root]  where to look — the whole document by default
    */
   function setNoteAnchorsActive(on, root = document) {
+    const lost = on ? null : _focusedAid();
     for (const a of root.querySelectorAll(WORD_ANCHOR_SELECTOR)) _setWordAnchorActive(a, on);
     if (!on) _hideNoteTooltip();
+    const verse = lost && _verseOfAid(lost);
+    if (verse) {
+      // Focusable from script only, and only until focus leaves it.
+      verse.setAttribute("tabindex", "-1");
+      verse.addEventListener("blur", () => verse.removeAttribute("tabindex"), { once: true });
+      verse.focus({ preventScroll: true });
+    }
   }
 
   /**
@@ -1194,7 +1232,7 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
     try {
       if (localStorage.getItem(COACHMARK_KEY) === "1") return;
     } catch (_) { /* localStorage unavailable → skip silently */ return; }
-    if (!document.body.classList.contains("cites-shown")) return;
+    if (!_citesShown()) return;
     if (!document.querySelector(".cite-chip")) return;
     if (document.getElementById("cite-coachmark")) return;
 

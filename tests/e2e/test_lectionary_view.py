@@ -1321,47 +1321,19 @@ def test_bracket_set_merges_into_long_text_with_markers(desktop_context):
     assert page.eval_on_selector_all(".lect-reading:has(.lect-bracket)", "els => els.length") == 1
 
 
-# 보이는 괄호(〔 〕)를 고치기 전의 자리 — 묶음 첫 줄 span 의 맨 앞, 마지막 줄 span 의 맨 끝 — 로 옮겨 보고, 화면에서 움직인 거리(px)를 낸다.
-# 칩과 ※가 감춰진 화면에서 0이면 괄호와 본문 사이의 간격이 전과 같다.
-_BRACKET_SHIFT_TO_OLD_PLACE = """
-(slot) => {
-  const sec = document.querySelector(`.lect-reading[data-slot='${slot}']`);
-  const shown = [...sec.querySelectorAll('.lect-bracket')].filter((b) => b.getClientRects().length > 0);   // 감춘 칩 안의 괄호도 뺀다
-  const opt = [...sec.querySelectorAll('.verse.lect-optional')];
-  const before = shown.map((b) => b.getBoundingClientRect());
-  for (const b of shown) {
-    if (b.textContent === '〔') {
-      const s = b.parentElement.classList.contains('verse') ? b.parentElement
-        : opt.find((x) => b.compareDocumentPosition(x) & Node.DOCUMENT_POSITION_FOLLOWING);
-      s.insertBefore(b, s.firstChild);
-    } else {
-      const s = b.parentElement.classList.contains('verse') ? b.parentElement
-        : opt.findLast((x) => (b.compareDocumentPosition(x) & Node.DOCUMENT_POSITION_PRECEDING) && !x.contains(b));
-      s.appendChild(b);
-    }
-  }
-  return shown.map((b, i) => {
-    const r = b.getBoundingClientRect();
-    return [b.textContent, Math.round(Math.max(Math.abs(r.left - before[i].left), Math.abs(r.top - before[i].top)) * 10) / 10];
-  });
-}
-"""
-
 # 성탄 낮 제2독서 「히브 1:1-4, 5-12」의 선택 구절 5-12절. 12절 끝의 운문 칩 「(시편 102:25-27)」(10-12절이 같은 인용이라 12절에만)과 괄호.
 _HEB1_CLOSE = """
 () => {
   const sec = document.querySelector(".lect-reading[data-slot='second']");
   const chip = sec.querySelector(".cite-chip[data-cite-src='시편 102:25-27']");
-  const shown = [...sec.querySelectorAll('.lect-bracket')].filter((b) => b.getClientRects().length > 0);   // 감춘 칩 안의 괄호도 뺀다
-  const close = shown.find((b) => b.textContent === '〕');
-  const label = chip.querySelector('.cite-chip-label').getBoundingClientRect();
-  const r = close.getBoundingClientRect();
+  const brackets = [...sec.querySelectorAll('.lect-bracket')];
   return {
-    glyphs: shown.map((b) => b.textContent).join(''),
+    elements: brackets.map((b) => b.textContent).join(''),
+    shown: brackets.filter((b) => b.getClientRects().length > 0).map((b) => b.textContent).join(''),
+    chipShown: getComputedStyle(chip).display !== 'none',
+    chipCloses: chip.classList.contains('lect-chip-closes') && getComputedStyle(chip, '::after').content === '"〕"',
     lastLine: chip.previousElementSibling.getAttribute('data-vkey'),
-    inChip: chip.contains(close),
-    inLastLine: close.parentElement === chip.previousElementSibling && close === close.parentElement.lastElementChild,
-    afterLabel: r.left >= label.right - 0.5 && r.top < label.bottom && r.bottom > label.top,
+    text: sec.querySelector('article.chapter-text').innerText,
   };
 }
 """
@@ -1375,21 +1347,23 @@ def _copy_with_and_without_brackets(page, slot):
 
 
 def test_bracket_closes_after_the_last_optional_verse_cite_chip(desktop_context):
-    """괄호 선택 구절 묶음의 마지막 절에 인용 칩이 있으면 칩까지 〔 〕 안에 든다(리뷰 2026-11-08, 구현하며 정함). 성탄 낮(2026-12-25)
-    제2독서 「히브 1:1-4, 5-12」의 12절은 운문이라 칩이 제 줄에 서고, 〕는 그 칩 줄 끝에 온다. 칩이 감춰지면(설정 끔) 〕는 전처럼 절
-    끝에 붙는다. 괄호와 칩은 복사에 들지 않는다."""
+    """괄호 선택 구절 묶음의 마지막 절에 인용 칩이 있으면 칩까지 〔 〕 안에 든다(코드 리뷰 2026-11-08, 구현하며 정함). 성탄 낮
+    (2026-12-25) 제2독서 「히브 1:1-4, 5-12」의 12절은 운문이라 칩이 제 줄에 서고, 〕는 그 칩 줄 끝에 CSS 생성 글자로 온다. 〕 요소는
+    묶음마다 하나이고(절 끝), 칩이 보이는 동안 감춰진다. 칩을 감추면(설정 끔) 절 끝의 〕가 보여 칩이 없는 묶음과 같은 글이 된다.
+    괄호와 칩은 복사에 들지 않는다."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-12-25")
     second = page.locator(".lect-reading[data-slot='second']")
     assert "히브 1:1-4, 5-12" in second.locator(".lect-ref").inner_text()
     on = page.evaluate(_HEB1_CLOSE)
     assert on["lastLine"] == "12/12d", on                      # 칩은 선택 구절 묶음의 마지막 줄 바로 뒤에 있다
-    assert on["glyphs"] == "〔〕" and on["inChip"] and on["afterLabel"], on
-    # 끔 흉내 — 설정을 끄면 CSS(body.cites-shown 없음)가 칩을 감춘다. 〕는 12절 끝에 보이고 자리도 전과 같다.
+    assert on["elements"] == "〔〕" and on["shown"] == "〔" and on["chipShown"] and on["chipCloses"], on
+    assert "늙지 않으십니다.” 〕" not in on["text"], on["text"][-120:]   # 절 끝의 〕는 칩이 보이는 동안 감춰진다
+    # 끔 흉내 — 설정을 끄면 CSS(body.cites-shown 없음)가 칩을 감춘다. 〕는 12절 끝에 보이고, 칩이 없는 묶음과 같은 글이다.
     page.evaluate("document.body.classList.remove('cites-shown')")
     off = page.evaluate(_HEB1_CLOSE)
-    assert off["glyphs"] == "〔〕" and off["inLastLine"] and not off["inChip"], off
-    assert page.evaluate(_BRACKET_SHIFT_TO_OLD_PLACE, "second") == [["〔", 0], ["〕", 0]]
+    assert off["shown"] == "〔〕" and not off["chipShown"], off
+    assert "늙지 않으십니다.” 〕" in off["text"], off["text"][-120:]
     page.evaluate("document.body.classList.add('cites-shown')")
     kept, plain = _copy_with_and_without_brackets(page, "second")
     assert kept == plain, (kept[-200:], plain[-200:])
@@ -1400,7 +1374,8 @@ def test_bracket_closes_after_the_last_optional_verse_cite_chip(desktop_context)
 def test_brackets_hold_a_prose_chip_and_a_parallel_marker(desktop_context):
     """줄글 칩과 병행 본문 ※도 괄호 안에 든다(리뷰 2026-11-08, 구현하며 정함). 실데이터에는 줄글 칩이 묶음 끝에 오거나 ※가 묶음 첫 절
     앞에 오는 곳이 없어(2026-11-08 셈), 연중 23주일 나해(2027-09-05) 제2독서 「야고 2:1-10, 11-13, 14-17」의 장 JSON에 13절 인용과
-    11-13절 병행 본문을 넣어 그린다. 〔는 ※ 앞에, 〕는 칩 뒤에 서고, 감추면 둘 다 전처럼 본문에 붙는다. 복사한 글은 그대로다."""
+    11-13절 병행 본문을 넣어 그린다. 〔는 ※ 앞에, 〕는 칩 뒤의 공백 다음에 선다. 칩과 ※를 감추면 칩이 없는 묶음과 같은 글이다.
+    복사한 글은 그대로다."""
     data = json.loads((Path(__file__).resolve().parents[2] / "data" / "bible" / "jas-2.json").read_text(encoding="utf-8"))
     for v in data["verses"]:
         if v["number"] == 13:
@@ -1418,8 +1393,11 @@ def test_brackets_hold_a_prose_chip_and_a_parallel_marker(desktop_context):
       return [name(par.previousElementSibling), name(par.nextElementSibling), name(chip.previousElementSibling), name(chip.nextElementSibling)];
     }""")
     assert order == ["〔", "11/11a", "13/13", "〕"], order
+    shown = lambda: page.inner_text(".lect-reading[data-slot='second'] article.chapter-text")
+    # 〕는 칩 뒤의 절 사이 공백 다음에 온다(views.js citePieceSpace) — 칩이 없는 묶음의 「…. 〕」와 같은 간격이다
+    assert "심판을 이깁니다.(마태 5:7) 〕" in shown(), shown()
     page.evaluate("document.body.classList.remove('cites-shown')")
-    assert page.evaluate(_BRACKET_SHIFT_TO_OLD_PLACE, "second") == [["〔", 0], ["〕", 0]]
+    assert "심판을 이깁니다. 〕" in shown(), shown()   # 칩을 감추면 칩이 없는 묶음과 같다(main의 글)
     page.reload()
     page.wait_for_selector(".lect-reading .verse", timeout=20_000)
     kept, plain = _copy_with_and_without_brackets(page, "second")

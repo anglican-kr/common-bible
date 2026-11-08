@@ -15,11 +15,10 @@
 """
 import pytest
 
-from .conftest import RECORD_ANNOUNCEMENTS, open_settings
+from .conftest import CITE_SHOW_OFF, NOTE_TOOLTIP_OPEN, RECORD_ANNOUNCEMENTS, open_settings
 
 BASE = "http://localhost:8080"
 
-CITE_OFF = "try { localStorage.setItem('bible-cite-show', '0'); } catch (_) {}"
 WORD = ".note-anchor:not(.note-anchor--variant)"
 
 # 날짜마다 시험할 슬롯과 그 슬롯의 표시. 세는 범위를 그 슬롯으로 좁혀, 같은 날 다른 독서에 표시가 더해져도 깨지지 않는다.
@@ -56,7 +55,6 @@ _STATE = f"""() => {{
 ON_STATE = {"role": "button", "tabindex": "0", "label": "기운 주석 보기", "chip": True, "variant": True}
 OFF_STATE = {"role": None, "tabindex": None, "label": None, "chip": False, "variant": False}
 
-_TOOLTIP_OPEN = "() => { const t = document.getElementById('note-tooltip'); return !!t && !t.hidden; }"
 
 _COPY_SLOT = """
 (slot) => {
@@ -151,7 +149,7 @@ def test_anchorless_note_marker_and_parallel_marker(desktop_context):
 def test_setting_off_hides_aids_and_leaves_plain_words(desktop_context, date):
     """설정이 꺼져 있어도 칩, 변형 ※, 병행 ※는 화면 구조에 있되 보이지 않는다(계산된 display가 none이라 키보드도 닿지
     않는다). 어절 주석은 단추 역할, 키보드 정지점, 이름이 없는 보통 글자이고 눌러도 툴팁이 열리지 않는다."""
-    desktop_context.add_init_script(CITE_OFF)
+    desktop_context.add_init_script(CITE_SHOW_OFF)
     page = desktop_context.new_page()
     _open(page, f"lectionary/{date}")
     assert page.evaluate("() => document.body.classList.contains('cites-shown')") is False
@@ -164,7 +162,7 @@ def test_setting_off_hides_aids_and_leaves_plain_words(desktop_context, date):
         assert loc.inner_text() == "베델"   # 글자는 그대로 보인다
         loc.click()
         page.wait_for_timeout(200)
-        assert page.evaluate(_TOOLTIP_OPEN) is False
+        assert page.evaluate(NOTE_TOOLTIP_OPEN) is False
     else:
         assert loc.evaluate("e => getComputedStyle(e).display") == "none"
 
@@ -205,21 +203,21 @@ def test_synced_value_follows_without_redraw(desktop_context):
     assert page.evaluate(_KEEP_DRAWN)
     word = page.locator(B_WORD)
     word.click()
-    page.wait_for_function(_TOOLTIP_OPEN)
+    page.wait_for_function(NOTE_TOOLTIP_OPEN)
 
     page.evaluate("() => window.applyCiteShow(false)")
-    assert page.evaluate(_TOOLTIP_OPEN) is False
+    assert page.evaluate(NOTE_TOOLTIP_OPEN) is False
     assert page.evaluate(_STATE) == OFF_STATE
     assert page.evaluate(_SAME_DRAWN)
     word.click()
     page.wait_for_timeout(200)
-    assert page.evaluate(_TOOLTIP_OPEN) is False
+    assert page.evaluate(NOTE_TOOLTIP_OPEN) is False
 
     page.evaluate("() => window.applyCiteShow(true)")
     assert page.evaluate(_STATE) == ON_STATE
     assert page.evaluate(_SAME_DRAWN)
     word.click()
-    page.wait_for_function(_TOOLTIP_OPEN)
+    page.wait_for_function(NOTE_TOOLTIP_OPEN)
     assert "옮길 수도 있다" in page.locator("#note-tooltip").inner_text()
 
 
@@ -237,3 +235,24 @@ def test_copy_leaves_out_chip_and_markers(desktop_context):
     assert page.locator(".lect-reading[data-slot='first'] .note-anchor--variant").count() == 1
     first = page.evaluate(_COPY_SLOT, "first")
     assert "※" not in first
+
+
+@pytest.mark.parametrize("cite_show", ["on", "off"])
+def test_space_between_verses_survives_a_verse_end_cite_chip(desktop_context, cite_show):
+    """부활 4주일(2026-04-26) 제2독서 1베드 2:19-25의 22절과 24절은 절 끝이 인용이라 그 뒤에 칩이 붙는다. 칩을 복사에서 빼거나 설정을
+    꺼 감춰도 절 사이 공백이 남는다(「없었습니다. 그분은」). 전례독서가 칩을 늘 그리면서 main의 「없었습니다. 그분은」이
+    「없었습니다.그분은」으로 붙었다(코드 리뷰 2026-11-09). 그 공백은 이제 칩 뒤에 있다(views.js citePieceSpace)."""
+    if cite_show == "off":
+        desktop_context.add_init_script(CITE_SHOW_OFF)
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-04-26")
+    assert "1베드 2:19-25" in page.inner_text(".lect-reading[data-slot='second'] .lect-ref")
+    text = page.evaluate(_COPY_SLOT, "second")
+    assert "거짓이 없었습니다. 그분은 모욕을" in text, text
+    assert "상처는 나았습니다. 여러분이 전에는" in text, text
+    # 화면 글에서 절 머리의 보이지 않는 글자(U+2060, 절 번호와 본문을 묶는다)는 뺀다
+    shown = page.inner_text(".lect-reading[data-slot='second'] article.chapter-text").replace("\u2060", "")
+    if cite_show == "off":
+        assert "거짓이 없었습니다. 그분은" in shown and "나았습니다. 여러분이" in shown, shown
+    else:
+        assert "거짓이 없었습니다.(이사 53:9) 그분은" in shown, shown

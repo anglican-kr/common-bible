@@ -3,7 +3,10 @@ verse-select 복사 button, and pure-poetry whole-verse selection."""
 
 import re
 
+import pytest
 from playwright.sync_api import expect
+
+from .conftest import CITE_SHOW_OFF
 
 BASE = "http://localhost:8080"
 
@@ -181,6 +184,42 @@ def test_no_space_between_opening_quote_and_quoted_passage(page):
 
     text = _copy_text(page, _SELECT_GAL_3_8)
     assert "아브라함에게 “너로 말미암아 만백성이 복을 받으리라.”는 복음" in text, text
+
+
+# ── 절 끝의 인용 칩 뒤에도 절 사이 공백이 있다 ─────────────────────────────
+
+_SELECT_1PET_2_22_25 = """
+  const spans = [...document.querySelectorAll('article.chapter-text .verse')]
+    .filter(s => { const n = parseInt(s.getAttribute('data-vref'), 10); return n >= 22 && n <= 25; });
+  const r = document.createRange();
+  r.setStartBefore(spans[0]);
+  r.setEndAfter(spans[spans.length - 1]);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+"""
+
+
+@pytest.mark.parametrize("cite_show", ["on", "off"])
+def test_space_between_verses_survives_a_verse_end_cite_chip(page, cite_show):
+    """1베드 2:22와 24는 절 끝이 인용이라 그 뒤에 칩이 붙는다. 칩을 복사에서 빼거나 설정을 꺼 감춰도 절 사이 공백이 남는다
+    (「없었습니다. 그분은」, 「나았습니다. 여러분이」). 그전엔 칩 앞 조각에서 공백을 빼고 칩의 여백을 간격으로 썼기 때문에, 칩이 빠지면
+    「없었습니다.그분은」으로 붙었다. 이제 그 공백은 칩 뒤에 있다(views.js citePieceSpace, 코드 리뷰 2026-11-09, 구현하며 정함)."""
+    if cite_show == "off":
+        page.add_init_script(CITE_SHOW_OFF)
+    page.goto(f"{BASE}/1pet/2")
+    page.wait_for_selector("article.chapter-text .verse")
+    page.wait_for_timeout(150)
+    text = _copy_text(page, _SELECT_1PET_2_22_25)
+    assert "거짓이 없었습니다. 그분은 모욕을" in text, text
+    assert "상처는 나았습니다. 여러분이 전에는" in text, text
+    assert "(이사 53" not in text, text
+    # 화면 글에서 절 머리의 보이지 않는 글자(U+2060, 절 번호와 본문을 묶는다)는 뺀다
+    shown = page.evaluate("() => document.querySelector('article.chapter-text').innerText").replace("\u2060", "")
+    if cite_show == "off":
+        assert "거짓이 없었습니다. 그분은" in shown, shown[:400]
+    else:
+        assert "거짓이 없었습니다.(이사 53:9) 그분은" in shown, shown[:400]
 
 
 # ── Verse-select bar 복사 button ─────────────────────────────────────────────
