@@ -34,11 +34,13 @@ nginx   → POST https://oauth2.googleapis.com/token
               body: 위 + &client_secret={server-only-value}
 ```
 
-가상 호스트(vhost)마다(`bible.anglican.kr`, `dev.anglican.kr`) 자기 OAuth 클라이언트의 비밀값을 nginx 설정에 둔다. SPA 번들, git 이력, CDN 어디에도 비밀값이 없다.
+가상 호스트(vhost)마다(`bible.anglican.kr`, `dev.anglican.kr`) 자기 OAuth 클라이언트의 비밀값을 별도 파일(`/etc/nginx/snippets/oauth-secret-{bible,dev}.conf`)에 두고, 사이트 설정 파일이 그 파일을 불러온다(`include`). 비밀값 파일은 서버 관리자(root)만 읽을 수 있다(2026-07-28부터). SPA 번들, git 이력, CDN 어디에도 비밀값이 없다.
+
+`proxy_pass`는 Google 주소를 변수(`$google_oauth`)로 받고, nginx가 요청 때 DNS 서버(`resolver`)에 물어 주소를 찾는다. 설정을 읽을 때 DNS가 응답하지 않아도 nginx가 시작된다(2026-07-28부터, 아래 대안 E).
 
 요청 빈도 제한(rate limit, M5)도 둔다. nginx의 `limit_req` 디렉티브(`limit_req zone=oauth_token`)가 `/oauth/token` 요청 수를 제한한다(아래 「구현 노트」). 2026-06-09에 njs 검사(M6)를 지울 때도 M5는 그대로 두었다.
 
-nginx 설정 예시는 `common-bible-server` 저장소의 `nginx/oauth-proxy.example.conf`에 있다(비공개 저장소라 링크하지 않는다). 처음에는 이 저장소에 있던 nginx 설정 예시 파일들(`oauth-proxy.example.conf`, `oauth-bff-shared.example.conf`, `oauth-bff-guard.example.js`, `security-headers.example.conf`)을 ADR-020의 저장소 분할 때(2026-05-11) `common-bible-server/nginx/`로 옮겼다. BFF 구조는 그대로다. 그 가운데 `oauth-bff-guard.example.js`는 아래 대안 D(M6)를 채택하지 않으면서(2026-06-09) 없어졌다.
+nginx 설정 예시는 `common-bible-server` 저장소의 `nginx/oauth-proxy.example.conf`에, 비밀값 파일의 예시는 같은 폴더의 `oauth-secret.example.conf`에 있다(비공개 저장소라 링크하지 않는다). 처음에는 이 저장소에 있던 nginx 설정 예시 파일들(`oauth-proxy.example.conf`, `oauth-bff-shared.example.conf`, `oauth-bff-guard.example.js`, `security-headers.example.conf`)을 ADR-020의 저장소 분할 때(2026-05-11) `common-bible-server/nginx/`로 옮겼다. BFF 구조는 그대로다. 그 가운데 `oauth-bff-guard.example.js`는 아래 대안 D(M6)를 채택하지 않으면서(2026-06-09) 없어졌다.
 
 ## 검토한 대안
 
@@ -74,15 +76,22 @@ Google이 발급하는 OAuth 클라이언트 가운데 「Desktop app」이나 �
 
 - 채택한 뒤 `/oauth/token`에 보안 강화를 둘 더했다(그때 ADR 본문에는 적지 않았다). 하나는 요청 빈도 제한(M5, `limit_req zone=oauth_token`)으로, 지금도 쓴다(위 「결정」). 다른 하나가 njs 본문 검사(M6)다. `js_content`(njs)로 요청 본문을 읽어, 클라이언트가 `client_secret=`을 넣은 요청을 400으로 미리 거절했다. 파라미터가 겹치므로 RFC 6749 §3.2를 어기는 요청이다. 구조는 `location = /oauth/token`(검사)과 내부 `@oauth_token_upstream`(프록시)의 2단이었다.
 - 채택 안 함(2026-06-09). 이유: 이 njs 검사가 **`libnginx-mod-http-js` 0.8.2에서 세그폴트(SIGSEGV)를 일으켰다**. `/oauth/token`으로 오는 **모든 POST**에서 `js_content` 핸들러가 워커를 죽였고(`worker exited on signal 11`), 연결은 `ERR_CONNECTION_RESET`으로 끊겼다. 이 기록은 커널과 journald에만 남고 접근 로그와 오류 로그에는 남지 않았다. 그 결과 운영 서버와 개발 서버 모두에서 조용한 토큰 갱신(silent refresh)과 새 로그인이 전부 실패해 **Drive 동기화가 완전히 멈췄다**. 앱 코드 `transport.js`는 1.5.12 이후 바뀌지 않아 원인과 무관했다.
-  - 조치: njs 검사(M6)와 `@oauth_token_upstream` 블록을 지우고, 비밀값을 넣어 Google로 바로 전달하는 일을 **`location = /oauth/token` 하나**로 되돌렸다. 처음 「구현 노트」의 형태에 `limit_req`를 더한 것이다. `proxy_pass`에는 `https://oauth2.googleapis.com/token`을 그대로 적는다. 서버 쪽 변경은 `common-bible-server` 저장소(`nginx/oauth-proxy.example.conf` 등, 커밋 `2f4cbac`)에 있다.
+  - 조치: njs 검사(M6)와 `@oauth_token_upstream` 블록을 지우고, 비밀값을 넣어 Google로 바로 전달하는 일을 **`location = /oauth/token` 하나**로 되돌렸다. 처음 「구현 노트」의 형태에 `limit_req`를 더한 것이다. 이때 `proxy_pass`에는 `https://oauth2.googleapis.com/token`을 그대로 적었다. 2026-07-28에 변수로 바꿨다(대안 E). 서버 쪽 변경은 `common-bible-server` 저장소(`nginx/oauth-proxy.example.conf` 등, 커밋 `2f4cbac`)에 있다.
   - 보안 영향은 없다. M6는 방어를 하나 더 둔 것이었다. 클라이언트가 본문에 `client_secret`을 넣어도 nginx가 서버 쪽 비밀값을 더 붙이므로 파라미터가 겹치고, Google이 RFC 6749 §3.2 위반으로 400을 돌려준다. 그래서 응답으로 비밀값을 알아낼 수 없다. 비밀값은 서버 쪽에서 넣으므로 클라이언트에 드러나지 않는다.
   - 다시 검토할 조건: njs를 다시 들이려면 그 버전에서 세그폴트가 고쳐졌는지 먼저 확인한다.
 
+### E. `proxy_pass`에 Google 주소를 그대로 적는다 (2026-07-28까지)
+
+- 주소를 그대로 적으면 nginx는 설정을 읽을 때 `oauth2.googleapis.com`의 IP 주소를 찾는다. 2026-05-29의 「invalid URL prefix」 오류(변수로 적은 `proxy_pass`와 `rewrite ... break`를 함께 쓴 순서 문제)를 겪은 뒤 이 방식을 썼다.
+- 채택 안 함(2026-07-28). 이유: 서버의 DNS 서비스(`systemd-resolved`)가 다시 시작되는 사이에 설정 검사(`nginx -t`)가 이 주소를 찾지 못했고, nginx 전체가 시작되지 않았다.
+  - 조치: 주소를 변수로 적고 `resolver`로 DNS 서버를 지정해, 요청 때 주소를 찾게 했다. `rewrite`는 쓰지 않고 `proxy_pass`에 경로(`/token`)를 직접 적으므로 5월의 오류는 생기지 않는다.
+  - 다시 검토할 조건: 서버가 외부 DNS 서버를 쓸 수 없는 환경으로 옮기면, 이 방식은 토큰 요청마다 실패한다. 그때는 주소를 그대로 적는 방식과 서버 안의 DNS 서비스를 다시 비교한다.
+
 ## 채택 근거
 
-1. **비밀값을 격리한다**: 브라우저, git, CDN 어디에도 `client_secret`이 없다. nginx 설정 파일(`/etc/nginx/sites-available/{bible,dev}`, 파일 권한 0644, 소유자 root:root)에만 있다.
+1. **비밀값을 격리한다**: 브라우저, git, CDN 어디에도 `client_secret`이 없다. 서버의 비밀값 파일(`/etc/nginx/snippets/oauth-secret-{bible,dev}.conf`, 파일 권한 0600, 소유자 root:root)에만 있다. 사이트 설정 파일(`/etc/nginx/sites-available/{bible,dev}`, 파일 권한 0644)에는 비밀값이 없다. nginx는 설정을 서버 관리자(root) 권한으로 읽으므로 비밀값 파일을 읽을 수 있고, 요청을 처리하는 nginx 작업 프로세스(`www-data` 사용자)는 읽지 못한다.
 2. **인프라 비용이 들지 않는다**: 이미 nginx로 정적 파일을 제공하고 있어 `location` 블록 하나를 더하면 된다. 새 서버나 런타임이 필요 없다.
-3. **운영이 단순하다**: 비밀값을 바꿀 때는 nginx 설정을 고치고 `nginx -s reload` 한 줄이면 된다. 코드 빌드나 배포와 상관없다.
+3. **운영이 단순하다**: 비밀값을 바꿀 때는 비밀값 파일을 고치고 `nginx -s reload` 한 줄이면 된다. 코드 빌드나 배포와 상관없다.
 4. **검수에 영향이 없다**: 클라이언트 ID가 그대로이므로 `drive.appdata` 검수 결과도 그대로 유효하다.
 5. **공격 표면이 작다**: `/oauth/token`은 누구나 호출할 수 있지만, Google은 유효한 `code`와 `code_verifier`, 또는 `refresh_token`이 없으면 아무 권한도 주지 않는다. nginx는 요청을 전달하기만 하고 스스로 권한을 줄 수 없다.
 
@@ -111,6 +120,7 @@ Google이 발급하는 OAuth 클라이언트 가운데 「Desktop app」이나 �
 - **서비스 워커가 캐시할 수 없다**: `/oauth/token`은 POST이고 서비스 워커가 GET이 아닌 요청을 통과시키므로 오프라인 캐시가 안 된다. OAuth 자체가 온라인에서만 되므로 영향은 없다.
 - **요청이 nginx를 거친다**: 모든 토큰 교환과 조용한 토큰 갱신이 nginx를 지난다. 사용자 행동 빈도(분 단위 동기화)에서는 무시할 만하다.
 - **장애 지점이 하나다**: nginx가 멈추면 새 access token을 받을 수 없다. 정적 콘텐츠도 같은 nginx가 제공하므로 멈추는 범위는 같다.
+- **토큰 요청이 외부 DNS 서버에 의존한다**: nginx는 요청 때 지정한 DNS 서버에 Google 주소를 묻고, 찾은 주소를 5분 동안 다시 쓴다(`valid=300s`). DNS 서버가 모두 응답하지 않으면 토큰 요청만 실패하고, 정적 콘텐츠는 그대로 제공된다(대안 E).
 
 ## 구현 노트
 
@@ -128,13 +138,22 @@ location = /oauth/token {
     proxy_set_header Content-Type "application/x-www-form-urlencoded";
     proxy_set_header Host oauth2.googleapis.com;
 
-    proxy_set_body "$request_body&client_secret=<CLIENT_SECRET>";
+    include snippets/oauth-secret-bible.conf;       # dev는 oauth-secret-dev.conf
 
     proxy_ssl_server_name on;
     proxy_ssl_name oauth2.googleapis.com;
 
-    proxy_pass https://oauth2.googleapis.com/token;
+    resolver 1.1.1.1 8.8.8.8 valid=300s ipv6=off;    # 요청 때 주소를 찾는다 (대안 E)
+    resolver_timeout 5s;
+    set $google_oauth "oauth2.googleapis.com";
+    proxy_pass https://$google_oauth/token;
 }
+```
+
+비밀값 파일(`snippets/oauth-secret-bible.conf`, 권한 0600)에는 주석을 빼면 지시문 하나만 있다.
+
+```nginx
+proxy_set_body "$request_body&client_secret=<CLIENT_SECRET>";
 ```
 
 요청 빈도 제한(M5)은 `limit_req zone=oauth_token`으로 분당 60회, `burst` 100을 둔다.
@@ -152,5 +171,5 @@ location = /oauth/token {
 
 ## 향후 고려
 
-- **비밀값 교체 자동화**: 지금은 손으로 한다. Cloud Console에서 새 비밀값을 발급하고, nginx 설정을 고친 뒤, 설정을 다시 읽게 한다(reload). 분기마다 또는 사고가 났을 때 자동으로 바꾸려면 따로 스크립트와 비밀값 관리 도구가 필요하다.
+- **비밀값 교체 자동화**: 지금은 손으로 한다. Cloud Console에서 새 비밀값을 발급하고, 비밀값 파일을 고친 뒤, 설정을 다시 읽게 한다(reload). 분기마다 또는 사고가 났을 때 자동으로 바꾸려면 따로 스크립트와 비밀값 관리 도구가 필요하다.
 - **OAuth 검수를 통과한 뒤 다시 본다**: Google이 검수를 통과한 클라이언트에 PKCE만으로 되는 경로를 열 수도 있다. 그런 발표가 나오면 BFF를 거치지 않는 단순한 구조를 검토한다.
