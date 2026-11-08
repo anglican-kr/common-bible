@@ -3575,13 +3575,6 @@ mark.search-highlight {
     -webkit-user-select: none;
     user-select: none;
   }
-  /* 전례독서에는 절 선택 모드가 없다 — 기기의 길게 눌러 고르기로 복사한다(ADR-038 §3, 2026-11-08).
-     복사 처리기(bindCopyAttribution)가 출처를 붙이는 것은 데스크톱과 같다. */
-  .lectionary .chapter-text .verse {
-    -webkit-touch-callout: default;
-    -webkit-user-select: text;
-    user-select: text;
-  }
 }
 
 .verse.verse-poetry {
