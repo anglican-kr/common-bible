@@ -4,6 +4,7 @@
     "target": "ES2022",
     "module": "nodenext",
     "moduleResolution": "nodenext",
+    "moduleDetection": "legacy",
     "lib": ["WebWorker", "ES2022"],
     "allowJs": true,
     "checkJs": true,
