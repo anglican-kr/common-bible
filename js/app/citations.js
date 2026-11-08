@@ -334,9 +334,11 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
     if (!lastSpan) return;
     // Strip trailing whitespace from the span's last text node so the
     // superscript marker glues directly to the previous character.
+    let hadSpace = false;
     for (let i = lastSpan.childNodes.length - 1; i >= 0; i--) {
       const n = lastSpan.childNodes[i];
       if (n.nodeType === 3 /* Node.TEXT_NODE */) {
+        hadSpace = /\s$/.test(n.nodeValue || "");
         n.nodeValue = (n.nodeValue || "").replace(/\s+$/, "");
         break;
       }
@@ -349,9 +351,10 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
       "aria-label": "본문 변형 주석 보기",
     }, VARIANT_MARKER);
     lastSpan.appendChild(btn);
-    // Re-add a single trailing space so the next verse still has visible
-    // word separation in inline flow.
-    lastSpan.appendChild(document.createTextNode(" "));
+    // Put back the trailing space it stood in front of, so the next verse still has visible word separation in inline
+    // flow. A verse ending in a cite chip has none here — its gap comes after the chip (views.js citePieceSpace), and a
+    // second one would double it (사도 28:28, 코드 리뷰 2026-11-09).
+    if (hadSpace) lastSpan.appendChild(document.createTextNode(" "));
   }
 
   /**
