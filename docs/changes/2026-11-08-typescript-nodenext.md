@@ -1,4 +1,5 @@
 ---
+pr: 532
 date: 2026-11-08
 branch: chore/typescript-nodenext
 title: "chore: 모듈 경로 규칙을 nodenext로 변경"
