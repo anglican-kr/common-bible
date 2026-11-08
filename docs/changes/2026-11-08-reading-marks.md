@@ -1,4 +1,5 @@
 ---
+pr: 530
 date: 2026-11-08
 branch: claude/amazing-ptolemy-0biux4
 title: "fix: 전례독서에서 시편 부 번호와 아가 화자 줄 숨기기"
