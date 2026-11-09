@@ -432,8 +432,9 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
   /**
    * The description an ⓘ button opens below its row (ADR-041 §7). `head` takes the top line beside the close button
    * (백업 & 동기화 puts the account there, the text then goes below); without it the text sits there. `extra` follows.
-   * The row follows the button's `aria-expanded`, so the app-wide Escape fallback that collapses expanded triggers
-   * (app.js) hides it too. Closing hands focus back to the ⓘ button.
+   * The button's `aria-expanded` is the one source of truth: the buttons only set it, and an observer shows or hides
+   * the row from it — so the app-wide Escape fallback that collapses expanded triggers (app.js) hides the row too.
+   * Closing hands focus back to the ⓘ button.
    * @param {HTMLButtonElement} infoBtn @param {string} text
    * @param {{ head?: HTMLElement | null, extra?: HTMLElement[] }} [opts]
    * @returns {HTMLDivElement}
@@ -444,8 +445,8 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     const desc = el("div", { className: "settings-drive-info-desc" }, text);
     const top = el("div", { className: "settings-drive-info-top" });
     top.appendChild(head ?? desc);
-    // 두 설명을 함께 열어도 스크린 리더가 어느 것을 닫는지 알게 ⓘ 단추의 이름을 붙인다.
-    const closeBtn = el("button", { className: "settings-drive-info-close", type: "button", "aria-label": `${infoBtn.getAttribute("aria-label")} 닫기` }, "✕");
+    // 두 설명을 함께 열어도 스크린 리더가 어느 것을 닫는지 알게 ⓘ 단추의 이름을 붙인다. 이름이 없는 단추면 「안내 닫기」다.
+    const closeBtn = el("button", { className: "settings-drive-info-close", type: "button", "aria-label": `${infoBtn.getAttribute("aria-label") || "안내"} 닫기` }, "✕");
     top.appendChild(closeBtn);
     row.appendChild(top);
     if (head) row.appendChild(desc);
@@ -453,7 +454,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
 
     infoBtn.setAttribute("aria-controls", row.id);
     /** @param {boolean} open */
-    const setOpen = (open) => { row.hidden = !open; infoBtn.setAttribute("aria-expanded", String(open)); };
+    const setOpen = (open) => infoBtn.setAttribute("aria-expanded", String(open));
     infoBtn.addEventListener("click", () => setOpen(infoBtn.getAttribute("aria-expanded") !== "true"));
     closeBtn.addEventListener("click", () => { setOpen(false); infoBtn.focus(); });
     new MutationObserver(() => { row.hidden = infoBtn.getAttribute("aria-expanded") !== "true"; })

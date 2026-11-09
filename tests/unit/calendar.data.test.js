@@ -16,6 +16,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadAppHelpers } from "./harness.js";
+// 화면 모델이 쓰는 공용 도우미. 손으로 옮긴 사본 대신 진짜 helpers.js의 것을 한 번만 받는다.
+const { isFormerNorthChurch } = loadAppHelpers();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../..");
@@ -36,8 +38,7 @@ function extractBlock(name, source) {
 const ctx = {
   Object, Array, Set, Map, String, Number, Boolean, Math, JSON, console, Error,
   parseInt, isNaN, Date, NaN, URLSearchParams,
-  // 화면 모델이 쓰는 공용 도우미 — 손으로 옮긴 사본 대신 진짜 helpers.js의 것이다
-  isFormerNorthChurch: loadAppHelpers().isFormerNorthChurch,
+  isFormerNorthChurch,
 };
 vm.createContext(ctx);
 vm.runInContext("const anchorCache = new Map(); const spansCache = new Map(); const transferCache = new Map(); const activatedOptionals = new Set();",
