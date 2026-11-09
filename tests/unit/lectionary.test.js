@@ -183,14 +183,14 @@ test("initialCandidate: 격자에 독서가 없으면 지정 전례일을 그대
   assert.strictEqual(ctx.initialCandidate(r, groupsOf), saint);
 });
 
-test("selectCandidate: ?obs 가 후보에 있으면 그것, 없으면 초기 선택", () => {
+test("selectCandidate: ?obs 가 후보에 있으면 그것, 없으면 그날 처음 여는 후보", () => {
   const feast = cand(obs("d0806-주의-변모", "주의 변모"));
   const grid = cand(obs("grid:ordinary-18-weekday-thu", "연중 18주 목요일"));
-  const r = resolvedOf("2026-08-06", [feast, grid], feast);
-  const groupsOf = groupsOfFrom({ "d0806-주의-변모": [group("f", FOUR)], "grid:ordinary-18-weekday-thu": [group("g", FOUR)] });
-  assert.strictEqual(ctx.selectCandidate(r, "grid:ordinary-18-weekday-thu", groupsOf), grid);
-  assert.strictEqual(ctx.selectCandidate(r, "no-such-id", groupsOf), feast);
-  assert.strictEqual(ctx.selectCandidate(r, null, groupsOf), feast);
+  assert.strictEqual(ctx.selectCandidate([feast, grid], "grid:ordinary-18-weekday-thu", feast), grid);
+  assert.strictEqual(ctx.selectCandidate([feast, grid], "no-such-id", feast), feast);
+  assert.strictEqual(ctx.selectCandidate([feast, grid], null, feast), feast);
+  // 소속교회의 축성일 주소를 그 교회가 없는 사람이 열면 처음 여는 후보다(ADR-041 §6)
+  assert.strictEqual(ctx.selectCandidate([feast, grid], "my-dedication", feast), feast);
 });
 
 // ── 트랙 · 세트 ──────────────────────────────────────────────────────────────
@@ -889,6 +889,93 @@ test("buildLectionaryModel: 그날 축성 · 축복된 교회는 종류마다 �
   same(lines([{ name: "북.버드내성당", kind: "consecration" }, { name: "북.장림성당", kind: "consecration" }]), []);
   same(lines([]), []);
   same(plain(ctx.buildLectionaryModel(r, q, groupsOf, entries, null).dedicationLines), []);
+});
+
+// ── 소속교회의 축성일(ADR-041 §6, §8) ─────────────────────────────────────────
+
+const MINE = "k7m3qx";
+const DEDICATIONS = [
+  { name: "강릉성당", kind: "consecration", church_id: MINE },
+  { name: "원주성당", kind: "consecration", church_id: "w2h9cd" },
+  { name: "세종성당", kind: "blessing", church_id: "n4p8rt" },
+];
+/** 공통 「성당 축성일」의 독서 2세트와 본기도 — 엔진이 `sanctoral_class: "dedication"`인 후보에 내는 것과 같은 모양. */
+const DEDICATION_GROUPS = [1, 2].map((n) => group(`common:dedication-s${n}`, FOUR, { common: "dedication", title: "성당 축성일", set_no: n, set_total: 2 }));
+const DEDICATION_COLLECT = collect("common:dedication-c1", "이 성전을 봉헌한 날을 기념하며", { common: "dedication", title: "성당 축성일" });
+/** 그날의 후보와 축성일 본기도를 담은 화면 모델. `findCollects`가 축성일 후보까지 받은 것처럼 본기도 원소를 하나 더한다. */
+const dedicationModelOf = (r, table, parish, query = {}, show = false, dedications = DEDICATIONS) => {
+  const mine = ctx.myDedicationOf(dedications, parish);
+  const entries = [...(mine ? [{ candidate: mine, collects: [DEDICATION_COLLECT] }] : []),
+    ...r.candidates.map((c) => ({ candidate: c, collects: [collect(`${c.observance.id}-c`, "…")] }))];
+  const groupsOf = groupsOfFrom({ ...table, "my-dedication": DEDICATION_GROUPS });
+  return ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null, ...query }, groupsOf, entries, null, dedications, show, [], parish);
+};
+/** 전례독서 목록에서 고른 줄(제목)을 뺀 줄의 이름과 주소. */
+const others = (m) => m.choices.filter((c) => !c.active).map((c) => [c.name, c.href]);
+
+test("myDedicationOf: 소속교회가 그날 축성일이면 주요축일 C인 「○○성당 축성일」 후보 — 축복일, 다른 교회, 고르지 않음은 null(ADR-041 §6)", () => {
+  const mine = ctx.myDedicationOf(DEDICATIONS, MINE);
+  same(mine, {
+    observance: {
+      id: "my-dedication", kind: "sanctoral", name: "강릉성당 축성일", aliases: null, sanctoral_class: "dedication", has_proper: false,
+      rank: "major_feast", precedence: 4, priority_group: "C", transferable: false, transfer_to: null, color: "white", color_alt: null,
+    },
+    status: "proper",
+  });
+  assert.strictEqual(ctx.myDedicationOf(DEDICATIONS, "n4p8rt"), null);   // 세종성당은 그날 축복일이다
+  assert.strictEqual(ctx.myDedicationOf(DEDICATIONS, "zzzzzz"), null);
+  assert.strictEqual(ctx.myDedicationOf(DEDICATIONS, ""), null);
+  assert.strictEqual(ctx.myDedicationOf([{ name: "옛성당", kind: "consecration", church_id: null }], ""), null);   // 식별자 없는 옛 표
+});
+
+test("dedicationFirst: 기본 독서가 주일, 대축일, 주요축일, 명절이면 축성일은 줄이고, 그 밖의 평일에는 축성일이 먼저다(ADR-041 §6, 사용자 결정 2026-11-09)", () => {
+  const of = (rank) => cand(obs("x", "x", { rank }));
+  same(["feria", "minor_feast", null].map((rank) => ctx.dedicationFirst(of(rank), "2026-04-21")), [true, true, true]);
+  same(["principal", "major_feast", "regional_festival"].map((rank) => ctx.dedicationFirst(of(rank), "2026-04-21")), [false, false, false]);
+  assert.strictEqual(ctx.dedicationFirst(of("sunday"), "2026-04-26"), false);   // 일요일
+});
+
+test("buildLectionaryModel: 평일의 소속교회 축성일 — 축성일이 먼저 열리고, 평일은 목록의 줄, 성인 본기도는 잇지 않으며, 제목의 교회는 축성일 줄에서 뺀다(사용자 결정 2026-11-05, 11-09)", () => {
+  const saint = cand(obs("d0421-안셀름", "안셀름(켄터베리 대주교, 1109년)", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "teacher" }));
+  const grid = cand(obs("grid:easter-4-weekday-tue", "부활 4주 화요일", { rank: "feria", precedence: 8, color: "white" }));
+  const r = resolvedOf("2026-04-21", [saint, grid], saint);   // 그날 색(녹색)과 달라 머리는 축성일의 백색이다
+  const table = { "d0421-안셀름": [group("common:teacher-s1", FOUR, { common: "teacher" })], "grid:easter-4-weekday-tue": [group("g", FOUR)] };
+  const m = dedicationModelOf(r, table, MINE);
+  same([m.selected.observance.id, m.initial.observance.id, m.dayName], ["my-dedication", "my-dedication", "강릉성당 축성일"]);
+  same([m.options.length, m.collects.map((c) => c.id), m.memorialCollects, m.ending], [2, ["common:dedication-c1"], [], "A"]);
+  same([m.colors, m.ownColor], [["white"], true]);
+  // 성인의 이름 줄은 그대로이고, 제목의 교회만 축성일 줄에서 빠진다
+  same([m.memorialSaints.map((c) => c.observance.id), m.dedicationLines], [["d0421-안셀름"], ["원주성당 축성일", "세종성당 축복일"]]);
+  // 평일 줄은 대체 독서 표시를 꺼도 보이고, 그 주소에는 평일의 id가 붙는다. 축성일이 기본이라 축성일 주소에는 `?obs=`가 없다
+  same(others(m), [["부활 4주 화요일", "/lectionary/2026-04-21?obs=grid%3Aeaster-4-weekday-tue"]]);
+  // 평일 줄을 고르면 지금처럼 성인 본기도를 잇고, 축성일 줄에 그 교회가 다시 보이며, 축성일 줄의 주소는 날짜뿐이다
+  const w = dedicationModelOf(r, table, MINE, { obs: grid.observance.id });
+  same([w.selected, w.memorialCollects.map((c) => c.id), w.dedicationLines], [grid, ["d0421-안셀름-c"], ["강릉성당, 원주성당 축성일", "세종성당 축복일"]]);
+  same(others(w), [["강릉성당 축성일", "/lectionary/2026-04-21"]]);
+  // 소속교회를 고르지 않은 사람이 축성일 주소를 열면 그날의 기본 독서다
+  const other = dedicationModelOf(r, table, "", { obs: "my-dedication" });
+  same([other.selected, others(other), other.dedicationLines[0]], [grid, [], "강릉성당, 원주성당 축성일"]);
+});
+
+test("buildLectionaryModel: 주일, 주요축일, 평일의 명절에 온 소속교회 축성일은 목록의 맨 앞 줄이고 주소는 `?obs=my-dedication`이다(ADR-041 §6, §8)", () => {
+  const sunday = cand(obs("grid:easter-5-sunday", "부활 5주일", { rank: "sunday", precedence: 5, color: "white" }));
+  const rs = resolvedOf("2026-04-26", [sunday], sunday, { coord: { season: "easter", week: 5, type: "sunday", weekday: "sun", year: "A" } });
+  const s = dedicationModelOf(rs, { "grid:easter-5-sunday": [group("s", FOUR)] }, MINE);
+  assert.strictEqual(s.selected, sunday);
+  same(others(s), [["강릉성당 축성일", "/lectionary/2026-04-26?obs=my-dedication"]]);
+  same(s.dedicationLines[0], "강릉성당, 원주성당 축성일");
+  // 그 줄을 고르면 축성일 화면이고, 제목의 교회를 축성일 줄에서 뺀다
+  const picked = dedicationModelOf(rs, { "grid:easter-5-sunday": [group("s", FOUR)] }, MINE, { obs: "my-dedication" });
+  same([picked.dayName, picked.dedicationLines[0], others(picked)], ["강릉성당 축성일", "원주성당 축성일", [["부활 5주일", "/lectionary/2026-04-26"]]]);   // 기본 독서인 주일의 주소는 날짜뿐이다
+
+  for (const [id, name, rank] of [["d0425-마르코", "성 마르코(복음사가)", "major_feast"], ["lunar815-추석-명절", "추석 명절", "regional_festival"]]) {
+    const feast = cand(obs(id, name, { rank, precedence: rank === "major_feast" ? 6 : 0, color: "white" }));
+    const grid = cand(obs("grid:easter-4-weekday-tue", "부활 4주 화요일", { rank: "feria", precedence: 8, color: "white" }));
+    const r = resolvedOf("2026-04-21", [feast, grid], feast);
+    const m = dedicationModelOf(r, { [id]: [group(`p-${id}`, FOUR)], "grid:easter-4-weekday-tue": [group("g", FOUR)] }, MINE, {}, true);
+    assert.strictEqual(m.selected, feast, rank);
+    same(others(m)[0], ["강릉성당 축성일", "/lectionary/2026-04-21?obs=my-dedication"], rank);
+  }
 });
 
 test("buildLectionaryModel: 본기도 없이 그날 지키는 다른 전례일의 독서를 그대로 받는 후보는 이름 줄 — 빌려 준 쪽이 옮겨 갔거나 본기도가 없으면 목록에 남는다(사용자 결정 2026-11-07, PR #510 리뷰)", () => {

@@ -74,8 +74,8 @@ function ix() {
 }
 const resolve = (d) => ctx.resolveDateIn(ix().cal, d, ctx.transfersOf(ix().cal, Number(d.slice(0, 4))));
 const NONE = { obs: null, track: null, set: null, collect: null };
-/** 실제 표 위의 뷰 모델 — 공개 래퍼가 하는 것과 같은 조합. */
-function model(d, query = NONE, stored = null, showAlternates = true) {
+/** 실제 표 위의 뷰 모델 — 공개 래퍼(`lectionaryModelOf`)가 하는 것과 같은 조합. `parish`는 설정 「소속교회」의 교회 식별자다. */
+function model(d, query = NONE, stored = null, showAlternates = true, parish = "") {
   const r = resolve(d);
   assert.ok(r, `${d} 를 풀 수 없다`);
   const cache = new Map();
@@ -86,7 +86,9 @@ function model(d, query = NONE, stored = null, showAlternates = true) {
   // 공개 래퍼의 findDedications(PRELOAD 블록 — 여기서는 싣지 않는다)와 같은 조회
   const dedications = ix().lec.dedications.get(`${d.slice(5, 7)}.${d.slice(8, 10)}`) || [];
   const foundings = ctx.findFoundingsIn(ix().lec, `${d.slice(5, 7)}.${d.slice(8, 10)}`);
-  const m = ctx.buildLectionaryModel(r, { ...NONE, ...query }, groupsOf, ctx.findCollectsIn(ix().lec, ix().cal, r), stored, dedications, showAlternates, foundings);
+  const mine = ctx.myDedicationOf(dedications, parish);
+  const collects = ctx.findCollectsIn(ix().lec, ix().cal, mine ? { ...r, candidates: [mine, ...r.candidates] } : r);
+  const m = ctx.buildLectionaryModel(r, { ...NONE, ...query }, groupsOf, collects, stored, dedications, showAlternates, foundings, parish);
   assert.ok(m, `${d} 모델이 null`);
   return m;
 }
@@ -110,6 +112,83 @@ test("A3 축성일 줄의 꼬리가 본당 표 _vocab 에 「일」을 붙인 �
     assert.ok(p.dedication && /^\d{2}\.\d{2}$/.test(p.dedication.date), `${p.name} 축성일`);
     assert.ok(p.dedication.kind in label, `${p.name} 종류 ${p.dedication.kind}`);
   }
+});
+
+// ── 소속교회의 축성일(ADR-041 §6, §8) ──
+
+/** 본당 표에서 교회 이름으로 찾은 교회 식별자. */
+const churchIdOf = (name) => {
+  const p = read("local-observances.json").parishes.find((x) => x.name === name);
+  assert.ok(p && p.church_id, `${name} 식별자`);
+  return p.church_id;
+};
+/** 전례독서 목록에서 고른 줄(제목)을 뺀 줄의 이름과 주소. */
+const otherRows = (m) => m.choices.filter((c) => !c.active).map((c) => [c.name, c.href]);
+
+test("축성일 후보의 색이 공통 「성당 축성일」의 색과 같고, 그 분류에 독서 2세트와 본기도가 있다", { skip: SKIP }, () => {
+  const dedication = read("commons.json").classes.dedication;
+  const mine = ctx.myDedicationOf([{ name: "가성당", kind: "consecration", church_id: "k7m3qx" }], "k7m3qx");
+  same([mine.observance.color, dedication.label, dedication.readings.length, typeof dedication.collect.text], [dedication.color, "성당 축성일", 2, "string"]);
+});
+
+test("소속교회 축성일 — 평일이면 축성일이 먼저(공통 독서 2세트와 본기도), 평일은 목록의 줄, 기리는 성인의 본기도는 평일 줄에서만(ADR-041 §6)", { skip: SKIP }, () => {
+  const yongin = churchIdOf("용인성당");
+  const m = model("2025-01-31", NONE, null, false, yongin);   // 연중 3주 금요일
+  same([m.dayName, m.groups.map((g) => g.id), m.collects.map((c) => c.id)],
+    ["용인성당 축성일", ["common:dedication-s1", "common:dedication-s2"], ["common:dedication-c1"]]);
+  same(otherRows(m), [["연중 3주 금요일", "/lectionary/2025-01-31?obs=grid%3Aordinary-3-weekday-fri"]]);
+  assert.ok(!m.dedicationLines.some((l) => l.includes("용인성당")), "제목의 교회는 축성일 줄에서 빠진다");
+  // 소속교회가 없으면 그날은 평일이고, 축성일 줄에 교회가 보인다
+  const none = model("2025-01-31", NONE, null, false);
+  same([none.dayName, none.dedicationLines.some((l) => l.includes("용인성당"))], ["연중 3주 금요일", true]);
+
+  // 안셀름 축일(공통 독서뿐 — 기본 독서는 부활 1주 월요일)과 겹친 강릉성당 축성일. 성인의 이름 줄은 남고 본기도는 평일 줄을 고를 때만 잇는다
+  const gangneung = churchIdOf("강릉성당");
+  const a = model("2025-04-21", NONE, null, false, gangneung);
+  same([a.dayName, a.memorialCollects, a.memorialSaints.map(id)], ["강릉성당 축성일", [], ["d0421-안셀름"]]);
+  const weekday = a.choices.find((c) => !c.active && c.candidate.observance.id.startsWith("grid:"));
+  const w = model("2025-04-21", { obs: weekday.candidate.observance.id }, null, false, gangneung);
+  assert.ok(w.memorialCollects.length > 0, "평일 줄에는 성인 본기도를 잇는다");
+});
+
+test("소속교회 축성일 — 주일, 대축일, 평일의 명절이면 그날의 전례일이 먼저이고 축성일은 맨 앞 줄(ADR-041 §6, 사용자 결정 2026-11-09)", { skip: SKIP }, () => {
+  for (const [d, church, title] of [
+    ["2025-05-11", "강동성당", "부활 4주일"],
+    ["2026-05-14", "서창성당", "승천대축일"],
+    ["2027-09-15", "서대구성당", "추석 명절"],
+  ]) {
+    const m = model(d, NONE, null, false, churchIdOf(church));
+    assert.strictEqual(ctx.shortName(m.dayName), title, d);
+    same(otherRows(m)[0], [`${church} 축성일`, `/lectionary/${d}?obs=my-dedication`], d);
+    // 그 줄을 고르면 축성일 화면이고, 제목의 교회는 축성일 줄에서 빠진다
+    const picked = model(d, { obs: "my-dedication" }, null, false, churchIdOf(church));
+    assert.strictEqual(picked.dayName, `${church} 축성일`, d);
+    assert.ok(!picked.dedicationLines.some((l) => l.includes(church)), d);
+  }
+});
+
+test("소속교회 축성일 — 2025-2050 모든 축성일에 축성일이 처음 여는 화면이거나 전례독서 목록의 줄이다(ADR-041 §6)", { skip: SKIP }, () => {
+  const churches = read("local-observances.json").parishes
+    .filter((p) => p.dedication.kind === "consecration" && p.church_id && !isFormerNorthChurch(p.name));
+  const bad = [];
+  let first = 0;
+  let rows = 0;
+  for (let y = 2025; y <= 2050; y++) {
+    for (const p of churches) {
+      const d = `${y}-${p.dedication.date.replace(".", "-")}`;
+      const m = model(d, NONE, null, false, p.church_id);
+      if (m.selected.observance.id === "my-dedication") {
+        first++;
+        if (m.dayName !== `${p.name} 축성일` || m.memorialCollects.some((c) => c.common !== "anniversary")) bad.push(`${d} ${p.name} 처음 화면`);
+      } else if (m.choices.some((c) => c.candidate.observance.id === "my-dedication" && c.href === `/lectionary/${d}?obs=my-dedication`)) {
+        rows++;
+      } else {
+        bad.push(`${d} ${p.name} 축성일이 없다`);
+      }
+    }
+  }
+  same(bad, []);
+  assert.ok(first > 0 && rows > 0, `처음 화면 ${first}, 줄 ${rows}`);
 });
 
 test("A3 주기 · 색 라벨이 데이터 _vocab 과 같다(ADR-036 §4 단일 출처)", { skip: SKIP }, () => {

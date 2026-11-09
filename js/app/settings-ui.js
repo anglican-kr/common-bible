@@ -515,7 +515,11 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
         const name = select.selectedOptions[0]?.textContent ?? "";
         // 목록에 없던 값을 바꿨으면 그 항목은 더 고를 일이 없다
         if (missingOption && !missingOption.selected) { missingOption.remove(); missingOption = null; }
-        announce(churchId ? `소속교회 ${name}` : "소속교회 선택 안 함");
+        const result = churchId ? `소속교회 ${name}` : "소속교회 선택 안 함";
+        // 전례독서 화면과 캘린더 목록은 소속교회의 축성일을 싣는다(ADR-041 §6) — 대체 독서 표시처럼 다시 그리고, 팝오버는 닫힌다
+        const here = parsePath();
+        if (here.view === "lectionary" || (here.view === "calendar" && here.mode === "list")) redrawThenAnnounce(result);
+        else announce(result);
       },
     });
     select.disabled = true;

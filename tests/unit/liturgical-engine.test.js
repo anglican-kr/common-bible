@@ -781,10 +781,10 @@ const LEC_TABLES = {
   ] },
   // 본당 표(데이터 lectionary/local-observances.json) — 같은 날 축성 · 축복이 섞인 날, 북한 성당, 깨진 행
   localObservances: { _meta: {}, _vocab: {}, province: { id: "province-대한성공회", name: "대한성공회", founded: "09.29", founded_year: 1992 }, dioceses: [], parishes: [
-    { id: "par-가", name: "가성당", diocese: "서울", dedication: { date: "04.21", kind: "consecration" } },
-    { id: "par-나", name: "나성당", diocese: "대전", dedication: { date: "04.21", kind: "blessing" } },
-    { id: "par-다", name: "북.다성당", diocese: null, dedication: { date: "04.21", kind: "consecration" } },
-    { id: "par-라", name: "라성당", diocese: "부산", dedication: { date: "05.02", kind: "consecration" } },
+    { id: "par-가", church_id: "k7m3qx", name: "가성당", diocese: "서울", dedication: { date: "04.21", kind: "consecration" } },
+    { id: "par-나", church_id: "n4p8rt", name: "나성당", diocese: "대전", dedication: { date: "04.21", kind: "blessing" } },
+    { id: "par-다", name: "북.다성당", diocese: null, dedication: { date: "04.21", kind: "consecration" } },   // 식별자가 없는 줄(업데이트 전의 표)
+    { id: "par-라", church_id: "w2h9cd", name: "라성당", diocese: "부산", dedication: { date: "05.02", kind: "consecration" } },
     { id: "par-마", name: "마성당", diocese: "부산", dedication: null },
     { id: "par-바", name: "바성당", diocese: "부산", dedication: { date: "05.02", kind: "patron" } },
   ] },
@@ -2145,14 +2145,18 @@ test("C-3.5-2 반절 경계 표를 받지 못해도 독서 묶음은 선다 — 
   assert.strictEqual(calls.length, 0);
 });
 
-test("C-3.5-3 본당 표는 독서 묶음과 함께 실리고 양력 월일로 찾는다 — 표의 차례, 축성일이 없거나 종류가 다른 행은 뺀다(사용자 결정 2026-11-04)", async () => {
+test("C-3.5-3 본당 표는 독서 묶음과 함께 실리고 양력 월일로 찾는다 — 표의 차례, 교회 식별자(없으면 null), 축성일이 없거나 종류가 다른 행은 뺀다(사용자 결정 2026-11-04)", async () => {
   const e = loadEngine(fakeFetch([]));
   await e.preloadLectionary();
   // 해와 상관없이 월일로 찾는다. 「북.」 성당도 그대로 낸다 — 빼는 일은 화면이 한다(lectionary.js dedicationLines)
-  const want = [{ name: "가성당", kind: "consecration" }, { name: "나성당", kind: "blessing" }, { name: "북.다성당", kind: "consecration" }];
+  const want = [
+    { name: "가성당", kind: "consecration", church_id: "k7m3qx" },
+    { name: "나성당", kind: "blessing", church_id: "n4p8rt" },
+    { name: "북.다성당", kind: "consecration", church_id: null },
+  ];
   same(plain(e.findDedications("2026-04-21")), want);
   same(plain(e.findDedications("1999-04-21")), want);
-  same(plain(e.findDedications("2026-05-02")), [{ name: "라성당", kind: "consecration" }]);   // 종류가 다른 「바성당」은 뺀다
+  same(plain(e.findDedications("2026-05-02")), [{ name: "라성당", kind: "consecration", church_id: "w2h9cd" }]);   // 종류가 다른 「바성당」은 뺀다
   same(plain(e.findDedications("2026-04-22")), []);
   same(plain(e.findDedications("2026-02-30")), []);                                          // 잘못된 날짜
   // 돌려준 배열을 고쳐도 인덱스는 그대로다

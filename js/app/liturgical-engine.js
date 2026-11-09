@@ -1926,8 +1926,9 @@ function provinceOf(table) {
 
 /**
  * 본당 표(`local-observances.json`) → 축성일 「MM.DD」 키의 Map. 값은 그날 축성되거나 축복된 교회들이고, 차례는 표의
- * 차례(파서가 날짜, 이름 순으로 정렬한다)다. 축성일과 종류(축성, 축복)만 읽는다 — 본당 축일의 등급 격상(ADR-036 B2
- * `scope` 오버레이)은 아직 없고, 옮김 계산도 본당 표를 보지 않는다(§4.9). 표가 없거나 형식이 깨졌으면 빈 Map이다.
+ * 차례(파서가 날짜, 이름 순으로 정렬한다)다. 축성일과 종류(축성, 축복), 교회 식별자만 읽는다. 식별자는 소속교회의 축성일을 찾는 데
+ * 쓰고(ADR-041 §6), 업데이트 전의 표라 없으면 null이다. 본당 축일의 등급 격상(ADR-036 B2 `scope` 오버레이)은 아직 없고, 옮김 계산도
+ * 본당 표를 보지 않는다(§4.9). 표가 없거나 형식이 깨졌으면 빈 Map이다.
  * @param {any} table @returns {Map<string, ParishDedication[]>}
  */
 function buildDedicationIndex(table) {
@@ -1938,7 +1939,10 @@ function buildDedicationIndex(table) {
     if (!d || typeof d.date !== "string" || typeof p.name !== "string") continue;
     if (d.kind !== "consecration" && d.kind !== "blessing") continue;
     const list = map.get(d.date);
-    const entry = { name: p.name, kind: /** @type {ParishDedication["kind"]} */ (d.kind) };
+    const entry = {
+      name: p.name, kind: /** @type {ParishDedication["kind"]} */ (d.kind),
+      church_id: typeof p.church_id === "string" && p.church_id !== "" ? p.church_id : null,
+    };
     if (list) list.push(entry); else map.set(d.date, [entry]);
   }
   return map;

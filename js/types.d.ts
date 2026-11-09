@@ -831,6 +831,8 @@ export interface HalfVerse {
 export interface ParishDedication {
   name: string;
   kind: "consecration" | "blessing";
+  /** 교회 식별자(무작위 6자, ADR-041 §6). 소속교회의 축성일을 찾는다. 업데이트 전의 표라 없으면 null이다. */
+  church_id: string | null;
 }
 
 /**
