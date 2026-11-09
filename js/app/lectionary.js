@@ -567,14 +567,14 @@ function dedicationFirst(publicInitial, date) {
 }
 
 /**
- * 관구 설립일(엔진 `findFoundings`) → 제목 아래 줄 「1992년 9월 29일 관구설립일」(사용자 결정 2026-11-07). 설립연도가 없으면
- * 「9월 29일 관구설립일」이다.
- * @param {import("../types.js").ProvinceFounding[]} entries @returns {string[]}
+ * 설립일(엔진 `findFoundings`)마다 제목 아래 줄 하나다. 관구는 「1992년 9월 29일 관구설립일」(사용자 결정 2026-11-07), 교구는 같은 형식으로
+ * 「1965년 5월 27일 서울교구설립일」이다(사용자 결정 2026-11-09). 설립연도가 없으면 「9월 29일 관구설립일」이다.
+ * @param {import("../types.js").Founding[]} entries @returns {string[]}
  */
 function foundingLines(entries) {
   return entries.map((f) => {
     const [m, d] = f.date.split(".").map(Number);
-    return `${f.year ? `${f.year}년 ` : ""}${m}월 ${d}일 관구설립일`;
+    return `${f.year ? `${f.year}년 ` : ""}${m}월 ${d}일 ${f.level === "diocese" ? `${f.name}교구` : "관구"}설립일`;
   });
 }
 
@@ -915,7 +915,7 @@ function isAlternateReading(c, initial) {
  * @param {1 | 2 | null} storedTrack  기억된 트랙 — 마지막으로 고른 것(해를 넘어 유지)
  * @param {import("../types.js").ParishDedication[] | undefined} dedications  그날 축성되거나 축복된 교회(엔진 `findDedications`)
  * @param {boolean} showAlternates  대체 독서의 줄을 전례독서 목록에 보이는가(설정 「대체 독서 표시」). 기본값을 두지 않는다 — 값은 설정에서 받는다
- * @param {import("../types.js").ProvinceFounding[]} [foundings]  그날이 관구 설립일이면 그 설립일(엔진 `findFoundings`)
+ * @param {import("../types.js").Founding[]} [foundings]  그날의 관구 설립일과 소속교회의 교구 설립일(엔진 `findFoundings`)
  * @param {MyDedication | null} [mine]  그날의 소속교회 축성일(`myDedicationOf`). `collectEntries`에는 그 후보의 본기도도 들어 있어야 한다(공개 래퍼가 같은 후보로 찾는다)
  * @returns {LectionaryModel | null}  후보가 하나도 없으면 null(유효한 날짜에는 격자가 언제나 있어 생기지 않는다)
  */
@@ -999,8 +999,8 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const linked = linkCollects(options, collects);
   const collectIndex = linked && setIndex >= 0 ? linked[setIndex] : pickCollect(collects, query.collect);
   const chosenCollect = collectIndex >= 0 ? collects[collectIndex] : null;
-  // 관구 설립일(9.29)에는 고른 전례일의 본기도 뒤에 관구 설립 본기도를 잇는다. 기리는 성인과 달리 주일에도, 전례독서 목록에서 다른
-  // 전례일을 골라도 잇는다 — 모든 사용자에게 덧붙이는 본기도다(사용자 결정 2026-11-05, ADR-041 §6). 송영은 그 뒤에 한 번이다.
+  // 관구 설립일(9.29)과 소속교회의 교구 설립일(서울과 대전 5.27, 부산 6.1)에는 고른 전례일의 본기도 뒤에 설립 본기도를 잇는다. 기리는 성인과
+  // 달리 주일에도, 전례독서 목록에서 다른 전례일을 골라도 잇는다(사용자 결정 2026-11-05, ADR-041 §6). 송영은 그 뒤에 한 번이다.
   const foundingCollects = foundings.flatMap((f) => (f.collect ? [f.collect] : []));
   // 기리는 성인의 본기도는 그날의 기본 독서를 볼 때만 잇는다. 소속교회의 축성일 화면에는 잇지 않는다(사용자 결정 2026-11-09, ADR-041 §6)
   const memorialCollects = [...(selected === publicInitial ? memorial.collects : []), ...foundingCollects];
@@ -1883,9 +1883,10 @@ function lectionaryModelOf(resolved, query) {
   const dedications = findDedications(date);
   // 소속교회는 늘 기기에 저장된 값으로 읽는다(ADR-041 §8). 그날이 그 교회의 축성일이면 후보를 한 번 만들어, 본기도(공통 「성당 축성일」)를
   // 엔진에서 받고 화면 모델에도 같은 후보를 넘긴다
-  const mine = myDedicationOf(dedications, loadParish());
+  const parish = loadParish();
+  const mine = myDedicationOf(dedications, parish);
   const collectEntries = findCollects(mine ? { ...resolved, candidates: [mine.candidate, ...resolved.candidates] } : resolved);
-  return buildLectionaryModel(resolved, query, groupsOf, collectEntries, loadLectionaryTrack(), dedications, loadLectionaryAltShow(), findFoundings(date), mine);
+  return buildLectionaryModel(resolved, query, groupsOf, collectEntries, loadLectionaryTrack(), dedications, loadLectionaryAltShow(), findFoundings(date, parish), mine);
 }
 
 /**

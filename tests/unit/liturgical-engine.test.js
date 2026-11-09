@@ -780,7 +780,10 @@ const LEC_TABLES = {
     { bookId: "rom", chapter: 3, verse: 22, half: "b", whole: true },
   ] },
   // 본당 표(데이터 lectionary/local-observances.json) — 같은 날 축성 · 축복이 섞인 날, 북한 성당, 깨진 행
-  localObservances: { _meta: {}, _vocab: {}, province: { id: "province-대한성공회", name: "대한성공회", founded: "09.29", founded_year: 1992 }, dioceses: [], parishes: [
+  localObservances: { _meta: {}, _vocab: {}, province: { id: "province-대한성공회", name: "대한성공회", founded: "09.29", founded_year: 1992 }, dioceses: [
+    { id: "dio-대전", name: "대전", founded: "05.27", founded_year: 1965 }, { id: "dio-서울", name: "서울", founded: "05.27", founded_year: 1965 },
+    { id: "dio-부산", name: "부산", founded: "06.01", founded_year: 1974 },
+  ], parishes: [
     { id: "par-가", church_id: "k7m3qx", name: "가성당", diocese: "서울", dedication: { date: "04.21", kind: "consecration",
       rank: "major_feast", precedence: 4, priority_group: "C", color: "white", common: "dedication", transferable: false, transfer_to: null } },
     { id: "par-나", church_id: "n4p8rt", name: "나성당", diocese: "대전", dedication: { date: "04.21", kind: "blessing" } },
@@ -2169,6 +2172,28 @@ test("C-3.5-3 본당 표는 독서 묶음과 함께 실리고 양력 월일로 �
   // 표가 없거나 형식이 깨져도 인덱스는 선다 — 조회는 빈 배열
   assert.strictEqual(e.buildLectionaryIndex({ ...LEC_TABLES, localObservances: null }).dedications.size, 0);
   assert.strictEqual(e.buildLectionaryIndex({ ...LEC_TABLES, localObservances: { parishes: {} } }).dedications.size, 0);
+});
+
+test("교구 설립일 — 소속교회가 속한 교구의 설립일만 내고, 공통 본기도의 「교구(관구)」를 「교구」로 고른다(ADR-041 §6, 사용자 결정 2026-11-09)", async () => {
+  const e = loadEngine(fakeFetch([]));
+  await e.preloadLectionary();
+  const of = (d, parish) => plain(e.findFoundings(d, parish)).map((f) => [f.level, f.name, f.date, f.year]);
+  // 5.27은 서울교구와 대전교구가 겹치지만 소속교회의 교구 것만 낸다
+  same(of("2026-05-27", "k7m3qx"), [["diocese", "서울", "05.27", 1965]]);
+  same(of("2027-05-27", "n4p8rt"), [["diocese", "대전", "05.27", 1965]]);
+  same(of("2026-06-01", "w2h9cd"), [["diocese", "부산", "06.01", 1974]]);
+  // 다른 날, 고르지 않음, 표에 없는 교회, 교구가 없는 교회(북한에 있던 성당)는 없다
+  same([of("2026-06-01", "k7m3qx"), of("2026-05-27", ""), of("2026-05-27"), of("2026-05-27", "zzzzzz")], [[], [], [], []]);
+  // 관구 설립일은 소속교회와 무관하게 낸다
+  same(of("2026-09-29", "k7m3qx"), [["province", "대한성공회", "09.29", 1992]]);
+  // 실제 원문 — 앞의 「{name}교구(관구)」와 뒤의 「교구(관구)」를 함께 고른다(사용자 확인 2026-11-05)
+  const lix = e.buildLectionaryIndex({ ...LEC_TABLES, commons: { classes: { anniversary: { label: "교구·관구 설립일",
+    collect: { text: "이곳에 {name}교구(관구)를 세우심을 감사하나이다. 이 교구(관구)를 기억하시고", ending: "A" }, readings: [] } } } });
+  same(e.findFoundingsIn(lix, "05.27", "k7m3qx")[0].collect.text, "이곳에 서울교구를 세우심을 감사하나이다. 이 교구를 기억하시고");
+  // 본당 표를 받지 못했거나 교구 행이 깨졌으면 없다
+  for (const lo of [null, { parishes: [{ church_id: "k7m3qx", diocese: "서울" }], dioceses: [{ name: "서울", founded: "5.27" }] }]) {
+    same(plain(e.findFoundingsIn(e.buildLectionaryIndex({ ...LEC_TABLES, localObservances: lo }), "05.27", "k7m3qx")), []);
+  }
 });
 
 test("관구 설립일 — 본당 표의 province를 양력 월일로 찾고, 설립일 공통 본기도의 「교구(관구)」를 「관구」로 고른다(ADR-041 §6)", async () => {

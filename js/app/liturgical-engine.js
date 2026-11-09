@@ -38,7 +38,7 @@
 /** @typedef {import("../types.js").LiturgicalFast} LiturgicalFast */
 /** @typedef {import("../types.js").HalfVerse} HalfVerse */
 /** @typedef {import("../types.js").ParishDedication} ParishDedication */
-/** @typedef {import("../types.js").ProvinceFounding} ProvinceFounding */
+/** @typedef {import("../types.js").Founding} Founding */
 /** @typedef {import("../types.js").WeekdayCode} WeekdayCode */
 /** @typedef {import("../types.js").Observance} Observance */
 /** @typedef {import("../types.js").Candidate} Candidate */
@@ -86,6 +86,7 @@
  *   commons: Record<string, CommonClass>,
  *   halfVerses: Map<string, HalfVerse>, dedications: Map<string, ParishDedication[]>,
  *   province: {name: string, date: string, year: number | null} | null,
+ *   dioceses: Array<{name: string, date: string, year: number | null}>, parishDiocese: Map<string, string>,
  * }} LectionaryIndex
  */
 
@@ -1897,7 +1898,8 @@ function coordKey(/** @type {unknown} */ season, /** @type {unknown} */ week, /*
 
 /**
  * 독서 묶음 다섯 표 → 인덱스. `commons.classes`는 배열이 아니라 **맵**이다(§5.2). 반절 경계 표는 「bookId:장:절+a|b」 키로 찾는다(`halfVerseKey`). 본당 표
- * (`local-observances`)는 축성일 「MM.DD」 키로 찾고(`buildDedicationIndex`), 같은 표의 관구 설립일도 읽는다(`provinceOf`).
+ * (`local-observances`)는 축성일 「MM.DD」 키로 찾고(`buildDedicationIndex`), 같은 표의 관구 설립일(`provinceOf`), 교구 설립일(`diocesesOf`), 교회마다 속한
+ * 교구(`parishDioceseOf`)도 읽는다.
  * @param {{readings?: any, collects?: any, commons?: any, halfVerses?: any, localObservances?: any} | null} tables
  * @returns {LectionaryIndex}
  */
@@ -1911,6 +1913,8 @@ function buildLectionaryIndex(tables) {
     halfVerses: buildHalfVerseIndex(t.halfVerses),
     dedications: buildDedicationIndex(t.localObservances),
     province: provinceOf(t.localObservances),
+    dioceses: diocesesOf(t.localObservances),
+    parishDiocese: parishDioceseOf(t.localObservances),
   };
 }
 
@@ -1919,9 +1923,39 @@ function buildLectionaryIndex(tables) {
  * @param {any} table @returns {{name: string, date: string, year: number | null} | null}
  */
 function provinceOf(table) {
-  const p = table && table.province;
-  if (!p || typeof p.name !== "string" || typeof p.founded !== "string" || !/^\d{2}\.\d{2}$/.test(p.founded)) return null;
-  return { name: p.name, date: p.founded, year: Number.isInteger(p.founded_year) ? p.founded_year : null };
+  return foundedOf(table && table.province);
+}
+
+/**
+ * 설립일 행 하나(관구, 교구) — 이름, 「MM.DD」, 설립연도. 형식이 깨졌으면 null이다.
+ * @param {any} row @returns {{name: string, date: string, year: number | null} | null}
+ */
+function foundedOf(row) {
+  if (!row || typeof row.name !== "string" || typeof row.founded !== "string" || !/^\d{2}\.\d{2}$/.test(row.founded)) return null;
+  return { name: row.name, date: row.founded, year: Number.isInteger(row.founded_year) ? row.founded_year : null };
+}
+
+/**
+ * 본당 표의 교구 설립일(`dioceses`) — 서울과 대전 05.27, 부산 06.01(ADR-041 §6). 형식이 깨진 행은 뺀다.
+ * @param {any} table @returns {Array<{name: string, date: string, year: number | null}>}
+ */
+function diocesesOf(table) {
+  const rows = table && Array.isArray(table.dioceses) ? table.dioceses : [];
+  return rows.flatMap((/** @type {any} */ row) => { const f = foundedOf(row); return f ? [f] : []; });
+}
+
+/**
+ * 교회 식별자 → 그 교회가 속한 교구 이름(「서울」). 소속교회의 교구 설립일을 찾는 데 쓴다(ADR-041 §6). 식별자나 교구가 없는 행(북한에 있던
+ * 성당, 업데이트 전의 표)은 뺀다.
+ * @param {any} table @returns {Map<string, string>}
+ */
+function parishDioceseOf(table) {
+  /** @type {Map<string, string>} */
+  const map = new Map();
+  for (const p of (table && Array.isArray(table.parishes) ? table.parishes : [])) {
+    if (p && typeof p.church_id === "string" && p.church_id !== "" && typeof p.diocese === "string" && p.diocese !== "") map.set(p.church_id, p.diocese);
+  }
+  return map;
 }
 
 /**
@@ -2207,12 +2241,13 @@ function collectsOf(lix, cal, resolved, obs) {
 }
 
 /**
- * 설립일 공통 본기도(`commons.json`의 `anniversary`)를 관구 설립일로 채운다(ADR-041 §6). 원문의 「{name}교구(관구)」는
- * 「대한성공회 관구」로, 뒤쪽 「교구(관구)」는 「관구」로 고른다(사용자 결정 2026-11-05 — 「이곳에 대한성공회 관구를
- * 세우심을 감사하나이다… 이 관구를 기억하시고」). 공통 본기도가 없으면 null이다.
- * @param {LectionaryIndex} lix @param {string} name @returns {CollectOption | null}
+ * 설립일 공통 본기도(`commons.json`의 `anniversary`)를 설립일 하나로 채운다(ADR-041 §6). 원문의 「{name}교구(관구)」와 뒤쪽 「교구(관구)」를
+ * 설립일의 종류에 따라 고른다(사용자 확인 2026-11-05). 관구 설립일이면 「이곳에 대한성공회 관구를 세우심을 감사하나이다… 이 관구를
+ * 기억하시고」, 교구 설립일이면 「이곳에 서울교구를 세우심을 감사하나이다… 이 교구를 기억하시고」다. 공통 본기도가 없으면 null이다.
+ * @param {LectionaryIndex} lix @param {string} name @param {Founding["level"]} level
+ * @returns {CollectOption | null}
  */
-function provinceCollectOf(lix, name) {
+function foundingCollectOf(lix, name, level) {
   const entry = commonClassOf(lix, "anniversary");
   const tmpl = entry && entry.collect && typeof entry.collect.text === "string" ? entry.collect : null;
   if (!entry || !tmpl) return null;
@@ -2222,21 +2257,29 @@ function provinceCollectOf(lix, name) {
     title: typeof entry.label === "string" ? entry.label : "anniversary",
     collect_no: 1,
     collect_total: 1,
-    text: String(tmpl.text).split("{name}교구(관구)").join(name + " 관구").split("교구(관구)").join("관구").split("{name}").join(name),
+    text: String(tmpl.text).split("{name}교구(관구)").join(level === "province" ? name + " 관구" : name + "교구")
+      .split("교구(관구)").join(level === "province" ? "관구" : "교구").split("{name}").join(name),
     ending: e === "A" || e === "B" || e === "C" ? e : null,
     common: "anniversary",
   };
 }
 
 /**
- * 그날(「MM.DD」)이 관구 설립일이면 그 설립일 하나를 담은 배열, 아니면 빈 배열(ADR-041 §6). 모든 사용자에게 같다 —
- * 소속교회 설정과 무관하다. 전례일 후보가 아니라 화면이 덧붙이는 것이라 교회력 판정(대표, 색, 옮김)에 끼지 않는다.
- * @param {LectionaryIndex} lix @param {string} monthDay 「MM.DD」 @returns {ProvinceFounding[]}
+ * 그날(「MM.DD」)의 설립일 — 관구 설립일, 그리고 소속교회(`parish`, 교회 식별자)가 속한 교구의 설립일(ADR-041 §6). 관구 설립일은 모든
+ * 사용자에게 같고, 교구 설립일은 소속교회를 고른 사람에게 그 교회의 교구 것만 낸다(사용자 결정 2026-11-09 — 5.27의 서울교구와 대전교구).
+ * 차례는 관구, 교구다. 전례일 후보가 아니라 화면이 덧붙이는 것이라 교회력 판정(대표, 색, 옮김)에 끼지 않는다.
+ * @param {LectionaryIndex} lix @param {string} monthDay 「MM.DD」 @param {string} [parish]  빈 문자열은 선택 안 함
+ * @returns {Founding[]}
  */
-function findFoundingsIn(lix, monthDay) {
+function findFoundingsIn(lix, monthDay, parish = "") {
+  /** @type {Founding[]} */
+  const out = [];
   const p = lix.province;
-  if (!p || p.date !== monthDay) return [];
-  return [{ name: p.name, date: p.date, year: p.year, collect: provinceCollectOf(lix, p.name) }];
+  if (p && p.date === monthDay) out.push({ level: "province", name: p.name, date: p.date, year: p.year, collect: foundingCollectOf(lix, p.name, "province") });
+  const diocese = parish ? lix.parishDiocese.get(parish) : undefined;
+  const d = diocese ? lix.dioceses.find((x) => x.name === diocese && x.date === monthDay) : undefined;
+  if (d) out.push({ level: "diocese", name: d.name, date: d.date, year: d.year, collect: foundingCollectOf(lix, d.name, "diocese") });
+  return out;
 }
 
 /**
@@ -2327,7 +2370,12 @@ function preloadLectionary() {
 /** 받은 선택 표를 인덱스의 제자리에 세운다. @param {LectionaryIndex} lix @param {string} file @param {any} table */
 function setOptionalTable(lix, file, table) {
   if (file === "half-verses") lix.halfVerses = buildHalfVerseIndex(table);
-  else if (file === "local-observances") { lix.dedications = buildDedicationIndex(table); lix.province = provinceOf(table); }
+  else if (file === "local-observances") {
+    lix.dedications = buildDedicationIndex(table);
+    lix.province = provinceOf(table);
+    lix.dioceses = diocesesOf(table);
+    lix.parishDiocese = parishDioceseOf(table);
+  }
 }
 
 /**
@@ -2406,15 +2454,16 @@ function findDedications(dateStr) {
 }
 
 /**
- * 그날이 관구 설립일이면 그 설립일(`findFoundingsIn`). 본당 표를 받지 못했으면 빈 배열이다(선택 표 — §3.5). 프리로드 규칙은
+ * 그날의 관구 설립일과 소속교회의 교구 설립일(`findFoundingsIn`). 본당 표를 받지 못했으면 빈 배열이다(선택 표 — §3.5). 프리로드 규칙은
  * `findReadings`와 같다.
- * @param {string} dateStr "YYYY-MM-DD" @returns {ProvinceFounding[]}
+ * @param {string} dateStr "YYYY-MM-DD" @param {string} [parish]  소속교회의 교회 식별자, 빈 문자열은 선택 안 함
+ * @returns {Founding[]}
  */
-function findFoundings(dateStr) {
+function findFoundings(dateStr, parish = "") {
   if (!lectionaryIndex) throw new Error("preloadLectionary() must be awaited before findFoundings()");
   const p = parseDate(dateStr);
   if (!p) return [];
-  return findFoundingsIn(lectionaryIndex, `${String(p.m).padStart(2, "0")}.${String(p.d).padStart(2, "0")}`);
+  return findFoundingsIn(lectionaryIndex, `${String(p.m).padStart(2, "0")}.${String(p.d).padStart(2, "0")}`, parish);
 }
 // ── END LITURGICAL_PRELOAD ──
 

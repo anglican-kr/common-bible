@@ -85,7 +85,7 @@ function model(d, query = NONE, stored = null, showAlternates = true, parish = "
   };
   // 공개 래퍼의 findDedications(PRELOAD 블록 — 여기서는 싣지 않는다)와 같은 조회
   const dedications = ix().lec.dedications.get(`${d.slice(5, 7)}.${d.slice(8, 10)}`) || [];
-  const foundings = ctx.findFoundingsIn(ix().lec, `${d.slice(5, 7)}.${d.slice(8, 10)}`);
+  const foundings = ctx.findFoundingsIn(ix().lec, `${d.slice(5, 7)}.${d.slice(8, 10)}`, parish);
   const mine = ctx.myDedicationOf(dedications, parish);
   const collects = ctx.findCollectsIn(ix().lec, ix().cal, mine ? { ...r, candidates: [mine.candidate, ...r.candidates] } : r);
   const m = ctx.buildLectionaryModel(r, { ...NONE, ...query }, groupsOf, collects, stored, dedications, showAlternates, foundings, mine);
@@ -198,6 +198,21 @@ test("소속교회 축성일 — 2025-2050 모든 축성일에 축성일이 처�
   }
   same(bad, []);
   assert.ok(first > 0 && rows > 0, `처음 화면 ${first}, 줄 ${rows}`);
+});
+
+test("소속교회의 교구 설립일 — 서울과 대전 5.27, 부산 6.1에 그 교구의 이름 줄과 본기도(「서울교구를 세우심을… 이 교구를」)를 잇고, 다른 교구와 소속교회가 없으면 없다(ADR-041 §6)", { skip: SKIP }, () => {
+  const lineOf = (m) => m.foundingLines.filter((l) => l.includes("교구설립일"));
+  const textOf = (m) => m.memorialCollects.filter((c) => c.common === "anniversary").map((c) => c.text);
+  for (const [church, diocese, d, year] of [["용인성당", "서울", "2026-05-27", 1965], ["대전주교좌성당", "대전", "2026-05-27", 1965], ["부산주교좌성당", "부산", "2026-06-01", 1974]]) {
+    const m = model(d, NONE, null, false, churchIdOf(church));
+    const [mm, dd] = [Number(d.slice(5, 7)), Number(d.slice(8, 10))];
+    same(lineOf(m), [`${year}년 ${mm}월 ${dd}일 ${diocese}교구설립일`], church);
+    const [text] = textOf(m);
+    assert.ok(text && text.includes(`이곳에 ${diocese}교구를 세우심을`) && text.includes("이 교구를 기억하시고") && !text.includes("(관구)"), `${church} ${text}`);
+  }
+  // 다른 교구의 설립일, 소속교회를 고르지 않은 사람에게는 없다
+  same([lineOf(model("2026-06-01", NONE, null, false, churchIdOf("용인성당"))), lineOf(model("2026-05-27", NONE, null, false))], [[], []]);
+  same(textOf(model("2026-05-27", NONE, null, false)), []);
 });
 
 test("A3 주기 · 색 라벨이 데이터 _vocab 과 같다(ADR-036 §4 단일 출처)", { skip: SKIP }, () => {
