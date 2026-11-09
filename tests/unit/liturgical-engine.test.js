@@ -2190,6 +2190,7 @@ test("교구 설립일 — 소속교회가 속한 교구의 설립일만 내고,
   const lix = e.buildLectionaryIndex({ ...LEC_TABLES, commons: { classes: { anniversary: { label: "교구·관구 설립일",
     collect: { text: "이곳에 {name}교구(관구)를 세우심을 감사하나이다. 이 교구(관구)를 기억하시고", ending: "A" }, readings: [] } } } });
   same(e.findFoundingsIn(lix, "05.27", "k7m3qx")[0].collect.text, "이곳에 서울교구를 세우심을 감사하나이다. 이 교구를 기억하시고");
+  same(e.findFoundingsIn(lix, "05.27", "k7m3qx")[0].collect.id, "common:anniversary-diocese-서울");   // 관구 본기도와 겹치지 않는 식별자
   // 본당 표를 받지 못했거나 교구 행이 깨졌으면 없다
   for (const lo of [null, { parishes: [{ church_id: "k7m3qx", diocese: "서울" }], dioceses: [{ name: "서울", founded: "5.27" }] }]) {
     same(plain(e.findFoundingsIn(e.buildLectionaryIndex({ ...LEC_TABLES, localObservances: lo }), "05.27", "k7m3qx")), []);
@@ -2202,7 +2203,7 @@ test("관구 설립일 — 본당 표의 province를 양력 월일로 찾고, �
   await e.preloadLectionary();
   const [f] = e.findFoundings("2027-09-29");
   same([f.name, f.date, f.year], ["대한성공회", "09.29", 1992]);
-  same([f.collect.id, f.collect.common, f.collect.ending, f.collect.text], ["common:anniversary-c1", "anniversary", "A", "대한성공회"]);
+  same([f.collect.id, f.collect.common, f.collect.ending, f.collect.text], ["common:anniversary-province-대한성공회", "anniversary", "A", "대한성공회"]);
   same(plain(e.findFoundings("2027-09-28")), []);
   same(plain(e.findFoundings("2026-02-30")), []);
   // 실제 원문 — 앞의 「{name}교구(관구)」와 뒤의 「교구(관구)」를 함께 고른다(사용자 결정 2026-11-05)

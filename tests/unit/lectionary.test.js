@@ -1058,7 +1058,7 @@ test("buildLectionaryModel: 관구 설립일에는 「1992년 9월 29일 관구�
   const groupsOf = groupsOfFrom({ "d0929-mich": [group("m", FOUR)], "grid:ordinary-26-sunday": [group("g", FOUR)] });
   const entries = [{ candidate: mich, collects: [collect("m-c", "미카엘")] }, { candidate: grid, collects: [collect("g-c", "연중")] }];
   const province = { level: "province", name: "대한성공회", date: "09.29", year: 1992,
-    collect: { id: "common:anniversary-c1", title: "설립일", collect_no: 1, collect_total: 1, text: "관구", ending: "C", common: "anniversary" } };
+    collect: { id: "common:anniversary-province-대한성공회", title: "설립일", collect_no: 1, collect_total: 1, text: "관구", ending: "C", common: "anniversary" } };
   const q = { obs: null, track: null, set: null, collect: null };
   const m = ctx.buildLectionaryModel(r, q, groupsOf, entries, null, [], false, [province]);
   same(plain(m.foundingLines), ["1992년 9월 29일 관구설립일"]);
@@ -1074,14 +1074,14 @@ test("buildLectionaryModel: 관구 설립일에는 「1992년 9월 29일 관구�
   same(plain(ctx.buildLectionaryModel(r, q, groupsOf, entries, null, [], false).foundingLines), []);
 });
 
-test("buildLectionaryModel: 소속교회의 교구 설립일에는 「1965년 5월 27일 서울교구설립일」 줄을 두고, 그 본기도를 고른 전례일의 본기도 뒤에 잇는다 — 주일에도, 다른 전례일을 골라도(ADR-041 §6, 사용자 결정 2026-11-09)", () => {
+test("buildLectionaryModel: 소속교회의 교구 설립일에는 「1965년 5월 27일 서울교구설립일」 줄을 두고, 그 본기도를 고른 전례일의 본기도 뒤에 잇는다. 주일에도, 다른 전례일을 골라도 잇는다(ADR-041 §6, 사용자 결정 2026-11-09)", () => {
   const sunday = cand(obs("grid:easter-7-sunday", "부활 7주일", { rank: "sunday", precedence: 5, color: "white" }));
   const weekday = cand(obs("d0527-x", "합성 축일", { rank: "minor_feast", precedence: 7, color: "red" }));
   const r = resolvedOf("2029-05-27", [weekday, sunday], sunday, { coord: { season: "easter", week: 7, type: "sunday", weekday: "sun", year: "B" } });
   const groupsOf = groupsOfFrom({ "grid:easter-7-sunday": [group("s", FOUR)], "d0527-x": [group("x", FOUR)] });
   const entries = [{ candidate: sunday, collects: [collect("s-c", "주일")] }, { candidate: weekday, collects: [collect("x-c", "축일")] }];
   const seoul = { level: "diocese", name: "서울", date: "05.27", year: 1965,
-    collect: { id: "common:anniversary-c1", title: "설립일", collect_no: 1, collect_total: 1, text: "서울교구", ending: "A", common: "anniversary" } };
+    collect: { id: "common:anniversary-diocese-서울", title: "설립일", collect_no: 1, collect_total: 1, text: "서울교구", ending: "A", common: "anniversary" } };
   const q = { obs: null, track: null, set: null, collect: null };
   const m = ctx.buildLectionaryModel(r, q, groupsOf, entries, null, [], false, [seoul]);
   same([plain(m.foundingLines), m.memorialCollects.map((c) => c.text)], [["1965년 5월 27일 서울교구설립일"], ["서울교구"]]);

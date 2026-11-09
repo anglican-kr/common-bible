@@ -999,7 +999,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const linked = linkCollects(options, collects);
   const collectIndex = linked && setIndex >= 0 ? linked[setIndex] : pickCollect(collects, query.collect);
   const chosenCollect = collectIndex >= 0 ? collects[collectIndex] : null;
-  // 관구 설립일(9.29)과 소속교회의 교구 설립일(서울과 대전 5.27, 부산 6.1)에는 고른 전례일의 본기도 뒤에 설립 본기도를 잇는다. 기리는 성인과
+  // 관구 설립일과 소속교회의 교구 설립일에는 고른 전례일의 본기도 뒤에 설립 본기도를 잇는다. 기리는 성인과
   // 달리 주일에도, 전례독서 목록에서 다른 전례일을 골라도 잇는다(사용자 결정 2026-11-05, ADR-041 §6). 송영은 그 뒤에 한 번이다.
   const foundingCollects = foundings.flatMap((f) => (f.collect ? [f.collect] : []));
   // 기리는 성인의 본기도는 그날의 기본 독서를 볼 때만 잇는다. 소속교회의 축성일 화면에는 잇지 않는다(사용자 결정 2026-11-09, ADR-041 §6)
@@ -1108,7 +1108,7 @@ function headLinesOf(m) {
     names: [
       ...m.memorialSaints.map((c) => `${c.observance.name || ""} 축일`),
       ...m.passiveDays.map((c) => shortName(c.observance.name) + statusSuffix(c)),
-      // 관구 설립일 — 같은 날의 「대한성공회 선교 기념일」 줄보다 먼저(사용자 결정 2026-11-07, foundingLines)
+      // 관구 설립일과 소속교회의 교구 설립일. 9.29에는 같은 날의 「대한성공회 선교 기념일」 줄보다 먼저다(사용자 결정 2026-11-07, foundingLines)
       ...m.foundingLines,
       ...m.commemorations.map((c) => `${c.observance.name || ""} 기념일`),
       ...m.textlessDays.map((c) => String(c.observance.name || "")),

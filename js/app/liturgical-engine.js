@@ -1911,10 +1911,22 @@ function buildLectionaryIndex(tables) {
     collects: buildTextIndex(t.collects),
     commons: classes && typeof classes === "object" && !Array.isArray(classes) ? classes : {},
     halfVerses: buildHalfVerseIndex(t.halfVerses),
-    dedications: buildDedicationIndex(t.localObservances),
-    province: provinceOf(t.localObservances),
-    dioceses: diocesesOf(t.localObservances),
-    parishDiocese: parishDioceseOf(t.localObservances),
+    ...localObservancesOf(t.localObservances),
+  };
+}
+
+/**
+ * 본당 표(`local-observances.json`)에서 만드는 색인 값 넷. 처음 받을 때(`buildLectionaryIndex`)와 늦게 받을 때(`setOptionalTable`)가 이 함수
+ * 하나를 써서 둘의 색인이 같다.
+ * @param {any} table
+ * @returns {Pick<LectionaryIndex, "dedications" | "province" | "dioceses" | "parishDiocese">}
+ */
+function localObservancesOf(table) {
+  return {
+    dedications: buildDedicationIndex(table),
+    province: provinceOf(table),
+    dioceses: diocesesOf(table),
+    parishDiocese: parishDioceseOf(table),
   };
 }
 
@@ -1936,7 +1948,7 @@ function foundedOf(row) {
 }
 
 /**
- * 본당 표의 교구 설립일(`dioceses`). 서울과 대전 05.27, 부산 06.01이다(ADR-041 §6). 형식이 깨진 행은 뺀다.
+ * 본당 표의 교구 설립일(`dioceses`, ADR-041 §6). 형식이 깨진 행은 뺀다.
  * @param {any} table @returns {Array<{name: string, date: string, year: number | null}>}
  */
 function diocesesOf(table) {
@@ -2253,7 +2265,8 @@ function foundingCollectOf(lix, name, level) {
   if (!entry || !tmpl) return null;
   const e = tmpl.ending;
   return {
-    id: COMMON_PREFIX + "anniversary-c1",
+    // 관구와 교구의 본기도가 한 날에 함께 와도 겹치지 않게 종류와 이름을 넣는다
+    id: COMMON_PREFIX + "anniversary-" + level + "-" + name,
     title: typeof entry.label === "string" ? entry.label : "anniversary",
     collect_no: 1,
     collect_total: 1,
@@ -2266,7 +2279,7 @@ function foundingCollectOf(lix, name, level) {
 
 /**
  * 그날(「MM.DD」)의 설립일. 관구 설립일, 그리고 소속교회(`parish`, 교회 식별자)가 속한 교구의 설립일(ADR-041 §6). 관구 설립일은 모든
- * 사용자에게 같고, 교구 설립일은 소속교회를 고른 사람에게 그 교회의 교구 것만 낸다(사용자 결정 2026-11-09. 5.27에는 서울교구와 대전교구가 겹친다).
+ * 사용자에게 같고, 교구 설립일은 소속교회를 고른 사람에게 그 교회의 교구 것만 낸다(사용자 결정 2026-11-09. 같은 날 설립된 교구가 둘 이상이어도 그 교회의 교구 하나다).
  * 차례는 관구, 교구다. 전례일 후보가 아니라 화면이 덧붙이는 것이라 교회력 판정(대표, 색, 옮김)에 끼지 않는다.
  * @param {LectionaryIndex} lix @param {string} monthDay 「MM.DD」 @param {string} [parish]  빈 문자열은 선택 안 함
  * @returns {Founding[]}
@@ -2370,12 +2383,7 @@ function preloadLectionary() {
 /** 받은 선택 표를 인덱스의 제자리에 세운다. @param {LectionaryIndex} lix @param {string} file @param {any} table */
 function setOptionalTable(lix, file, table) {
   if (file === "half-verses") lix.halfVerses = buildHalfVerseIndex(table);
-  else if (file === "local-observances") {
-    lix.dedications = buildDedicationIndex(table);
-    lix.province = provinceOf(table);
-    lix.dioceses = diocesesOf(table);
-    lix.parishDiocese = parishDioceseOf(table);
-  }
+  else if (file === "local-observances") Object.assign(lix, localObservancesOf(table));
 }
 
 /**
