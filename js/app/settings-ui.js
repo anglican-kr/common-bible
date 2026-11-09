@@ -29,6 +29,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     loadStartupBehavior, saveStartupBehavior,
     loadStartPage, saveStartPage,
     loadLectionaryAltShow, saveLectionaryAltShow,
+    loadParish, saveParish,
     loadColorScheme, saveColorScheme,
     loadTheme, saveTheme,
     loadBookOrder, saveBookOrder,
@@ -359,32 +360,188 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
   }
 
   // ── Select row component ──
+  /** @typedef {[string, string] | { label: string, options: [string, string][] }} SelectOption [value, visible text], or a labelled group of them */
+
+  /**
+   * Replace a <select>'s options. A group becomes an <optgroup>.
+   * @param {HTMLSelectElement} select @param {SelectOption[]} options @param {string} value
+   */
+  function fillSelect(select, options, value) {
+    clearNode(select);
+    for (const opt of options) {
+      if (Array.isArray(opt)) {
+        select.appendChild(el("option", { value: opt[0] }, opt[1]));
+      } else {
+        const group = el("optgroup", { label: opt.label });
+        for (const [optValue, text] of opt.options) group.appendChild(el("option", { value: optValue }, text));
+        select.appendChild(group);
+      }
+    }
+    select.value = value;
+  }
+
   /**
    * Build a settings row: a label on the left, a native <select> on the right, so
    * each OS shows its own picker. Changing it updates state in place — no rebuild
    * — so focus stays on the control (same reason as makeToggleRow).
-   * No row calls this yet: 세례명 and 소속교회 will (ADR-041 §9).
+   * `labelExtra` (an ⓘ button) sits beside the label, outside the <label> element, so the
+   * button's name does not become part of the select's name.
    * @param {Object} opts
    * @param {string} opts.labelText
    * @param {string} opts.value
-   * @param {[string, string][]} opts.options  [value, visible text]
+   * @param {SelectOption[]} opts.options
    * @param {(value: string) => void} opts.onChange
-   * @returns {HTMLDivElement}
+   * @param {HTMLElement} [opts.labelExtra]
+   * @returns {{ row: HTMLDivElement, select: HTMLSelectElement }}
    */
-  function makeSelectRow({ labelText, value, options, onChange }) {
+  function makeSelectRow({ labelText, value, options, onChange, labelExtra }) {
     const row = el("div", { className: "settings-row" });
     const id = `settings-select-${++_toggleIdSeq}`;
-    row.appendChild(el("label", { className: "settings-label", for: id }, labelText));
-    const wrap = el("span", { className: "settings-select-wrap" });
-    const select = el("select", { className: "settings-select", id });
-    for (const [optValue, text] of options) {
-      select.appendChild(el("option", { value: optValue }, text));
+    if (labelExtra) {
+      const labelWrap = el("span", { className: "settings-label" });
+      labelWrap.appendChild(el("label", { for: id }, labelText));
+      labelWrap.appendChild(labelExtra);
+      row.appendChild(labelWrap);
+    } else {
+      row.appendChild(el("label", { className: "settings-label", for: id }, labelText));
     }
-    select.value = value;
+    const wrap = el("span", { className: "settings-select-wrap" });
+    const select = /** @type {HTMLSelectElement} */ (el("select", { className: "settings-select", id }));
+    fillSelect(select, options, value);
     select.addEventListener("change", () => onChange(select.value));
     wrap.appendChild(select);
     row.appendChild(wrap);
+    return { row, select };
+  }
+
+  // ── ⓘ description (ADR-041 §7) ──
+  /** @param {string} ariaLabel @returns {HTMLButtonElement} */
+  function makeInfoButton(ariaLabel) {
+    const svgNs = "http://www.w3.org/2000/svg";
+    const btn = /** @type {HTMLButtonElement} */ (el("button", { className: "settings-drive-info-btn", type: "button", "aria-label": ariaLabel, "aria-expanded": "false" }));
+    const svg = document.createElementNS(svgNs, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("aria-hidden", "true"); svg.setAttribute("class", "drive-info-icon");
+    const ring = document.createElementNS(svgNs, "circle"); ring.setAttribute("cx", "12"); ring.setAttribute("cy", "12"); ring.setAttribute("r", "10"); ring.setAttribute("fill", "none"); ring.setAttribute("stroke", "currentColor"); ring.setAttribute("stroke-width", "1.5");
+    const dot = document.createElementNS(svgNs, "circle"); dot.setAttribute("cx", "12"); dot.setAttribute("cy", "8.5"); dot.setAttribute("r", "0.85"); dot.setAttribute("fill", "currentColor");
+    const stem = document.createElementNS(svgNs, "line"); stem.setAttribute("x1", "12"); stem.setAttribute("y1", "11.5"); stem.setAttribute("x2", "12"); stem.setAttribute("y2", "16.5"); stem.setAttribute("stroke", "currentColor"); stem.setAttribute("stroke-width", "1.7"); stem.setAttribute("stroke-linecap", "round");
+    svg.append(ring, dot, stem);
+    btn.appendChild(svg);
+    return btn;
+  }
+
+  /**
+   * The description an ⓘ button opens below its row, with a close button that hands focus back to the ⓘ button
+   * (백업 & 동기화 builds its own: it adds the account line and the diagnosis button).
+   * @param {HTMLButtonElement} infoBtn @param {string} text @returns {HTMLDivElement}
+   */
+  function makeInfoRow(infoBtn, text) {
+    const row = el("div", { className: "settings-drive-info-row", id: `settings-info-${++_toggleIdSeq}` });
+    row.hidden = true;
+    const top = el("div", { className: "settings-drive-info-top" });
+    top.appendChild(el("div", { className: "settings-drive-info-desc" }, text));
+    const closeBtn = el("button", { className: "settings-drive-info-close", type: "button", "aria-label": "닫기" }, "✕");
+    top.appendChild(closeBtn);
+    row.appendChild(top);
+    infoBtn.setAttribute("aria-controls", row.id);
+    infoBtn.addEventListener("click", () => {
+      const open = row.hidden;
+      row.hidden = !open;
+      infoBtn.setAttribute("aria-expanded", String(open));
+    });
+    closeBtn.addEventListener("click", () => { row.hidden = true; infoBtn.setAttribute("aria-expanded", "false"); infoBtn.focus(); });
     return row;
+  }
+
+  // ── 소속교회 (ADR-041 §6, §7, §9) ──
+  // 교구 묶음의 차례. 표에 이 밖의 교구가 생기면 그 뒤에 이름순으로 둔다.
+  const PARISH_DIOCESES = ["서울", "대전", "부산"];
+  const PARISH_INFO = "교회 축성일과 교구설립일에 그날의 전례독서와 본기도를 보여줍니다.";
+  const PARISH_LOAD_FAILED = "교회 목록을 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 설정을 다시 열어 주세요.";
+
+  /**
+   * 본당 표를 교구별 교회 목록으로 바꾼다. 「북.」으로 시작하는 성당(북한에 있던 성당)과 교구가 없는 줄은 넣지 않는다. 두 줄인 교회
+   * (축성일이 둘)는 한 항목이다. 묶음 안의 차례는 이름의 사전순이다(사용자 확인 2026-11-05).
+   * @param {any} table @returns {{ diocese: string, churches: { id: string, name: string }[] }[]}
+   */
+  function parishGroups(table) {
+    /** @type {Map<string, Map<string, string>>} */
+    const byDiocese = new Map();
+    for (const p of (table && Array.isArray(table.parishes) ? table.parishes : [])) {
+      if (!p || typeof p.church_id !== "string" || !p.church_id || typeof p.name !== "string" || typeof p.diocese !== "string") continue;
+      if (p.name.startsWith("북.")) continue;
+      if (!byDiocese.has(p.diocese)) byDiocese.set(p.diocese, new Map());
+      /** @type {Map<string, string>} */ (byDiocese.get(p.diocese)).set(p.church_id, p.name);
+    }
+    const rank = (/** @type {string} */ d) => (PARISH_DIOCESES.includes(d) ? PARISH_DIOCESES.indexOf(d) : PARISH_DIOCESES.length);
+    return [...byDiocese.keys()]
+      .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b, "ko"))
+      .map((diocese) => ({
+        diocese,
+        churches: [.../** @type {Map<string, string>} */ (byDiocese.get(diocese)).entries()]
+          .map(([id, name]) => ({ id, name }))
+          .sort((a, b) => a.name.localeCompare(b.name, "ko")),
+      }));
+  }
+
+  /** @type {Promise<ReturnType<typeof parishGroups>> | null} */
+  let _parishList = null;
+  /**
+   * 교회 목록을 본당 표에서 받는다. 받은 목록은 기억하고, 받지 못하면 다음에 설정을 열 때 다시 받는다.
+   * @returns {Promise<ReturnType<typeof parishGroups>>}
+   */
+  function loadParishList() {
+    return (_parishList ??= fetch("/data/lectionary/local-observances.json")
+      .then((res) => {
+        if (!res.ok) throw new Error(`local-observances.json: ${res.status}`);
+        return res.json();
+      })
+      .then((table) => {
+        const groups = parishGroups(table);
+        // 식별자가 없는 옛 표(업데이트 전에 받아 둔 사본)는 고를 것이 없어, 받지 못한 것과 같게 안내한다.
+        if (!groups.length) throw new Error("local-observances.json: no church ids");
+        return groups;
+      })
+      .catch((e) => { _parishList = null; throw e; }));
+  }
+
+  /**
+   * 소속교회 행과 그 ⓘ 설명 행을 섹션에 넣는다. 목록을 받는 동안 선택 상자는 「불러오는 중」 하나뿐이고 고를 수 없다.
+   * 받지 못하면 고를 수 없게 둔 채 행 아래에 안내를 보인다. 저장한 값이 목록에 없으면 「선택 안 함」으로 보이되 지우지 않는다.
+   * @param {HTMLElement} section
+   */
+  function appendParishRows(section) {
+    const infoBtn = makeInfoButton("소속교회 안내");
+    const { row, select } = makeSelectRow({
+      labelText: "소속교회",
+      value: "",
+      options: [["", "불러오는 중"]],
+      labelExtra: infoBtn,
+      onChange: (churchId) => {
+        saveParish(churchId);
+        const name = select.selectedOptions[0]?.textContent ?? "";
+        announce(churchId ? `소속교회 ${name}` : "소속교회 선택 안 함");
+      },
+    });
+    select.disabled = true;
+    section.appendChild(row);
+    section.appendChild(makeInfoRow(infoBtn, PARISH_INFO));
+
+    loadParishList().then((groups) => {
+      if (!select.isConnected) return;   // the surface was rebuilt or closed meanwhile
+      const saved = loadParish();
+      const known = groups.some((g) => g.churches.some((c) => c.id === saved));
+      fillSelect(select, [
+        ["", "선택 안 함"],
+        ...groups.map((g) => ({ label: `${g.diocese}교구`, options: g.churches.map((c) => /** @type {[string, string]} */ ([c.id, c.name])) })),
+      ], known ? saved : "");
+      select.disabled = false;
+    }, () => {
+      if (!select.isConnected) return;
+      fillSelect(select, [["", "목록 없음"]], "");
+      const note = el("p", { className: "settings-drive-note", id: `settings-note-${++_toggleIdSeq}` }, PARISH_LOAD_FAILED);
+      select.setAttribute("aria-describedby", note.id);
+      row.after(note);
+    });
   }
 
   // route() announces the view it draws, so a toggle's result goes after it, or that replaces the result. If the user
@@ -517,6 +674,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
         else announce(result);
       },
     }));
+    appendParishRows(lectionarySection);
     target.appendChild(lectionarySection);
 
     // ── Section: 모양 ──
@@ -627,15 +785,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
 
         // i icon — visible regardless of auth state so users can read the
         // description before connecting.
-        const svgNs = "http://www.w3.org/2000/svg";
-        const infoBtn = el("button", { className: "settings-drive-info-btn", type: "button", "aria-label": "백업 및 동기화 안내", "aria-expanded": "false" });
-        const infoSvg = document.createElementNS(svgNs, "svg");
-        infoSvg.setAttribute("viewBox", "0 0 24 24"); infoSvg.setAttribute("aria-hidden", "true"); infoSvg.setAttribute("class", "drive-info-icon");
-        const ic = document.createElementNS(svgNs, "circle"); ic.setAttribute("cx", "12"); ic.setAttribute("cy", "12"); ic.setAttribute("r", "10"); ic.setAttribute("fill", "none"); ic.setAttribute("stroke", "currentColor"); ic.setAttribute("stroke-width", "1.5");
-        const idot = document.createElementNS(svgNs, "circle"); idot.setAttribute("cx", "12"); idot.setAttribute("cy", "8.5"); idot.setAttribute("r", "0.85"); idot.setAttribute("fill", "currentColor");
-        const istem = document.createElementNS(svgNs, "line"); istem.setAttribute("x1", "12"); istem.setAttribute("y1", "11.5"); istem.setAttribute("x2", "12"); istem.setAttribute("y2", "16.5"); istem.setAttribute("stroke", "currentColor"); istem.setAttribute("stroke-width", "1.7"); istem.setAttribute("stroke-linecap", "round");
-        infoSvg.append(ic, idot, istem);
-        infoBtn.appendChild(infoSvg);
+        const infoBtn = makeInfoButton("백업 및 동기화 안내");
         driveLabelSpan.appendChild(infoBtn);
         driveRow.appendChild(driveLabelSpan);
 
@@ -659,7 +809,8 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
 
         // Info row — description always present; email line + diag button only
         // when authenticated.
-        const infoRow = el("div", { className: "settings-drive-info-row" });
+        const infoRow = el("div", { className: "settings-drive-info-row", id: `settings-info-${++_toggleIdSeq}` });
+        infoBtn.setAttribute("aria-controls", infoRow.id);
         infoRow.hidden = true;
         const infoTop = el("div", { className: "settings-drive-info-top" });
         if (driveAuthed) {

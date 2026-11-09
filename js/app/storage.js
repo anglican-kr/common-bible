@@ -52,6 +52,9 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
   // 채로 보인다(사용자 결정 2026-11-05). 로컬 전용.
   const LECTIONARY_CARDS_FOLDED_KEY = "bible-lectionary-cards-folded";
   const LECTIONARY_ALT_SHOW_KEY = "bible-lectionary-alt-show"; // "1"/"0" or "true"/"false" via sync; default OFF when unset
+  // 소속교회(ADR-041 §6, §8). 값은 데이터 본당 표의 교회 식별자(`church_id`, 무작위 6자)이고 빈 문자열은 선택 안 함이다.
+  // 해제도 빈 문자열로 저장한다. 동기화가 기기에 쓸 때 `null`은 건너뛰어(`applyToLegacyKeys`) 해제가 다른 기기로 가지 않는다.
+  const PARISH_KEY = "bible-parish";
   // ADR-038 §1 — 캘린더 탭이 돌아갈 마지막 캘린더 보기의 주소. 앱을 다시 열어도 이어진다(사용자 결정 2026-11-07). 로컬 전용.
   const CALENDAR_LAST_VIEW_KEY = "bible-calendar-last-view";
   const SEARCH_HISTORY_MAX = 30; // storage cap (LRU)
@@ -628,6 +631,27 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
     } catch (_) {}
   }
 
+  /**
+   * 소속교회의 교회 식별자. 고르지 않았으면 빈 문자열이다(ADR-041 §6).
+   * @returns {string}
+   */
+  function loadParish() {
+    try {
+      return localStorage.getItem(PARISH_KEY) ?? "";
+    } catch {
+      return "";
+    }
+  }
+
+  /** @param {string} churchId 빈 문자열은 선택 안 함 */
+  function saveParish(churchId) {
+    try {
+      localStorage.setItem(PARISH_KEY, churchId);
+      window.syncStoreV2?.saveSetting("parish", churchId);
+      if (window.driveSync) window.driveSync.scheduleUpload();
+    } catch (_) {}
+  }
+
   return {
     FONT_SIZES, DEFAULT_FONT_SIZE, COLOR_SCHEMES, SEARCH_HISTORY_MAX, START_PAGES,
     saveReadingPosition, loadReadingPosition, clearReadingPosition,
@@ -646,6 +670,7 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
     loadLectionaryTrack, saveLectionaryTrack,
     loadLectionaryCardsFolded, saveLectionaryCardsFolded,
     loadLectionaryAltShow, saveLectionaryAltShow,
+    loadParish, saveParish,
     loadCalendarLastView, saveCalendarLastView,
     _loadNudgeState, _saveNudgeState,
     _maybeRequestPersist,

@@ -1001,14 +1001,15 @@ def test_drive_diag_copy_shows_feedback(browser, fake_drive, fake_oauth):
 
         page.locator("#settings-anchor .settings-btn").click()
         page.wait_for_selector(".settings-popover", state="visible")
-        page.locator(".settings-drive-info-btn").click()
+        info_btn = page.get_by_role("button", name="백업 및 동기화 안내")   # 소속교회에도 ⓘ 단추가 있다(ADR-041 §7)
+        info_btn.click()
         page.wait_for_timeout(200)
 
         page.locator(".settings-drive-diag-btn").click()
         page.wait_for_timeout(500)
 
         diag_btn = page.locator(".settings-drive-diag-btn")
-        info_row = page.locator(".settings-drive-info-row")
+        info_row = page.locator(f"#{info_btn.get_attribute('aria-controls')}")
         has_feedback = (
             diag_btn.text_content() == "복사됨 ✓"
             or info_row.locator("textarea").count() > 0

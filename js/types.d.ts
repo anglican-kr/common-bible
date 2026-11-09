@@ -82,7 +82,8 @@ export type SettingKey =
   | "startPage"
   | "citeShow"
   | "audioShow"
-  | "lectionaryAltShow";
+  | "lectionaryAltShow"
+  | "parish";
 
 // Per-setting value type. All settings store one MTimed wrapper; the inner
 // value type is intentionally `unknown` so that store-v2 can index by a
@@ -1083,6 +1084,9 @@ export interface AppStorage {
   // 전례독서 목록에 대체 독서의 줄을 보이는가(ADR-038 §3). 처음에는 숨긴다(사용자 결정 2026-11-05).
   loadLectionaryAltShow: () => boolean;
   saveLectionaryAltShow: (on: boolean) => void;
+  // 소속교회의 교회 식별자(ADR-041 §6, 데이터 본당 표의 `church_id`). 빈 문자열은 선택 안 함이다. Drive 동기화 대상.
+  loadParish: () => string;
+  saveParish: (churchId: string) => void;
   // 캘린더 탭이 돌아갈 마지막 캘린더 보기의 주소(ADR-038 §1). 앱을 다시 열어도 이어진다(사용자 결정 2026-11-07). 로컬 전용.
   loadCalendarLastView: () => string | null;
   saveCalendarLastView: (path: string) => void;

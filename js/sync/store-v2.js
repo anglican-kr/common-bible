@@ -34,7 +34,12 @@ const _SETTING_LS_KEYS = {
   citeShow:        "bible-cite-show",
   audioShow:       "bible-audio-show",
   lectionaryAltShow: "bible-lectionary-alt-show",
+  parish:          "bible-parish",
 };
+// Settings whose stored value is an opaque string. Moving the legacy keys in parses each value as JSON, which would
+// turn a church id such as "2345e6" into the number 2345000000 (ADR-041 §6) — these keep the string as stored.
+/** @type {Set<string>} */
+const _RAW_STRING_SETTINGS = new Set(["parish"]);
 const _LR_KEY = "bible-last-read";
 
 // ── Device ID ─────────────────────────────────────────────────────────────────
@@ -250,6 +255,7 @@ function _emptyDoc() {
       citeShow:        { v: null, _u: 0 },
       audioShow:       { v: null, _u: 0 },
       lectionaryAltShow: { v: null, _u: 0 },
+      parish:          { v: null, _u: 0 },
     },
     lastRead: { v: null, _u: 0 },
   };
@@ -692,7 +698,9 @@ function _docFromLegacyKeys(withList) {
   for (const [key, lsKey] of Object.entries(_SETTING_LS_KEYS)) {
     const raw = localStorage.getItem(lsKey);
     if (raw !== null) {
-      let v; try { v = JSON.parse(raw); } catch { v = raw; }
+      let v;
+      if (_RAW_STRING_SETTINGS.has(key)) v = raw;
+      else try { v = JSON.parse(raw); } catch { v = raw; }
       doc.settings[/** @type {SettingKey} */ (key)] = /** @type {SyncDoc["settings"][SettingKey]} */ ({ v, _u: 0 });
     }
   }
