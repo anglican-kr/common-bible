@@ -2250,7 +2250,19 @@ function collectsOf(lix, cal, resolved, obs) {
  * @param {string} name @param {Founding["level"]} level
  */
 function foundingLabelOf(name, level) {
-  return level === "province" ? "관구" : `${name}교구`;
+  return foundingWordsOf(name, level).label;
+}
+
+/**
+ * 설립일의 종류마다 쓰는 말. 이름 줄의 표시 이름(`label`), 본기도 앞쪽 「{name}교구(관구)」 자리(`head`), 뒤쪽 「교구(관구)」 자리(`tail`).
+ * 규칙을 이 표 한 곳에 둔다.
+ * @param {string} name @param {Founding["level"]} level
+ * @returns {{label: string, head: string, tail: string}}
+ */
+function foundingWordsOf(name, level) {
+  return level === "province"
+    ? { label: "관구", head: `${name} 관구`, tail: "관구" }
+    : { label: `${name}교구`, head: `${name}교구`, tail: "교구" };
 }
 
 /**
@@ -2261,7 +2273,7 @@ function foundingLabelOf(name, level) {
  * @returns {CollectOption | null}
  */
 function foundingCollectOf(lix, name, level) {
-  const label = foundingLabelOf(name, level);
+  const words = foundingWordsOf(name, level);
   const entry = commonClassOf(lix, "anniversary");
   const tmpl = entry && entry.collect && typeof entry.collect.text === "string" ? entry.collect : null;
   if (!entry || !tmpl) return null;
@@ -2272,8 +2284,7 @@ function foundingCollectOf(lix, name, level) {
     title: typeof entry.label === "string" ? entry.label : "anniversary",
     collect_no: 1,
     collect_total: 1,
-    text: String(tmpl.text).split("{name}교구(관구)").join(level === "province" ? `${name} ${label}` : label)
-      .split("교구(관구)").join(level === "province" ? "관구" : "교구").split("{name}").join(name),
+    text: String(tmpl.text).split("{name}교구(관구)").join(words.head).split("교구(관구)").join(words.tail).split("{name}").join(name),
     ending: e === "A" || e === "B" || e === "C" ? e : null,
     common: "anniversary",
   };

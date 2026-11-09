@@ -200,6 +200,14 @@ test("소속교회 축성일 — 2025-2050 모든 축성일에 축성일이 처�
   assert.ok(first > 0 && rows > 0, `처음 화면 ${first}, 줄 ${rows}`);
 });
 
+test("본당 표의 교회 교구가 모두 교구 설립일 행과 짝이 맞고, 교구 이름은 「교구」를 뗀 이름이다(설립일 찾기가 이름으로 잇는다)", { skip: SKIP }, () => {
+  const table = read("local-observances.json");
+  const names = new Set(table.dioceses.map((d) => d.name));
+  for (const n of names) assert.ok(!n.endsWith("교구"), n);   // 「서울교구교구설립일」이 되지 않게
+  const missing = [...new Set(table.parishes.map((p) => p.diocese).filter((d) => d !== null && !names.has(d)))];
+  same(missing, []);
+});
+
 test("소속교회의 교구 설립일 — 서울과 대전 5.27, 부산 6.1에 그 교구의 이름 줄과 본기도(「서울교구를 세우심을… 이 교구를」)를 잇고, 다른 교구와 소속교회가 없으면 없다(ADR-041 §6)", { skip: SKIP }, () => {
   const lineOf = (m) => m.foundingLines.filter((l) => l.includes("교구설립일"));
   const textOf = (m) => m.memorialCollects.filter((c) => c.common === "anniversary").map((c) => c.text);

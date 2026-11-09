@@ -249,7 +249,7 @@ const rowOf = (d, parish = "") => ctx.listRowOf(headModel(d, parish), "2026-11-0
 /** 본당 표에서 교회 이름으로 찾은 교회 식별자. */
 const churchIdOf = (name) => read("local-observances.json").parishes.find((p) => p.name === name).church_id;
 
-test("목록 줄 — 소속교회를 고르면 전례독서 화면처럼 축성일이 제목이고, 교구 설립일 줄이 생긴다(ADR-041 §6)", { skip: SKIP }, () => {
+test("목록 줄. 소속교회를 고르면 전례독서 화면처럼 축성일이 제목이고, 교구 설립일 줄이 생긴다(ADR-041 §6)", { skip: SKIP }, () => {
   const yongin = churchIdOf("용인성당");   // 서울교구, 축성일 01.31
   same([rowOf("2025-01-31").title, rowOf("2025-01-31", yongin).title], ["연중 3주 금요일", "용인성당 축성일"]);
   assert.strictEqual(rowOf("2025-01-31", yongin).level, "");   // 굵기는 그날의 기본 독서(평일)를 따른다
