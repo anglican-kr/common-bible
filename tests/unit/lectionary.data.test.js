@@ -87,8 +87,8 @@ function model(d, query = NONE, stored = null, showAlternates = true, parish = "
   const dedications = ix().lec.dedications.get(`${d.slice(5, 7)}.${d.slice(8, 10)}`) || [];
   const foundings = ctx.findFoundingsIn(ix().lec, `${d.slice(5, 7)}.${d.slice(8, 10)}`);
   const mine = ctx.myDedicationOf(dedications, parish);
-  const collects = ctx.findCollectsIn(ix().lec, ix().cal, mine ? { ...r, candidates: [mine, ...r.candidates] } : r);
-  const m = ctx.buildLectionaryModel(r, { ...NONE, ...query }, groupsOf, collects, stored, dedications, showAlternates, foundings, parish);
+  const collects = ctx.findCollectsIn(ix().lec, ix().cal, mine ? { ...r, candidates: [mine.candidate, ...r.candidates] } : r);
+  const m = ctx.buildLectionaryModel(r, { ...NONE, ...query }, groupsOf, collects, stored, dedications, showAlternates, foundings, mine);
   assert.ok(m, `${d} 모델이 null`);
   return m;
 }
@@ -128,7 +128,7 @@ const otherRows = (m) => m.choices.filter((c) => !c.active).map((c) => [c.name, 
 test("축성일 후보의 색이 공통 「성당 축성일」의 색과 같고, 그 분류에 독서 2세트와 본기도가 있다", { skip: SKIP }, () => {
   const dedication = read("commons.json").classes.dedication;
   const mine = ctx.myDedicationOf([{ name: "가성당", kind: "consecration", church_id: "k7m3qx" }], "k7m3qx");
-  same([mine.observance.color, dedication.label, dedication.readings.length, typeof dedication.collect.text], [dedication.color, "성당 축성일", 2, "string"]);
+  same([mine.candidate.observance.color, dedication.label, dedication.readings.length, typeof dedication.collect.text], [dedication.color, "성당 축성일", 2, "string"]);
 });
 
 test("소속교회 축성일 — 평일이면 축성일이 먼저(공통 독서 2세트와 본기도), 평일은 목록의 줄, 기리는 성인의 본기도는 평일 줄에서만(ADR-041 §6)", { skip: SKIP }, () => {
@@ -180,6 +180,9 @@ test("소속교회 축성일 — 2025-2050 모든 축성일에 축성일이 처�
       if (m.selected.observance.id === "my-dedication") {
         first++;
         if (m.dayName !== `${p.name} 축성일` || m.memorialCollects.some((c) => c.common !== "anniversary")) bad.push(`${d} ${p.name} 처음 화면`);
+        // 머리 색은 축성일의 백색 하나이고, 그날의 기본 독서는 목록의 줄로 남는다(PR #542 리뷰)
+        if (m.colors.join() !== "white" || m.colorAlt.length) bad.push(`${d} ${p.name} 색 ${m.colors} ${m.colorAlt}`);
+        if (!m.choices.some((c) => c.candidate === m.publicInitial && !c.active)) bad.push(`${d} ${p.name} 기본 독서 줄이 없다`);
       } else if (m.choices.some((c) => c.candidate.observance.id === "my-dedication" && c.href === `/lectionary/${d}?obs=my-dedication`)) {
         rows++;
       } else {

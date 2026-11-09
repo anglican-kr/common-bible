@@ -314,7 +314,8 @@ function listPathOf(date, today) {
  * @returns {"major" | "minor" | ""}
  */
 function rowLevelOf(m) {
-  const rank = m.selected.observance.rank;
+  // 소속교회와 무관한 그날의 기본 독서로 정한다 — 소속교회 축성일의 줄도 월간 칸처럼 그날의 강조를 따른다(ADR-041 §6, PR #542 리뷰)
+  const rank = m.publicInitial.observance.rank;
   if (m.resolved.coord.type === "sunday" || rank === "principal" || rank === "privileged_sunday" || rank === "major_feast" || rank === "sunday") return "major";
   return rank === "minor_feast" || rank === "regional_festival" ? "minor" : "";
 }

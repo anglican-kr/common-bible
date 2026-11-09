@@ -72,7 +72,7 @@ const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
 /**
  * 뷰가 그리는 것 전부 — 순수 함수 `buildLectionaryModel` 의 반환. DOM 은 이것만 읽는다.
  * @typedef {{
- *   date: string, resolved: ResolvedDate, selected: Candidate, initial: Candidate, dayName: string,
+ *   date: string, resolved: ResolvedDate, selected: Candidate, initial: Candidate, publicInitial: Candidate, dayName: string,
  *   groups: ReadingGroup[], tracks: Array<1 | 2>, track: 1 | 2 | null, cards: ReadingCard[] | null,
  *   options: ReadingOption[], setIndex: number, group: ReadingGroup | null, shortGroup: ReadingGroup | null, slots: ReadingSlot[],
  *   choices: LectionaryChoice[], selectedNote: string | null,
@@ -526,25 +526,31 @@ function dedicationLines(entries, titled = null) {
 /** 소속교회 축성일의 전례일 식별자이자 주소의 값(`?obs=my-dedication`). 교회 이름과 식별자를 주소와 방문 기록에 싣지 않는다(ADR-041 §8). */
 const MY_DEDICATION_ID = "my-dedication";
 
+/** 그날의 소속교회 축성일 — 전례일 후보와 그 교회의 식별자. @typedef {{ candidate: Candidate, churchId: string }} MyDedication */
+
 /**
- * 그날이 소속교회(`parish`, 교회 식별자. 빈 문자열은 선택 안 함)의 축성일이면 그 축성일의 전례일 후보, 아니면 null이다(ADR-041 §6).
- * 축복일에는 없다. 등급은 주요축일 C(ADR-036 §6)이고, 독서 2세트와 본기도는 성인 공통의 「성당 축성일」(`commons.json`의 `dedication`)이다.
+ * 그날이 소속교회(`parish`, 교회 식별자. 빈 문자열은 선택 안 함)의 축성일이면 그 축성일, 아니면 null이다(ADR-041 §6).
+ * 축복일에는 없다. 후보의 등급은 주요축일 C(ADR-036 §6)이고, 독서 2세트와 본기도는 성인 공통의 「성당 축성일」(`commons.json`의 `dedication`)이다.
  * 날짜를 두지 않아 엔진이 그날의 다른 전례일의 고유 본문을 이 후보의 것으로 찾지 않는다. 색은 그 공통 분류의 색이다(lectionary.data.test.js가 대조한다).
+ * 공개 래퍼(`lectionaryModelOf`)가 한 번 만들어 본기도 조회와 화면 모델에 같은 후보를 넘긴다.
  * @param {import("../types.js").ParishDedication[]} entries  그날 축성되거나 축복된 교회(엔진 `findDedications`)
  * @param {string} parish
- * @returns {Candidate | null}
+ * @returns {MyDedication | null}
  */
 function myDedicationOf(entries, parish) {
   const e = parish ? entries.find((x) => x.kind === "consecration" && x.church_id === parish) : null;
   if (!e) return null;
   return {
-    observance: {
-      id: MY_DEDICATION_ID, kind: "sanctoral", name: `${e.name} ${DEDICATION_LABEL.consecration}`, aliases: null,
-      sanctoral_class: "dedication", has_proper: false,
-      rank: "major_feast", precedence: 4, priority_group: "C", transferable: false, transfer_to: null,
-      color: "white", color_alt: null,
+    candidate: {
+      observance: {
+        id: MY_DEDICATION_ID, kind: "sanctoral", name: `${e.name} ${DEDICATION_LABEL.consecration}`, aliases: null,
+        sanctoral_class: "dedication", has_proper: false,
+        rank: "major_feast", precedence: 4, priority_group: "C", transferable: false, transfer_to: null,
+        color: "white", color_alt: null,
+      },
+      status: "proper",
     },
-    status: "proper",
+    churchId: parish,
   };
 }
 
@@ -905,23 +911,24 @@ function isAlternateReading(c, initial) {
  * @param {import("../types.js").ParishDedication[] | undefined} dedications  그날 축성되거나 축복된 교회(엔진 `findDedications`)
  * @param {boolean} showAlternates  대체 독서의 줄을 전례독서 목록에 보이는가(설정 「대체 독서 표시」). 기본값을 두지 않는다 — 값은 설정에서 받는다
  * @param {import("../types.js").ProvinceFounding[]} [foundings]  그날이 관구 설립일이면 그 설립일(엔진 `findFoundings`)
- * @param {string} [parish]  소속교회의 교회 식별자(설정 「소속교회」, 빈 문자열은 선택 안 함). `collectEntries`에는 그 축성일 후보(`myDedicationOf`)의 본기도도 들어 있어야 한다
+ * @param {MyDedication | null} [mine]  그날의 소속교회 축성일(`myDedicationOf`). `collectEntries`에는 그 후보의 본기도도 들어 있어야 한다(공개 래퍼가 같은 후보로 찾는다)
  * @returns {LectionaryModel | null}  후보가 하나도 없으면 null(유효한 날짜에는 격자가 언제나 있어 생기지 않는다)
  */
-function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedTrack, dedications = [], showAlternates, foundings = [], parish = "") {
+function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedTrack, dedications = [], showAlternates, foundings = [], mine = null) {
   const date = resolved.date;
   // 소속교회와 무관한 그날의 기본 독서. 기리는 성인, 대체 독서, 옮겨 지킬 수 있는 축일의 안내는 이것으로 정한다(ADR-041 §6)
   const publicInitial = initialCandidate(resolved, groupsOf);
   if (!publicInitial) return null;
   // 소속교회의 축성일은 그날 처음 여는 화면이거나(`dedicationFirst`) 전례독서 목록의 맨 앞 줄이다(ADR-041 §6). 엔진의 후보와 지정 전례일은 그대로다
-  const mine = myDedicationOf(dedications, parish);
-  const initial = mine && dedicationFirst(publicInitial, date) ? mine : publicInitial;
-  const candidates = mine ? [mine, ...resolved.candidates] : resolved.candidates;
+  const dedication = mine ? mine.candidate : null;
+  const initial = dedication && dedicationFirst(publicInitial, date) ? dedication : publicInitial;
+  const candidates = dedication ? [dedication, ...resolved.candidates] : resolved.candidates;
   // 기리는 성인은 전례독서 목록에 없다 — 이름 줄에 보이고, 주소로 가리켜도 기본 독서다(사용자 결정 2026-11-03, 11-04, memorialOf)
   const memorial = memorialOf(resolved, publicInitial, collectEntries);
   // 기념일도 전례독서 목록이 아니라 이름 줄에 「… 기념일」로 보인다 — 고유 본기도와 독서가 없어 눌러도 본문 없는 화면뿐이었다(사용자
   // 결정 2026-11-03). 그날 지키는 기념일(`proper`)만 이름 줄에 들고, 성주간에 생략된 기념일은 어느 줄에도 없다.
-  const isCommemoration = (/** @type {Candidate} */ c) => c !== initial && c.observance.rank === "commemoration";
+  // 감추는 판정은 모두 소속교회와 무관한 기본 독서(`publicInitial`)와 견준다 — 축성일이 먼저 열려도 기본 독서의 줄은 감추지 않는다(ADR-041 §6)
+  const isCommemoration = (/** @type {Candidate} */ c) => c !== publicInitial && c.observance.rank === "commemoration";
   const commemorations = resolved.candidates.filter((c) => isCommemoration(c) && c.status === "proper" && !c.evening);
   // 공통 독서 감추기를 끄면(HIDE_COMMON_READINGS) 공통 독서만 있는 기리는 성인도 전례독서 목록으로 돌아와 그 독서를 고를 수 있다(PR #463 리뷰)
   // 독서도 본기도도 없는 후보는 전례독서 목록에 넣지 않는다 — 눌러도 빈 화면뿐이다(사용자 결정 2026-11-04). 본문이 이동 축일 쪽에만
@@ -937,19 +944,19 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const borrowsReadings = (/** @type {Candidate} */ c) => !isGrid(c) && !!readingIds(c)
     && resolved.candidates.some((o) => o !== c && !isGrid(o) && o.status === "proper" && !o.evening
       && collectsFor(collectEntries, o).length > 0 && readingIds(o) === readingIds(c));
-  const textless = (/** @type {Candidate} */ c) => c !== initial && (!groupsOf(c).length || borrowsReadings(c))
+  const textless = (/** @type {Candidate} */ c) => c !== publicInitial && (!groupsOf(c).length || borrowsReadings(c))
     && !collectsFor(collectEntries, c).length;
   // 기념만 하거나 생략하는 후보는 누를 수 없는 글이다 — 고유 독서가 있어도 그날 화면을 옮기지 않는다(사용자 결정 2026-11-04). 기리는
   // 성인은 이름 줄의 「이름 축일」이고, 그 밖(성 십자가 발견, 사도 성 베드로의 탈옥 …)은 이름 줄에 이름만 보인다(`passiveDays`). 지역 축일
   // (`national` — 기념만 하는 날이 있는 것은 삼일절, 광복절)은 예외로 전례독서 목록에 둔다 — 주일에 지키지 않더라도 그날 독서를 볼 수 있게 한다(같은 날 사용자 결정).
   // 대체 독서인 축일(2.11 병자를 위한 기도일)도 그렇다 — 2.11이면 어느 해든 읽을 수 있게 넣은 독서다(사용자 결정 2026-11-07).
-  const isPassive = (/** @type {Candidate} */ c) => c !== initial && c.observance.sanctoral_class !== "national" && !c.observance.alternate_readings
+  const isPassive = (/** @type {Candidate} */ c) => c !== publicInitial && c.observance.sanctoral_class !== "national" && !c.observance.alternate_readings
     && (c.status === "commemorated" || c.status === "omitted");
   // 옮겨 간 축일도 전례독서 목록에 넣지 않는다 — 제목 아래 안내로 알리고(`transferNotes`), 그 독서는 옮겨 간 날에 있다(사용자 결정 2026-11-04)
   // 소속교회의 축성일은 공통 독서뿐이어도 감추지 않는다. 공통 독서를 감추는 규칙의 예외다(ADR-041 §6)
-  const hiddenOwn = (/** @type {Candidate} */ c) => c !== mine && (c.status === "transferred_out" || isCommemoration(c) || textless(c) || isPassive(c)
+  const hiddenOwn = (/** @type {Candidate} */ c) => c !== dedication && (c.status === "transferred_out" || isCommemoration(c) || textless(c) || isPassive(c)
     || (HIDE_COMMON_READINGS && memorial.saints.includes(c) && !hasProperReadings(groupsOf(c)))
-    || isHiddenCandidate(c, initial, groupsOf(c)));
+    || isHiddenCandidate(c, publicInitial, groupsOf(c)));
   // 전례독서 목록에 있는 이름 있는 후보와 독서 · 본기도가 똑같은 격자도 넣지 않는다 — 눌러도 같은 화면이다(사용자 결정 2026-11-04).
   // 대림1주일이 그렇다: 그날 기본 독서가 그해(가해 · 나해 · 다해)의 대림 1주일 독서라 「대림 1주일 (나해)」 격자가 같은 본문이다.
   // 후보가 하나만 남으면 전례독서 목록이 없다(buildChoices). 견줄 짝은 그날 지키는 이름 있는 후보뿐이다 — 생략된 후보나
@@ -957,13 +964,13 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const textKey = (/** @type {Candidate} */ c) => textKeyOf(groupsOf(c), collectsFor(collectEntries, c));
   const namedKeys = new Set(resolved.candidates
     .filter((c) => !isGrid(c) && !hiddenOwn(c) && !c.evening).map(textKey));
-  const hidden = (/** @type {Candidate} */ c) => hiddenOwn(c) || (isGrid(c) && c !== initial && namedKeys.has(textKey(c)));
+  const hidden = (/** @type {Candidate} */ c) => hiddenOwn(c) || (isGrid(c) && c !== publicInitial && namedKeys.has(textKey(c)));
   // 본문 없는 날 — 기념일 줄 아래에 이름만 한 줄씩(사용자 결정 2026-11-04). 그날 지키거나 기념만 하는 것만 싣는다.
   const textlessDays = resolved.candidates.filter((c) => !isGrid(c) && !c.evening && !isCommemoration(c) && textless(c)
     && (c.status === "proper" || c.status === "commemorated"));
   // 공통 독서만 있어 감춘 후보는 넣지 않는다 — 성주간 평일에 생략되는 성인(2035-03-21 토마스 크랜머 등)은 화면에 보인 적이 없다.
   const passiveDays = resolved.candidates.filter((c) => isPassive(c) && !isCommemoration(c) && !textless(c) && !memorial.saints.includes(c)
-    && !isHiddenCandidate(c, initial, groupsOf(c)));
+    && !isHiddenCandidate(c, publicInitial, groupsOf(c)));
   const transferNotes = resolved.candidates.flatMap((c) => (c.status === "transferred_out" && c.to
     ? [transferOutNote(c.observance.name, c.to)] : []));
   const picked = selectCandidate(candidates, query.obs, initial);
@@ -1035,13 +1042,16 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   });
   // 성인 축일이 둘 이상이고 색이 다르면 본기도 차례대로 「적색 또는 백색」(사용자 결정 2026-11-03 — memorialOf)
   const colorsOr = selected === publicInitial && memorial.colors.length > 1;
+  // 소속교회의 축성일은 엔진이 그날 색을 계산할 때 넣지 않은 후보라, 그날의 병기 색(사계재의 자색)이나 대체색(성모 축일의 청색)을 받지 않고 자기 색 하나다
   const { colors, colorAlt, ownColor } = colorsOr
     ? { colors: memorial.colors, colorAlt: /** @type {string[]} */ ([]), ownColor: false }
-    : headerColors(resolved, selected);
+    : selected === dedication && dedication.observance.color
+      ? { colors: [dedication.observance.color], colorAlt: /** @type {string[]} */ ([]), ownColor: true }
+      : headerColors(resolved, selected);
   const empty = !groups.length && !collects.length;
 
   return {
-    date, resolved, selected, initial, dayName: conditionTitle(group) || choiceNameOf(selected, group, !!linked),
+    date, resolved, selected, initial, publicInitial, dayName: conditionTitle(group) || choiceNameOf(selected, group, !!linked),
     groups, tracks, track, options, setIndex, group, shortGroup, slots,
     cards: readingCards({ groups, baseName: shortName(selected.observance.name), options, setIndex, linked: !!linked, trackHrefs, optionHrefs }),
     choices,
@@ -1054,7 +1064,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked,
     ending: endingCodeOf(memorialCollects[memorialCollects.length - 1] || chosenCollect), memorialCollects,
     memorialSaints: memorial.saints, passiveDays, commemorations, textlessDays, foundingLines: foundingLines(foundings),
-    dedicationLines: dedicationLines(dedications, selected === mine ? parish : null), transferNotes,
+    dedicationLines: dedicationLines(dedications, mine && selected === dedication ? mine.churchId : null), transferNotes,
     colors, colorAlt, ownColor, colorsOr, fast: fastOf(resolved),
     cycle: resolved.coord.year && CYCLE_LABEL[resolved.coord.year] ? CYCLE_LABEL[resolved.coord.year] : null,
     empty,
@@ -1852,11 +1862,13 @@ function commit(m, chapters) {
 
 /**
  * 그날의 모델 — 두 묶음을 받은 뒤에 동기로 만든다. 전례독서 화면과 캘린더의 목록 줄이 같이 쓴다.
+ * 그날 축성일인 교회를 라우터에 알린다(`window.noteDrawnChurches`). 소속교회가 바뀌어도 그린 날들의 축성일과 무관하면 다시 그리지 않으려는 것이다.
  * @param {ResolvedDate} resolved
  * @param {LectionaryQuery} query
+ * @param {string} [parish]  소속교회의 교회 식별자. 늘 기기에 저장된 값(`loadParish`)으로 읽고(ADR-041 §8), 문서 제목을 정할 때만 빈 문자열을 넘긴다
  * @returns {LectionaryModel | null}
  */
-function lectionaryModelOf(resolved, query) {
+function lectionaryModelOf(resolved, query, parish = loadParish()) {
   const date = resolved.date;
   /** @type {Map<string, ReadingGroup[]>} */
   const groupsCache = new Map();
@@ -1867,11 +1879,11 @@ function lectionaryModelOf(resolved, query) {
     return g;
   };
   const dedications = findDedications(date);
-  // 소속교회는 늘 기기에 저장된 값으로 읽는다(ADR-041 §8). 그날이 그 교회의 축성일이면 그 후보의 본기도(공통 「성당 축성일」)도 엔진에서 받는다
-  const parish = loadParish();
+  window.noteDrawnChurches?.(dedications.flatMap((e) => (e.kind === "consecration" && e.church_id ? [e.church_id] : [])));
+  // 그날이 소속교회의 축성일이면 그 후보를 한 번 만들어, 본기도(공통 「성당 축성일」)를 엔진에서 받고 화면 모델에도 같은 후보를 넘긴다
   const mine = myDedicationOf(dedications, parish);
-  const collectEntries = findCollects(mine ? { ...resolved, candidates: [mine, ...resolved.candidates] } : resolved);
-  return buildLectionaryModel(resolved, query, groupsOf, collectEntries, loadLectionaryTrack(), dedications, loadLectionaryAltShow(), findFoundings(date), parish);
+  const collectEntries = findCollects(mine ? { ...resolved, candidates: [mine.candidate, ...resolved.candidates] } : resolved);
+  return buildLectionaryModel(resolved, query, groupsOf, collectEntries, loadLectionaryTrack(), dedications, loadLectionaryAltShow(), findFoundings(date), mine);
 }
 
 /**
@@ -1918,10 +1930,11 @@ async function renderLectionaryView(parsed) {
     const search = withTrack(location.search, model.track);
     if (search !== location.search) history.replaceState(history.state, "", location.pathname + search);
   }
-  // 문서 제목도 머리처럼 고른 전례일의 이름이다(2026-11-04, buildHeader). 다만 소속교회의 축성일이면 「전례독서」뿐이다. 문서 제목은
-  // Google Analytics의 방문 기록(`page_title`)으로 나가므로 교회 이름을 싣지 않는다(ADR-041 §8)
-  if (model.selected.observance.id === MY_DEDICATION_ID) return PAGE_TITLE;
-  return `${shortName(model.dayName)} ${PAGE_TITLE}`;
+  // 문서 제목도 머리처럼 고른 전례일의 이름이다(2026-11-04, buildHeader). 다만 소속교회의 축성일이면 같은 주소를 소속교회 없이 열 때의
+  // 제목이다. 문서 제목은 Google Analytics의 방문 기록(`page_title`)으로 나가므로, 다른 방문과 다른 제목이면 그 방문이 축성일 화면임이 드러나고
+  // 그날 축성일인 교회가 하나면 그 교회까지 정해진다(ADR-041 §8, PR #542 리뷰)
+  const titled = model.selected.observance.id === MY_DEDICATION_ID ? lectionaryModelOf(resolved, parsed, "") || model : model;
+  return `${shortName(titled.dayName)} ${PAGE_TITLE}`;
 }
 
 // 캘린더 탭(calendar.js — ADR-038 §2 A2)이 같은 이름 · 날짜 · 색 규칙을 쓴다(복제 금지 — 칸 · 줄의 이름이 전례독서 목록과 같아야 한다).

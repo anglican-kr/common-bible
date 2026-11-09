@@ -902,25 +902,28 @@ const DEDICATIONS = [
 /** 공통 「성당 축성일」의 독서 2세트와 본기도. 엔진이 `sanctoral_class: "dedication"`인 후보에 내는 것과 같은 모양이다. */
 const DEDICATION_GROUPS = [1, 2].map((n) => group(`common:dedication-s${n}`, FOUR, { common: "dedication", title: "성당 축성일", set_no: n, set_total: 2 }));
 const DEDICATION_COLLECT = collect("common:dedication-c1", "이 성전을 봉헌한 날을 기념하며", { common: "dedication", title: "성당 축성일" });
-/** 그날의 후보와 축성일 본기도를 담은 화면 모델. `findCollects`가 축성일 후보까지 받은 것처럼 본기도 원소를 하나 더한다. */
+/** 그날의 후보와 축성일 본기도를 담은 화면 모델. 공개 래퍼처럼 축성일 후보를 한 번 만들어 본기도 원소와 화면 모델에 같은 후보를 넘긴다. */
 const dedicationModelOf = (r, table, parish, query = {}, show = false, dedications = DEDICATIONS) => {
   const mine = ctx.myDedicationOf(dedications, parish);
-  const entries = [...(mine ? [{ candidate: mine, collects: [DEDICATION_COLLECT] }] : []),
+  const entries = [...(mine ? [{ candidate: mine.candidate, collects: [DEDICATION_COLLECT] }] : []),
     ...r.candidates.map((c) => ({ candidate: c, collects: [collect(`${c.observance.id}-c`, "…")] }))];
   const groupsOf = groupsOfFrom({ ...table, "my-dedication": DEDICATION_GROUPS });
-  return ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null, ...query }, groupsOf, entries, null, dedications, show, [], parish);
+  return ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null, ...query }, groupsOf, entries, null, dedications, show, [], mine);
 };
 /** 전례독서 목록에서 고른 줄(제목)을 뺀 줄의 이름과 주소. */
 const others = (m) => m.choices.filter((c) => !c.active).map((c) => [c.name, c.href]);
 
-test("myDedicationOf: 소속교회가 그날 축성일이면 주요축일 C인 「○○성당 축성일」 후보 — 축복일, 다른 교회, 고르지 않음은 null(ADR-041 §6)", () => {
+test("myDedicationOf: 소속교회가 그날 축성일이면 주요축일 C인 「○○성당 축성일」 후보와 그 교회 식별자 — 축복일, 다른 교회, 고르지 않음은 null(ADR-041 §6)", () => {
   const mine = ctx.myDedicationOf(DEDICATIONS, MINE);
   same(mine, {
-    observance: {
-      id: "my-dedication", kind: "sanctoral", name: "강릉성당 축성일", aliases: null, sanctoral_class: "dedication", has_proper: false,
-      rank: "major_feast", precedence: 4, priority_group: "C", transferable: false, transfer_to: null, color: "white", color_alt: null,
+    candidate: {
+      observance: {
+        id: "my-dedication", kind: "sanctoral", name: "강릉성당 축성일", aliases: null, sanctoral_class: "dedication", has_proper: false,
+        rank: "major_feast", precedence: 4, priority_group: "C", transferable: false, transfer_to: null, color: "white", color_alt: null,
+      },
+      status: "proper",
     },
-    status: "proper",
+    churchId: MINE,
   });
   assert.strictEqual(ctx.myDedicationOf(DEDICATIONS, "n4p8rt"), null);   // 세종성당은 그날 축복일이다
   assert.strictEqual(ctx.myDedicationOf(DEDICATIONS, "zzzzzz"), null);
@@ -976,6 +979,30 @@ test("buildLectionaryModel: 주일, 주요축일, 평일의 명절에 온 소속
     assert.strictEqual(m.selected, feast, rank);
     same(others(m)[0], ["강릉성당 축성일", "/lectionary/2026-04-21?obs=my-dedication"], rank);
   }
+});
+
+test("buildLectionaryModel: 축성일 화면의 머리 색은 축성일의 백색 하나 — 그날의 병기 색(사계재의 자색)과 대체색(청색)을 받지 않는다(PR #542 리뷰)", () => {
+  const grid = cand(obs("grid:ordinary-24-weekday-fri", "연중 24주 금요일", { rank: "feria", precedence: 8, color: "green" }));
+  // 그날 대표색이 백색이고 사계재의 자색이 병기되며 청색 대체색이 있는 날(2025-09-19 추계재 금요일과 같은 경우)
+  const r = resolvedOf("2025-09-19", [grid], grid, { color: "white", colors: ["violet", "white"], colorAlt: "blue" });
+  const m = dedicationModelOf(r, { "grid:ordinary-24-weekday-fri": [group("g", FOUR)] }, MINE);
+  same([m.dayName, m.colors, m.colorAlt, m.ownColor], ["강릉성당 축성일", ["white"], [], true]);
+  // 평일 줄을 고르면 그날 색 그대로다
+  const w = dedicationModelOf(r, { "grid:ordinary-24-weekday-fri": [group("g", FOUR)] }, MINE, { obs: grid.observance.id });
+  same([w.colors, w.ownColor], [["violet", "white"], false]);
+});
+
+test("buildLectionaryModel: 축성일이 먼저 열려도 그날의 기본 독서는 감추지 않는다 — 공통 독서뿐인 지정 전례일이 기본 독서인 날(PR #542 리뷰)", () => {
+  // 평일 격자에 독서가 없어 공통 독서뿐인 성인 축일이 그날의 기본 독서다. 소속교회와 무관하면 목록에 감추는 후보가 아니다
+  const saint = cand(obs("d0421-안셀름", "안셀름(켄터베리 대주교, 1109년)", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "teacher" }));
+  const grid = cand(obs("grid:easter-4-weekday-tue", "부활 4주 화요일", { rank: "feria", precedence: 8, color: "white" }));
+  const r = resolvedOf("2026-04-21", [saint, grid], saint);
+  const table = { "d0421-안셀름": [group("common:teacher-s1", FOUR, { common: "teacher" })] };
+  const m = dedicationModelOf(r, table, MINE);
+  same([m.publicInitial, m.selected.observance.id], [saint, "my-dedication"]);
+  same(others(m).map(([name]) => name), ["안셀름"]);
+  // 그 줄의 주소로 열면 그 축일이다
+  assert.strictEqual(dedicationModelOf(r, table, MINE, { obs: saint.observance.id }).selected, saint);
 });
 
 test("buildLectionaryModel: 본기도 없이 그날 지키는 다른 전례일의 독서를 그대로 받는 후보는 이름 줄 — 빌려 준 쪽이 옮겨 갔거나 본기도가 없으면 목록에 남는다(사용자 결정 2026-11-07, PR #510 리뷰)", () => {

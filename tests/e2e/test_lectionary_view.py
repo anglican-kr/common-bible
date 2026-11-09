@@ -2229,18 +2229,18 @@ def _wait_day(page, name):
 
 
 def test_my_dedication_opens_first_on_a_weekday_and_keeps_the_church_out_of_page_views(desktop_context):
-    """용인성당 축성일 2025-01-31(연중 3주 금요일)에는 제목이 「용인성당 축성일」이고 평일은 목록의 줄이다. 문서 제목과 방문 기록에는
-    교회 이름이 없다. 평일 줄을 고르면 주소에 그 평일이 붙고, 축성일 줄의 주소는 날짜뿐이다(ADR-041 §6, §8)."""
+    """용인성당 축성일 2025-01-31(연중 3주 금요일)에는 제목이 「용인성당 축성일」이고 평일은 목록의 줄이다. 문서 제목과 방문 기록은
+    소속교회가 없는 사람이 같은 주소를 열 때와 같다. 평일 줄을 고르면 주소에 그 평일이 붙고, 축성일 줄의 주소는 날짜뿐이다(ADR-041 §6, §8)."""
     desktop_context.add_init_script(_with_parish("용인성당"))
     page = desktop_context.new_page()
     _open(page, "lectionary/2025-01-31")
     assert page.inner_text(".lect-day") == "용인성당 축성일"
-    assert page.title() == "전례독서 — 공동번역성서"
+    assert page.title() == "연중 3주 금요일 전례독서 — 공동번역성서"   # 소속교회가 없는 사람의 제목과 같다
     assert _choices(page) == ["연중 3주 금요일"]
     assert "용인성당" not in page.inner_text(".lect-head").replace("용인성당 축성일", "", 1)   # 축성일 줄에서는 빠진다
     page.wait_for_function(f"() => ({PAGE_VIEWS})().length > 0")
     for v in page.evaluate(PAGE_VIEWS):
-        assert "용인성당" not in v["page_title"] and "obs=" not in v["page_location"], v
+        assert v["page_title"] == "연중 3주 금요일 전례독서 — 공동번역성서" and "obs=" not in v["page_location"], v
 
     page.locator(".lect-choice", has_text="연중 3주 금요일").click()
     _wait_day(page, "연중 3주 금요일")
@@ -2252,7 +2252,7 @@ def test_my_dedication_opens_first_on_a_weekday_and_keeps_the_church_out_of_page
 
 def test_my_dedication_on_a_sunday_is_the_first_row_with_a_fixed_address(desktop_context):
     """강동성당 축성일 2025-05-11(부활 4주일)에는 주일이 먼저이고 축성일은 목록의 맨 앞 줄이다. 그 줄의 주소는 `?obs=my-dedication`이고,
-    고르면 문서 제목과 방문 기록에 교회 이름이 없다(ADR-041 §6, §8)."""
+    고르면 문서 제목은 소속교회가 없는 사람이 그 주소를 열 때의 제목(부활 4주일)이다(ADR-041 §6, §8)."""
     desktop_context.add_init_script(_with_parish("강동성당"))
     page = desktop_context.new_page()
     _open(page, "lectionary/2025-05-11")
@@ -2261,7 +2261,7 @@ def test_my_dedication_on_a_sunday_is_the_first_row_with_a_fixed_address(desktop
     page.locator(".lect-choice", has_text="강동성당 축성일").click()
     _wait_day(page, "강동성당 축성일")
     assert page.url == f"{BASE}/lectionary/2025-05-11?obs=my-dedication"
-    assert page.title() == "전례독서 — 공동번역성서"
+    assert page.title() == "부활 4주일 전례독서 — 공동번역성서"
     page.wait_for_function(f"() => ({PAGE_VIEWS})().some((v) => v.page_location.includes('my-dedication'))")
     for v in page.evaluate(PAGE_VIEWS):
         assert "강동성당" not in v["page_title"] and _church_id("강동성당") not in v["page_location"], v
@@ -2275,8 +2275,9 @@ def test_my_dedication_address_opens_the_day_for_someone_without_the_church(desk
     assert "강동성당 축성일" not in _choices(page)
 
 
-def test_choosing_a_parish_in_settings_redraws_the_lectionary(desktop_context):
-    """전례독서 화면에서 소속교회를 고르면 화면을 다시 그려 축성일이 먼저 열리고, 고른 결과는 그 뒤에 알린다(ADR-041 §6)."""
+def test_choosing_a_parish_in_settings_redraws_the_lectionary_when_the_popover_closes(desktop_context):
+    """전례독서 화면에서 소속교회를 고르면 알리고 저장하되 팝오버는 열린 채다. 닫은 뒤 화면을 다시 그려 축성일이 먼저 열린다. 닫힌 선택
+    상자에서 화살표 키로 옮겨도 팝오버가 닫히지 않는다(ADR-041 §6, WCAG 3.2.2, PR #542 리뷰)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2025-01-31")
     assert page.inner_text(".lect-day") == "연중 3주 금요일"
@@ -2288,10 +2289,20 @@ def test_choosing_a_parish_in_settings_redraws_the_lectionary(desktop_context):
       new MutationObserver(() => { if (live.textContent) window.__said.push(live.textContent); })
         .observe(live, { childList: true, characterData: true, subtree: true });
     }""")
-    pop.get_by_label("소속교회", exact=True).select_option(label="용인성당")
-    _wait_day(page, "용인성당 축성일")
+    select = pop.get_by_label("소속교회", exact=True)
+    select.focus()
+    page.keyboard.press("ArrowDown")
+    page.keyboard.press("ArrowDown")
+    page.wait_for_timeout(300)
+    assert pop.is_visible()
+    assert page.evaluate("() => localStorage.getItem('bible-parish')") == select.input_value() != ""
+    select.select_option(label="용인성당")
     page.wait_for_function("() => window.__said.at(-1) === '소속교회 용인성당'")
-    assert page.title() == "전례독서 — 공동번역성서"
+    assert pop.is_visible() and page.inner_text(".lect-day") == "연중 3주 금요일"
+    page.keyboard.press("Escape")
+    pop.wait_for(state="hidden")
+    _wait_day(page, "용인성당 축성일")
+    assert page.title() == "연중 3주 금요일 전례독서 — 공동번역성서"
 
 
 def test_calendar_list_row_follows_my_dedication(desktop_context):

@@ -1403,8 +1403,12 @@ declare global {
     applyTheme?: (theme: string) => void;
     applyCiteShow?: (on: boolean) => void;
     applyAudioShow?: (on: boolean) => void;
-    // routing.js: redraws the open view when a synced setting changed what it shows; state-machine.js calls it.
+    // routing.js: redraws the open view when a synced setting changed what it shows; state-machine.js calls it,
+    // and so does settings-ui.js when the settings popover closes.
     redrawIfSyncedSettingsChanged?: () => Promise<void> | undefined;
+    // routing.js: lectionary.js reports the church ids whose consecration falls on a day it drew, so a parish change
+    // redraws only when it changes what is shown (ADR-041 §6).
+    noteDrawnChurches?: (ids: string[]) => void;
     // Manual SW update check — set by app.js inside registerServiceWorker()
     // so it can capture the registration and reuse showUpdateToast(). Returns
     // a status object the caller can surface as transient feedback.
