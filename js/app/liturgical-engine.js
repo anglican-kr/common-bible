@@ -1196,6 +1196,21 @@ function periodsOn(index, md) {
 }
 
 /**
+ * 그날의 명절(설, 추석) 행. 주일에 오면 그 주일 바로 뒤에 서도록 그날의 우선순위를 주일의 것에 0.5를 더한 값(절기 주일
+ * 2.5, 연중 주일 5.5)으로 둔 사본을 낸다(ADR-036 §7 규칙 5, 사용자 확정 2026-11-09, 신부님 확인). 명절의 우선순위 0은
+ * 대재일과 주요축일보다 앞서지만(규칙 1, 2) 주일에는 뒤지므로 숫자 하나로 담기지 않는다. 지정 전례일 판정과 옮김 계산이 모두
+ * `ownObservancesOn`을 거치므로 두 계산이 같은 값을 본다. 명절이 아니거나 주일이 아니면 행 그대로다.
+ * @param {CalendarIndex} index @param {string} dateStr @param {Observance} row
+ * @returns {Observance}
+ */
+function festivalOn(index, dateStr, row) {
+  if (row.rank !== "regional_festival" || dayOfWeek(dateStr) !== 0) return row;
+  const coord = coordOf(dateStr, index.ordinal);
+  const sunday = coord ? gridObservance(dateStr, coord).precedence : null;
+  return typeof sunday === "number" ? { ...row, precedence: sunday + 0.5 } : row;
+}
+
+/**
  * 그 날짜의 **고유** 전례일 — §5.5 출처 ② 양력 날짜 · ③ 음력(둘 다 월별 축일) · ④ 규칙 파생(① 격자는 따로 합성한다).
  * 같은 행이 두 출처에서 오면 한 번만 낸다. 순서는 뜻이 없다 — 표시 순서와 지정 전례일은 우선순위가 정한다
  * (`compareCandidates`). 음력 표 범위 밖 연도는 ③ 이 빈다(§2).
@@ -1210,7 +1225,7 @@ function ownObservancesOn(index, dateStr) {
   ];
   const lunar = lunarDatesOf(index.kasi, y);
   for (const key of Object.keys(lunar)) {
-    if (lunar[key] === dateStr) rows.push(...(index.sanctoralByLunar.get(key) || []));
+    if (lunar[key] === dateStr) rows.push(...(index.sanctoralByLunar.get(key) || []).map((r) => festivalOn(index, dateStr, r)));
   }
   /** @type {Observance[]} */
   const out = [];
