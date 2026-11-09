@@ -123,7 +123,9 @@ const churchIdOf = (name) => {
   return p.church_id;
 };
 /** 전례독서 목록에서 고른 줄(제목)을 뺀 줄의 이름과 주소. */
-const otherRows = (m) => m.choices.filter((c) => !c.active).map((c) => [c.name, c.href]);
+const otherRows = (m) => m.choices.filter((c) => !c.active).map((c) => [c.name, c.href, c.query ? c.query.obs : null]);
+/** 화면의 모든 링크 주소 — 전례독서 목록의 줄, 독서 카드, 트랙, 세트, 본기도 번호. */
+const allHrefs = (m) => [...m.choices.map((c) => c.href), ...(m.cards || []).map((c) => c.href), ...m.hrefs.tracks.map((t) => t.href), ...m.hrefs.options, ...m.hrefs.collects];
 
 test("축성일 후보의 색이 공통 「성당 축성일」의 색과 같고, 그 분류에 독서 2세트와 본기도가 있다", { skip: SKIP }, () => {
   const dedication = read("commons.json").classes.dedication;
@@ -136,7 +138,8 @@ test("소속교회 축성일 — 평일이면 축성일이 먼저(공통 독서 
   const m = model("2025-01-31", NONE, null, false, yongin);   // 연중 3주 금요일
   same([m.dayName, m.groups.map((g) => g.id), m.collects.map((c) => c.id)],
     ["용인성당 축성일", ["common:dedication-s1", "common:dedication-s2"], ["common:dedication-c1"]]);
-  same(otherRows(m), [["연중 3주 금요일", "/lectionary/2025-01-31?obs=grid%3Aordinary-3-weekday-fri"]]);
+  // 평일 줄의 주소는 소속교회 없이 여는 사람의 기본 화면과 같고, 평일을 고른 것은 기록 항목의 상태로 넘긴다(ADR-041 §8)
+  same(otherRows(m), [["연중 3주 금요일", "/lectionary/2025-01-31", "grid:ordinary-3-weekday-fri"]]);
   assert.ok(!m.dedicationLines.some((l) => l.includes("용인성당")), "제목의 교회는 축성일 줄에서 빠진다");
   // 소속교회가 없으면 그날은 평일이고, 축성일 줄에 교회가 보인다
   const none = model("2025-01-31", NONE, null, false);
@@ -159,7 +162,7 @@ test("소속교회 축성일 — 주일, 대축일, 평일의 명절이면 그�
   ]) {
     const m = model(d, NONE, null, false, churchIdOf(church));
     assert.strictEqual(ctx.shortName(m.dayName), title, d);
-    same(otherRows(m)[0], [`${church} 축성일`, `/lectionary/${d}?obs=my-dedication`], d);
+    same(otherRows(m)[0], [`${church} 축성일`, `/lectionary/${d}`, "my-dedication"], d);
     // 그 줄을 고르면 축성일 화면이고, 제목의 교회는 축성일 줄에서 빠진다
     const picked = model(d, { obs: "my-dedication" }, null, false, churchIdOf(church));
     assert.strictEqual(picked.dayName, `${church} 축성일`, d);
@@ -167,7 +170,7 @@ test("소속교회 축성일 — 주일, 대축일, 평일의 명절이면 그�
   }
 });
 
-test("소속교회 축성일 — 2025-2050 모든 축성일에 축성일이 처음 여는 화면이거나 전례독서 목록의 줄이다(ADR-041 §6)", { skip: SKIP }, () => {
+test("소속교회 축성일 — 2025-2050 모든 축성일에 축성일이 처음 여는 화면이거나 전례독서 목록의 줄이고, 어느 링크의 주소에도 소속교회의 단서가 없다(ADR-041 §6, §8)", { skip: SKIP }, () => {
   const churches = read("local-observances.json").parishes
     .filter((p) => p.dedication.kind === "consecration" && p.church_id && !isFormerNorthChurch(p.name));
   const bad = [];
@@ -183,11 +186,16 @@ test("소속교회 축성일 — 2025-2050 모든 축성일에 축성일이 처�
         // 머리 색은 축성일의 백색 하나이고, 그날의 기본 독서는 목록의 줄로 남는다(PR #542 리뷰)
         if (m.colors.join() !== "white" || m.colorAlt.length) bad.push(`${d} ${p.name} 색 ${m.colors} ${m.colorAlt}`);
         if (!m.choices.some((c) => c.candidate === m.publicInitial && !c.active)) bad.push(`${d} ${p.name} 기본 독서 줄이 없다`);
-      } else if (m.choices.some((c) => c.candidate.observance.id === "my-dedication" && c.href === `/lectionary/${d}?obs=my-dedication`)) {
+        // 기본 독서 줄의 주소에도 그 전례일이 없다 — 소속교회 없이 여는 사람의 기본 화면과 같은 주소다(ADR-041 §8)
+        const own = `obs=${encodeURIComponent(m.publicInitial.observance.id)}`;
+        if (allHrefs(m).some((h) => h.includes(own))) bad.push(`${d} ${p.name} 주소에 기본 독서`);
+      } else if (m.choices.some((c) => c.candidate.observance.id === "my-dedication" && c.href === `/lectionary/${d}` && c.query && c.query.obs === "my-dedication")) {
         rows++;
       } else {
         bad.push(`${d} ${p.name} 축성일이 없다`);
       }
+      // 어느 링크의 주소에도 축성일이 없다(ADR-041 §8)
+      if (allHrefs(m).some((h) => h.includes("my-dedication"))) bad.push(`${d} ${p.name} 주소에 축성일`);
     }
   }
   same(bad, []);

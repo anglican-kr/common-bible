@@ -910,8 +910,8 @@ const dedicationModelOf = (r, table, parish, query = {}, show = false, dedicatio
   const groupsOf = groupsOfFrom({ ...table, "my-dedication": DEDICATION_GROUPS });
   return ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null, ...query }, groupsOf, entries, null, dedications, show, [], mine);
 };
-/** 전례독서 목록에서 고른 줄(제목)을 뺀 줄의 이름과 주소. */
-const others = (m) => m.choices.filter((c) => !c.active).map((c) => [c.name, c.href]);
+/** 전례독서 목록에서 고른 줄(제목)을 뺀 줄의 이름, 주소, 기록 항목의 상태로 넘길 전례일(`query.obs`). */
+const others = (m) => m.choices.filter((c) => !c.active).map((c) => [c.name, c.href, c.query ? c.query.obs : null]);
 
 test("myDedicationOf: 소속교회가 그날 축성일이면 주요축일 C인 「○○성당 축성일」 후보와 그 교회 식별자 — 축복일, 다른 교회, 고르지 않음은 null(ADR-041 §6)", () => {
   const mine = ctx.myDedicationOf(DEDICATIONS, MINE);
@@ -938,6 +938,12 @@ test("dedicationFirst: 기본 독서가 주일, 대축일, 주요축일, 명절�
   assert.strictEqual(ctx.dedicationFirst(of("sunday"), "2026-04-26"), false);   // 일요일
 });
 
+test("keptQueryOf: 기록 항목의 상태에 넘긴 선택을 읽는다 — 없거나 형식이 틀리면 null, 틀린 값은 버린다(ADR-041 §8)", () => {
+  same(ctx.keptQueryOf({ lectionaryQuery: { obs: "my-dedication", track: null, set: 2, collect: null } }), { obs: "my-dedication", track: null, set: 2, collect: null });
+  same(ctx.keptQueryOf({ lectionaryQuery: { obs: 3, track: 5, set: 0, collect: 1.5 } }), { obs: null, track: null, set: null, collect: null });
+  for (const st of [null, undefined, "x", {}, { lectionaryQuery: null }, { lectionaryQuery: "x" }]) assert.strictEqual(ctx.keptQueryOf(st), null, JSON.stringify(st));
+});
+
 test("buildLectionaryModel: 평일의 소속교회 축성일 — 축성일이 먼저 열리고, 평일은 목록의 줄, 성인 본기도는 잇지 않으며, 제목의 교회는 축성일 줄에서 뺀다(사용자 결정 2026-11-05, 11-09)", () => {
   const saint = cand(obs("d0421-안셀름", "안셀름(켄터베리 대주교, 1109년)", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "teacher" }));
   const grid = cand(obs("grid:easter-4-weekday-tue", "부활 4주 화요일", { rank: "feria", precedence: 8, color: "white" }));
@@ -949,27 +955,29 @@ test("buildLectionaryModel: 평일의 소속교회 축성일 — 축성일이 �
   same([m.colors, m.ownColor], [["white"], true]);
   // 성인의 이름 줄은 그대로이고, 제목의 교회만 축성일 줄에서 빠진다
   same([m.memorialSaints.map((c) => c.observance.id), m.dedicationLines], [["d0421-안셀름"], ["원주성당 축성일", "세종성당 축복일"]]);
-  // 평일 줄은 대체 독서 표시를 꺼도 보이고, 그 주소에는 평일의 식별자가 붙는다. 축성일이 기본이라 축성일 주소에는 `?obs=`가 없다
-  same(others(m), [["부활 4주 화요일", "/lectionary/2026-04-21?obs=grid%3Aeaster-4-weekday-tue"]]);
+  // 평일 줄은 대체 독서 표시를 꺼도 보인다. 주소는 소속교회 없이 여는 사람의 기본 화면과 같은 날짜뿐이고, 평일을 고른 것은 기록 항목의 상태로 넘긴다(ADR-041 §8)
+  same(others(m), [["부활 4주 화요일", "/lectionary/2026-04-21", "grid:easter-4-weekday-tue"]]);
+  // 축성일 독서 카드도 주소에는 세트가 없고 상태로 넘긴다
+  same(m.cards.map((c) => [c.href, c.query.obs, c.query.set]), [["/lectionary/2026-04-21", "my-dedication", 1], ["/lectionary/2026-04-21", "my-dedication", 2]]);
   // 평일 줄을 고르면 지금처럼 성인 본기도를 잇고, 축성일 줄에 그 교회가 다시 보이며, 축성일 줄의 주소는 날짜뿐이다
   const w = dedicationModelOf(r, table, MINE, { obs: grid.observance.id });
   same([w.selected, w.memorialCollects.map((c) => c.id), w.dedicationLines], [grid, ["d0421-안셀름-c"], ["강릉성당, 원주성당 축성일", "세종성당 축복일"]]);
-  same(others(w), [["강릉성당 축성일", "/lectionary/2026-04-21"]]);
+  same(others(w), [["강릉성당 축성일", "/lectionary/2026-04-21", "my-dedication"]]);
   // 소속교회를 고르지 않은 사람이 축성일 주소를 열면 그날의 기본 독서다
   const other = dedicationModelOf(r, table, "", { obs: "my-dedication" });
   same([other.selected, others(other), other.dedicationLines[0]], [grid, [], "강릉성당, 원주성당 축성일"]);
 });
 
-test("buildLectionaryModel: 주일, 주요축일, 평일의 명절에 온 소속교회 축성일은 목록의 맨 앞 줄이고 주소는 `?obs=my-dedication`이다(ADR-041 §6, §8)", () => {
+test("buildLectionaryModel: 주일, 주요축일, 평일의 명절에 온 소속교회 축성일은 목록의 맨 앞 줄이고, 주소에는 없이 기록 항목의 상태로 넘긴다(ADR-041 §6, §8)", () => {
   const sunday = cand(obs("grid:easter-5-sunday", "부활 5주일", { rank: "sunday", precedence: 5, color: "white" }));
   const rs = resolvedOf("2026-04-26", [sunday], sunday, { coord: { season: "easter", week: 5, type: "sunday", weekday: "sun", year: "A" } });
   const s = dedicationModelOf(rs, { "grid:easter-5-sunday": [group("s", FOUR)] }, MINE);
   assert.strictEqual(s.selected, sunday);
-  same(others(s), [["강릉성당 축성일", "/lectionary/2026-04-26?obs=my-dedication"]]);
+  same(others(s), [["강릉성당 축성일", "/lectionary/2026-04-26", "my-dedication"]]);
   same(s.dedicationLines[0], "강릉성당, 원주성당 축성일");
   // 그 줄을 고르면 축성일 화면이고, 제목의 교회를 축성일 줄에서 뺀다
   const picked = dedicationModelOf(rs, { "grid:easter-5-sunday": [group("s", FOUR)] }, MINE, { obs: "my-dedication" });
-  same([picked.dayName, picked.dedicationLines[0], others(picked)], ["강릉성당 축성일", "원주성당 축성일", [["부활 5주일", "/lectionary/2026-04-26"]]]);   // 기본 독서인 주일의 주소는 날짜뿐이다
+  same([picked.dayName, picked.dedicationLines[0], others(picked)], ["강릉성당 축성일", "원주성당 축성일", [["부활 5주일", "/lectionary/2026-04-26", "grid:easter-5-sunday"]]]);   // 기본 독서인 주일의 주소는 날짜뿐이다
 
   for (const [id, name, rank] of [["d0425-마르코", "성 마르코(복음사가)", "major_feast"], ["lunar815-추석-명절", "추석 명절", "regional_festival"]]) {
     const feast = cand(obs(id, name, { rank, precedence: rank === "major_feast" ? 6 : 0, color: "white" }));
@@ -977,7 +985,7 @@ test("buildLectionaryModel: 주일, 주요축일, 평일의 명절에 온 소속
     const r = resolvedOf("2026-04-21", [feast, grid], feast);
     const m = dedicationModelOf(r, { [id]: [group(`p-${id}`, FOUR)], "grid:easter-4-weekday-tue": [group("g", FOUR)] }, MINE, {}, true);
     assert.strictEqual(m.selected, feast, rank);
-    same(others(m)[0], ["강릉성당 축성일", "/lectionary/2026-04-21?obs=my-dedication"], rank);
+    same(others(m)[0], ["강릉성당 축성일", "/lectionary/2026-04-21", "my-dedication"], rank);
   }
 });
 
@@ -1127,8 +1135,8 @@ test("buildLectionaryModel: 트랙 — 기억(마지막 선택)이 기본, URL �
   assert.strictEqual(remembered.choices[0].name, "연중 11주일");   // 주기와 독서 N은 이름에 붙이지 않는다 — 제목 아래 줄과 세그먼트에 있다(2026-11-04)
   assert.strictEqual(remembered.choices[0].href, "/lectionary/2026-06-14?track=2");   // 목록의 링크도 그 트랙을 적는다
   same(plain(remembered.hrefs.tracks), [
-    { track: 1, href: "/lectionary/2026-06-14?track=1", active: false },
-    { track: 2, href: "/lectionary/2026-06-14?track=2", active: true },
+    { track: 1, href: "/lectionary/2026-06-14?track=1", query: null, active: false },
+    { track: 2, href: "/lectionary/2026-06-14?track=2", query: null, active: true },
   ]);
   // 트랙을 바꿔도 본기도 선택(collect=2)은 남고, 세트는 그 트랙의 첫 세트로 돌아간다(Copilot 1회차).
   const withCollect = ctx.buildLectionaryModel(r, { obs: null, track: 2, set: null, collect: 2 }, groupsOf, [{ candidate: sunday, collects: [collect(59, "…", { collect_no: 1, collect_total: 2 }), collect(60, "…", { collect_no: 2, collect_total: 2 })] }], 2);

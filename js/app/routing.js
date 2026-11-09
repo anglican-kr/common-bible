@@ -819,6 +819,22 @@ function focusInPageTarget(id) {
   target.focus();
 }
 
+/**
+ * 링크에 실린 전례독서의 선택(`data-lect-query`, lectionary.js `lectQueryAttrs`). 없거나 읽을 수 없으면 null이다.
+ * @param {HTMLAnchorElement} a
+ * @returns {object | null}
+ */
+function lectQueryOf(a) {
+  const raw = a.getAttribute("data-lect-query");
+  if (!raw) return null;
+  try {
+    const q = JSON.parse(raw);
+    return q && typeof q === "object" ? q : null;
+  } catch {
+    return null;
+  }
+}
+
 document.addEventListener("click", (e) => {
   const t = e.target;
   if (!(t instanceof Element)) return;
@@ -841,8 +857,14 @@ document.addEventListener("click", (e) => {
   const path = url.pathname + url.search;
   // 같은 화면을 다시 그리는 링크면 그 자리 — route() 가 시작하자마자 꺼내 간다(위 `_pendingFocusSpot`).
   _pendingFocusSpot = focusSpotOf(a, e, $app);
+  // 전례독서에서 소속교회에 따라 달라지는 선택은 주소에 적지 않고 이 기록 항목의 상태로 넘긴다. 주소가 같아도 새 항목이라 뒤로 가기가
+  // 앞의 선택으로 돌아간다. 전례독서 화면이 이 상태를 주소보다 먼저 읽는다(lectionary.js, ADR-041 §8)
+  const lectQuery = lectQueryOf(a);
   try {
-    if (path === location.pathname + location.search) {
+    if (lectQuery) {
+      history.pushState({ lectionaryQuery: lectQuery }, "", path);
+      route();
+    } else if (path === location.pathname + location.search) {
       route();
     } else {
       navigate(path);

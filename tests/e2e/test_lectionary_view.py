@@ -2229,8 +2229,9 @@ def _wait_day(page, name):
 
 
 def test_my_dedication_opens_first_on_a_weekday_and_keeps_the_church_out_of_page_views(desktop_context):
-    """용인성당 축성일 2025-01-31(연중 3주 금요일)에는 제목이 「용인성당 축성일」이고 평일은 목록의 줄이다. 문서 제목과 방문 기록은
-    소속교회가 없는 사람이 같은 주소를 열 때와 같다. 평일 줄을 고르면 주소에 그 평일이 붙고, 축성일 줄의 주소는 날짜뿐이다(ADR-041 §6, §8)."""
+    """용인성당 축성일 2025-01-31(연중 3주 금요일)에는 제목이 「용인성당 축성일」이고 평일은 목록의 줄이다. 평일 줄을 고르거나 다시
+    축성일로 돌아가도 주소는 날짜뿐이고 문서 제목은 소속교회가 없는 사람이 그 주소를 열 때와 같다. 고른 것은 기록 항목의 상태로
+    남아 뒤로 가기가 앞 선택으로 돌아간다(ADR-041 §6, §8)."""
     desktop_context.add_init_script(_with_parish("용인성당"))
     page = desktop_context.new_page()
     _open(page, "lectionary/2025-01-31")
@@ -2238,33 +2239,39 @@ def test_my_dedication_opens_first_on_a_weekday_and_keeps_the_church_out_of_page
     assert page.title() == "연중 3주 금요일 전례독서 — 공동번역성서"   # 소속교회가 없는 사람의 제목과 같다
     assert _choices(page) == ["연중 3주 금요일"]
     assert "용인성당" not in page.inner_text(".lect-head").replace("용인성당 축성일", "", 1)   # 축성일 줄에서는 빠진다
-    page.wait_for_function(f"() => ({PAGE_VIEWS})().length > 0")
-    for v in page.evaluate(PAGE_VIEWS):
-        assert v["page_title"] == "연중 3주 금요일 전례독서 — 공동번역성서" and "obs=" not in v["page_location"], v
 
     page.locator(".lect-choice", has_text="연중 3주 금요일").click()
     _wait_day(page, "연중 3주 금요일")
-    assert "obs=grid%3Aordinary-3-weekday-fri" in page.url
+    assert page.url == f"{BASE}/lectionary/2025-01-31"
     assert page.title() == "연중 3주 금요일 전례독서 — 공동번역성서"
     assert _choices(page) == ["용인성당 축성일"]
     assert page.locator(".lect-choice", has_text="용인성당 축성일").get_attribute("href") == "/lectionary/2025-01-31"
+    page.go_back()
+    _wait_day(page, "용인성당 축성일")
+    page.go_forward()
+    _wait_day(page, "연중 3주 금요일")
+    for v in page.evaluate(PAGE_VIEWS):
+        assert v["page_title"] == "연중 3주 금요일 전례독서 — 공동번역성서" and v["page_location"] == f"{BASE}/lectionary/2025-01-31", v
 
 
-def test_my_dedication_on_a_sunday_is_the_first_row_with_a_fixed_address(desktop_context):
-    """강동성당 축성일 2025-05-11(부활 4주일)에는 주일이 먼저이고 축성일은 목록의 맨 앞 줄이다. 그 줄의 주소는 `?obs=my-dedication`이고,
-    고르면 문서 제목은 소속교회가 없는 사람이 그 주소를 열 때의 제목(부활 4주일)이다(ADR-041 §6, §8)."""
+def test_my_dedication_on_a_sunday_is_the_first_row_without_its_own_address(desktop_context):
+    """강동성당 축성일 2025-05-11(부활 4주일)에는 주일이 먼저이고 축성일은 목록의 맨 앞 줄이다. 그 줄을 골라도 주소는 날짜뿐이고 문서
+    제목은 그날 주일의 제목이라, 방문 기록이 소속교회 없이 그날을 연 방문과 같다. 새로 고쳐도 고른 축성일이 남는다(ADR-041 §6, §8)."""
     desktop_context.add_init_script(_with_parish("강동성당"))
     page = desktop_context.new_page()
     _open(page, "lectionary/2025-05-11")
     assert page.inner_text(".lect-day") == "부활 4주일"
     assert _choices(page)[0] == "강동성당 축성일"
+    assert page.locator(".lect-choice", has_text="강동성당 축성일").get_attribute("href") == "/lectionary/2025-05-11"
     page.locator(".lect-choice", has_text="강동성당 축성일").click()
     _wait_day(page, "강동성당 축성일")
-    assert page.url == f"{BASE}/lectionary/2025-05-11?obs=my-dedication"
+    assert page.url == f"{BASE}/lectionary/2025-05-11"
     assert page.title() == "부활 4주일 전례독서 — 공동번역성서"
-    page.wait_for_function(f"() => ({PAGE_VIEWS})().some((v) => v.page_location.includes('my-dedication'))")
+    page.reload()
+    _wait_day(page, "강동성당 축성일")
+    page.wait_for_function(f"() => ({PAGE_VIEWS})().length > 0")
     for v in page.evaluate(PAGE_VIEWS):
-        assert "강동성당" not in v["page_title"] and _church_id("강동성당") not in v["page_location"], v
+        assert v["page_title"] == "부활 4주일 전례독서 — 공동번역성서" and v["page_location"] == f"{BASE}/lectionary/2025-05-11", v
 
 
 def test_my_dedication_address_opens_the_day_for_someone_without_the_church(desktop_context):
