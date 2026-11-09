@@ -1042,7 +1042,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   });
   // 성인 축일이 둘 이상이고 색이 다르면 본기도 차례대로 「적색 또는 백색」(사용자 결정 2026-11-03 — memorialOf)
   const colorsOr = selected === publicInitial && memorial.colors.length > 1;
-  // 소속교회의 축성일은 엔진이 그날 색을 계산할 때 넣지 않은 후보라, 그날의 병기 색(사계재의 자색)이나 대체색(성모 축일의 청색)을 받지 않고 자기 색 하나다
+  // 소속교회의 축성일은 엔진이 그날 색을 계산할 때 넣지 않은 후보라, 그날 함께 적는 색(사계재의 자색)이나 대체색(성모 축일의 청색)을 받지 않고 자기 색 하나다
   const { colors, colorAlt, ownColor } = colorsOr
     ? { colors: memorial.colors, colorAlt: /** @type {string[]} */ ([]), ownColor: false }
     : selected === dedication && dedication.observance.color

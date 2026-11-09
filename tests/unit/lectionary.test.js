@@ -981,9 +981,9 @@ test("buildLectionaryModel: 주일, 주요축일, 평일의 명절에 온 소속
   }
 });
 
-test("buildLectionaryModel: 축성일 화면의 머리 색은 축성일의 백색 하나 — 그날의 병기 색(사계재의 자색)과 대체색(청색)을 받지 않는다(PR #542 리뷰)", () => {
+test("buildLectionaryModel: 축성일 화면의 머리 색은 축성일의 백색 하나이고, 그날 함께 적는 색(사계재의 자색)과 대체색(청색)을 받지 않는다(PR #542 리뷰)", () => {
   const grid = cand(obs("grid:ordinary-24-weekday-fri", "연중 24주 금요일", { rank: "feria", precedence: 8, color: "green" }));
-  // 그날 대표색이 백색이고 사계재의 자색이 병기되며 청색 대체색이 있는 날(2025-09-19 추계재 금요일과 같은 경우)
+  // 그날 대표색이 백색이고 사계재의 자색을 함께 적으며 청색 대체색이 있는 날(2025-09-19 추계재 금요일과 같은 경우)
   const r = resolvedOf("2025-09-19", [grid], grid, { color: "white", colors: ["violet", "white"], colorAlt: "blue" });
   const m = dedicationModelOf(r, { "grid:ordinary-24-weekday-fri": [group("g", FOUR)] }, MINE);
   same([m.dayName, m.colors, m.colorAlt, m.ownColor], ["강릉성당 축성일", ["white"], [], true]);
