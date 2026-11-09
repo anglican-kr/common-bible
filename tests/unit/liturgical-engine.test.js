@@ -1392,24 +1392,25 @@ test("C-6.1-4 명절 ∧ 연중 주일 — 주일 격자가 지정 전례일이�
   same(officialId(r), "grid:ordinary-x-sunday");
   same(fate(r, "lunar11-seol"), ["proper", null]);
   // 그날 명절의 유효 우선순위는 연중 주일(5) 바로 다음이고, 후보의 값과 표의 값(0)은 그대로다
-  same([ctx.sundayPrecedenceOn("2027-02-07"), ctx.effectivePrecedence(cand(r, "lunar11-seol").observance, ctx.sundayPrecedenceOn("2027-02-07")), cand(r, "lunar11-seol").observance.precedence], [5, 5.5, 0]);
-  same([ctx.sundayPrecedenceOn("2027-02-08"), ctx.effectivePrecedence(cand(r, "lunar11-seol").observance, null)], [null, 0]);   // 주일이 아니면 표의 값
+  // 주일의 우선순위는 함께 순위를 세우는 목록의 주일 격자에서 읽는다. 주일 격자가 없으면 명절은 표의 값이다
+  same([ctx.sundayPrecedenceIn(r.candidates), ctx.effectivePrecedence(cand(r, "lunar11-seol").observance, ctx.sundayPrecedenceIn(r.candidates)), cand(r, "lunar11-seol").observance.precedence], [5, 5.5, 0]);
+  same([ctx.sundayPrecedenceIn(rb("2027-02-08").candidates), ctx.effectivePrecedence(cand(r, "lunar11-seol").observance)], [null, 0]);
   same(r.candidates.map((c) => c.observance.id), ["lunar11-seol", "grid:ordinary-x-sunday"]);
 });
 
 test("C-6.1-4b 명절 ∧ 절기 주일 — 절기 주일도 명절보다 선순위다(ADR-036 §7 규칙 5, 사용자 결정 2026-11-09)", () => {
-  // 2026-12-27 = 성탄 1주일(prec 2). 2025-2050 실데이터에는 이 경우가 없다
+  // 2026-12-27은 성탄 1주일(prec 2)이다. 2025-2050 실데이터에는 이 경우가 없다
   const t = passEngine(passTables([
     SAN("lunar815-chuseok", null, "추석", { lunar: "8-15", rank: "regional_festival", precedence: 0 }),
   ], [], { years: { "2026": { "8-15": "12-27" } } }));
   const r = t.at("2026-12-27");
   const grid = r.candidates.find((c) => c.observance.id.startsWith("grid:")).observance;
-  same([grid.rank, officialId(r), fate(r, "lunar815-chuseok"), ctx.effectivePrecedence(cand(r, "lunar815-chuseok").observance, ctx.sundayPrecedenceOn("2026-12-27"))],
+  same([grid.rank, officialId(r), fate(r, "lunar815-chuseok"), ctx.effectivePrecedence(cand(r, "lunar815-chuseok").observance, ctx.sundayPrecedenceIn(r.candidates))],
     ["privileged_sunday", grid.id, ["proper", null], 2.5]);
 });
 
 test("C-6.1-4c 주일에 온 명절 ∧ 주일보다 선순위인 축일 — 그 축일이 지정 전례일이고 옮기지 않으며, 명절은 proper로 남는다(ADR-036 §7 규칙 1, 5, 사용자 결정 2026-11-09)", () => {
-  // 2025-02-02 = 연중 주일(합성 표에는 주의 세례 기준 주차가 없어 x)에 설과 주의 봉헌(A 특례, 유효 1.5), 2025-09-28 = 연중 주일에 추석과 합성 C 축일(4).
+  // 2025-02-02는 연중 주일(합성 표에는 주의 세례 기준 주차가 없어 x)이고 설과 주의 봉헌(A 특례, 유효 1.5)이 함께 있다. 2025-09-28은 연중 주일이고 추석과 합성 C 축일(4)이 함께 있다.
   // 평일이면 명절이 선순위라 축일을 옮기지만(규칙 1), 주일에 온 명절은 그 주일 다음 순위라 주일보다 선순위인 축일보다 후순위다.
   // 2025-2050 실데이터에는 이 경우가 없다
   const t = passEngine(passTables([
@@ -1423,6 +1424,45 @@ test("C-6.1-4c 주일에 온 명절 ∧ 주일보다 선순위인 축일 — 그
   same([officialId(feb), fate(feb, "d0202-p"), fate(feb, "lunar11-seol")], ["d0202-p", ["proper", null], ["proper", null]]);
   const sep = t.at("2025-09-28");
   same([officialId(sep), fate(sep, "d0928-c"), fate(sep, "lunar815-chuseok")], ["d0928-c", ["proper", null], ["proper", null]]);
+});
+
+test("C-6.1-4d 주일에 온 명절 ∧ 그 주일보다 후순위인 주요축일 — 축일은 다음날로 옮기고, 밀어낸 것은 명절이 아니라 주일 격자다(ADR-036 §7 규칙 5)", () => {
+  // 2026-12-27은 성탄 1주일(2)이고 추석과 우선순위 3인 합성 축일이 함께 있다. 2025-09-28은 연중 주일(5)이고 추석과 주요축일 나(6)가 함께 있다.
+  // 명절은 그 주일 다음 순위(2.5, 5.5)라 두 축일은 주일보다도 명절보다도 후순위다. 2025-2050 실데이터에는 이 경우가 없다
+  const advent = passEngine(passTables([
+    MOV("d1227-a", "12.27", { precedence: 3 }),
+    SAN("lunar815-chuseok", null, "추석", { lunar: "8-15", rank: "regional_festival", precedence: 0 }),
+  ], [], { years: { "2026": { "8-15": "12-27" } } }));
+  const dec = advent.at("2026-12-27");
+  const decGrid = dec.candidates.find((c) => c.observance.id.startsWith("grid:")).observance;
+  same([decGrid.rank, officialId(dec), fate(dec, "lunar815-chuseok")], ["privileged_sunday", decGrid.id, ["proper", null]]);
+  same(seats(advent.pass(2026).departures, "2026-12"), { "2026-12-27": ["d1227-a->2026-12-28"] });
+  same(advent.pass(2026).departures.get("2026-12-27")[0].displacedBy, decGrid.id);
+
+  const ordinary = passEngine(passTables([
+    MOV("d0928-b", "09.28"),
+    SAN("lunar815-chuseok", null, "추석", { lunar: "8-15", rank: "regional_festival", precedence: 0 }),
+  ], [], { years: { "2025": { "8-15": "09-28" } } }));
+  const sep = ordinary.at("2025-09-28");
+  const sepGrid = sep.candidates.find((c) => c.observance.id.startsWith("grid:")).observance;
+  same([sepGrid.rank, officialId(sep), fate(sep, "lunar815-chuseok")], ["sunday", sepGrid.id, ["proper", null]]);
+  same(seats(ordinary.pass(2025).departures, "2025-09"), { "2025-09-28": ["d0928-b->2025-09-29"] });
+  same(ordinary.pass(2025).departures.get("2025-09-28")[0].displacedBy, sepGrid.id);
+});
+
+test("C-6.1-4e 다른 날에서 밀려 옮겨 오는 주요축일은 명절과 겹친 연중 주일에 들어가 지정 전례일이 된다(ADR-036 §7 규칙 5, 사용자 결정 2026-11-09)", () => {
+  // 2025-09-27(토)에 해마다 날짜가 바뀌는 합성 대축일(1)이 주요축일 가(3)를 민다. 다음날 2025-09-28은 추석과 겹친 연중 주일이다.
+  // 주일에 온 명절은 그 주일 다음 순위(5.5)이고 연중 주일(5)은 주요축일 가보다 후순위라, 축일은 그 주일로 옮겨 온다.
+  // 명절이 없는 연중 주일과 같다. 2025-2050 실데이터에는 이 경우가 없다
+  const t = passEngine(passTables([
+    MOV("d0927-a", "09.27", { precedence: 3 }),
+    SAN("lunar11-wall", null, "합성 음력 대축일", { lunar: "1-1", rank: "principal", precedence: 1 }),
+    SAN("lunar815-chuseok", null, "추석", { lunar: "8-15", rank: "regional_festival", precedence: 0 }),
+  ], [], { years: { "2025": { "1-1": "09-27", "8-15": "09-28" } } }));
+  same(seats(t.pass(2025).departures, "2025-09"), { "2025-09-27": ["d0927-a->2025-09-28"] });
+  const sun = t.at("2025-09-28");
+  same([officialId(sun), fate(sun, "d0927-a")[0], fate(sun, "lunar815-chuseok")], ["d0927-a", "transferred_in", ["proper", null]]);
+  same(fate(sun, sun.candidates.find((c) => c.observance.id.startsWith("grid:")).observance.id), ["proper", null]);
 });
 
 test("C-6.1-5 A > C > B (잠정 — ADR-036 §6) · 고정일끼리는 동시 봉헌이라 후순위인 쪽도 proper", () => {
@@ -1905,7 +1945,7 @@ test("C-6.2-4 · C-6.2-11 목적지 충돌 — 옮겨 지키지 않는 선택 �
 });
 
 test("C-6.2-8 옮겨 지키기로 한 선택 봉헌이 목적지에서 후순위여도 다시 옮기지 않는다 — 그날 옮길 고유 축일이 함께 있어도(옮겨 온 축일을 다시 옮기지 않는 것은 명시 분기)", () => {
-  // 2026-12-27 = 성탄 1주일(절기 주일, prec 2). 옮겨 지키기로 한 O(12.29에서 12.27로, prec 3)는 그 주일보다 후순위지만 옮겨 온 축일이라
+  // 2026-12-27은 성탄 1주일(절기 주일, prec 2)이다. 옮겨 지키기로 한 O(12.29에서 12.27로, prec 3)는 그 주일보다 후순위지만 옮겨 온 축일이라
   // 남고, 같은 날의 고유 축일 M만 옮겨진다. 실데이터에는 이 경우가 없다(2030-02-03의 주의 봉헌은 설과 겹친 연중 주일보다 선순위다)
   const t = passEngine(passTables([
     SAN("d1229-o", "12.29", "합성 선택 봉헌", { rank: "major_feast", precedence: 3, transferable: true, transfer_to: "nearby_sunday" }),
