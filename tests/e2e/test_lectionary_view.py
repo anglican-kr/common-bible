@@ -1477,11 +1477,11 @@ def test_commemoration_is_a_line_not_a_chip(desktop_context):
 def test_parish_dedications_are_lines_below_the_day_names(desktop_context):
     """그날 축성되거나 축복된 교회는 이름 줄 맨 아래에 종류마다 한 줄이다. 교회 이름을 쉼표로 잇고 「축성일」 · 「축복일」은
     한 번만 붙이며, 「북.」으로 시작하는 성당(북한에 있던 성당)은 보이지 않는다(사용자 결정 2026-11-04). 데이터 본당 표
-    (local-observances.json) 2026-04-21은 축성 하나(강릉), 축복 둘(세종, 청주산남), 05-16은 북한 성당 둘뿐이다."""
+    (local-observances.json) 2026-04-21은 축성 하나(강릉), 축복 하나(세종), 05-16은 북한 성당 둘뿐이다."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-04-21")
     lines = page.eval_on_selector_all(".lect-day-saint", "els => els.map(e => e.textContent)")
-    assert lines[-2:] == ["강릉성당 축성일", "세종성당, 청주산남성당 축복일"], lines
+    assert lines[-2:] == ["강릉성당 축성일", "세종성당 축복일"], lines
     # 다른 전례일(안셀름, 부활 4주 화요일 격자)을 골라도 제목 아래 줄은 그대로다
     for obs in ["d0421-안셀름", "grid:easter-4-weekday-tue"]:
         _open(page, "lectionary/2026-04-21?obs=" + urllib.parse.quote(obs))

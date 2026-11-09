@@ -858,8 +858,9 @@ test("9.29 — 제목은 성 미카엘, 이름 줄은 「1992년 9월 29일 관�
 });
 
 test("축성일 줄 — 실제 본당 표에서 축성과 축복이 섞인 날은 두 줄, 같은 종류는 한 줄에 모으고, 북한 성당뿐인 날은 줄이 없다(사용자 결정 2026-11-04)", { skip: SKIP }, () => {
-  same(model("2026-04-21").dedicationLines, ["강릉성당 축성일", "세종성당, 청주산남성당 축복일"]);
-  same(model("2026-09-01").dedicationLines, ["일산성당, 초지성당, 행신성당 축성일"]);
+  same(model("2026-04-21").dedicationLines, ["강릉성당 축성일", "세종성당 축복일"]);
+  same(model("2026-09-02").dedicationLines, ["일산성당, 초지성당, 행신성당 축성일"]);
+  same(model("2026-10-13").dedicationLines, ["송강성당, 유성성당 축복일"]);
   same(model("2026-05-16").dedicationLines, []);   // 북.버드내성당 · 북.장림성당
   same(model("2026-01-31").dedicationLines, ["용인성당 축성일"]);
   // 어느 날이든 「북.」 성당은 줄에 없다
