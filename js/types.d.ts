@@ -854,6 +854,8 @@ export interface Founding {
   level: "province" | "diocese";
   /** 관구는 「대한성공회」, 교구는 「서울」처럼 「교구」를 뗀 이름이다. */
   name: string;
+  /** 표시 이름. 관구는 「관구」, 교구는 「서울교구」다(이름 줄과 본기도가 함께 쓴다). */
+  label: string;
   /** 「MM.DD」 */
   date: string;
   year: number | null;

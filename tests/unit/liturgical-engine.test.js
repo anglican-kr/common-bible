@@ -2178,12 +2178,16 @@ test("교구 설립일 — 소속교회가 속한 교구의 설립일만 내고,
   const e = loadEngine(fakeFetch([]));
   await e.preloadLectionary();
   const of = (d, parish) => plain(e.findFoundings(d, parish)).map((f) => [f.level, f.name, f.date, f.year]);
+  same(plain(e.findFoundings("2026-05-27", "k7m3qx")).map((f) => f.label), ["서울교구"]);
   // 5.27은 서울교구와 대전교구가 겹치지만 소속교회의 교구 것만 낸다
   same(of("2026-05-27", "k7m3qx"), [["diocese", "서울", "05.27", 1965]]);
   same(of("2027-05-27", "n4p8rt"), [["diocese", "대전", "05.27", 1965]]);
   same(of("2026-06-01", "w2h9cd"), [["diocese", "부산", "06.01", 1974]]);
-  // 다른 날, 고르지 않음, 표에 없는 교회, 교구가 없는 교회(북한에 있던 성당)는 없다
+  // 다른 날, 고르지 않음, 표에 없는 교회는 없다. 교구가 없는 교회(북한에 있던 성당)는 교구 설립일이 없다
   same([of("2026-06-01", "k7m3qx"), of("2026-05-27", ""), of("2026-05-27"), of("2026-05-27", "zzzzzz")], [[], [], [], []]);
+  const north = e.buildLectionaryIndex({ ...LEC_TABLES, localObservances: { ...LEC_TABLES.localObservances,
+    parishes: [{ church_id: "nrth22", name: "북.가성당", diocese: null, dedication: null }] } });
+  same([north.parishDiocese.has("nrth22"), plain(e.findFoundingsIn(north, "05.27", "nrth22"))], [false, []]);
   // 관구 설립일은 소속교회와 무관하게 낸다
   same(of("2026-09-29", "k7m3qx"), [["province", "대한성공회", "09.29", 1992]]);
   // 실제 원문. 앞의 「{name}교구(관구)」와 뒤의 「교구(관구)」를 함께 고른다(사용자 확인 2026-11-05)

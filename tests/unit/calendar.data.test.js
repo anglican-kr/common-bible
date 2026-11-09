@@ -230,7 +230,8 @@ const lec = () => (lecIndex ??= ctx.buildLectionaryIndex({
   readings: read("eucharist-readings.json"), collects: read("eucharist-collects.json"),
   commons: read("commons.json"), localObservances: read("local-observances.json"),
 }));
-function headModel(d) {
+/** 공개 래퍼(`lectionaryModelOf`)와 같은 조합의 전례독서 모델. `parish`는 설정 「소속교회」의 교회 식별자다. */
+function headModel(d, parish = "") {
   const r = resolve(d);
   const cache = new Map();
   const groupsOf = (c) => {
@@ -238,10 +239,25 @@ function headModel(d) {
     return cache.get(c.observance.id);
   };
   const key = `${d.slice(5, 7)}.${d.slice(8, 10)}`;
-  return ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOf, ctx.findCollectsIn(lec(), index(), r), null,
-    lec().dedications.get(key) || [], false, ctx.findFoundingsIn(lec(), key));
+  const dedications = lec().dedications.get(key) || [];
+  const mine = ctx.myDedicationOf(dedications, parish);
+  const collects = ctx.findCollectsIn(lec(), index(), mine ? { ...r, candidates: [mine.candidate, ...r.candidates] } : r);
+  return ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOf, collects, null,
+    dedications, false, ctx.findFoundingsIn(lec(), key, parish), mine);
 }
-const rowOf = (d) => ctx.listRowOf(headModel(d), "2026-11-07");
+const rowOf = (d, parish = "") => ctx.listRowOf(headModel(d, parish), "2026-11-07");
+/** 본당 표에서 교회 이름으로 찾은 교회 식별자. */
+const churchIdOf = (name) => read("local-observances.json").parishes.find((p) => p.name === name).church_id;
+
+test("목록 줄 — 소속교회를 고르면 전례독서 화면처럼 축성일이 제목이고, 교구 설립일 줄이 생긴다(ADR-041 §6)", { skip: SKIP }, () => {
+  const yongin = churchIdOf("용인성당");   // 서울교구, 축성일 01.31
+  same([rowOf("2025-01-31").title, rowOf("2025-01-31", yongin).title], ["연중 3주 금요일", "용인성당 축성일"]);
+  assert.strictEqual(rowOf("2025-01-31", yongin).level, "");   // 굵기는 그날의 기본 독서(평일)를 따른다
+  const founding = rowOf("2026-05-27", yongin);
+  assert.ok(founding.lines.includes("1965년 5월 27일 서울교구설립일"), founding.lines.join(" | "));
+  assert.ok(!rowOf("2026-05-27").lines.some((l) => l.includes("교구설립일")));
+  assert.ok(!rowOf("2026-05-27", churchIdOf("부산주교좌성당")).lines.some((l) => l.includes("교구설립일")));
+});
 
 test("목록 줄 — 11.6은 전례독서처럼 제목이 평일 이름이고 레오나드는 이름 줄이다", { skip: SKIP }, () => {
   const r = rowOf("2026-11-06");

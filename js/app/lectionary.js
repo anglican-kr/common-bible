@@ -574,7 +574,7 @@ function dedicationFirst(publicInitial, date) {
 function foundingLines(entries) {
   return entries.map((f) => {
     const [m, d] = f.date.split(".").map(Number);
-    return `${f.year ? `${f.year}년 ` : ""}${m}월 ${d}일 ${f.level === "diocese" ? `${f.name}교구` : "관구"}설립일`;
+    return `${f.year ? `${f.year}년 ` : ""}${m}월 ${d}일 ${f.label}설립일`;
   });
 }
 
@@ -1435,7 +1435,7 @@ function buildCollects(m) {
   const o = m.collects[Math.max(m.collectIndex, 0)];
   const art = el("article", { className: "lect-collect chapter-text", lang: "ko" });
   art.appendChild(el("p", { className: "lect-collect-text" }, o.text));
-  // 기리는 성인의 본기도와 관구 설립 본기도 — 고른 본기도 다음, 송영 앞(memorialOf, buildLectionaryModel의 foundingCollects).
+  // 기리는 성인의 본기도와 설립 본기도(관구, 소속교회의 교구)는 고른 본기도 다음, 송영 앞이다(memorialOf, buildLectionaryModel의 foundingCollects).
   for (const mc of m.memorialCollects) art.appendChild(el("p", { className: "lect-collect-text" }, mc.text));
   section.appendChild(art);
   // 송영 — 고른 본기도(기리는 성인의 본기도가 있으면 마지막 것) 뒤에 1회(ADR-036 §3).

@@ -1057,7 +1057,7 @@ test("buildLectionaryModel: 관구 설립일에는 「1992년 9월 29일 관구�
   const r = resolvedOf("2030-09-29", [mich, grid], mich);
   const groupsOf = groupsOfFrom({ "d0929-mich": [group("m", FOUR)], "grid:ordinary-26-sunday": [group("g", FOUR)] });
   const entries = [{ candidate: mich, collects: [collect("m-c", "미카엘")] }, { candidate: grid, collects: [collect("g-c", "연중")] }];
-  const province = { level: "province", name: "대한성공회", date: "09.29", year: 1992,
+  const province = { level: "province", name: "대한성공회", label: "관구", date: "09.29", year: 1992,
     collect: { id: "common:anniversary-province-대한성공회", title: "설립일", collect_no: 1, collect_total: 1, text: "관구", ending: "C", common: "anniversary" } };
   const q = { obs: null, track: null, set: null, collect: null };
   const m = ctx.buildLectionaryModel(r, q, groupsOf, entries, null, [], false, [province]);
@@ -1080,7 +1080,7 @@ test("buildLectionaryModel: 소속교회의 교구 설립일에는 「1965년 5�
   const r = resolvedOf("2029-05-27", [weekday, sunday], sunday, { coord: { season: "easter", week: 7, type: "sunday", weekday: "sun", year: "B" } });
   const groupsOf = groupsOfFrom({ "grid:easter-7-sunday": [group("s", FOUR)], "d0527-x": [group("x", FOUR)] });
   const entries = [{ candidate: sunday, collects: [collect("s-c", "주일")] }, { candidate: weekday, collects: [collect("x-c", "축일")] }];
-  const seoul = { level: "diocese", name: "서울", date: "05.27", year: 1965,
+  const seoul = { level: "diocese", name: "서울", label: "서울교구", date: "05.27", year: 1965,
     collect: { id: "common:anniversary-diocese-서울", title: "설립일", collect_no: 1, collect_total: 1, text: "서울교구", ending: "A", common: "anniversary" } };
   const q = { obs: null, track: null, set: null, collect: null };
   const m = ctx.buildLectionaryModel(r, q, groupsOf, entries, null, [], false, [seoul]);

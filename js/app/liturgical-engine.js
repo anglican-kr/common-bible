@@ -1898,7 +1898,7 @@ function coordKey(/** @type {unknown} */ season, /** @type {unknown} */ week, /*
 
 /**
  * 독서 묶음 다섯 표 → 인덱스. `commons.classes`는 배열이 아니라 **맵**이다(§5.2). 반절 경계 표는 「bookId:장:절+a|b」 키로 찾는다(`halfVerseKey`). 본당 표
- * (`local-observances`)는 축성일 「MM.DD」 키로 찾고(`buildDedicationIndex`), 같은 표의 관구 설립일(`provinceOf`), 교구 설립일(`diocesesOf`), 교회마다 속한
+ * (`local-observances`)는 축성일 「MM.DD」 키로 찾고(`buildDedicationIndex`), 같은 표의 관구 설립일(`foundedOf`), 교구 설립일(`diocesesOf`), 교회마다 속한
  * 교구(`parishDioceseOf`)도 읽는다.
  * @param {{readings?: any, collects?: any, commons?: any, halfVerses?: any, localObservances?: any} | null} tables
  * @returns {LectionaryIndex}
@@ -1924,18 +1924,10 @@ function buildLectionaryIndex(tables) {
 function localObservancesOf(table) {
   return {
     dedications: buildDedicationIndex(table),
-    province: provinceOf(table),
+    province: foundedOf(table && table.province),   // 관구 설립일, 없거나 형식이 깨졌으면 null
     dioceses: diocesesOf(table),
     parishDiocese: parishDioceseOf(table),
   };
-}
-
-/**
- * 본당 표(`local-observances.json`)의 관구 설립일(`province`) — 이름, 「MM.DD」, 설립연도. 없거나 형식이 깨졌으면 null이다.
- * @param {any} table @returns {{name: string, date: string, year: number | null} | null}
- */
-function provinceOf(table) {
-  return foundedOf(table && table.province);
 }
 
 /**
@@ -2253,6 +2245,15 @@ function collectsOf(lix, cal, resolved, obs) {
 }
 
 /**
+ * 설립일의 표시 이름. 관구는 「관구」, 교구는 「서울교구」다. 이름 줄(「1965년 5월 27일 서울교구설립일」, lectionary.js `foundingLines`)과
+ * 본기도(「이곳에 서울교구를 세우심을」, `foundingCollectOf`)가 이 이름을 함께 쓴다.
+ * @param {string} name @param {Founding["level"]} level
+ */
+function foundingLabelOf(name, level) {
+  return level === "province" ? "관구" : `${name}교구`;
+}
+
+/**
  * 설립일 공통 본기도(`commons.json`의 `anniversary`)에 설립일 하나의 이름을 넣어 만든다(ADR-041 §6). 원문의 「{name}교구(관구)」와 뒤쪽 「교구(관구)」를
  * 설립일의 종류에 따라 고른다(사용자 확인 2026-11-05). 관구 설립일이면 「이곳에 대한성공회 관구를 세우심을 감사하나이다… 이 관구를
  * 기억하시고」, 교구 설립일이면 「이곳에 서울교구를 세우심을 감사하나이다… 이 교구를 기억하시고」다. 공통 본기도가 없으면 null이다.
@@ -2260,6 +2261,7 @@ function collectsOf(lix, cal, resolved, obs) {
  * @returns {CollectOption | null}
  */
 function foundingCollectOf(lix, name, level) {
+  const label = foundingLabelOf(name, level);
   const entry = commonClassOf(lix, "anniversary");
   const tmpl = entry && entry.collect && typeof entry.collect.text === "string" ? entry.collect : null;
   if (!entry || !tmpl) return null;
@@ -2270,7 +2272,7 @@ function foundingCollectOf(lix, name, level) {
     title: typeof entry.label === "string" ? entry.label : "anniversary",
     collect_no: 1,
     collect_total: 1,
-    text: String(tmpl.text).split("{name}교구(관구)").join(level === "province" ? name + " 관구" : name + "교구")
+    text: String(tmpl.text).split("{name}교구(관구)").join(level === "province" ? `${name} ${label}` : label)
       .split("교구(관구)").join(level === "province" ? "관구" : "교구").split("{name}").join(name),
     ending: e === "A" || e === "B" || e === "C" ? e : null,
     common: "anniversary",
@@ -2288,10 +2290,12 @@ function findFoundingsIn(lix, monthDay, parish = "") {
   /** @type {Founding[]} */
   const out = [];
   const p = lix.province;
-  if (p && p.date === monthDay) out.push({ level: "province", name: p.name, date: p.date, year: p.year, collect: foundingCollectOf(lix, p.name, "province") });
+  if (p && p.date === monthDay) {
+    out.push({ level: "province", name: p.name, label: foundingLabelOf(p.name, "province"), date: p.date, year: p.year, collect: foundingCollectOf(lix, p.name, "province") });
+  }
   const diocese = parish ? lix.parishDiocese.get(parish) : undefined;
   const d = diocese ? lix.dioceses.find((x) => x.name === diocese && x.date === monthDay) : undefined;
-  if (d) out.push({ level: "diocese", name: d.name, date: d.date, year: d.year, collect: foundingCollectOf(lix, d.name, "diocese") });
+  if (d) out.push({ level: "diocese", name: d.name, label: foundingLabelOf(d.name, "diocese"), date: d.date, year: d.year, collect: foundingCollectOf(lix, d.name, "diocese") });
   return out;
 }
 
