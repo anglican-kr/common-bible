@@ -1927,7 +1927,7 @@ function provinceOf(table) {
 }
 
 /**
- * 설립일 행 하나(관구, 교구) — 이름, 「MM.DD」, 설립연도. 형식이 깨졌으면 null이다.
+ * 설립일 행 하나(관구, 교구)의 이름, 「MM.DD」, 설립연도. 형식이 깨졌으면 null이다.
  * @param {any} row @returns {{name: string, date: string, year: number | null} | null}
  */
 function foundedOf(row) {
@@ -1936,7 +1936,7 @@ function foundedOf(row) {
 }
 
 /**
- * 본당 표의 교구 설립일(`dioceses`) — 서울과 대전 05.27, 부산 06.01(ADR-041 §6). 형식이 깨진 행은 뺀다.
+ * 본당 표의 교구 설립일(`dioceses`). 서울과 대전 05.27, 부산 06.01이다(ADR-041 §6). 형식이 깨진 행은 뺀다.
  * @param {any} table @returns {Array<{name: string, date: string, year: number | null}>}
  */
 function diocesesOf(table) {
@@ -1945,7 +1945,7 @@ function diocesesOf(table) {
 }
 
 /**
- * 교회 식별자 → 그 교회가 속한 교구 이름(「서울」). 소속교회의 교구 설립일을 찾는 데 쓴다(ADR-041 §6). 식별자나 교구가 없는 행(북한에 있던
+ * 교회 식별자마다 그 교회가 속한 교구 이름(「서울」)을 담는다. 소속교회의 교구 설립일을 찾는 데 쓴다(ADR-041 §6). 식별자나 교구가 없는 행(북한에 있던
  * 성당, 업데이트 전의 표)은 뺀다.
  * @param {any} table @returns {Map<string, string>}
  */
@@ -2241,7 +2241,7 @@ function collectsOf(lix, cal, resolved, obs) {
 }
 
 /**
- * 설립일 공통 본기도(`commons.json`의 `anniversary`)를 설립일 하나로 채운다(ADR-041 §6). 원문의 「{name}교구(관구)」와 뒤쪽 「교구(관구)」를
+ * 설립일 공통 본기도(`commons.json`의 `anniversary`)에 설립일 하나의 이름을 넣어 만든다(ADR-041 §6). 원문의 「{name}교구(관구)」와 뒤쪽 「교구(관구)」를
  * 설립일의 종류에 따라 고른다(사용자 확인 2026-11-05). 관구 설립일이면 「이곳에 대한성공회 관구를 세우심을 감사하나이다… 이 관구를
  * 기억하시고」, 교구 설립일이면 「이곳에 서울교구를 세우심을 감사하나이다… 이 교구를 기억하시고」다. 공통 본기도가 없으면 null이다.
  * @param {LectionaryIndex} lix @param {string} name @param {Founding["level"]} level
@@ -2265,8 +2265,8 @@ function foundingCollectOf(lix, name, level) {
 }
 
 /**
- * 그날(「MM.DD」)의 설립일 — 관구 설립일, 그리고 소속교회(`parish`, 교회 식별자)가 속한 교구의 설립일(ADR-041 §6). 관구 설립일은 모든
- * 사용자에게 같고, 교구 설립일은 소속교회를 고른 사람에게 그 교회의 교구 것만 낸다(사용자 결정 2026-11-09 — 5.27의 서울교구와 대전교구).
+ * 그날(「MM.DD」)의 설립일. 관구 설립일, 그리고 소속교회(`parish`, 교회 식별자)가 속한 교구의 설립일(ADR-041 §6). 관구 설립일은 모든
+ * 사용자에게 같고, 교구 설립일은 소속교회를 고른 사람에게 그 교회의 교구 것만 낸다(사용자 결정 2026-11-09. 5.27에는 서울교구와 대전교구가 겹친다).
  * 차례는 관구, 교구다. 전례일 후보가 아니라 화면이 덧붙이는 것이라 교회력 판정(대표, 색, 옮김)에 끼지 않는다.
  * @param {LectionaryIndex} lix @param {string} monthDay 「MM.DD」 @param {string} [parish]  빈 문자열은 선택 안 함
  * @returns {Founding[]}
@@ -2454,7 +2454,7 @@ function findDedications(dateStr) {
 }
 
 /**
- * 그날의 관구 설립일과 소속교회의 교구 설립일(`findFoundingsIn`). 본당 표를 받지 못했으면 빈 배열이다(선택 표 — §3.5). 프리로드 규칙은
+ * 그날의 관구 설립일과 소속교회의 교구 설립일(`findFoundingsIn`). 본당 표를 받지 못했으면 빈 배열이다(선택 표, §3.5). 프리로드 규칙은
  * `findReadings`와 같다.
  * @param {string} dateStr "YYYY-MM-DD" @param {string} [parish]  소속교회의 교회 식별자, 빈 문자열은 선택 안 함
  * @returns {Founding[]}
