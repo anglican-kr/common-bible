@@ -485,17 +485,22 @@ def test_parish_select_explains_when_the_list_cannot_load(browser):
 
 
 def test_parish_select_gives_up_waiting_after_ten_seconds(browser):
-    """응답 없이 멈춘 요청은 10초 뒤 받지 못한 것으로 보고 안내한다. 「불러오는 중」에 머물지 않는다(ADR-041 §9)."""
+    """응답 없이 멈춘 요청은 10초 뒤 받지 못한 것으로 보고 안내한다. 「불러오는 중」에 머물지 않는다(ADR-041 §9).
+    시험은 실제로 10초를 기다리지 않고 페이지의 시계를 앞으로 돌린다(`page.clock`)."""
     ctx = browser.new_context()
     ctx.add_init_script(CLEAR_APP_STORAGE)
     ctx.route("**/data/lectionary/local-observances.json", lambda route: None)   # 답하지 않는다
     page = ctx.new_page()
+    page.clock.install()
     try:
         _open(page)
         pop = open_settings(page)
         select = pop.get_by_label("소속교회", exact=True)
         assert select.locator("option").all_inner_texts() == ["불러오는 중"]
-        pop.get_by_text("교회 목록을 불러오지 못했습니다.", exact=False).wait_for(timeout=15_000)
+        page.clock.fast_forward(9_000)
+        assert select.locator("option").all_inner_texts() == ["불러오는 중"]   # 10초 전에는 기다린다
+        page.clock.fast_forward(2_000)
+        pop.get_by_text("교회 목록을 불러오지 못했습니다.", exact=False).wait_for(timeout=3_000)
         assert select.locator("option").all_inner_texts() == ["목록 없음"]
     finally:
         ctx.close()

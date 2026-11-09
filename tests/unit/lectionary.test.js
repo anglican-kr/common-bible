@@ -22,6 +22,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadAppHelpers } from "./harness.js";
+// 화면 모델이 쓰는 공용 도우미. 손으로 옮긴 사본 대신 진짜 helpers.js의 것을 한 번만 받는다.
+const { isFormerNorthChurch } = loadAppHelpers();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../..");
@@ -42,8 +44,7 @@ function load() {
   const ctx = {
     Object, Array, Set, Map, String, Number, Boolean, Math, JSON, console, Error,
     parseInt, isNaN, Date, NaN, URLSearchParams,
-    // 화면 모델이 쓰는 공용 도우미 — 손으로 옮긴 사본 대신 진짜 helpers.js의 것이다
-    isFormerNorthChurch: loadAppHelpers().isFormerNorthChurch,
+    isFormerNorthChurch,
   };
   vm.createContext(ctx);
   // 엔진 모듈 상태는 블록 밖에 있어 prelude 로 재선언한다(설계서 §3.3).
