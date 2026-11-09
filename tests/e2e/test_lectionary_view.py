@@ -2305,6 +2305,32 @@ def test_choosing_a_parish_in_settings_redraws_the_lectionary_when_the_popover_c
     assert page.title() == "전례독서 — 공동번역성서"
 
 
+def test_parish_redraw_waits_for_a_window_opened_from_the_settings_popover(browser):
+    """설정 팝오버에서 소속교회를 바꾸고 같은 팝오버의 설치 안내를 열면, 안내 창은 열린 채로 남고 화면은 그 창을 닫은 뒤에 다시 그린다.
+    다시 그리는 route()가 열린 창을 모두 닫기 때문이다(ADR-041 §6, PR #542 리뷰)."""
+    ctx = browser.new_context(user_agent=IPHONE_UA)   # 설치 안내 단추는 아이폰 사파리에서 보인다
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open(page, "lectionary/2025-01-31")
+        pop = open_settings(page)
+        page.wait_for_function(PARISH_READY)
+        pop.get_by_label("소속교회", exact=True).select_option(label="용인성당")
+        install = pop.locator('button[aria-label="앱으로 설치 안내 열기"]')
+        if install.count() == 0:
+            pytest.skip("이 환경에는 설치 안내 단추가 없다")
+        install.click()
+        page.wait_for_selector("#install-modal:not([hidden])")
+        page.wait_for_timeout(300)
+        assert page.locator("#install-modal:not([hidden])").count() == 1
+        assert page.inner_text(".lect-day") == "연중 3주 금요일"
+        page.keyboard.press("Escape")
+        page.wait_for_selector("#install-modal", state="hidden")
+        _wait_day(page, "용인성당 축성일")
+    finally:
+        ctx.close()
+
+
 def test_calendar_list_row_follows_my_dedication(desktop_context):
     """캘린더 목록의 줄은 전례독서 화면을 따른다. 용인성당 축성일 2025-01-31의 줄 제목은 「용인성당 축성일」이고, 목록 화면의 문서
     제목은 달 이름이다(사용자 결정 2026-11-09, ADR-041 §6)."""

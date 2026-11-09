@@ -72,6 +72,29 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
     }
   }
 
+  // 열린 창이 하나도 없을 때 실행할 일. route()가 열린 창을 모두 닫으므로, 화면을 다시 그리는 일은 열린 창이 없을 때로 미룬다.
+  /** @type {Array<() => void>} */
+  const _whenClear = [];
+
+  function anyOverlayOpen() {
+    return _overlayRegistry.some(({ panel, controller }) => panel.isConnected && controller.isOpen);
+  }
+
+  function flushWhenClear() {
+    if (anyOverlayOpen()) return;
+    for (const fn of _whenClear.splice(0)) fn();
+  }
+
+  /**
+   * 열린 창이 하나도 없으면 `fn`을 바로 실행하고, 있으면 마지막 창이 닫힌 뒤에 실행한다. 설정 팝오버를 닫으면서 다른 창(앱 설치 안내,
+   * 동기화 해제 확인)을 연 경우에 그 창을 닫지 않고 다시 그리려는 것이다(ADR-041 §6, PR #542 리뷰).
+   * @param {() => void} fn
+   */
+  function whenNoOverlayOpen(fn) {
+    _whenClear.push(fn);
+    flushWhenClear();
+  }
+
   /**
    * Build a controller for a single overlay. Returns stable `open`/`close`
    * handles plus an `isOpen` getter; both are idempotent (re-`open` while open
@@ -220,6 +243,8 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
       } else {
         panel.hidden = true;
       }
+      // 기다리는 일이 있으면 이 닫기가 끝난 뒤에 본다. 같은 누름으로 다른 창을 바로 열었으면 그 창이 닫힐 때까지 기다린다
+      if (_whenClear.length) Promise.resolve().then(flushWhenClear);
     }
 
     const controller = {
@@ -322,7 +347,7 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
     });
   }
 
-  return { createOverlay, closeAllOverlays, attachSheetDrag, attachSheetResize };
+  return { createOverlay, closeAllOverlays, whenNoOverlayOpen, attachSheetDrag, attachSheetResize };
 })();
 
 // ESM module marker (ADR-019). No runtime effect; signals TypeScript that

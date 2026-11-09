@@ -431,11 +431,6 @@ def test_synced_setting_redraws_only_the_view_it_changes(browser, fake_drive, fa
         _sync_now(page_a)
         _sync_now(page_b)
         page_b.wait_for_function("() => document.querySelector('.lect-day')?.textContent === '용인성당 축성일'")
-        # 그린 날이 옛 교회와 새 교회 어느 쪽의 축성일도 아니면 다시 그리지 않는다
-        go("/lectionary/2025-02-01", ".lectionary")
-        from_a("window.appStorage.saveParish('')")
-        assert page_b.evaluate("() => localStorage.getItem('bible-parish')") == ""
-        assert page_b.locator(".lectionary[data-keep='1']").count() == 1
 
         # 데스크톱의 설정 주소는 성서 목록 위에 설정을 연다. 목록이 보이니 같게 다시 그린다
         tab = "a[href='/deuterocanon']"

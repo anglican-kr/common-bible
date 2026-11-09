@@ -1005,6 +1005,8 @@ export interface AppOverlay {
   // Dismiss every currently-open overlay (route() calls this on navigation).
   // ADR-034 PR5b — replaces the router's hardcoded per-overlay teardown list.
   closeAllOverlays: () => void;
+  // 열린 창이 하나도 없으면 바로, 있으면 마지막 창이 닫힌 뒤에 실행한다(route()가 열린 창을 모두 닫으므로 다시 그리기를 미룬다).
+  whenNoOverlayOpen: (fn: () => void) => void;
   // Bottom-sheet drag plumbing (ADR-032 §2), shared by the bookmark drawer +
   // cite sheet. Lifecycle stays with the overlay/caller; these only wire the
   // drag gesture onto a handle element.
@@ -1415,9 +1417,6 @@ declare global {
     // routing.js: redraws the open view when a synced setting changed what it shows; state-machine.js calls it,
     // and so does settings-ui.js when the settings popover closes.
     redrawIfSyncedSettingsChanged?: () => Promise<void> | undefined;
-    // routing.js: lectionary.js reports the church ids whose consecration falls on a day it drew, so a parish change
-    // redraws only when it changes what is shown (ADR-041 §6).
-    noteDrawnChurches?: (ids: string[]) => void;
     // Manual SW update check — set by app.js inside registerServiceWorker()
     // so it can capture the registration and reuse showUpdateToast(). Returns
     // a status object the caller can surface as transient feedback.

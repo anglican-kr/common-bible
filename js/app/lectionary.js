@@ -511,14 +511,15 @@ function collectsFor(entries, selected) {
  * 그날 축성되거나 축복된 교회(엔진 `findDedications`) → 제목 아래 줄(사용자 결정 2026-11-04). 종류마다 한 줄이고, 교회
  * 이름을 쉼표로 이은 뒤 「축성일」 · 「축복일」을 한 번만 붙인다(「일산성당, 초지성당, 행신성당 축성일」). 축성일 줄이
  * 먼저다(`DEDICATION_LABEL`의 차례). 「북.」으로 시작하는 성당(북한에 있던 성당, `isFormerNorthChurch`)은 싣지 않고, 주보성인도 보이지 않는다(같은 결정).
- * 제목이 소속교회의 축성일이면 그 교회(`titled`, 교회 식별자)의 축성일은 뺀다. 제목과 같은 글이 바로 아래에 또 보이지 않게 한다(사용자 결정 2026-11-09, ADR-041 §6).
- * @param {import("../types.js").ParishDedication[]} entries @param {string | null} [titled]
+ * 소속교회의 축성일이 제목이거나 전례독서 목록의 줄이면 그 교회(`shown`, 교회 식별자)의 축성일은 뺀다. 같은 글이 두 번 보이지 않게 한다(제목일 때는
+ * 사용자 결정 2026-11-09, 줄일 때는 PR #542 리뷰에서 같은 까닭으로 넓혔다, ADR-041 §6).
+ * @param {import("../types.js").ParishDedication[]} entries @param {string | null} [shown]
  * @returns {string[]}
  */
-function dedicationLines(entries, titled = null) {
+function dedicationLines(entries, shown = null) {
   return /** @type {Array<keyof typeof DEDICATION_LABEL>} */ (Object.keys(DEDICATION_LABEL)).flatMap((kind) => {
     const names = entries.filter((e) => e.kind === kind && !isFormerNorthChurch(e.name)
-      && !(titled && kind === "consecration" && e.church_id === titled)).map((e) => e.name);
+      && !(shown && kind === "consecration" && e.church_id === shown)).map((e) => e.name);
     return names.length ? [`${names.join(", ")} ${DEDICATION_LABEL[kind]}`] : [];
   });
 }
@@ -714,12 +715,15 @@ function altList(/** @type {unknown} */ v) {
  * (사계재 자 · 성 토요일 저녁의 부활밤 백 · 생략된 성인). 그 밖은 그날의 `colors`(병기) + `colorAlt`
  * 그대로 — 지정 전례일이나 색이 같은 후보를 누르면 사계재 날의 [자, 백] 병기가 남는다. 격자 후보는 자기
  * 색이 아니라 절기 바탕색을 들고 있어 제외. 「재일 독서를 읽을 때만 자색, 어차피 선택 독서」(2026-09-17)의 일반화.
+ * 화면이 만든 후보(소속교회의 축성일)는 엔진이 그날 색을 계산할 때 넣지 않았으므로 색이 같아도 자기 색 하나다. 그날 함께 적는 색(사계재의
+ * 자색)이나 대체색(성모 축일의 청색)을 받지 않는다(ADR-041 §6, PR #542 리뷰).
  * @param {ResolvedDate} resolved @param {Candidate | null} selected
  * @returns {{ colors: string[], colorAlt: string[], ownColor: boolean }}
  */
 function headerColors(resolved, selected) {
   const obs = selected ? selected.observance : null;
-  if (selected && obs && !isGrid(selected) && typeof obs.color === "string" && obs.color !== resolved.color) {
+  if (selected && obs && !isGrid(selected) && typeof obs.color === "string"
+    && (obs.color !== resolved.color || !resolved.candidates.includes(selected))) {
     return { colors: [obs.color], colorAlt: altList(obs.color_alt), ownColor: true };
   }
   const colors = Array.isArray(resolved.colors) && resolved.colors.length ? resolved.colors.slice()
@@ -921,7 +925,8 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const publicInitial = initialCandidate(resolved, groupsOf);
   if (!publicInitial) return null;
   // 소속교회의 축성일은 그날 처음 여는 화면이거나(`dedicationFirst`) 전례독서 목록의 맨 앞 줄이다(ADR-041 §6). 엔진의 후보와 지정 전례일은 그대로다
-  const dedication = mine ? mine.candidate : null;
+  // 본문(독서나 본기도)이 없는 축성일은 열지 않는다 — 본당 표의 공통 분류가 `commons.json`에 없으면 빈 화면이 그날의 독서를 밀어낸다(PR #542 리뷰)
+  const dedication = mine && (groupsOf(mine.candidate).length || collectsFor(collectEntries, mine.candidate).length) ? mine.candidate : null;
   const initial = dedication && dedicationFirst(publicInitial, date) ? dedication : publicInitial;
   const candidates = dedication ? [dedication, ...resolved.candidates] : resolved.candidates;
   // 기리는 성인은 전례독서 목록에 없다 — 이름 줄에 보이고, 주소로 가리켜도 기본 독서다(사용자 결정 2026-11-03, 11-04, memorialOf)
@@ -1043,12 +1048,9 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   });
   // 성인 축일이 둘 이상이고 색이 다르면 본기도 차례대로 「적색 또는 백색」(사용자 결정 2026-11-03 — memorialOf)
   const colorsOr = selected === publicInitial && memorial.colors.length > 1;
-  // 소속교회의 축성일은 엔진이 그날 색을 계산할 때 넣지 않은 후보라, 그날 함께 적는 색(사계재의 자색)이나 대체색(성모 축일의 청색)을 받지 않고 자기 색 하나다
   const { colors, colorAlt, ownColor } = colorsOr
     ? { colors: memorial.colors, colorAlt: /** @type {string[]} */ ([]), ownColor: false }
-    : selected === dedication && dedication.observance.color
-      ? { colors: [dedication.observance.color], colorAlt: /** @type {string[]} */ ([]), ownColor: true }
-      : headerColors(resolved, selected);
+    : headerColors(resolved, selected);
   const empty = !groups.length && !collects.length;
 
   return {
@@ -1065,7 +1067,8 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked,
     ending: endingCodeOf(memorialCollects[memorialCollects.length - 1] || chosenCollect), memorialCollects,
     memorialSaints: memorial.saints, passiveDays, commemorations, textlessDays, foundingLines: foundingLines(foundings),
-    dedicationLines: dedicationLines(dedications, mine && selected === dedication ? mine.churchId : null), transferNotes,
+    // 소속교회의 축성일이 제목이거나 전례독서 목록의 줄이면 축성일 줄에서 그 교회를 뺀다. 같은 글이 두 번 보이지 않게 한다(`dedicationLines`)
+    dedicationLines: dedicationLines(dedications, mine && dedication ? mine.churchId : null), transferNotes,
     colors, colorAlt, ownColor, colorsOr, fast: fastOf(resolved),
     cycle: resolved.coord.year && CYCLE_LABEL[resolved.coord.year] ? CYCLE_LABEL[resolved.coord.year] : null,
     empty,
@@ -1863,7 +1866,6 @@ function commit(m, chapters) {
 
 /**
  * 그날의 모델 — 두 묶음을 받은 뒤에 동기로 만든다. 전례독서 화면과 캘린더의 목록 줄이 같이 쓴다.
- * 그날 축성일인 교회를 라우터에 알린다(`window.noteDrawnChurches`). 소속교회가 바뀌어도 그린 날들의 축성일과 무관하면 다시 그리지 않으려는 것이다.
  * @param {ResolvedDate} resolved
  * @param {LectionaryQuery} query
  * @returns {LectionaryModel | null}
@@ -1879,7 +1881,6 @@ function lectionaryModelOf(resolved, query) {
     return g;
   };
   const dedications = findDedications(date);
-  window.noteDrawnChurches?.(dedications.flatMap((e) => (e.kind === "consecration" && e.church_id ? [e.church_id] : [])));
   // 소속교회는 늘 기기에 저장된 값으로 읽는다(ADR-041 §8). 그날이 그 교회의 축성일이면 후보를 한 번 만들어, 본기도(공통 「성당 축성일」)를
   // 엔진에서 받고 화면 모델에도 같은 후보를 넘긴다
   const mine = myDedicationOf(dedications, loadParish());

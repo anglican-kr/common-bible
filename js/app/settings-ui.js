@@ -1076,8 +1076,11 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
       ariaExpanded: ".settings-btn",
       returnFocus: true,
       // 팝오버에서 바꾼 소속교회가 뒤에 열린 화면(전례독서, 캘린더 목록)의 내용을 바꾸면 닫은 뒤 다시 그린다. 포커스가 설정 단추로
-      // 돌아온 다음에 그리도록 한 차례 미룬다(ADR-041 §6)
-      onClose: () => { setTimeout(() => window.redrawIfSyncedSettingsChanged?.(), 0); },
+      // 돌아온 다음에 그리도록 한 차례 미루고, 닫으면서 다른 창(앱 설치 안내, 동기화 해제 확인)을 열었으면 그 창이 닫힌 뒤에 그린다.
+      // 다시 그리는 route()가 열린 창을 모두 닫기 때문이다(ADR-041 §6, PR #542 리뷰)
+      onClose: () => {
+        setTimeout(() => window.appOverlay.whenNoOverlayOpen(() => window.redrawIfSyncedSettingsChanged?.()), 0);
+      },
     });
 
     function closeSettings() { settingsOverlay.close(); }

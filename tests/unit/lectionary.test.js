@@ -183,7 +183,7 @@ test("initialCandidate: 격자에 독서가 없으면 지정 전례일을 그대
   assert.strictEqual(ctx.initialCandidate(r, groupsOf), saint);
 });
 
-test("selectCandidate: ?obs 가 후보에 있으면 그것, 없으면 그날 처음 여는 후보", () => {
+test("selectCandidate: `?obs`가 가리키는 후보가 있으면 그것, 없으면 그날 처음 여는 후보", () => {
   const feast = cand(obs("d0806-주의-변모", "주의 변모"));
   const grid = cand(obs("grid:ordinary-18-weekday-thu", "연중 18주 목요일"));
   assert.strictEqual(ctx.selectCandidate([feast, grid], "grid:ordinary-18-weekday-thu", feast), grid);
@@ -960,7 +960,8 @@ test("buildLectionaryModel: 평일의 소속교회 축성일 — 축성일이 �
   same(others(m), [["부활 4주 화요일", "/lectionary/2026-04-21?obs=grid%3Aeaster-4-weekday-tue"]]);
   // 평일 줄을 고르면 지금처럼 성인 본기도를 잇고, 축성일 줄에 그 교회가 다시 보이며, 축성일 줄의 주소는 날짜뿐이다
   const w = dedicationModelOf(r, table, MINE, { obs: grid.observance.id });
-  same([w.selected, w.memorialCollects.map((c) => c.id), w.dedicationLines], [grid, ["d0421-안셀름-c"], ["강릉성당, 원주성당 축성일", "세종성당 축복일"]]);
+  // 축성일이 전례독서 목록의 줄이어도 축성일 줄에서 그 교회를 뺀다(같은 글이 두 번 보이지 않게)
+  same([w.selected, w.memorialCollects.map((c) => c.id), w.dedicationLines], [grid, ["d0421-안셀름-c"], ["원주성당 축성일", "세종성당 축복일"]]);
   same(others(w), [["강릉성당 축성일", "/lectionary/2026-04-21"]]);
   // 소속교회를 고르지 않은 사람이 축성일 주소를 열면 그날의 기본 독서다
   const other = dedicationModelOf(r, table, "", { obs: "my-dedication" });
@@ -973,7 +974,7 @@ test("buildLectionaryModel: 주일, 주요축일, 평일의 명절에 온 소속
   const s = dedicationModelOf(rs, { "grid:easter-5-sunday": [group("s", FOUR)] }, MINE);
   assert.strictEqual(s.selected, sunday);
   same(others(s), [["강릉성당 축성일", "/lectionary/2026-04-26?obs=my-dedication"]]);
-  same(s.dedicationLines[0], "강릉성당, 원주성당 축성일");
+  same(s.dedicationLines[0], "원주성당 축성일");   // 줄로 있는 교회는 축성일 줄에서 뺀다
   // 그 줄을 고르면 축성일 화면이고, 제목의 교회를 축성일 줄에서 뺀다
   const picked = dedicationModelOf(rs, { "grid:easter-5-sunday": [group("s", FOUR)] }, MINE, { obs: "my-dedication" });
   same([picked.dayName, picked.dedicationLines[0], others(picked)], ["강릉성당 축성일", "원주성당 축성일", [["부활 5주일", "/lectionary/2026-04-26"]]]);   // 기본 독서인 주일의 주소는 날짜뿐이다
@@ -986,6 +987,16 @@ test("buildLectionaryModel: 주일, 주요축일, 평일의 명절에 온 소속
     assert.strictEqual(m.selected, feast, rank);
     same(others(m)[0], ["강릉성당 축성일", "/lectionary/2026-04-21?obs=my-dedication"], rank);
   }
+});
+
+test("buildLectionaryModel: 본문(독서와 본기도)이 없는 축성일은 열지 않는다 — 본당 표의 공통 분류가 공통 자료에 없을 때(PR #542 리뷰)", () => {
+  const grid = cand(obs("grid:easter-4-weekday-tue", "부활 4주 화요일", { rank: "feria", precedence: 8, color: "white" }));
+  const r = resolvedOf("2026-04-21", [grid], grid);
+  const mine = ctx.myDedicationOf(DEDICATIONS, MINE);
+  const entries = [{ candidate: mine.candidate, collects: [] }, { candidate: grid, collects: [collect("g-c", "…")] }];
+  const m = ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOfFrom({ "grid:easter-4-weekday-tue": [group("g", FOUR)] }),
+    entries, null, DEDICATIONS, false, [], mine);
+  same([m.selected, m.choices.map((c) => c.candidate.observance.id), m.dedicationLines[0]], [grid, ["grid:easter-4-weekday-tue"], "강릉성당, 원주성당 축성일"]);
 });
 
 test("buildLectionaryModel: 축성일 화면의 머리 색은 축성일의 백색 하나이고, 그날 함께 적는 색(사계재의 자색)과 대체색(청색)을 받지 않는다(PR #542 리뷰)", () => {
