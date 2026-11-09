@@ -522,7 +522,7 @@ test("C-6.1-3 명절 > 대재일 — 2032-02-11 설이 지정 전례일, 재의 
   same(ctx.fastOf(moved), "major");
 });
 
-test("C-6.1-4 명절 ∧ 연중 주일 — 설 2027 · 2030 · 2034 · 2037 · 2040 · 2050, 추석 2032 · 2035 · 2039 · 2042: 주일 격자가 지정 전례일이고 명절은 proper 로 남는다(ADR-036 §7 규칙 5 — 사용자 확정 2026-11-09)", { skip: SKIP }, () => {
+test("C-6.1-4 명절 ∧ 연중 주일 — 설 2027 · 2030 · 2034 · 2037 · 2040 · 2050, 추석 2032 · 2035 · 2039 · 2042: 주일 격자가 지정 전례일이고 명절은 proper로 남는다(ADR-036 §7 규칙 5, 사용자 확정 2026-11-09)", { skip: SKIP }, () => {
   const days = [
     ...[2027, 2030, 2034, 2037, 2040, 2050].map((y) => [lunarDay(y, "1-1"), "lunar11-설날"]),
     ...[2032, 2035, 2039, 2042].map((y) => [lunarDay(y, "8-15"), "lunar815-추석-명절"]),
@@ -530,9 +530,9 @@ test("C-6.1-4 명절 ∧ 연중 주일 — 설 2027 · 2030 · 2034 · 2037 · 2
   for (const [d, id] of days) {
     const r = resolve(d);
     const fest = r.candidates.find((c) => c.observance.id === id);
-    // 그날 명절의 우선순위는 연중 주일(5) 바로 뒤다
-    same([ctx.dayOfWeek(d), r.coord.season, offId(r), gridIn(r).observance.rank, fest.status, fest.observance.precedence],
-      [0, "ordinary", gridIn(r).observance.id, "sunday", "proper", 5.5], d);
+    // 그날 명절의 유효 우선순위는 연중 주일(5) 바로 다음이고, 표의 값(0)은 그대로다
+    same([ctx.dayOfWeek(d), r.coord.season, offId(r), gridIn(r).observance.rank, fest.status, ctx.effectivePrecedence(fest.observance, d), fest.observance.precedence],
+      [0, "ordinary", gridIn(r).observance.id, "sunday", "proper", 5.5, 0], d);
   }
   // 2025-2050년에 명절이 주일인 날은 이 열이 전부다. 목록이 데이터와 어긋나면 잡힌다. 평일의 명절은 여전히 지정 전례일이다(규칙 1, 2)
   const all = [];
