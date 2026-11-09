@@ -899,7 +899,7 @@ const DEDICATIONS = [
   { name: "원주성당", kind: "consecration", church_id: "w2h9cd" },
   { name: "세종성당", kind: "blessing", church_id: "n4p8rt" },
 ];
-/** 공통 「성당 축성일」의 독서 2세트와 본기도 — 엔진이 `sanctoral_class: "dedication"`인 후보에 내는 것과 같은 모양. */
+/** 공통 「성당 축성일」의 독서 2세트와 본기도. 엔진이 `sanctoral_class: "dedication"`인 후보에 내는 것과 같은 모양이다. */
 const DEDICATION_GROUPS = [1, 2].map((n) => group(`common:dedication-s${n}`, FOUR, { common: "dedication", title: "성당 축성일", set_no: n, set_total: 2 }));
 const DEDICATION_COLLECT = collect("common:dedication-c1", "이 성전을 봉헌한 날을 기념하며", { common: "dedication", title: "성당 축성일" });
 /** 그날의 후보와 축성일 본기도를 담은 화면 모델. `findCollects`가 축성일 후보까지 받은 것처럼 본기도 원소를 하나 더한다. */
@@ -946,7 +946,7 @@ test("buildLectionaryModel: 평일의 소속교회 축성일 — 축성일이 �
   same([m.colors, m.ownColor], [["white"], true]);
   // 성인의 이름 줄은 그대로이고, 제목의 교회만 축성일 줄에서 빠진다
   same([m.memorialSaints.map((c) => c.observance.id), m.dedicationLines], [["d0421-안셀름"], ["원주성당 축성일", "세종성당 축복일"]]);
-  // 평일 줄은 대체 독서 표시를 꺼도 보이고, 그 주소에는 평일의 id가 붙는다. 축성일이 기본이라 축성일 주소에는 `?obs=`가 없다
+  // 평일 줄은 대체 독서 표시를 꺼도 보이고, 그 주소에는 평일의 식별자가 붙는다. 축성일이 기본이라 축성일 주소에는 `?obs=`가 없다
   same(others(m), [["부활 4주 화요일", "/lectionary/2026-04-21?obs=grid%3Aeaster-4-weekday-tue"]]);
   // 평일 줄을 고르면 지금처럼 성인 본기도를 잇고, 축성일 줄에 그 교회가 다시 보이며, 축성일 줄의 주소는 날짜뿐이다
   const w = dedicationModelOf(r, table, MINE, { obs: grid.observance.id });

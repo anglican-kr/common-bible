@@ -2229,7 +2229,7 @@ def _wait_day(page, name):
 
 
 def test_my_dedication_opens_first_on_a_weekday_and_keeps_the_church_out_of_page_views(desktop_context):
-    """용인성당 축성일 2025-01-31(연중 3주 금요일) — 제목이 「용인성당 축성일」이고 평일은 목록의 줄이다. 문서 제목과 방문 기록에는
+    """용인성당 축성일 2025-01-31(연중 3주 금요일)에는 제목이 「용인성당 축성일」이고 평일은 목록의 줄이다. 문서 제목과 방문 기록에는
     교회 이름이 없다. 평일 줄을 고르면 주소에 그 평일이 붙고, 축성일 줄의 주소는 날짜뿐이다(ADR-041 §6, §8)."""
     desktop_context.add_init_script(_with_parish("용인성당"))
     page = desktop_context.new_page()
@@ -2251,7 +2251,7 @@ def test_my_dedication_opens_first_on_a_weekday_and_keeps_the_church_out_of_page
 
 
 def test_my_dedication_on_a_sunday_is_the_first_row_with_a_fixed_address(desktop_context):
-    """강동성당 축성일 2025-05-11(부활 4주일) — 주일이 먼저이고 축성일은 목록의 맨 앞 줄이다. 그 줄의 주소는 `?obs=my-dedication`이고,
+    """강동성당 축성일 2025-05-11(부활 4주일)에는 주일이 먼저이고 축성일은 목록의 맨 앞 줄이다. 그 줄의 주소는 `?obs=my-dedication`이고,
     고르면 문서 제목과 방문 기록에 교회 이름이 없다(ADR-041 §6, §8)."""
     desktop_context.add_init_script(_with_parish("강동성당"))
     page = desktop_context.new_page()
@@ -2295,7 +2295,7 @@ def test_choosing_a_parish_in_settings_redraws_the_lectionary(desktop_context):
 
 
 def test_calendar_list_row_follows_my_dedication(desktop_context):
-    """캘린더 목록의 줄은 전례독서 화면을 따른다 — 용인성당 축성일 2025-01-31의 줄 제목은 「용인성당 축성일」이고, 목록 화면의 문서
+    """캘린더 목록의 줄은 전례독서 화면을 따른다. 용인성당 축성일 2025-01-31의 줄 제목은 「용인성당 축성일」이고, 목록 화면의 문서
     제목은 달 이름이다(사용자 결정 2026-11-09, ADR-041 §6)."""
     desktop_context.add_init_script(_with_parish("용인성당"))
     page = desktop_context.new_page()

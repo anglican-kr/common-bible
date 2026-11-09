@@ -74,7 +74,7 @@ function ix() {
 }
 const resolve = (d) => ctx.resolveDateIn(ix().cal, d, ctx.transfersOf(ix().cal, Number(d.slice(0, 4))));
 const NONE = { obs: null, track: null, set: null, collect: null };
-/** 실제 표 위의 뷰 모델 — 공개 래퍼(`lectionaryModelOf`)가 하는 것과 같은 조합. `parish`는 설정 「소속교회」의 교회 식별자다. */
+/** 실제 표 위의 뷰 모델. 공개 래퍼(`lectionaryModelOf`)가 하는 것과 같은 조합이다. `parish`는 설정 「소속교회」의 교회 식별자다. */
 function model(d, query = NONE, stored = null, showAlternates = true, parish = "") {
   const r = resolve(d);
   assert.ok(r, `${d} 를 풀 수 없다`);
@@ -142,7 +142,7 @@ test("소속교회 축성일 — 평일이면 축성일이 먼저(공통 독서 
   const none = model("2025-01-31", NONE, null, false);
   same([none.dayName, none.dedicationLines.some((l) => l.includes("용인성당"))], ["연중 3주 금요일", true]);
 
-  // 안셀름 축일(공통 독서뿐 — 기본 독서는 부활 1주 월요일)과 겹친 강릉성당 축성일. 성인의 이름 줄은 남고 본기도는 평일 줄을 고를 때만 잇는다
+  // 안셀름 축일(공통 독서뿐이라 기본 독서는 부활 1주 월요일)과 겹친 강릉성당 축성일. 성인의 이름 줄은 남고 본기도는 평일 줄을 고를 때만 잇는다
   const gangneung = churchIdOf("강릉성당");
   const a = model("2025-04-21", NONE, null, false, gangneung);
   same([a.dayName, a.memorialCollects, a.memorialSaints.map(id)], ["강릉성당 축성일", [], ["d0421-안셀름"]]);
