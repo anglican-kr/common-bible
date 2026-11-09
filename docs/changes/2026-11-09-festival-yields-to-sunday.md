@@ -1,4 +1,5 @@
 ---
+pr: 541
 date: 2026-11-09
 branch: fix/festival-yields-to-sunday
 title: "fix: 설날과 추석이 주일과 겹치면 주일이 먼저"
