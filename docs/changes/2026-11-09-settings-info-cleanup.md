@@ -1,4 +1,5 @@
 ---
+pr: 540
 date: 2026-11-09
 branch: refactor/settings-info-cleanup
 title: "refactor: 설정 설명 행과 소속교회 시험 정리"
