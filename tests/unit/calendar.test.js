@@ -417,7 +417,7 @@ test("buildMonthGrid: 칸의 label 이 dayAriaLabel 과 같고, 오늘 칸만 �
 
 /** 전례독서 모델 가운데 줄이 읽는 곳만. */
 const headModel = (date, resolved, extra = {}) => ({
-  date, resolved, selected: resolved.candidates[0], dayName: "연중 28주 목요일",
+  date, resolved, selected: resolved.candidates[0], initial: resolved.candidates[0], publicInitial: resolved.candidates[0], dayName: "연중 28주 목요일",
   colors: ["green"], colorAlt: [], colorsOr: false, cycle: "짝수해", fast: null,
   selectedNote: null, transferNotes: [], memorialSaints: [], passiveDays: [], foundingLines: [], commemorations: [],
   textlessDays: [], dedicationLines: [], choices: [], ...extra,
@@ -465,6 +465,11 @@ test("listRowOf: 굵기 — 주일과 대축일, 주요축일은 major, 축일�
   assert.strictEqual(level(cand(obs("c", "다", { rank: "minor_feast" }))), "minor");
   assert.strictEqual(level(cand(obs("d", "라", { rank: "regional_festival" }))), "minor");
   assert.strictEqual(level(cand(obs("e", "마", { rank: "commemoration" }))), "");
+  // 소속교회 축성일(주요축일 C)이 제목인 평일 줄도 그날의 기본 독서(평일)대로 보통 굵기이고, 월간 칸과 같다(ADR-041 §6, PR #542 리뷰)
+  const weekday = cand(obs("grid:ordinary-28-weekday-thu", "연중 28주 목요일", { rank: "feria" }));
+  const mine = cand(obs("my-dedication", "용인성당 축성일", { rank: "major_feast" }));
+  const r = resolvedOf("2026-10-15", [weekday], { coord: WEEKDAY });
+  assert.strictEqual(ctx.listRowOf(headModel("2026-10-15", r, { selected: mine, initial: mine, dayName: "용인성당 축성일" }), "2026-01-01").level, "");
 });
 
 test("listRowOf: 전례년 첫날은 해 대신 「나해 시작」을 단다", () => {

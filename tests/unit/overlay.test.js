@@ -178,6 +178,7 @@ function makeEnv() {
   return {
     createOverlay: ctx.appOverlay.createOverlay,
     closeAllOverlays: ctx.appOverlay.closeAllOverlays,
+    whenNoOverlayOpen: ctx.appOverlay.whenNoOverlayOpen,
     attachSheetDrag: ctx.appOverlay.attachSheetDrag,
     attachSheetResize: ctx.appOverlay.attachSheetResize,
     document,
@@ -609,4 +610,29 @@ test("attachSheetResize: mobile (<769px) pointerdown is a no-op", () => {
   handle._dispatch("pointerdown", { clientX: 300, pointerId: 1, preventDefault() {} });
   handle._dispatch("pointermove", { clientX: 100 });
   assert.equal(sheet.style.width, undefined);
+});
+
+// ── whenNoOverlayOpen ────────────────────────────────────────────────────────
+
+test("whenNoOverlayOpen: 열린 창이 없으면 바로 실행하고, 있으면 마지막 창이 닫힌 뒤에 실행한다(ADR-041 §6)", async () => {
+  const env = makeEnv();
+  const a = env.createOverlay({ panel: new env.StubEl("div") });
+  const b = env.createOverlay({ panel: new env.StubEl("div") });
+  const ran = [];
+  env.whenNoOverlayOpen(() => ran.push("now"));
+  assert.deepStrictEqual(ran, ["now"]);
+  a.open();
+  b.open();
+  env.whenNoOverlayOpen(() => ran.push("later"));
+  a.close();
+  await Promise.resolve();
+  assert.deepStrictEqual(ran, ["now"]);   // b가 아직 열려 있다
+  b.close();
+  await Promise.resolve();
+  assert.deepStrictEqual(ran, ["now", "later"]);
+  // 한 번만 실행한다
+  a.open();
+  a.close();
+  await Promise.resolve();
+  assert.deepStrictEqual(ran, ["now", "later"]);
 });

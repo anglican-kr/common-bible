@@ -2204,3 +2204,141 @@ def test_alternate_setting_shows_rows_in_place_and_a_link_still_opens_when_off(d
     page.goto(f"{BASE}{href}")
     page.wait_for_selector(".lect-day:has-text('연중 13주 월요일')", timeout=20_000)
     assert _choices(page) == ["사도 성 베드로와 바울로"]
+
+
+# ── ⑨ 소속교회의 축성일(ADR-041 §6, §8) ──
+
+LOCAL_OBSERVANCES = Path(__file__).resolve().parents[2] / "data" / "lectionary" / "local-observances.json"
+# 방문 기록으로 보낸 것(`trackPageView` — gtag-init.js가 dataLayer에 쌓는다)
+PAGE_VIEWS = "() => (window.dataLayer || []).filter((a) => a[0] === 'event' && a[1] === 'page_view').map((a) => ({ ...a[2] }))"
+PARISH_READY = "() => { const s = document.querySelector('.settings-popover .settings-select'); return !!s && !s.disabled; }"
+
+
+def _church_id(name):
+    parishes = json.loads(LOCAL_OBSERVANCES.read_text(encoding="utf-8"))["parishes"]
+    return next(p["church_id"] for p in parishes if p["name"] == name)
+
+
+def _with_parish(name):
+    """저장소를 비우는 스크립트 뒤에 실행되어 소속교회를 고른 기기를 만든다."""
+    return f"localStorage.setItem('bible-parish', {json.dumps(_church_id(name))})"
+
+
+def _wait_day(page, name):
+    page.wait_for_function("(n) => document.querySelector('.lect-day')?.textContent === n", arg=name, timeout=20_000)
+
+
+def test_my_dedication_opens_first_on_a_weekday_and_keeps_the_church_out_of_page_views(desktop_context):
+    """용인성당 축성일 2025-01-31(연중 3주 금요일)에는 제목이 「용인성당 축성일」이고 평일은 목록의 줄이다. 문서 제목은 「전례독서」라
+    방문 기록에 교회 이름이 없다. 평일 줄을 고르면 주소에 그 평일이 붙고, 축성일 줄의 주소는 날짜뿐이다(ADR-041 §6, §8)."""
+    desktop_context.add_init_script(_with_parish("용인성당"))
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2025-01-31")
+    assert page.inner_text(".lect-day") == "용인성당 축성일"
+    assert page.title() == "전례독서 — 공동번역성서"
+    assert _choices(page) == ["연중 3주 금요일"]
+    assert "용인성당" not in page.inner_text(".lect-head").replace("용인성당 축성일", "", 1)   # 축성일 줄에서는 빠진다
+    page.wait_for_function(f"() => ({PAGE_VIEWS})().length > 0")
+    for v in page.evaluate(PAGE_VIEWS):
+        assert v["page_title"] == "전례독서 — 공동번역성서" and "obs=" not in v["page_location"], v
+
+    page.locator(".lect-choice", has_text="연중 3주 금요일").click()
+    _wait_day(page, "연중 3주 금요일")
+    assert "obs=grid%3Aordinary-3-weekday-fri" in page.url
+    assert page.title() == "연중 3주 금요일 전례독서 — 공동번역성서"
+    assert _choices(page) == ["용인성당 축성일"]
+    assert page.locator(".lect-choice", has_text="용인성당 축성일").get_attribute("href") == "/lectionary/2025-01-31"
+
+
+def test_my_dedication_on_a_sunday_is_the_first_row_with_a_fixed_address(desktop_context):
+    """강동성당 축성일 2025-05-11(부활 4주일)에는 주일이 먼저이고 축성일은 목록의 맨 앞 줄이다. 그 줄의 주소는 `?obs=my-dedication`이고,
+    고르면 문서 제목은 「전례독서」라 방문 기록에 교회 이름과 식별자가 없다(ADR-041 §6, §8)."""
+    desktop_context.add_init_script(_with_parish("강동성당"))
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2025-05-11")
+    assert page.inner_text(".lect-day") == "부활 4주일"
+    assert _choices(page)[0] == "강동성당 축성일"
+    page.locator(".lect-choice", has_text="강동성당 축성일").click()
+    _wait_day(page, "강동성당 축성일")
+    assert page.url == f"{BASE}/lectionary/2025-05-11?obs=my-dedication"
+    assert page.title() == "전례독서 — 공동번역성서"
+    page.wait_for_function(f"() => ({PAGE_VIEWS})().some((v) => v.page_location.includes('my-dedication'))")
+    for v in page.evaluate(PAGE_VIEWS):
+        assert "강동성당" not in v["page_title"] and _church_id("강동성당") not in v["page_location"], v
+
+
+def test_my_dedication_address_opens_the_day_for_someone_without_the_church(desktop_context):
+    """소속교회를 고르지 않은 사람이 축성일 주소를 열면 그날의 기본 독서다(ADR-041 §6)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2025-05-11?obs=my-dedication")
+    assert page.inner_text(".lect-day") == "부활 4주일"
+    assert "강동성당 축성일" not in _choices(page)
+
+
+def test_choosing_a_parish_in_settings_redraws_the_lectionary_when_the_popover_closes(desktop_context):
+    """전례독서 화면에서 소속교회를 고르면 알리고 저장하되 팝오버는 열린 채다. 닫은 뒤 화면을 다시 그려 축성일이 먼저 열린다. 닫힌 선택
+    상자에서 화살표 키로 옮겨도 팝오버가 닫히지 않는다(ADR-041 §6, WCAG 3.2.2, PR #542 리뷰)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2025-01-31")
+    assert page.inner_text(".lect-day") == "연중 3주 금요일"
+    pop = open_settings(page)
+    page.wait_for_function(PARISH_READY)
+    page.evaluate("""() => {
+      window.__said = [];
+      const live = document.getElementById('a11y-announce');
+      new MutationObserver(() => { if (live.textContent) window.__said.push(live.textContent); })
+        .observe(live, { childList: true, characterData: true, subtree: true });
+    }""")
+    select = pop.get_by_label("소속교회", exact=True)
+    select.focus()
+    page.keyboard.press("ArrowDown")
+    page.keyboard.press("ArrowDown")
+    page.wait_for_timeout(300)
+    assert pop.is_visible()
+    assert page.evaluate("() => localStorage.getItem('bible-parish')") == select.input_value() != ""
+    select.select_option(label="용인성당")
+    page.wait_for_function("() => window.__said.at(-1) === '소속교회 용인성당'")
+    assert pop.is_visible() and page.inner_text(".lect-day") == "연중 3주 금요일"
+    page.keyboard.press("Escape")
+    pop.wait_for(state="hidden")
+    _wait_day(page, "용인성당 축성일")
+    assert page.title() == "전례독서 — 공동번역성서"
+
+
+def test_parish_redraw_waits_for_a_window_opened_from_the_settings_popover(browser):
+    """설정 팝오버에서 소속교회를 바꾸고 같은 팝오버의 설치 안내를 열면, 안내 창은 열린 채로 남고 화면은 그 창을 닫은 뒤에 다시 그린다.
+    다시 그리는 route()가 열린 창을 모두 닫기 때문이다(ADR-041 §6, PR #542 리뷰)."""
+    ctx = browser.new_context(user_agent=IPHONE_UA)   # 설치 안내 단추는 아이폰 사파리에서 보인다
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open(page, "lectionary/2025-01-31")
+        pop = open_settings(page)
+        page.wait_for_function(PARISH_READY)
+        pop.get_by_label("소속교회", exact=True).select_option(label="용인성당")
+        install = pop.locator('button[aria-label="앱으로 설치 안내 열기"]')
+        if install.count() == 0:
+            pytest.skip("이 환경에는 설치 안내 단추가 없다")
+        install.click()
+        page.wait_for_selector("#install-modal:not([hidden])")
+        page.wait_for_timeout(300)
+        assert page.locator("#install-modal:not([hidden])").count() == 1
+        assert page.inner_text(".lect-day") == "연중 3주 금요일"
+        page.keyboard.press("Escape")
+        page.wait_for_selector("#install-modal", state="hidden")
+        _wait_day(page, "용인성당 축성일")
+    finally:
+        ctx.close()
+
+
+def test_calendar_list_row_follows_my_dedication(desktop_context):
+    """캘린더 목록의 줄은 전례독서 화면을 따른다. 용인성당 축성일 2025-01-31의 줄 제목은 「용인성당 축성일」이고, 목록 화면의 문서
+    제목은 달 이름이다(사용자 결정 2026-11-09, ADR-041 §6)."""
+    desktop_context.add_init_script(_with_parish("용인성당"))
+    page = desktop_context.new_page()
+    page.goto(f"{BASE}/calendar/list/2025-01-31")
+    page.wait_for_selector(".cal-rows", timeout=20_000)
+    row = page.locator("li[data-date='2025-01-31'] a.cal-row")
+    assert row.locator(".cal-row-title").inner_text() == "용인성당 축성일"
+    assert "연중 3주 금요일" in row.inner_text()
+    assert "용인성당" not in page.title()

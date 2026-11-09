@@ -515,6 +515,8 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
         const name = select.selectedOptions[0]?.textContent ?? "";
         // 목록에 없던 값을 바꿨으면 그 항목은 더 고를 일이 없다
         if (missingOption && !missingOption.selected) { missingOption.remove(); missingOption = null; }
+        // 전례독서 화면과 캘린더 목록은 소속교회의 축성일을 싣지만, 여기서 다시 그리지 않는다. 닫힌 선택 상자에서 화살표 키를 누르면
+        // 칸마다 값이 바뀌므로, 그때마다 화면을 다시 그리면 팝오버가 닫힌다(WCAG 3.2.2, PR #542 리뷰). 팝오버가 닫힐 때 다시 그린다(`initSettings`)
         announce(churchId ? `소속교회 ${name}` : "소속교회 선택 안 함");
       },
     });
@@ -1073,6 +1075,12 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
       outsideIgnore: ".settings-btn",
       ariaExpanded: ".settings-btn",
       returnFocus: true,
+      // 팝오버에서 바꾼 소속교회가 뒤에 열린 화면(전례독서, 캘린더 목록)의 내용을 바꾸면 닫은 뒤 다시 그린다. 포커스가 설정 단추로
+      // 돌아온 다음에 그리도록 한 차례 미루고, 닫으면서 다른 창(앱 설치 안내, 동기화 해제 확인)을 열었으면 그 창이 닫힌 뒤에 그린다.
+      // 다시 그리는 route()가 열린 창을 모두 닫기 때문이다(ADR-041 §6, PR #542 리뷰)
+      onClose: () => {
+        setTimeout(() => window.appOverlay.whenNoOverlayOpen(() => window.redrawIfSyncedSettingsChanged?.()), 0);
+      },
     });
 
     function closeSettings() { settingsOverlay.close(); }

@@ -385,7 +385,7 @@ def test_upload_then_download(browser, fake_drive, fake_oauth):
 
 
 def test_synced_setting_redraws_only_the_view_it_changes(browser, fake_drive, fake_oauth):
-    """다른 기기에서 바꾼 대체 독서 표시와 외경이 열린 화면에 바로 보인다. 그 값을 쓰지 않는 변경과 화면은 다시 그리지 않는다(ADR-041 §8)."""
+    """다른 기기에서 바꾼 대체 독서 표시, 소속교회, 외경이 열린 화면에 바로 보인다. 그 값을 쓰지 않는 변경과 화면은 다시 그리지 않는다(ADR-041 §8)."""
     fake_drive.reset()
     page_a = _make_page(browser, fake_drive, fake_oauth)
     page_b = _make_page(browser, fake_drive, fake_oauth)
@@ -421,6 +421,16 @@ def test_synced_setting_redraws_only_the_view_it_changes(browser, fake_drive, fa
         page_b.wait_for_selector(".lect-choice:has-text('연중 13주 월요일')")
         page_b.wait_for_timeout(300)
         assert page_b.evaluate("() => window.__said.at(-1)") == "다른 기기에서 변경된 데이터를 불러왔습니다."
+
+        # 소속교회가 바뀌면 그날이 그 교회의 축성일일 때 축성일이 먼저 열린다(ADR-041 §6)
+        go("/lectionary/2025-01-31", ".lectionary")
+        assert page_b.inner_text(".lect-day") == "연중 3주 금요일"
+        yongin = page_b.evaluate("""async () => (await (await fetch('/data/lectionary/local-observances.json')).json())
+          .parishes.find((p) => p.name === '용인성당').church_id""")
+        page_a.evaluate("(id) => window.appStorage.saveParish(id)", yongin)
+        _sync_now(page_a)
+        _sync_now(page_b)
+        page_b.wait_for_function("() => document.querySelector('.lect-day')?.textContent === '용인성당 축성일'")
 
         # 데스크톱의 설정 주소는 성서 목록 위에 설정을 연다. 목록이 보이니 같게 다시 그린다
         tab = "a[href='/deuterocanon']"

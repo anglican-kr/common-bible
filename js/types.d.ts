@@ -831,6 +831,17 @@ export interface HalfVerse {
 export interface ParishDedication {
   name: string;
   kind: "consecration" | "blessing";
+  /** 교회 식별자(무작위 6자, ADR-041 §6). 소속교회의 축성일을 찾는다. 업데이트 전의 표라 없으면 null이다. */
+  church_id: string | null;
+  /** 축성일 전례일의 분류. 본당 표 `dedication`의 값 그대로이고(축성은 주요축일 C, 축복은 기념일), 없으면 null이다. */
+  rank: LiturgicalRank | null;
+  precedence: number | null;
+  priority_group: "A" | "B" | "C" | null;
+  color: LiturgicalColor | null;
+  /** 독서와 본기도의 공통 분류(`commons.json`의 키, 「dedication」). */
+  common: string | null;
+  transferable: boolean;
+  transfer_to: TransferTo | null;
 }
 
 /**
@@ -994,6 +1005,8 @@ export interface AppOverlay {
   // Dismiss every currently-open overlay (route() calls this on navigation).
   // ADR-034 PR5b — replaces the router's hardcoded per-overlay teardown list.
   closeAllOverlays: () => void;
+  // 열린 창이 하나도 없으면 바로, 있으면 마지막 창이 닫힌 뒤에 실행한다(route()가 열린 창을 모두 닫으므로 다시 그리기를 미룬다).
+  whenNoOverlayOpen: (fn: () => void) => void;
   // Bottom-sheet drag plumbing (ADR-032 §2), shared by the bookmark drawer +
   // cite sheet. Lifecycle stays with the overlay/caller; these only wire the
   // drag gesture onto a handle element.
@@ -1401,7 +1414,8 @@ declare global {
     applyTheme?: (theme: string) => void;
     applyCiteShow?: (on: boolean) => void;
     applyAudioShow?: (on: boolean) => void;
-    // routing.js: redraws the open view when a synced setting changed what it shows; state-machine.js calls it.
+    // routing.js: redraws the open view when a synced setting changed what it shows; state-machine.js calls it,
+    // and so does settings-ui.js when the settings popover closes.
     redrawIfSyncedSettingsChanged?: () => Promise<void> | undefined;
     // Manual SW update check — set by app.js inside registerServiceWorker()
     // so it can capture the registration and reuse showUpdateToast(). Returns
