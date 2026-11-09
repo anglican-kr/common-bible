@@ -62,13 +62,12 @@ const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
 
 /** parsePath가 /lectionary에서 내는 서술자(routing.js PARSE_PATH — 정의는 types.d.ts `Route`). @typedef {import("../types.js").LectionaryRoute} LectionaryRoute */
 /** URL 쿼리에서 온 상태 — 넷 다 없을 수 있다. @typedef {{ obs: string | null, track: 1 | 2 | null, set: number | null, collect: number | null }} LectionaryQuery */
-/** 제목 아래 전례독서 목록의 줄 하나(후보 하나, 세트와 본기도가 짝지어진 후보는 세트 하나) — `name`은 괄호 설명을 뗀 이름, `suffix`는 상태 표시. `query`는 주소에 적지 않고 기록 항목의 상태로 넘길 선택이다(소속교회의 축성일이 있는 날만, ADR-041 §8). @typedef {{ candidate: Candidate, name: string, suffix: string, title: string, href: string, query: LectionaryQuery | null, active: boolean }} LectionaryChoice */
+/** 제목 아래 전례독서 목록의 줄 하나(후보 하나, 세트와 본기도가 짝지어진 후보는 세트 하나) — `name`은 괄호 설명을 뗀 이름, `suffix`는 상태 표시. @typedef {{ candidate: Candidate, name: string, suffix: string, title: string, href: string, active: boolean }} LectionaryChoice */
 /** 화면의 「독서」 선택지 하나 — `short` 는 괄호 선택 구절 세트에 합쳐진 짧은 바탕 세트(〔 〕 표시의 기준). @typedef {{ group: ReadingGroup, short: ReadingGroup | null, label: string }} ReadingOption */
 /**
  * 독서 카드 한 장 — 고를 수 있는 독서 한 벌(ADR-038 §3 「대안 세트·트랙 전환」). `refs`는 그 독서의 모든 항목이고, `differs`는 다른
  * 카드와 성구가 다른 항목이다. `focusKey`는 다시 그린 뒤 포커스를 돌려줄 자리(`track:N`, `set:N`)다. 트랙이 없는 날은 `track`이 null이다.
- * `query`는 전례독서 목록의 줄과 같다(`LectionaryChoice`).
- * @typedef {{ name: string, refs: Array<{ label: string, differs: boolean }>, href: string, query: LectionaryQuery | null, active: boolean, focusKey: string, track: 1 | 2 | null }} ReadingCard
+ * @typedef {{ name: string, refs: Array<{ label: string, differs: boolean }>, href: string, active: boolean, focusKey: string, track: 1 | 2 | null }} ReadingCard
  */
 /**
  * 뷰가 그리는 것 전부 — 순수 함수 `buildLectionaryModel` 의 반환. DOM 은 이것만 읽는다.
@@ -82,9 +81,7 @@ const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
  *   foundingLines: string[], dedicationLines: string[], transferNotes: string[],
  *   colors: string[], colorAlt: string[], ownColor: boolean, colorsOr: boolean,
  *   fast: "major" | "minor" | null, cycle: string | null, empty: boolean,
- *   dedication: Candidate | null,
- *   hrefs: { prev: string | null, next: string | null, today: string, tracks: Array<{ track: 1 | 2, href: string, query: LectionaryQuery | null, active: boolean }>,
- *     options: string[], collects: string[], collectQueries: Array<LectionaryQuery | null> },
+ *   hrefs: { prev: string | null, next: string | null, today: string, tracks: Array<{ track: 1 | 2, href: string, active: boolean }>, options: string[], collects: string[] },
  * }} LectionaryModel
  */
 
@@ -446,22 +443,21 @@ function optionalVerseTest(slot, shortSlot) {
  * 트랙마다, 그 밖에는 세트마다 한 장이다. 앞쪽끼리, 뒤쪽끼리 묶인 독서이므로 항목을 따로 고르지 않는다(사용자 확정 2026-11-05).
  * 세트와 본기도가 짝지어진 날(5.1, 사계재 금요일)은 전례일이 갈리는 날이라 카드가 아니라 전례독서 목록의 줄이다. 고를 것이 없으면 null.
  * @param {{ groups: ReadingGroup[], baseName: string, options: ReadingOption[], setIndex: number, linked: boolean,
- *   trackHrefs: Array<{ track: 1 | 2, href: string, query: LectionaryQuery | null, active: boolean }>,
- *   optionLinks: Array<{ href: string, query: LectionaryQuery | null }> }} a
+ *   trackHrefs: Array<{ track: 1 | 2, href: string, active: boolean }>, optionHrefs: string[] }} a
  * @returns {ReadingCard[] | null}
  */
-function readingCards({ groups, baseName, options, setIndex, linked, trackHrefs, optionLinks }) {
-  /** @type {Array<{ name: string, group: ReadingGroup, href: string, query: LectionaryQuery | null, active: boolean, focusKey: string, track: 1 | 2 | null }>} */
+function readingCards({ groups, baseName, options, setIndex, linked, trackHrefs, optionHrefs }) {
+  /** @type {Array<{ name: string, group: ReadingGroup, href: string, active: boolean, focusKey: string, track: 1 | 2 | null }>} */
   const picks = [];
   if (trackHrefs.length > 1) {
     for (const t of trackHrefs) {
       // 트랙마다 선택지는 하나다(괄호 선택 구절 세트는 바탕에 합쳐진다) — 실데이터 테스트가 지킨다(lectionary.data.test.js).
       const { group } = readingOptions(setsOf(groups, t.track), baseName)[0];
-      picks.push({ name: TRACK_NAME[t.track], group, href: t.href, query: t.query, active: t.active, focusKey: `track:${t.track}`, track: t.track });
+      picks.push({ name: TRACK_NAME[t.track], group, href: t.href, active: t.active, focusKey: `track:${t.track}`, track: t.track });
     }
   } else if (options.length > 1 && !linked) {
     options.forEach((o, i) => {
-      picks.push({ name: o.label, group: o.group, ...optionLinks[i], active: i === setIndex, focusKey: `set:${i + 1}`, track: null });
+      picks.push({ name: o.label, group: o.group, href: optionHrefs[i], active: i === setIndex, focusKey: `set:${i + 1}`, track: null });
     });
   } else {
     return null;
@@ -529,34 +525,14 @@ function dedicationLines(entries, titled = null) {
 
 /** 소속교회 축성일의 전례일 식별자이자 주소의 값(`?obs=my-dedication`). 교회 이름과 식별자를 주소와 방문 기록에 싣지 않는다(ADR-041 §8). */
 const MY_DEDICATION_ID = "my-dedication";
-/** 주소에 아무 선택도 적지 않은 상태. 그날의 기본 화면이다(`hrefFor`). @type {LectionaryQuery} */
-const NO_QUERY = { obs: null, track: null, set: null, collect: null };
 
-/**
- * 기록 항목의 상태에 넘긴 선택을 전례독서의 상태로 읽는다. routing.js가 링크의 `data-lect-query`를 `history.state.lectionaryQuery`에 둔다. 소속교회의
- * 축성일이 있는 날에 주소 대신 쓰고(ADR-041 §8), 없거나 형식이 틀리면 null이라 주소의 상태를 쓴다.
- * @param {unknown} state  `history.state`
- * @returns {LectionaryQuery | null}
- */
-function keptQueryOf(state) {
-  const q = state && typeof state === "object" ? /** @type {Record<string, unknown>} */ (state).lectionaryQuery : null;
-  if (!q || typeof q !== "object") return null;
-  const r = /** @type {Record<string, unknown>} */ (q);
-  const count = (/** @type {unknown} */ v) => (typeof v === "number" && Number.isInteger(v) && v >= 1 ? v : null);
-  return {
-    obs: typeof r.obs === "string" ? r.obs : null,
-    track: r.track === 1 || r.track === 2 ? r.track : null,
-    set: count(r.set),
-    collect: count(r.collect),
-  };
-}
-
-/** 그날의 소속교회 축성일 — 전례일 후보와 그 교회의 식별자. @typedef {{ candidate: Candidate, churchId: string }} MyDedication */
+/** 그날의 소속교회 축성일. 전례일 후보와 그 교회의 식별자를 담는다. @typedef {{ candidate: Candidate, churchId: string }} MyDedication */
 
 /**
  * 그날이 소속교회(`parish`, 교회 식별자. 빈 문자열은 선택 안 함)의 축성일이면 그 축성일, 아니면 null이다(ADR-041 §6).
- * 축복일에는 없다. 후보의 등급은 주요축일 C(ADR-036 §6)이고, 독서 2세트와 본기도는 성인 공통의 「성당 축성일」(`commons.json`의 `dedication`)이다.
- * 날짜를 두지 않아 엔진이 그날의 다른 전례일의 고유 본문을 이 후보의 것으로 찾지 않는다. 색은 그 공통 분류의 색이다(lectionary.data.test.js가 대조한다).
+ * 축복일에는 없다. 등급, 우선순위, 묶음, 색, 공통 분류는 본당 표의 그 교회 행에서 읽는다(엔진 `findDedications`). 지금 표는 주요축일 C(ADR-036 §6),
+ * 백색, 성인 공통의 「성당 축성일」(`commons.json`의 `dedication`, 독서 2세트와 본기도)이다. 공통 분류가 없으면 독서와 본기도를 찾을 수 없어 null이다.
+ * 날짜를 두지 않아 엔진이 그날의 다른 전례일의 고유 본문을 이 후보의 것으로 찾지 않는다.
  * 공개 래퍼(`lectionaryModelOf`)가 한 번 만들어 본기도 조회와 화면 모델에 같은 후보를 넘긴다.
  * @param {import("../types.js").ParishDedication[]} entries  그날 축성되거나 축복된 교회(엔진 `findDedications`)
  * @param {string} parish
@@ -564,14 +540,14 @@ function keptQueryOf(state) {
  */
 function myDedicationOf(entries, parish) {
   const e = parish ? entries.find((x) => x.kind === "consecration" && x.church_id === parish) : null;
-  if (!e) return null;
+  if (!e || !e.common) return null;
   return {
     candidate: {
       observance: {
         id: MY_DEDICATION_ID, kind: "sanctoral", name: `${e.name} ${DEDICATION_LABEL.consecration}`, aliases: null,
-        sanctoral_class: "dedication", has_proper: false,
-        rank: "major_feast", precedence: 4, priority_group: "C", transferable: false, transfer_to: null,
-        color: "white", color_alt: null,
+        sanctoral_class: e.common, has_proper: false,
+        rank: e.rank, precedence: e.precedence, priority_group: e.priority_group, transferable: e.transferable, transfer_to: e.transfer_to,
+        color: e.color, color_alt: null,
       },
       status: "proper",
     },
@@ -1004,14 +980,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const groups = groupsOf(selected);
   const tracks = tracksOf(groups);
   const track = pickTrack(groups, query.track, storedTrack);
-  // 주소는 소속교회와 무관한 기본 독서를 기준으로 적는다. 트랙은 언제나 적는다(hrefFor)
-  const defaults = { obs: publicInitial.observance.id, track: null };
-  // 소속교회의 축성일이 있는 날에는 고른 상태를 주소 대신 기록 항목의 상태로 넘긴다(`query`. routing.js가 링크의 `data-lect-query`를 읽는다).
-  // 주소에는 소속교회 없이 열어도 같은 화면이 되는 부분만 남아, 방문 기록에서 다른 방문과 구별되지 않는다. 축성일은 주소에 없다(사용자 결정 2026-11-09, ADR-041 §8)
-  const linkOf = (/** @type {LectionaryQuery} */ state) => ({
-    href: hrefFor(date, dedication && state.obs === MY_DEDICATION_ID ? NO_QUERY : state, defaults),
-    query: dedication ? state : null,
-  });
+  const defaults = { obs: initial.observance.id, track: null };   // 트랙은 언제나 적는다(hrefFor)
   const options = readingOptions(setsOf(groups, track), shortName(selected.observance.name));
   const setIndex = pickSet(options, query.set);
   const option = setIndex >= 0 ? options[setIndex] : null;
@@ -1038,9 +1007,8 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   // 본기도 선택(`collect`)은 독서와 독립된 축이라 트랙 · 세트를 바꿔도 유지한다(Copilot 리뷰 1회차) — 세트와 본기도가
   // 제목으로 짝지어진 날만 예외로, 세트가 본기도를 정한다(`linked`).
   // 트랙이 바뀌면 세트는 그 트랙의 첫 세트로 돌아간다(세트는 트랙에 딸린 것).
-  const trackHrefs = tracks.map((t) => ({ track: t, ...linkOf({ ...base, track: t, set: null }), active: t === track }));
-  const optionLinks = options.map((_, i) => linkOf({ ...base, set: i + 1 }));
-  const collectLinks = collects.map((_, j) => linkOf({ ...base, collect: j + 1 }));
+  const trackHrefs = tracks.map((t) => ({ track: t, href: hrefFor(date, { ...base, track: t, set: null }, defaults), active: t === track }));
+  const optionHrefs = options.map((_, i) => hrefFor(date, { ...base, set: i + 1 }, defaults));
   // 목록의 줄은 후보마다 하나이고, 세트와 본기도가 짝지어진 후보(5.1, 사계재 금요일)는 세트마다 하나다 — 이름이 곧 그 세트의
   // 제목이고 누르면 제목으로 올라간다(사용자 결정 2026-11-05. 전에는 「독서 · 본기도」 단추였다).
   // 설정이 감추는 것은 줄뿐이다 — `hidden`과 달리 주소로 가리키면 그 독서를 보인다. 공유한 링크가 받는 사람의 설정에 따라 다른 본문이 되지 않게 한다.
@@ -1068,7 +1036,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
         name: shortName(name),
         suffix,
         title: name + suffix,
-        ...linkOf({ obs: c.observance.id, track: trackOf(c), set: pair ? i + 1 : null, collect: null }),
+        href: hrefFor(date, { obs: c.observance.id, track: trackOf(c), set: pair ? i + 1 : null, collect: null }, defaults),
         active: own && (!pair || i === setIndex),
       };
     });
@@ -1086,7 +1054,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   return {
     date, resolved, selected, initial, publicInitial, dayName: conditionTitle(group) || choiceNameOf(selected, group, !!linked),
     groups, tracks, track, options, setIndex, group, shortGroup, slots,
-    cards: readingCards({ groups, baseName: shortName(selected.observance.name), options, setIndex, linked: !!linked, trackHrefs, optionLinks }),
+    cards: readingCards({ groups, baseName: shortName(selected.observance.name), options, setIndex, linked: !!linked, trackHrefs, optionHrefs }),
     choices,
     // 설과 겹쳐 옮겨 온 해(2049-02-03)는 상태 표시처럼 이어 「2월 2일에서 옮겨 옴 · 1월 31일로 옮겨 지킬 수 있음」이다
     selectedNote: [
@@ -1098,7 +1066,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     ending: endingCodeOf(memorialCollects[memorialCollects.length - 1] || chosenCollect), memorialCollects,
     memorialSaints: memorial.saints, passiveDays, commemorations, textlessDays, foundingLines: foundingLines(foundings),
     dedicationLines: dedicationLines(dedications, mine && selected === dedication ? mine.churchId : null), transferNotes,
-    colors, colorAlt, ownColor, colorsOr, fast: fastOf(resolved), dedication,
+    colors, colorAlt, ownColor, colorsOr, fast: fastOf(resolved),
     cycle: resolved.coord.year && CYCLE_LABEL[resolved.coord.year] ? CYCLE_LABEL[resolved.coord.year] : null,
     empty,
     hrefs: {
@@ -1106,9 +1074,8 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
       next: stepHref(date, 1),
       today: "/lectionary",
       tracks: trackHrefs,
-      options: optionLinks.map((l) => l.href),
-      collects: collectLinks.map((l) => l.href),
-      collectQueries: collectLinks.map((l) => l.query),
+      options: optionHrefs,
+      collects: collects.map((_, j) => hrefFor(date, { ...base, collect: j + 1 }, defaults)),
     },
   };
 }
@@ -1149,16 +1116,6 @@ function headLinesOf(m) {
   };
 }
 // ── END LECTIONARY_MODEL ──
-
-/**
- * 주소에 적지 않은 선택을 링크에 싣는다. 누르면 라우터가 그 선택을 기록 항목의 상태로 넘긴다(routing.js, ADR-041 §8). 소속교회의 축성일이
- * 있는 날에만 있다(`linkOf`).
- * @param {LectionaryQuery | null | undefined} query
- * @returns {Record<string, string>}
- */
-function lectQueryAttrs(query) {
-  return query ? { "data-lect-query": JSON.stringify(query) } : {};
-}
 
 // ── Chapter JSON cache ──
 // Choice-row / segment changes re-run route(), and most of them re-use the chapters
@@ -1348,7 +1305,7 @@ function buildChoices(m) {
   if (!others.length) return null;
   const nav = el("nav", { className: "lect-choices", "aria-label": "이날의 다른 전례" });
   others.forEach((c, i) => {
-    nav.appendChild(el("a", { className: "lect-choice", href: c.href, ...lectQueryAttrs(c.query), title: c.title, "data-focus-key": `choice:${i}` },
+    nav.appendChild(el("a", { className: "lect-choice", href: c.href, title: c.title, "data-focus-key": `choice:${i}` },
       el("span", { className: "lect-choice-text" }, el("span", { className: "lect-choice-name" }, c.name), c.suffix)));
   });
   return nav;
@@ -1391,7 +1348,6 @@ function buildReadingCards(m) {
     const a = el("a", {
       className: c.active ? "lect-collect-num active" : "lect-collect-num",
       href: c.href,
-      ...lectQueryAttrs(c.query),
       "aria-label": c.name,
       "data-focus-key": `folded:${c.focusKey}`,
     });
@@ -1413,7 +1369,7 @@ function buildReadingCards(m) {
   const rows = Math.max(...m.cards.map((c) => c.refs.length)) + 1;
   list.style.setProperty("--lect-card-rows", String(rows));
   for (const c of m.cards) {
-    const a = el("a", { className: c.active ? "lect-card active" : "lect-card", href: c.href, ...lectQueryAttrs(c.query), "data-focus-key": c.focusKey });
+    const a = el("a", { className: c.active ? "lect-card active" : "lect-card", href: c.href, "data-focus-key": c.focusKey });
     if (c.active) a.setAttribute("aria-current", "page");
     a.appendChild(el("span", { className: "lect-card-name" }, c.name));
     for (const r of c.refs) {
@@ -1454,7 +1410,6 @@ function buildCollectNumbers(m) {
     const a = el("a", {
       className: active ? "lect-collect-num active" : "lect-collect-num",
       href: m.hrefs.collects[i],
-      ...lectQueryAttrs(m.hrefs.collectQueries[i]),
       "aria-label": label,
       "data-focus-key": `collect:${i + 1}`,
     });
@@ -1911,10 +1866,9 @@ function commit(m, chapters) {
  * 그날 축성일인 교회를 라우터에 알린다(`window.noteDrawnChurches`). 소속교회가 바뀌어도 그린 날들의 축성일과 무관하면 다시 그리지 않으려는 것이다.
  * @param {ResolvedDate} resolved
  * @param {LectionaryQuery} query
- * @param {string} [parish]  소속교회의 교회 식별자. 늘 기기에 저장된 값(`loadParish`)으로 읽고(ADR-041 §8), 문서 제목을 정할 때만 빈 문자열을 넘긴다
  * @returns {LectionaryModel | null}
  */
-function lectionaryModelOf(resolved, query, parish = loadParish()) {
+function lectionaryModelOf(resolved, query) {
   const date = resolved.date;
   /** @type {Map<string, ReadingGroup[]>} */
   const groupsCache = new Map();
@@ -1926,8 +1880,9 @@ function lectionaryModelOf(resolved, query, parish = loadParish()) {
   };
   const dedications = findDedications(date);
   window.noteDrawnChurches?.(dedications.flatMap((e) => (e.kind === "consecration" && e.church_id ? [e.church_id] : [])));
-  // 그날이 소속교회의 축성일이면 그 후보를 한 번 만들어, 본기도(공통 「성당 축성일」)를 엔진에서 받고 화면 모델에도 같은 후보를 넘긴다
-  const mine = myDedicationOf(dedications, parish);
+  // 소속교회는 늘 기기에 저장된 값으로 읽는다(ADR-041 §8). 그날이 그 교회의 축성일이면 후보를 한 번 만들어, 본기도(공통 「성당 축성일」)를
+  // 엔진에서 받고 화면 모델에도 같은 후보를 넘긴다
+  const mine = myDedicationOf(dedications, loadParish());
   const collectEntries = findCollects(mine ? { ...resolved, candidates: [mine.candidate, ...resolved.candidates] } : resolved);
   return buildLectionaryModel(resolved, query, groupsOf, collectEntries, loadLectionaryTrack(), dedications, loadLectionaryAltShow(), findFoundings(date), mine);
 }
@@ -1963,8 +1918,7 @@ async function renderLectionaryView(parsed) {
 
   const resolved = resolveDate(date);
   if (!resolved) return pickAnotherDate("이 날짜는 교회력에 없습니다");
-  // 주소에 적지 않은 선택(소속교회의 축성일이 있는 날에 라우터가 이 기록 항목의 상태로 넘긴 것)이 있으면 주소보다 먼저다(ADR-041 §8)
-  const model = lectionaryModelOf(resolved, keptQueryOf(history.state) || parsed);
+  const model = lectionaryModelOf(resolved, parsed);
   if (!model) return pickAnotherDate("이 날짜는 교회력에 없습니다");
 
   const chapters = await loadSlotChapters(model.slots);
@@ -1977,11 +1931,10 @@ async function renderLectionaryView(parsed) {
     const search = withTrack(location.search, model.track);
     if (search !== location.search) history.replaceState(history.state, "", location.pathname + search);
   }
-  // 문서 제목도 머리처럼 고른 전례일의 이름이다(2026-11-04, buildHeader). 다만 소속교회의 축성일이 있는 날이면 지금 주소를 소속교회 없이
-  // 열 때의 제목이다. 문서 제목은 Google Analytics의 방문 기록(`page_title`)으로 나가므로, 다른 방문과 다른 제목이면 그 방문이 축성일 화면임이
-  // 드러나고 그날 축성일인 교회가 하나면 그 교회까지 정해진다(ADR-041 §8, PR #542 리뷰). 주소는 이미 소속교회와 무관하게 적었다(`linkOf`)
-  const titled = model.dedication ? lectionaryModelOf(resolved, parsed, "") || model : model;
-  return `${shortName(titled.dayName)} ${PAGE_TITLE}`;
+  // 문서 제목도 머리처럼 고른 전례일의 이름이다(2026-11-04, buildHeader). 다만 소속교회의 축성일이면 「전례독서」뿐이다. 문서 제목은
+  // Google Analytics의 방문 기록(`page_title`)으로 나가므로 교회 이름을 싣지 않는다(ADR-041 §8)
+  if (model.selected.observance.id === MY_DEDICATION_ID) return PAGE_TITLE;
+  return `${shortName(model.dayName)} ${PAGE_TITLE}`;
 }
 
 // 캘린더 탭(calendar.js — ADR-038 §2 A2)이 같은 이름 · 날짜 · 색 규칙을 쓴다(복제 금지 — 칸 · 줄의 이름이 전례독서 목록과 같아야 한다).

@@ -833,6 +833,15 @@ export interface ParishDedication {
   kind: "consecration" | "blessing";
   /** 교회 식별자(무작위 6자, ADR-041 §6). 소속교회의 축성일을 찾는다. 업데이트 전의 표라 없으면 null이다. */
   church_id: string | null;
+  /** 축성일 전례일의 분류. 본당 표 `dedication`의 값 그대로이고(축성은 주요축일 C, 축복은 기념일), 없으면 null이다. */
+  rank: LiturgicalRank | null;
+  precedence: number | null;
+  priority_group: "A" | "B" | "C" | null;
+  color: LiturgicalColor | null;
+  /** 독서와 본기도의 공통 분류(`commons.json`의 키, 「dedication」). */
+  common: string | null;
+  transferable: boolean;
+  transfer_to: TransferTo | null;
 }
 
 /**
