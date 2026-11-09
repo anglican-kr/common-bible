@@ -1359,7 +1359,7 @@ test("§5.5 고유명 평일 표지는 엔진이 합성한 격자에만 — 같�
 });
 
 test("C-6.1-1 유효 precedence — 비교는 precedence 로만(rank 아님) · null 은 최하위 · 지향 · 이름 줄 9 · A 특례 1.5", () => {
-  const ep = (o) => ctx.effectivePrecedence({ id: "x", kind: "sanctoral", name: "x", color: null, ...o });
+  const ep = (o) => ctx.effectivePrecedence({ id: "x", kind: "sanctoral", name: "x", color: null, ...o }, null);
   same([ep({ rank: "major_feast", precedence: 3 }), ep({ rank: "major_feast", precedence: 6 })], [3, 6]);
   assert.strictEqual(ep({ rank: null, precedence: null }), Infinity);
   assert.strictEqual(ep({ rank: "commemoration", precedence: 7 }), 9);
@@ -1392,8 +1392,8 @@ test("C-6.1-4 명절 ∧ 연중 주일 — 주일 격자가 지정 전례일이�
   same(officialId(r), "grid:ordinary-x-sunday");
   same(fate(r, "lunar11-seol"), ["proper", null]);
   // 그날 명절의 유효 우선순위는 연중 주일(5) 바로 다음이고, 후보의 값과 표의 값(0)은 그대로다
-  same([ctx.effectivePrecedence(cand(r, "lunar11-seol").observance, "2027-02-07"), cand(r, "lunar11-seol").observance.precedence], [5.5, 0]);
-  same(ctx.effectivePrecedence(cand(r, "lunar11-seol").observance), 0);   // 날짜가 없으면 표의 값
+  same([ctx.sundayPrecedenceOn("2027-02-07"), ctx.effectivePrecedence(cand(r, "lunar11-seol").observance, ctx.sundayPrecedenceOn("2027-02-07")), cand(r, "lunar11-seol").observance.precedence], [5, 5.5, 0]);
+  same([ctx.sundayPrecedenceOn("2027-02-08"), ctx.effectivePrecedence(cand(r, "lunar11-seol").observance, null)], [null, 0]);   // 주일이 아니면 표의 값
   same(r.candidates.map((c) => c.observance.id), ["lunar11-seol", "grid:ordinary-x-sunday"]);
 });
 
@@ -1404,7 +1404,7 @@ test("C-6.1-4b 명절 ∧ 절기 주일 — 절기 주일도 명절보다 선순
   ], [], { years: { "2026": { "8-15": "12-27" } } }));
   const r = t.at("2026-12-27");
   const grid = r.candidates.find((c) => c.observance.id.startsWith("grid:")).observance;
-  same([grid.rank, officialId(r), fate(r, "lunar815-chuseok"), ctx.effectivePrecedence(cand(r, "lunar815-chuseok").observance, "2026-12-27")],
+  same([grid.rank, officialId(r), fate(r, "lunar815-chuseok"), ctx.effectivePrecedence(cand(r, "lunar815-chuseok").observance, ctx.sundayPrecedenceOn("2026-12-27"))],
     ["privileged_sunday", grid.id, ["proper", null], 2.5]);
 });
 
@@ -1492,7 +1492,7 @@ test("C-6.1-7 · C-2-1 precedence null 은 정렬 최하위 · 지정 전례일�
   // prec 1 이 되며 지웠다(data#32). same() 은 JSON 왕복이라 Infinity 가 null 이 되므로 하나씩 strictEqual 로 본다(PR #349 리뷰)
   for (const obs of [{ kind: "temporal", type: "weekday", precedence: null }, { kind: "temporal", type: "sunday", precedence: null },
     { kind: "sanctoral", precedence: null }]) {
-    assert.strictEqual(ctx.effectivePrecedence(obs), Infinity, JSON.stringify(obs));
+    assert.strictEqual(ctx.effectivePrecedence(obs, null), Infinity, JSON.stringify(obs));
   }
   const family = rb("2026-05-10");   // 가정주일 — 부활 6주일
   same(officialId(family), "grid:easter-6-sunday");
