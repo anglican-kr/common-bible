@@ -141,6 +141,7 @@ Phase 2를 진행하며 그 전제가 두 번 깨졌다.
 | `bible-startup` | `"resume" \| "home"` | ADR-010, `js/app.js` |
 | `bible-start-page` | `"bible" \| "lectionary"` | ADR-041, `js/app/storage.js` |
 | `bible-lectionary-alt-show` | `"1" \| "0"`, 동기화를 거치면 `"true" \| "false"` | ADR-041, `js/app/storage.js` |
+| `bible-parish` | 교회 식별자(무작위 6자), 빈 문자열은 선택 안 함 | ADR-041 §6, §8, `js/app/storage.js` |
 | `bible-font-size` | `"1"`–`"7"` | `js/app.js` |
 | `bible-color-scheme` | `"light" \| "dark" \| "auto"` | `js/app.js` |
 | `bible-theme` | 테마 이름 문자열 | `js/app.js` |

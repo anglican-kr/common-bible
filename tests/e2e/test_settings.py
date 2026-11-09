@@ -1,5 +1,7 @@
-"""E2E: 설정 팝오버 — 섹션, 시작 화면, 읽던 페이지에서 시작, 책 순서, 글자 크기, 테마, 색상, 캐시, 영속성."""
-from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, RECORD_ANNOUNCEMENTS, open_settings
+"""E2E: 설정 팝오버 — 섹션, 시작 화면, 읽던 페이지에서 시작, 소속교회, 책 순서, 글자 크기, 테마, 색상, 캐시, 영속성."""
+import re
+
+from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, RECORD_ANNOUNCEMENTS, close_popovers, open_settings
 
 BASE = "http://localhost:8080"
 
@@ -47,6 +49,7 @@ def test_popover_has_labeled_sections_in_order(browser):
         assert bible.get_by_role("switch").count() == 4
         lectionary = pop.locator(".settings-section", has=page.locator("h2", has_text="전례독서"))
         assert lectionary.get_by_role("switch", name="대체 독서 표시").is_checked() is False
+        assert lectionary.get_by_label("소속교회", exact=True).count() == 1
         appearance = pop.locator(".settings-section", has=page.locator("h2", has_text="모양"))
         assert appearance.get_by_role("button", name="글자 크게").count() == 1
         system = pop.locator(".settings-section", has=page.locator("h2", has_text="시스템"))
@@ -63,6 +66,7 @@ def test_mobile_settings_view_has_the_same_sections(browser):
         page.goto(f"{BASE}/settings")
         page.wait_for_selector(".settings-view .btn-group")
         _assert_sections(page.evaluate(SECTION_FACTS, ".settings-view"))
+        assert page.locator(".settings-view").get_by_label("소속교회", exact=True).count() == 1
     finally:
         ctx.close()
 
@@ -132,8 +136,7 @@ def test_segment_groups_share_width_and_buttons_divide_it_equally(browser):
         (".settings-view", {"viewport": {"width": 320, "height": 640}, "user_agent": IPHONE_UA}, 24),
     ):
         ctx = browser.new_context(**options)
-        ctx.add_init_script(CLEAR_APP_STORAGE)
-        ctx.add_init_script(f"localStorage.setItem('bible-font-size', '{font}')")
+        ctx.add_init_script(CLEAR_APP_STORAGE + f"localStorage.setItem('bible-font-size', '{font}')")
         page = ctx.new_page()
         try:
             if root == ".settings-popover":
@@ -155,8 +158,7 @@ def test_segment_groups_share_width_and_buttons_divide_it_equally(browser):
 
 def test_resume_row_stays_hidden_when_reopened_with_lectionary_start(browser):
     ctx = browser.new_context()
-    ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script("localStorage.setItem('bible-start-page', 'lectionary')")
+    ctx.add_init_script(CLEAR_APP_STORAGE + "localStorage.setItem('bible-start-page', 'lectionary')")
     page = ctx.new_page()
     try:
         page.goto(f"{BASE}/john/3")
@@ -171,8 +173,7 @@ def test_resume_row_stays_hidden_when_reopened_with_lectionary_start(browser):
 def test_lectionary_start_page_opens_lectionary_only_on_launch(browser):
     """「/」로 열면 읽던 위치가 있어도 오늘의 전례독서다. 뒤로 가기로 온 「/」는 성서 목록이고, 다른 주소로 열면 그 주소다."""
     ctx = browser.new_context()
-    ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script("""
+    ctx.add_init_script(CLEAR_APP_STORAGE + """
       localStorage.setItem('bible-start-page', 'lectionary');
       localStorage.setItem('bible-last-read', JSON.stringify({ bookId: 'john', chapter: 3, verse: null }));
     """)
@@ -194,8 +195,7 @@ def test_lectionary_start_page_opens_lectionary_only_on_launch(browser):
 def test_reload_stays_on_book_list_with_lectionary_start(browser):
     """새로고침은 앱을 새로 여는 것이 아니다 — 성서 목록에 머문다(ADR-041 §2)."""
     ctx = browser.new_context()
-    ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script("localStorage.setItem('bible-start-page', 'lectionary')")
+    ctx.add_init_script(CLEAR_APP_STORAGE + "localStorage.setItem('bible-start-page', 'lectionary')")
     page = ctx.new_page()
     try:
         page.goto(BASE)
@@ -214,8 +214,7 @@ def test_reload_stays_on_book_list_with_lectionary_start(browser):
 def test_reload_stays_on_book_list_with_resume(browser):
     """「읽던 페이지에서 시작」의 이동도 같다. 장을 새로고침할 때의 절 복원은 이동이 아니라 그대로다."""
     ctx = browser.new_context()
-    ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script("localStorage.setItem('bible-last-read', JSON.stringify({ bookId: 'john', chapter: 3, verse: 20 }))")
+    ctx.add_init_script(CLEAR_APP_STORAGE + "localStorage.setItem('bible-last-read', JSON.stringify({ bookId: 'john', chapter: 3, verse: 20 }))")
     page = ctx.new_page()
     try:
         page.goto(BASE)
@@ -242,8 +241,7 @@ def test_start_page_shows_failure_screen_when_lectionary_cannot_load(browser):
     """자료나 화면 모듈을 받지 못하면 전례독서 주소를 직접 열었을 때와 같은 실패 화면이다. 성서 목록으로 옮기지 않고, 홈 탭으로 갈 수 있다(ADR-041 §2)."""
     for blocked in ("**/data/lectionary/**", "**/js/app/lectionary.js*"):
         ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
-        ctx.add_init_script(CLEAR_APP_STORAGE)
-        ctx.add_init_script("localStorage.setItem('bible-start-page', 'lectionary')")
+        ctx.add_init_script(CLEAR_APP_STORAGE + "localStorage.setItem('bible-start-page', 'lectionary')")
         ctx.route(blocked, lambda route: route.abort())
         page = ctx.new_page()
         try:
@@ -282,8 +280,7 @@ def test_popover_shows_a_thin_scrollbar_on_a_short_window(browser):
 
 def test_home_tab_shows_book_list_after_lectionary_start(browser):
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
-    ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script("localStorage.setItem('bible-start-page', 'lectionary')")
+    ctx.add_init_script(CLEAR_APP_STORAGE + "localStorage.setItem('bible-start-page', 'lectionary')")
     page = ctx.new_page()
     try:
         page.goto(BASE)
@@ -328,14 +325,8 @@ def test_keyboard_opens_on_first_control_and_focus_stays_trapped(browser):
         ctx.close()
 
 
-# 세례명과 소속교회의 선택 상자(ADR-041 §9)가 아직 화면에 없어, 팝오버에 하나를 넣어 Esc 처리를 본다.
-ADD_SELECT = """() => {
-  const select = document.createElement('select');
-  select.className = 'settings-select';
-  select.setAttribute('aria-label', '시험 목록');
-  select.innerHTML = '<option>가</option><option>나</option>';
-  document.querySelector('.settings-popover .settings-section').append(select);
-}"""
+# 소속교회 선택 상자(ADR-041 §9)가 목록을 받아 고를 수 있게 되었는가
+PARISH_READY = "() => { const s = document.querySelector('.settings-popover .settings-select'); return !!s && !s.disabled; }"
 LIST_IS_OPEN = "() => document.querySelector('.settings-popover .settings-select').matches(':open')"
 # Chromium은 목록을 연 채 누른 Esc를 페이지로 보내지 않는다. 보내는 브라우저에서 일어날 일을 키 입력 사건을 직접 내어 본다.
 ESC_REACHES_PAGE = """() => document.querySelector('.settings-popover .settings-select')
@@ -350,8 +341,8 @@ def test_escape_on_open_select_list_keeps_popover(browser):
     try:
         _open(page)
         pop = open_settings(page)
-        page.evaluate(ADD_SELECT)
-        pop.get_by_label("시험 목록").click()
+        page.wait_for_function(PARISH_READY)
+        pop.get_by_label("소속교회", exact=True).click()
         page.wait_for_function(LIST_IS_OPEN)
         page.evaluate(ESC_REACHES_PAGE)
         assert pop.is_visible()
@@ -360,6 +351,190 @@ def test_escape_on_open_select_list_keeps_popover(browser):
         assert pop.is_visible()
         page.evaluate(ESC_REACHES_PAGE)    # 이제 닫힌 선택 상자다
         pop.wait_for(state="hidden")
+    finally:
+        ctx.close()
+
+
+# ── 소속교회 (ADR-041 §6, §7, §9) ──────────────────────────────────────────────
+
+CHURCH_ID = re.compile(r"[23456789abcdefghjkmnpqrstuvwxyz]{6}")
+GROUP_FACTS = """(s) => [...s.querySelectorAll('optgroup')].map((g) => ({
+  label: g.label,
+  names: [...g.children].map((o) => o.textContent),
+  ids: [...g.children].map((o) => o.value),
+}))"""
+CHURCH_ID_OF = """async (name) => (await (await fetch('/data/lectionary/local-observances.json')).json())
+  .parishes.find((p) => p.name === name).church_id"""
+SORTED_KO = "(names) => [...names].sort((a, b) => a.localeCompare(b, 'ko'))"
+
+
+def test_parish_select_lists_churches_by_diocese_and_saves_the_id(browser):
+    """소속교회는 교구별 묶음(서울 60, 대전 38, 부산 18)의 사전순 목록이고, 「북.」 성당은 없고 두 줄인 교회는 한 번만 있다.
+    고르면 교회 이름이 아니라 식별자를 저장하고, 설정을 다시 열면 고른 교회가 보인다. 「선택 안 함」은 빈 문자열이다(ADR-041 §6, §8, §9)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open(page)
+        pop = open_settings(page)
+        page.wait_for_function(PARISH_READY)
+        select = pop.get_by_label("소속교회", exact=True)
+        assert select.input_value() == ""
+        assert select.locator("option:checked").inner_text() == "선택 안 함"
+        groups = select.evaluate(GROUP_FACTS)
+        assert [g["label"] for g in groups] == ["서울교구", "대전교구", "부산교구"]
+        assert [len(g["names"]) for g in groups] == [60, 38, 18]
+        for g in groups:
+            assert not [n for n in g["names"] if n.startswith("북.")], g["label"]
+            assert g["names"] == page.evaluate(SORTED_KO, g["names"]), g["label"]
+            assert all(CHURCH_ID.fullmatch(i) for i in g["ids"]), g["label"]
+        assert groups[0]["names"].count("파주성당") == 1
+
+        page.evaluate(RECORD_ANNOUNCEMENTS)
+        bundang = page.evaluate(CHURCH_ID_OF, "분당성당")
+        select.select_option(label="분당성당")
+        assert _ls(page, "bible-parish") == bundang
+        page.wait_for_function("() => window.__said.includes('소속교회 분당성당')")
+
+        close_popovers(page)
+        pop.wait_for(state="hidden")
+        pop = open_settings(page)
+        page.wait_for_function(PARISH_READY)
+        select = pop.get_by_label("소속교회", exact=True)
+        assert select.input_value() == bundang
+        select.select_option(label="선택 안 함")
+        assert _ls(page, "bible-parish") == ""
+    finally:
+        ctx.close()
+
+
+def test_parish_info_button_opens_the_description_and_close_returns_focus(browser):
+    """소속교회 라벨 옆 ⓘ 단추가 행 아래의 설명을 열고 닫는다. 닫기 단추는 ⓘ 단추의 이름을 붙여 백업 & 동기화의 것과 구별되고,
+    누르면 포커스가 ⓘ 단추로 돌아온다(ADR-041 §7)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open(page)
+        pop = open_settings(page)
+        btn = pop.get_by_role("button", name="소속교회 안내", exact=True)
+        assert btn.get_attribute("aria-expanded") == "false"
+        desc = pop.locator(f"#{btn.get_attribute('aria-controls')}")
+        assert desc.is_hidden()
+        btn.click()
+        assert desc.is_visible()
+        assert btn.get_attribute("aria-expanded") == "true"
+        assert "교회 축성일과 교구설립일에 그날의 전례독서와 본기도를 보여줍니다." in desc.inner_text()
+        # 설명은 소속교회 행 바로 아래다
+        assert page.evaluate("(d) => d.previousElementSibling.querySelector('select') !== null", desc.element_handle())
+        assert pop.get_by_role("button", name="백업 및 동기화 안내 닫기", exact=True, include_hidden=True).count() == 1   # 그 설명은 닫혀 있다
+        desc.get_by_role("button", name="소속교회 안내 닫기", exact=True).click()
+        assert desc.is_hidden()
+        assert btn.get_attribute("aria-expanded") == "false"
+        assert page.evaluate("() => document.activeElement.getAttribute('aria-label')") == "소속교회 안내"
+    finally:
+        ctx.close()
+
+
+def test_escape_on_the_mobile_settings_view_closes_the_open_description(browser):
+    """팝오버가 없는 모바일 설정 화면에서 Esc는 펼친 단추를 접는다. 설명도 함께 닫혀 단추의 상태와 어긋나지 않는다(ADR-041 §7)."""
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/settings")
+        page.wait_for_selector(".settings-view .btn-group")
+        view = page.locator(".settings-view")
+        for name in ("소속교회 안내", "백업 및 동기화 안내"):
+            btn = view.get_by_role("button", name=name, exact=True)
+            if btn.count() == 0:
+                continue   # 백업 & 동기화는 동기화 모듈이 있을 때만 보인다
+            desc = view.locator(f"#{btn.get_attribute('aria-controls')}")
+            btn.click()
+            assert desc.is_visible(), name
+            page.keyboard.press("Escape")
+            desc.wait_for(state="hidden")
+            assert btn.get_attribute("aria-expanded") == "false", name
+    finally:
+        ctx.close()
+
+
+def test_parish_select_explains_when_the_list_cannot_load(browser):
+    """교회 목록을 받지 못하면 선택 상자를 고를 수 없게(흐리게) 두고 ⓘ 설명 아래에 안내를 보인다. 다른 설정은 그대로 쓸 수 있다(ADR-041 §9)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.route("**/data/lectionary/local-observances.json", lambda route: route.abort())
+    page = ctx.new_page()
+    try:
+        _open(page)
+        pop = open_settings(page)
+        note = pop.get_by_text("교회 목록을 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 설정을 다시 열어 주세요.", exact=True)
+        note.wait_for()
+        select = pop.get_by_label("소속교회", exact=True)
+        assert select.is_disabled()
+        assert select.locator("option").all_inner_texts() == ["목록 없음"]
+        assert select.get_attribute("aria-describedby") == note.get_attribute("id")
+        assert select.evaluate("(s) => getComputedStyle(s).opacity") == "0.35"
+        # 안내는 ⓘ 설명 행 다음이라, 설명을 열어도 행 바로 아래에 열린다
+        info_id = pop.get_by_role("button", name="소속교회 안내", exact=True).get_attribute("aria-controls")
+        assert note.evaluate("(n) => n.previousElementSibling.id") == info_id
+        pop.get_by_role("switch", name="대체 독서 표시").click()
+        assert _ls(page, "bible-lectionary-alt-show") == "1"
+    finally:
+        ctx.close()
+
+
+def test_parish_select_gives_up_waiting_after_ten_seconds(browser):
+    """응답 없이 멈춘 요청은 10초 뒤 받지 못한 것으로 보고 안내한다. 「불러오는 중」에 머물지 않는다(ADR-041 §9)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.route("**/data/lectionary/local-observances.json", lambda route: None)   # 답하지 않는다
+    page = ctx.new_page()
+    try:
+        _open(page)
+        pop = open_settings(page)
+        select = pop.get_by_label("소속교회", exact=True)
+        assert select.locator("option").all_inner_texts() == ["불러오는 중"]
+        pop.get_by_text("교회 목록을 불러오지 못했습니다.", exact=False).wait_for(timeout=15_000)
+        assert select.locator("option").all_inner_texts() == ["목록 없음"]
+    finally:
+        ctx.close()
+
+
+def test_parish_select_explains_an_outdated_table(browser):
+    """식별자가 없는 옛 표(업데이트 전에 받아 둔 사본)를 받으면 인터넷 연결 탓이 아니라 아직 업데이트하지 못했다고 안내한다(ADR-041 §9)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    old = '{"parishes": [{"id": "par-용인성당", "name": "용인성당", "diocese": "서울"}]}'
+    ctx.route("**/data/lectionary/local-observances.json",
+              lambda route: route.fulfill(status=200, content_type="application/json", body=old))
+    page = ctx.new_page()
+    try:
+        _open(page)
+        pop = open_settings(page)
+        pop.get_by_text("교회 목록을 아직 업데이트하지 못했습니다. 잠시 뒤 설정을 다시 열어 주세요.", exact=True).wait_for()
+        assert pop.get_by_label("소속교회", exact=True).is_disabled()
+    finally:
+        ctx.close()
+
+
+def test_parish_saved_id_missing_from_the_list_is_kept_until_cleared(browser):
+    """저장한 식별자가 목록에 없으면(교회가 표에서 빠진 경우) 「목록에 없는 교회」를 고른 채 보이고 값을 지우지 않는다.
+    「선택 안 함」을 고르면 지워지고, 그 항목은 목록에서 빠진다(ADR-041 §9)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE + "localStorage.setItem('bible-parish', 'zzzzzz')")
+    page = ctx.new_page()
+    try:
+        _open(page)
+        pop = open_settings(page)
+        page.wait_for_function(PARISH_READY)
+        select = pop.get_by_label("소속교회", exact=True)
+        assert select.input_value() == "zzzzzz"
+        assert select.locator("option:checked").inner_text() == "목록에 없는 교회"
+        assert _ls(page, "bible-parish") == "zzzzzz"
+        select.select_option(label="선택 안 함")
+        assert _ls(page, "bible-parish") == ""
+        assert select.locator("option", has_text="목록에 없는 교회").count() == 0
     finally:
         ctx.close()
 
@@ -522,8 +697,7 @@ def test_book_order_caption_sits_right_of_its_label(browser):
         (".settings-view", {"viewport": {"width": 320, "height": 640}, "user_agent": IPHONE_UA}, 24),
     ):
         ctx = browser.new_context(**options)
-        ctx.add_init_script(CLEAR_APP_STORAGE)
-        ctx.add_init_script(f"localStorage.setItem('bible-font-size', '{font}')")
+        ctx.add_init_script(CLEAR_APP_STORAGE + f"localStorage.setItem('bible-font-size', '{font}')")
         page = ctx.new_page()
         try:
             if root == ".settings-popover":

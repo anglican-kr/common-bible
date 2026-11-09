@@ -47,7 +47,7 @@ import {
   optionalDestOf,
 } from "./liturgical-engine.js";
 
-const { _$, el, clearNode, emptyState, isModifiedClick, headerIcon, HEADER_ICON_PATHS } = window.appHelpers;
+const { _$, el, clearNode, emptyState, isModifiedClick, headerIcon, HEADER_ICON_PATHS, isFormerNorthChurch } = window.appHelpers;
 const { loadLectionaryTrack, saveLectionaryTrack, loadLectionaryCardsFolded, saveLectionaryCardsFolded, loadLectionaryAltShow } = window.appStorage;
 
 const $app = _$("app");
@@ -509,12 +509,12 @@ function collectsFor(entries, selected) {
 /**
  * 그날 축성되거나 축복된 교회(엔진 `findDedications`) → 제목 아래 줄(사용자 결정 2026-11-04). 종류마다 한 줄이고, 교회
  * 이름을 쉼표로 이은 뒤 「축성일」 · 「축복일」을 한 번만 붙인다(「일산성당, 초지성당, 행신성당 축성일」). 축성일 줄이
- * 먼저다(`DEDICATION_LABEL`의 차례). 「북.」으로 시작하는 성당(북한에 있던 성당)은 싣지 않고, 주보성인도 보이지 않는다(같은 결정).
+ * 먼저다(`DEDICATION_LABEL`의 차례). 「북.」으로 시작하는 성당(북한에 있던 성당, `isFormerNorthChurch`)은 싣지 않고, 주보성인도 보이지 않는다(같은 결정).
  * @param {import("../types.js").ParishDedication[]} entries @returns {string[]}
  */
 function dedicationLines(entries) {
   return /** @type {Array<keyof typeof DEDICATION_LABEL>} */ (Object.keys(DEDICATION_LABEL)).flatMap((kind) => {
-    const names = entries.filter((e) => e.kind === kind && !e.name.startsWith("북.")).map((e) => e.name);
+    const names = entries.filter((e) => e.kind === kind && !isFormerNorthChurch(e.name)).map((e) => e.name);
     return names.length ? [`${names.join(", ")} ${DEDICATION_LABEL[kind]}`] : [];
   });
 }

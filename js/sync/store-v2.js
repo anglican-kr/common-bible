@@ -34,8 +34,25 @@ const _SETTING_LS_KEYS = {
   citeShow:        "bible-cite-show",
   audioShow:       "bible-audio-show",
   lectionaryAltShow: "bible-lectionary-alt-show",
+  parish:          "bible-parish",
 };
 const _LR_KEY = "bible-last-read";
+
+/**
+ * A legacy setting value as the sync document stores it. JSON where the value reads back to the same text ("18" → 18,
+ * "true" → true), the stored string otherwise — so an opaque string that happens to parse as a number (a church id
+ * such as "2345e6" → 2345000000, "2e9999" → Infinity, written back as "null"; ADR-041 §6) stays as stored. This
+ * matches applyToLegacyKeys, which writes a string as is and anything else as JSON.
+ * @param {string} raw @returns {unknown}
+ */
+function _legacySettingValue(raw) {
+  try {
+    const v = JSON.parse(raw);
+    return JSON.stringify(v) === raw ? v : raw;
+  } catch {
+    return raw;
+  }
+}
 
 // ── Device ID ─────────────────────────────────────────────────────────────────
 
@@ -250,6 +267,7 @@ function _emptyDoc() {
       citeShow:        { v: null, _u: 0 },
       audioShow:       { v: null, _u: 0 },
       lectionaryAltShow: { v: null, _u: 0 },
+      parish:          { v: null, _u: 0 },
     },
     lastRead: { v: null, _u: 0 },
   };
@@ -692,7 +710,7 @@ function _docFromLegacyKeys(withList) {
   for (const [key, lsKey] of Object.entries(_SETTING_LS_KEYS)) {
     const raw = localStorage.getItem(lsKey);
     if (raw !== null) {
-      let v; try { v = JSON.parse(raw); } catch { v = raw; }
+      const v = _legacySettingValue(raw);
       doc.settings[/** @type {SettingKey} */ (key)] = /** @type {SyncDoc["settings"][SettingKey]} */ ({ v, _u: 0 });
     }
   }

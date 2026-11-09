@@ -21,7 +21,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
   /** @typedef {import("../types.js").ColorSchemeEntry} ColorSchemeEntry */
   /** @typedef {import("../types.js").StartPage} StartPage */
 
-  const { _$, el, clearNode } = window.appHelpers;
+  const { _$, el, clearNode, parishGroups } = window.appHelpers;
   const { createOverlay } = window.appOverlay;
   const {
     FONT_SIZES, DEFAULT_FONT_SIZE, COLOR_SCHEMES, START_PAGES,
@@ -29,6 +29,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     loadStartupBehavior, saveStartupBehavior,
     loadStartPage, saveStartPage,
     loadLectionaryAltShow, saveLectionaryAltShow,
+    loadParish, saveParish,
     loadColorScheme, saveColorScheme,
     loadTheme, saveTheme,
     loadBookOrder, saveBookOrder,
@@ -359,32 +360,187 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
   }
 
   // ── Select row component ──
+  /** @typedef {[string, string] | { label: string, options: [string, string][] }} SelectOption [value, visible text], or a labelled group of them */
+
+  /**
+   * Replace a <select>'s options. A group becomes an <optgroup>.
+   * @param {HTMLSelectElement} select @param {SelectOption[]} options @param {string} value
+   */
+  function fillSelect(select, options, value) {
+    clearNode(select);
+    for (const opt of options) {
+      if (Array.isArray(opt)) {
+        select.appendChild(el("option", { value: opt[0] }, opt[1]));
+      } else {
+        const group = el("optgroup", { label: opt.label });
+        for (const [optValue, text] of opt.options) group.appendChild(el("option", { value: optValue }, text));
+        select.appendChild(group);
+      }
+    }
+    select.value = value;
+  }
+
   /**
    * Build a settings row: a label on the left, a native <select> on the right, so
    * each OS shows its own picker. Changing it updates state in place — no rebuild
    * — so focus stays on the control (same reason as makeToggleRow).
-   * No row calls this yet: 세례명 and 소속교회 will (ADR-041 §9).
+   * `labelExtra` (an ⓘ button) sits beside the label, outside the <label> element, so the
+   * button's name does not become part of the select's name.
    * @param {Object} opts
    * @param {string} opts.labelText
    * @param {string} opts.value
-   * @param {[string, string][]} opts.options  [value, visible text]
+   * @param {SelectOption[]} opts.options
    * @param {(value: string) => void} opts.onChange
-   * @returns {HTMLDivElement}
+   * @param {HTMLElement} [opts.labelExtra]
+   * @returns {{ row: HTMLDivElement, select: HTMLSelectElement }}
    */
-  function makeSelectRow({ labelText, value, options, onChange }) {
+  function makeSelectRow({ labelText, value, options, onChange, labelExtra }) {
     const row = el("div", { className: "settings-row" });
     const id = `settings-select-${++_toggleIdSeq}`;
-    row.appendChild(el("label", { className: "settings-label", for: id }, labelText));
-    const wrap = el("span", { className: "settings-select-wrap" });
-    const select = el("select", { className: "settings-select", id });
-    for (const [optValue, text] of options) {
-      select.appendChild(el("option", { value: optValue }, text));
+    if (labelExtra) {
+      const labelWrap = el("span", { className: "settings-label" });
+      labelWrap.appendChild(el("label", { for: id }, labelText));
+      labelWrap.appendChild(labelExtra);
+      row.appendChild(labelWrap);
+    } else {
+      row.appendChild(el("label", { className: "settings-label", for: id }, labelText));
     }
-    select.value = value;
+    const wrap = el("span", { className: "settings-select-wrap" });
+    const select = /** @type {HTMLSelectElement} */ (el("select", { className: "settings-select", id }));
+    fillSelect(select, options, value);
     select.addEventListener("change", () => onChange(select.value));
     wrap.appendChild(select);
     row.appendChild(wrap);
+    return { row, select };
+  }
+
+  // ── ⓘ description (ADR-041 §7) ──
+  /** @param {string} ariaLabel @returns {HTMLButtonElement} */
+  function makeInfoButton(ariaLabel) {
+    const svgNs = "http://www.w3.org/2000/svg";
+    const btn = /** @type {HTMLButtonElement} */ (el("button", { className: "settings-drive-info-btn", type: "button", "aria-label": ariaLabel, "aria-expanded": "false" }));
+    const svg = document.createElementNS(svgNs, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("aria-hidden", "true"); svg.setAttribute("class", "drive-info-icon");
+    const ring = document.createElementNS(svgNs, "circle"); ring.setAttribute("cx", "12"); ring.setAttribute("cy", "12"); ring.setAttribute("r", "10"); ring.setAttribute("fill", "none"); ring.setAttribute("stroke", "currentColor"); ring.setAttribute("stroke-width", "1.5");
+    const dot = document.createElementNS(svgNs, "circle"); dot.setAttribute("cx", "12"); dot.setAttribute("cy", "8.5"); dot.setAttribute("r", "0.85"); dot.setAttribute("fill", "currentColor");
+    const stem = document.createElementNS(svgNs, "line"); stem.setAttribute("x1", "12"); stem.setAttribute("y1", "11.5"); stem.setAttribute("x2", "12"); stem.setAttribute("y2", "16.5"); stem.setAttribute("stroke", "currentColor"); stem.setAttribute("stroke-width", "1.7"); stem.setAttribute("stroke-linecap", "round");
+    svg.append(ring, dot, stem);
+    btn.appendChild(svg);
+    return btn;
+  }
+
+  /**
+   * The description an ⓘ button opens below its row (ADR-041 §7). `head` takes the top line beside the close button
+   * (백업 & 동기화 puts the account there, the text then goes below); without it the text sits there. `extra` follows.
+   * The row follows the button's `aria-expanded`, so the app-wide Escape fallback that collapses expanded triggers
+   * (app.js) hides it too. Closing hands focus back to the ⓘ button.
+   * @param {HTMLButtonElement} infoBtn @param {string} text
+   * @param {{ head?: HTMLElement | null, extra?: HTMLElement[] }} [opts]
+   * @returns {HTMLDivElement}
+   */
+  function makeInfoRow(infoBtn, text, { head = null, extra = [] } = {}) {
+    const row = el("div", { className: "settings-drive-info-row", id: `settings-info-${++_toggleIdSeq}` });
+    row.hidden = true;
+    const desc = el("div", { className: "settings-drive-info-desc" }, text);
+    const top = el("div", { className: "settings-drive-info-top" });
+    top.appendChild(head ?? desc);
+    // 두 설명을 함께 열어도 스크린 리더가 어느 것을 닫는지 알게 ⓘ 단추의 이름을 붙인다.
+    const closeBtn = el("button", { className: "settings-drive-info-close", type: "button", "aria-label": `${infoBtn.getAttribute("aria-label")} 닫기` }, "✕");
+    top.appendChild(closeBtn);
+    row.appendChild(top);
+    if (head) row.appendChild(desc);
+    for (const node of extra) row.appendChild(node);
+
+    infoBtn.setAttribute("aria-controls", row.id);
+    /** @param {boolean} open */
+    const setOpen = (open) => { row.hidden = !open; infoBtn.setAttribute("aria-expanded", String(open)); };
+    infoBtn.addEventListener("click", () => setOpen(infoBtn.getAttribute("aria-expanded") !== "true"));
+    closeBtn.addEventListener("click", () => { setOpen(false); infoBtn.focus(); });
+    new MutationObserver(() => { row.hidden = infoBtn.getAttribute("aria-expanded") !== "true"; })
+      .observe(infoBtn, { attributes: true, attributeFilter: ["aria-expanded"] });
     return row;
+  }
+
+  // ── 소속교회 (ADR-041 §6, §7, §9) ──
+  const PARISH_INFO = "교회 축성일과 교구설립일에 그날의 전례독서와 본기도를 보여줍니다.";
+  const PARISH_LOAD_FAILED = "교회 목록을 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 설정을 다시 열어 주세요.";
+  const PARISH_LIST_OUTDATED = "교회 목록을 아직 업데이트하지 못했습니다. 잠시 뒤 설정을 다시 열어 주세요.";
+  // 응답 없이 멈춘 요청(연결은 됐지만 답이 오지 않는 망)을 이 시간 뒤에 받지 못한 것으로 본다. 서비스 워커는 캐시에
+  // 없으면 시간 제한 없이 네트워크로 요청한다.
+  const PARISH_LIST_TIMEOUT_MS = 10_000;
+
+  /** @type {Promise<import("../types.js").ParishGroup[]> | null} */
+  let _parishList = null;
+  /**
+   * 교회 목록을 본당 표에서 받는다. 받은 목록은 기억하고, 받지 못하면 다음에 설정을 열 때 다시 받는다. 옛 표(업데이트 전에
+   * 받아 둔 사본이라 식별자가 없음)면 `outdated`가 참인 오류로 끝난다.
+   * @returns {Promise<import("../types.js").ParishGroup[]>}
+   */
+  function loadParishList() {
+    if (_parishList) return _parishList;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), PARISH_LIST_TIMEOUT_MS);
+    return (_parishList = fetch("/data/lectionary/local-observances.json", { signal: ctrl.signal })
+      .then((res) => {
+        if (!res.ok) throw new Error(`local-observances.json: ${res.status}`);
+        return res.json();
+      })
+      .then((table) => {
+        const groups = parishGroups(table);
+        if (!groups.length) throw Object.assign(new Error("local-observances.json: no church ids"), { outdated: true });
+        return groups;
+      })
+      .finally(() => clearTimeout(timer))
+      .catch((e) => { _parishList = null; throw e; }));
+  }
+
+  /**
+   * 소속교회 행과 그 ⓘ 설명 행을 섹션에 넣는다(ADR-041 §9). 목록을 받는 동안 선택 상자는 「불러오는 중」 하나뿐이고 고를 수
+   * 없다. 받지 못하면 「목록 없음」으로 고를 수 없게 두고 설명 행 아래에 안내를 보인다. 저장한 값이 목록에 없으면 「목록에
+   * 없는 교회」 항목을 더해 그것을 고른 채 보인다. 「선택 안 함」을 고르면 저장한 값이 지워진다.
+   * @param {HTMLElement} section
+   */
+  function appendParishRows(section) {
+    const infoBtn = makeInfoButton("소속교회 안내");
+    /** @type {HTMLOptionElement | null} */
+    let missingOption = null;
+    const { row, select } = makeSelectRow({
+      labelText: "소속교회",
+      value: "",
+      options: [["", "불러오는 중"]],
+      labelExtra: infoBtn,
+      onChange: (churchId) => {
+        saveParish(churchId);
+        const name = select.selectedOptions[0]?.textContent ?? "";
+        // 목록에 없던 값을 바꿨으면 그 항목은 더 고를 일이 없다
+        if (missingOption && !missingOption.selected) { missingOption.remove(); missingOption = null; }
+        announce(churchId ? `소속교회 ${name}` : "소속교회 선택 안 함");
+      },
+    });
+    select.disabled = true;
+    const infoRow = makeInfoRow(infoBtn, PARISH_INFO);
+    section.appendChild(row);
+    section.appendChild(infoRow);
+
+    loadParishList().then((groups) => {
+      if (!select.isConnected) return;   // the surface was rebuilt or closed meanwhile
+      const saved = loadParish();
+      const known = groups.some((g) => g.churches.some((c) => c.id === saved));
+      fillSelect(select, [
+        ["", "선택 안 함"],
+        ...(saved && !known ? [/** @type {[string, string]} */ ([saved, "목록에 없는 교회"])] : []),
+        ...groups.map((g) => ({ label: `${g.diocese}교구`, options: g.churches.map((c) => /** @type {[string, string]} */ ([c.id, c.name])) })),
+      ], saved);
+      if (saved && !known) missingOption = select.options[1];
+      select.disabled = false;
+    }, (/** @type {any} */ e) => {
+      if (!select.isConnected) return;
+      fillSelect(select, [["", "목록 없음"]], "");
+      const note = el("p", { className: "settings-drive-note", id: `settings-note-${++_toggleIdSeq}` },
+        e && e.outdated ? PARISH_LIST_OUTDATED : PARISH_LOAD_FAILED);
+      select.setAttribute("aria-describedby", note.id);
+      infoRow.after(note);
+    });
   }
 
   // route() announces the view it draws, so a toggle's result goes after it, or that replaces the result. If the user
@@ -517,6 +673,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
         else announce(result);
       },
     }));
+    appendParishRows(lectionarySection);
     target.appendChild(lectionarySection);
 
     // ── Section: 모양 ──
@@ -627,15 +784,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
 
         // i icon — visible regardless of auth state so users can read the
         // description before connecting.
-        const svgNs = "http://www.w3.org/2000/svg";
-        const infoBtn = el("button", { className: "settings-drive-info-btn", type: "button", "aria-label": "백업 및 동기화 안내", "aria-expanded": "false" });
-        const infoSvg = document.createElementNS(svgNs, "svg");
-        infoSvg.setAttribute("viewBox", "0 0 24 24"); infoSvg.setAttribute("aria-hidden", "true"); infoSvg.setAttribute("class", "drive-info-icon");
-        const ic = document.createElementNS(svgNs, "circle"); ic.setAttribute("cx", "12"); ic.setAttribute("cy", "12"); ic.setAttribute("r", "10"); ic.setAttribute("fill", "none"); ic.setAttribute("stroke", "currentColor"); ic.setAttribute("stroke-width", "1.5");
-        const idot = document.createElementNS(svgNs, "circle"); idot.setAttribute("cx", "12"); idot.setAttribute("cy", "8.5"); idot.setAttribute("r", "0.85"); idot.setAttribute("fill", "currentColor");
-        const istem = document.createElementNS(svgNs, "line"); istem.setAttribute("x1", "12"); istem.setAttribute("y1", "11.5"); istem.setAttribute("x2", "12"); istem.setAttribute("y2", "16.5"); istem.setAttribute("stroke", "currentColor"); istem.setAttribute("stroke-width", "1.7"); istem.setAttribute("stroke-linecap", "round");
-        infoSvg.append(ic, idot, istem);
-        infoBtn.appendChild(infoSvg);
+        const infoBtn = makeInfoButton("백업 및 동기화 안내");
         driveLabelSpan.appendChild(infoBtn);
         driveRow.appendChild(driveLabelSpan);
 
@@ -658,18 +807,13 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
         }
 
         // Info row — description always present; email line + diag button only
-        // when authenticated.
-        const infoRow = el("div", { className: "settings-drive-info-row" });
-        infoRow.hidden = true;
-        const infoTop = el("div", { className: "settings-drive-info-top" });
-        if (driveAuthed) {
-          const email = window.driveSync.getUserEmail();
-          infoTop.appendChild(el("div", { className: "settings-drive-info-email" }, `계정: ${email ?? "연결됨"}`));
-        }
-        const closeBtn = el("button", { className: "settings-drive-info-close", type: "button", "aria-label": "닫기" }, "✕");
-        infoTop.appendChild(closeBtn);
-        infoRow.appendChild(infoTop);
-        infoRow.appendChild(el("div", { className: "settings-drive-info-desc" }, "북마크·설정·읽기 위치를 Google Drive에 백업하고, 여러 기기를 이용하는 경우 자동으로 동기화합니다."));
+        // when authenticated. Same part as 소속교회 (makeInfoRow): closing returns focus
+        // to the ⓘ button, so the destructive 초기화 button below doesn't grab focus by
+        // DOM order when the close button hides itself.
+        /** @type {HTMLElement[]} */
+        const extra = [];
+        /** @type {HTMLDivElement | null} */
+        let infoRow = null;
         if (driveAuthed) {
           const diagBtn = el("button", { className: "settings-drive-diag-btn", type: "button" }, "동기화 진단 정보 복사");
           diagBtn.addEventListener("click", async () => {
@@ -681,19 +825,17 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
               // Clipboard API unavailable — show text in a selectable textarea.
               const ta = el("textarea", { readOnly: true, rows: "6", style: "width:100%;font-size:0.7rem;margin-top:0.4rem;resize:none;" });
               ta.value = window.syncDebugLog?.dump() ?? "(로그 없음)";
-              infoRow.appendChild(ta);
+              infoRow?.appendChild(ta);
               ta.select();
             }
           });
-          infoRow.appendChild(diagBtn);
+          extra.push(diagBtn);
         }
+        infoRow = makeInfoRow(infoBtn, "북마크·설정·읽기 위치를 Google Drive에 백업하고, 여러 기기를 이용하는 경우 자동으로 동기화합니다.", {
+          head: driveAuthed ? el("div", { className: "settings-drive-info-email" }, `계정: ${window.driveSync.getUserEmail() ?? "연결됨"}`) : null,
+          extra,
+        });
         systemSection.appendChild(infoRow);
-
-        const toggleInfo = () => { const open = infoRow.hidden; infoRow.hidden = !open; infoBtn.setAttribute("aria-expanded", String(open)); };
-        infoBtn.addEventListener("click", toggleInfo);
-        // Return focus to the trigger so the destructive 초기화 button below
-        // doesn't grab focus by DOM order when the close button hides itself.
-        closeBtn.addEventListener("click", () => { infoRow.hidden = true; infoBtn.setAttribute("aria-expanded", "false"); infoBtn.focus(); });
 
         if (!driveAuthed) {
           const statusText = window.driveSync.getStatus();

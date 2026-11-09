@@ -256,6 +256,33 @@ test("applyToLegacyKeys는 시작 화면과 대체 독서 표시를 앱이 읽�
   assert.equal(localStorage.getItem("bible-lectionary-alt-show"), "true");
 });
 
+test("applyToLegacyKeys는 소속교회 식별자를 그대로 쓰고, 해제(빈 문자열)도 쓴다(ADR-041 §8)", () => {
+  const { store, localStorage } = load({ "bible-parish": "jqdnsv" });
+  store.applyToLegacyKeys(doc({ settings: { parish: { v: "", _u: 2 } } }));
+  assert.equal(localStorage.getItem("bible-parish"), "");
+  store.applyToLegacyKeys(doc({ settings: { parish: { v: "2345e6", _u: 3 } } }));
+  assert.equal(localStorage.getItem("bible-parish"), "2345e6");
+});
+
+test("옛 키를 옮길 때 JSON으로 읽어 같은 글자로 돌아오지 않는 값은 문자열 그대로 옮긴다(ADR-041 §6)", () => {
+  // JSON으로 읽으면 "2345e6"은 2345000000, "2e9999"는 Infinity(쓰면 "null")가 된다
+  for (const id of ["2345e6", "2e9999", "jqdnsv"]) {
+    const { store, localStorage } = load({ "bible-parish": id });
+    store.migrateLegacyIfNeeded();
+    const saved = storedDoc(localStorage);
+    assert.deepEqual(saved.settings.parish, { v: id, _u: 0 });
+    store.applyToLegacyKeys(saved);
+    assert.equal(localStorage.getItem("bible-parish"), id);
+  }
+  // 같은 글자로 돌아오는 값은 전처럼 JSON 값이다. 숫자만으로 된 식별자도 기기에 다시 쓰면 같은 글자다
+  const { store, localStorage } = load({ "bible-parish": "234567", "bible-font-size": "18", "bible-cite-show": "true", "bible-theme": "dark" });
+  store.migrateLegacyIfNeeded();
+  const saved = storedDoc(localStorage);
+  assert.deepEqual([saved.settings.parish.v, saved.settings.fontSize.v, saved.settings.citeShow.v, saved.settings.theme.v], [234567, 18, true, "dark"]);
+  store.applyToLegacyKeys(saved);
+  assert.equal(localStorage.getItem("bible-parish"), "234567");
+});
+
 // ── 저장 결과 (known-issues §15.4, 실패를 성공과 같은 값으로 돌려주지 않는다) ──
 
 test("applyToLegacyKeys는 브라우저가 거절한 키를 돌려주고, 나머지 키는 그대로 쓴다", () => {

@@ -278,6 +278,20 @@ test("loadLectionaryAltShow/saveLectionaryAltShow: 처음에는 숨기고, 동�
   assert.equal(loadStorage({ localStorageInit: { "bible-lectionary-alt-show": "false" } }).appStorage.loadLectionaryAltShow(), false);
 });
 
+test("loadParish/saveParish: 처음에는 빈 문자열이고, 고르면 식별자를, 해제하면 빈 문자열을 저장하고 동기화한다(ADR-041 §6, §8)", () => {
+  const h = loadStorage();
+  assert.equal(h.appStorage.loadParish(), "");
+  h.appStorage.saveParish("jqdnsv");
+  assert.equal(h.appStorage.loadParish(), "jqdnsv");
+  assert.equal(h.localStorage.getItem("bible-parish"), "jqdnsv");
+  h.appStorage.saveParish("");
+  assert.equal(h.appStorage.loadParish(), "");
+  // 해제를 `null`이 아니라 빈 문자열로 보내야 다른 기기의 값도 지워진다
+  assert.deepEqual(h.syncStoreV2._calls.saveSetting, [{ key: "parish", val: "jqdnsv" }, { key: "parish", val: "" }]);
+  assert.equal(h.driveSync._calls.scheduleUpload, 2);
+  assert.equal(loadStorage({ localStorageInit: { "bible-parish": "2345e6" } }).appStorage.loadParish(), "2345e6");
+});
+
 test("loadLectionaryTrack: 1 · 2 가 아닌 값 · 이 PR 의 옛 전례년별 표 · 읽기 실패는 null(뷰가 1 을 기본으로 삼는다)", () => {
   const read = (/** @type {string} */ raw) => loadStorage({ localStorageInit: { "bible-lectionary-track": raw } }).appStorage.loadLectionaryTrack();
   assert.equal(read("3"), null);

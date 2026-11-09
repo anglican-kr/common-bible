@@ -82,7 +82,8 @@ export type SettingKey =
   | "startPage"
   | "citeShow"
   | "audioShow"
-  | "lectionaryAltShow";
+  | "lectionaryAltShow"
+  | "parish";
 
 // Per-setting value type. All settings store one MTimed wrapper; the inner
 // value type is intentionally `unknown` so that store-v2 can index by a
@@ -885,7 +886,17 @@ export interface CandidateCollects {
 // Phase 1 of the app.js modularization (ADR-018). Common DOM helpers shared
 // by all app/* modules.
 
+/** 소속교회 목록의 교구 하나(ADR-041 §6) — 교회는 이름의 사전순이다. `id`는 본당 표의 `church_id`다. */
+export interface ParishGroup {
+  diocese: string;
+  churches: { id: string; name: string }[];
+}
+
 export interface AppHelpers {
+  /** 「북.」으로 시작하는 성당(북한에 있던 성당)인가 — 축성일 줄과 소속교회 목록에서 뺀다(ADR-038 §3, ADR-041 §6). */
+  isFormerNorthChurch: (name: string) => boolean;
+  /** 본당 표(`local-observances.json`) → 소속교회 목록. 북한에 있던 성당, 교구나 식별자가 없는 줄은 뺀다(ADR-041 §6). */
+  parishGroups: (table: any) => ParishGroup[];
   _$: (id: string) => HTMLElement;
   chUnit: (bookId: string) => string;
   el: <K extends keyof HTMLElementTagNameMap>(
@@ -1083,6 +1094,9 @@ export interface AppStorage {
   // 전례독서 목록에 대체 독서의 줄을 보이는가(ADR-038 §3). 처음에는 숨긴다(사용자 결정 2026-11-05).
   loadLectionaryAltShow: () => boolean;
   saveLectionaryAltShow: (on: boolean) => void;
+  // 소속교회의 교회 식별자(ADR-041 §6, 데이터 본당 표의 `church_id`). 빈 문자열은 선택 안 함이다. Drive 동기화 대상.
+  loadParish: () => string;
+  saveParish: (churchId: string) => void;
   // 캘린더 탭이 돌아갈 마지막 캘린더 보기의 주소(ADR-038 §1). 앱을 다시 열어도 이어진다(사용자 결정 2026-11-07). 로컬 전용.
   loadCalendarLastView: () => string | null;
   saveCalendarLastView: (path: string) => void;

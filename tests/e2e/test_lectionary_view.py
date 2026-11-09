@@ -239,8 +239,7 @@ def test_choice_rows_fit_on_phones_and_large_type(browser):
     }
     for width, font in ((320, None), (375, None), (320, "24px")):
         ctx = browser.new_context(viewport={"width": width, "height": 740}, user_agent=IPHONE_UA)
-        ctx.add_init_script(CLEAR_APP_STORAGE)
-        ctx.add_init_script(SHOW_ALT_READINGS)
+        ctx.add_init_script(CLEAR_APP_STORAGE + SHOW_ALT_READINGS)
         try:
             page = ctx.new_page()
             for date, rows in expected.items():

@@ -20,6 +20,7 @@
 //   - isModifiedClick (modifier / non-primary clicks the page leaves to the browser)
 //   - focusSpotOf · restoreFocusSpot (the router puts focus back on the pressed control after a redraw)
 //   - barBottom · publishBarHeight (the top bar's measured bottom for JS, its height as `--top-bar-h` for CSS)
+//   - isFormerNorthChurch · parishGroups (the 소속교회 list from the parish table, ADR-041 §6)
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -27,6 +28,7 @@ import vm from "node:vm";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadAppHelpers } from "./harness.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SOURCE_PATH = path.resolve(__dirname, "../../js/app/helpers.js");
@@ -1158,4 +1160,50 @@ test("scrollUnderBar: 그사이 독자가 스크롤을 시작했거나(휠 · �
   env.timers[0].cb();
   env.collapse();
   assert.equal(env.target.getBoundingClientRect().top, 106);
+});
+
+// ── 본당 표 (ADR-041 §6) ─────────────────────────────────────────────────────
+
+const { isFormerNorthChurch, parishGroups } = loadAppHelpers();
+// vm objects carry the sandbox realm's prototypes — normalize before deepEqual.
+const plainOf = (v) => JSON.parse(JSON.stringify(v));
+
+test("isFormerNorthChurch: 「북.」으로 시작하는 성당만 북한에 있던 성당이다", () => {
+  assert.equal(isFormerNorthChurch("북.해주성당"), true);
+  assert.equal(isFormerNorthChurch("해주성당"), false);
+  assert.equal(isFormerNorthChurch("서울북.성당"), false);
+});
+
+test("parishGroups: 서울, 대전, 부산 다음에 다른 교구를 이름순으로 두고, 묶음 안은 이름의 사전순이다", () => {
+  const table = { parishes: [
+    { church_id: "aaaaaa", name: "용인성당", diocese: "서울" },
+    { church_id: "bbbbbb", name: "강남성당", diocese: "서울" },
+    { church_id: "cccccc", name: "부산주교좌성당", diocese: "부산" },
+    { church_id: "dddddd", name: "공주성당", diocese: "대전" },
+    { church_id: "eeeeee", name: "가상성당", diocese: "제주" },
+    { church_id: "ffffff", name: "나상성당", diocese: "광주" },
+  ] };
+  const groups = plainOf(parishGroups(table));
+  assert.deepEqual(groups.map((g) => g.diocese), ["서울", "대전", "부산", "광주", "제주"]);
+  assert.deepEqual(groups[0].churches, [{ id: "bbbbbb", name: "강남성당" }, { id: "aaaaaa", name: "용인성당" }]);
+});
+
+test("parishGroups: 두 줄인 교회는 한 항목이고, 북한에 있던 성당과 교구나 식별자가 없거나 깨진 줄은 뺀다", () => {
+  const table = { parishes: [
+    { church_id: "r9n5b3", name: "파주성당", diocese: "서울" },
+    { church_id: "r9n5b3", name: "파주성당", diocese: "서울" },
+    { church_id: "qmhpfh", name: "북.버드내성당", diocese: "서울" },
+    { church_id: "jqdnsv", name: "교구없는성당", diocese: null },
+    { church_id: "", name: "식별자없는성당", diocese: "서울" },
+    { name: "옛표성당", diocese: "서울" },
+    null,
+    { church_id: 5, name: "숫자성당", diocese: "서울" },
+  ] };
+  assert.deepEqual(plainOf(parishGroups(table)), [{ diocese: "서울", churches: [{ id: "r9n5b3", name: "파주성당" }] }]);
+});
+
+test("parishGroups: 표가 없거나 형식이 깨졌으면 빈 목록이다", () => {
+  for (const table of [null, undefined, {}, { parishes: "x" }, { parishes: [] }]) {
+    assert.deepEqual(plainOf(parishGroups(table)), [], JSON.stringify(table));
+  }
 });
