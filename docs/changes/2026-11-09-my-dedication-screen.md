@@ -1,4 +1,5 @@
 ---
+pr: 542
 date: 2026-11-09
 branch: feat/my-dedication-screen
 title: "feat: 소속교회 축성일에 축성일 독서를 먼저 보임"
