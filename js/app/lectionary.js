@@ -925,7 +925,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const publicInitial = initialCandidate(resolved, groupsOf);
   if (!publicInitial) return null;
   // 소속교회의 축성일은 그날 처음 여는 화면이거나(`dedicationFirst`) 전례독서 목록의 맨 앞 줄이다(ADR-041 §6). 엔진의 후보와 지정 전례일은 그대로다
-  // 본문(독서나 본기도)이 없는 축성일은 열지 않는다 — 본당 표의 공통 분류가 `commons.json`에 없으면 빈 화면이 그날의 독서를 밀어낸다(PR #542 리뷰)
+  // 본문(독서나 본기도)이 없는 축성일은 열지 않는다. 본당 표의 공통 분류가 `commons.json`에 없으면 빈 화면이 그날의 독서를 밀어낸다(PR #542 리뷰)
   const dedication = mine && (groupsOf(mine.candidate).length || collectsFor(collectEntries, mine.candidate).length) ? mine.candidate : null;
   const initial = dedication && dedicationFirst(publicInitial, date) ? dedication : publicInitial;
   const candidates = dedication ? [dedication, ...resolved.candidates] : resolved.candidates;
