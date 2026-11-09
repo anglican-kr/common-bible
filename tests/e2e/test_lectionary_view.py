@@ -2342,3 +2342,21 @@ def test_calendar_list_row_follows_my_dedication(desktop_context):
     assert row.locator(".cal-row-title").inner_text() == "용인성당 축성일"
     assert "연중 3주 금요일" in row.inner_text()
     assert "용인성당" not in page.title()
+
+
+def test_diocese_founding_collect_follows_the_parish(desktop_context):
+    """용인성당(서울교구)을 고른 사람은 2026-05-27에 「1965년 5월 27일 서울교구설립일」 줄과, 그날의 본기도 뒤에 「이곳에 서울교구를
+    세우심을…」 본기도를 본다. 소속교회를 고르지 않으면 둘 다 없다(ADR-041 §6, 사용자 결정 2026-11-09)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-05-27")
+    page.wait_for_selector(".lect-collect-text")   # 본기도가 그려진 뒤에 없음을 본다
+    assert "교구설립일" not in page.inner_text(".lect-head")
+    assert not any("서울교구를 세우심을" in t for t in page.eval_on_selector_all(".lect-collect-text", "els => els.map(e => e.textContent)"))
+
+    desktop_context.add_init_script(_with_parish("용인성당"))
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-05-27")
+    page.wait_for_selector(".lect-collect-text")
+    assert "1965년 5월 27일 서울교구설립일" in page.inner_text(".lect-head")
+    texts = page.eval_on_selector_all(".lect-collect-text", "els => els.map(e => e.textContent)")
+    assert any("이곳에 서울교구를 세우심을" in t and "이 교구를 기억하시고" in t for t in texts), texts

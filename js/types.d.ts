@@ -845,12 +845,17 @@ export interface ParishDedication {
 }
 
 /**
- * 관구 설립일 — 데이터 `lectionary/local-observances.json`의 `province`(원료는 데이터 저장소
- * `liturgical/calendar/dioceses.md`의 관구 행). 모든 사용자에게 그날의 본기도 뒤에 관구 설립 본기도를 잇는다(ADR-041 §6).
- * `collect`는 설립일 공통 본기도(`commons.json`의 `anniversary`)에 이름을 넣고 「교구(관구)」를 「관구」로 고른 것이다.
+ * 설립일. 데이터 `lectionary/local-observances.json`의 `province`(관구)와 `dioceses`(교구)에서 온다. 원료는 데이터 저장소
+ * `liturgical/calendar/dioceses.md`다. 관구 설립일은 모든 사용자에게, 교구 설립일은 소속교회가 그 교구에 속한 사람에게 그날의 본기도 뒤에
+ * 설립일 본기도를 잇는다(ADR-041 §6). `collect`는 설립일 공통 본기도(`commons.json`의 `anniversary`)에 이름을 넣고 「교구(관구)」를
+ * 종류에 맞게 고른 것이다.
  */
-export interface ProvinceFounding {
+export interface Founding {
+  level: "province" | "diocese";
+  /** 관구는 「대한성공회」, 교구는 「서울」처럼 「교구」를 뗀 이름이다. */
   name: string;
+  /** 표시 이름. 관구는 「관구」, 교구는 「서울교구」다(이름 줄과 본기도가 함께 쓴다). */
+  label: string;
   /** 「MM.DD」 */
   date: string;
   year: number | null;
