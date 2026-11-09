@@ -529,11 +529,11 @@ function dedicationLines(entries, titled = null) {
 
 /** 소속교회 축성일의 전례일 식별자이자 주소의 값(`?obs=my-dedication`). 교회 이름과 식별자를 주소와 방문 기록에 싣지 않는다(ADR-041 §8). */
 const MY_DEDICATION_ID = "my-dedication";
-/** 주소에 아무 선택도 적지 않은 상태 — 그날의 기본 화면(`hrefFor`). @type {LectionaryQuery} */
+/** 주소에 아무 선택도 적지 않은 상태. 그날의 기본 화면이다(`hrefFor`). @type {LectionaryQuery} */
 const NO_QUERY = { obs: null, track: null, set: null, collect: null };
 
 /**
- * 기록 항목의 상태에 넘긴 선택(routing.js가 링크의 `data-lect-query`로 `history.state.lectionaryQuery`에 둔다) → 전례독서의 상태. 소속교회의
+ * 기록 항목의 상태에 넘긴 선택을 전례독서의 상태로 읽는다. routing.js가 링크의 `data-lect-query`를 `history.state.lectionaryQuery`에 둔다. 소속교회의
  * 축성일이 있는 날에 주소 대신 쓰고(ADR-041 §8), 없거나 형식이 틀리면 null이라 주소의 상태를 쓴다.
  * @param {unknown} state  `history.state`
  * @returns {LectionaryQuery | null}
@@ -952,7 +952,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const memorial = memorialOf(resolved, publicInitial, collectEntries);
   // 기념일도 전례독서 목록이 아니라 이름 줄에 「… 기념일」로 보인다 — 고유 본기도와 독서가 없어 눌러도 본문 없는 화면뿐이었다(사용자
   // 결정 2026-11-03). 그날 지키는 기념일(`proper`)만 이름 줄에 들고, 성주간에 생략된 기념일은 어느 줄에도 없다.
-  // 감추는 판정은 모두 소속교회와 무관한 기본 독서(`publicInitial`)와 견준다 — 축성일이 먼저 열려도 기본 독서의 줄은 감추지 않는다(ADR-041 §6)
+  // 감추는 판정은 모두 소속교회와 무관한 기본 독서(`publicInitial`)와 견준다. 축성일이 먼저 열려도 기본 독서의 줄은 감추지 않는다(ADR-041 §6)
   const isCommemoration = (/** @type {Candidate} */ c) => c !== publicInitial && c.observance.rank === "commemoration";
   const commemorations = resolved.candidates.filter((c) => isCommemoration(c) && c.status === "proper" && !c.evening);
   // 공통 독서 감추기를 끄면(HIDE_COMMON_READINGS) 공통 독서만 있는 기리는 성인도 전례독서 목록으로 돌아와 그 독서를 고를 수 있다(PR #463 리뷰)
@@ -1006,7 +1006,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const track = pickTrack(groups, query.track, storedTrack);
   // 주소는 소속교회와 무관한 기본 독서를 기준으로 적는다. 트랙은 언제나 적는다(hrefFor)
   const defaults = { obs: publicInitial.observance.id, track: null };
-  // 소속교회의 축성일이 있는 날에는 고른 상태를 주소 대신 기록 항목의 상태로 넘긴다(`query` — routing.js가 링크의 `data-lect-query`를 읽는다).
+  // 소속교회의 축성일이 있는 날에는 고른 상태를 주소 대신 기록 항목의 상태로 넘긴다(`query`. routing.js가 링크의 `data-lect-query`를 읽는다).
   // 주소에는 소속교회 없이 열어도 같은 화면이 되는 부분만 남아, 방문 기록에서 다른 방문과 구별되지 않는다. 축성일은 주소에 없다(사용자 결정 2026-11-09, ADR-041 §8)
   const linkOf = (/** @type {LectionaryQuery} */ state) => ({
     href: hrefFor(date, dedication && state.obs === MY_DEDICATION_ID ? NO_QUERY : state, defaults),
@@ -1963,7 +1963,7 @@ async function renderLectionaryView(parsed) {
 
   const resolved = resolveDate(date);
   if (!resolved) return pickAnotherDate("이 날짜는 교회력에 없습니다");
-  // 주소에 적지 않은 선택(소속교회의 축성일이 있는 날 — 라우터가 이 기록 항목의 상태로 넘겼다)이 있으면 주소보다 먼저다(ADR-041 §8)
+  // 주소에 적지 않은 선택(소속교회의 축성일이 있는 날에 라우터가 이 기록 항목의 상태로 넘긴 것)이 있으면 주소보다 먼저다(ADR-041 §8)
   const model = lectionaryModelOf(resolved, keptQueryOf(history.state) || parsed);
   if (!model) return pickAnotherDate("이 날짜는 교회력에 없습니다");
 

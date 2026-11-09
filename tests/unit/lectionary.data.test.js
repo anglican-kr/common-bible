@@ -124,7 +124,7 @@ const churchIdOf = (name) => {
 };
 /** 전례독서 목록에서 고른 줄(제목)을 뺀 줄의 이름과 주소. */
 const otherRows = (m) => m.choices.filter((c) => !c.active).map((c) => [c.name, c.href, c.query ? c.query.obs : null]);
-/** 화면의 모든 링크 주소 — 전례독서 목록의 줄, 독서 카드, 트랙, 세트, 본기도 번호. */
+/** 화면의 모든 링크 주소. 전례독서 목록의 줄, 독서 카드, 트랙, 세트, 본기도 번호. */
 const allHrefs = (m) => [...m.choices.map((c) => c.href), ...(m.cards || []).map((c) => c.href), ...m.hrefs.tracks.map((t) => t.href), ...m.hrefs.options, ...m.hrefs.collects];
 
 test("축성일 후보의 색이 공통 「성당 축성일」의 색과 같고, 그 분류에 독서 2세트와 본기도가 있다", { skip: SKIP }, () => {
@@ -186,7 +186,7 @@ test("소속교회 축성일 — 2025-2050 모든 축성일에 축성일이 처�
         // 머리 색은 축성일의 백색 하나이고, 그날의 기본 독서는 목록의 줄로 남는다(PR #542 리뷰)
         if (m.colors.join() !== "white" || m.colorAlt.length) bad.push(`${d} ${p.name} 색 ${m.colors} ${m.colorAlt}`);
         if (!m.choices.some((c) => c.candidate === m.publicInitial && !c.active)) bad.push(`${d} ${p.name} 기본 독서 줄이 없다`);
-        // 기본 독서 줄의 주소에도 그 전례일이 없다 — 소속교회 없이 여는 사람의 기본 화면과 같은 주소다(ADR-041 §8)
+        // 기본 독서 줄의 주소에도 그 전례일이 없다. 소속교회 없이 여는 사람의 기본 화면과 같은 주소다(ADR-041 §8)
         const own = `obs=${encodeURIComponent(m.publicInitial.observance.id)}`;
         if (allHrefs(m).some((h) => h.includes(own))) bad.push(`${d} ${p.name} 주소에 기본 독서`);
       } else if (m.choices.some((c) => c.candidate.observance.id === "my-dedication" && c.href === `/lectionary/${d}` && c.query && c.query.obs === "my-dedication")) {
