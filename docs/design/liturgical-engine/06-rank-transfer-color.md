@@ -19,7 +19,7 @@ B1은 A1 다음의 PR 3에서 구현했다(우선순위, 지정 전례일, 전�
 | 7 | `minor_feast`, `commemoration` | 축일과 기념일. 밀린 축일은 → R-6.1-prec7-omit, 기념일은 → R-6.1-ineligible |
 | 8 | `feria` | 절기 평일, 소재일 |
 
-**주일에 온 명절.** 설이나 추석이 주일에 오면 순위를 세울 때 그 주일 바로 다음 순위로 본다. 유효값은 절기 주일이면 2.5, 연중 주일이면 5.5이고, 표의 값 0은 그대로다(ADR-036 §7 규칙 5, 사용자 확정 2026-11-09). 엔진은 함께 순위를 세우는 후보 목록의 주일 격자에서 그 주일의 우선순위를 읽어(`sundayPrecedenceIn`) `effectivePrecedence`에 넘긴다.
+**주일에 온 명절.** 설이나 추석이 주일에 오면 순위를 세울 때 그 주일 바로 다음 순위로 본다. 유효값은 절기 주일이면 2.5, 연중 주일이면 5.5이고, 표의 값 0은 그대로다(ADR-036 §7 규칙 5, 사용자 확정 2026-11-09). 엔진은 후보 목록마다 순위 규칙을 한 번 만든다(`rankingOf`). 그때 목록의 주일 격자에서 그 주일의 우선순위를 읽어(`sundayPrecedenceIn`) 유효 우선순위(`effectivePrecedence`)와 정렬 키(`compareCandidates`)에 넘긴다. 그날의 정렬, 지정 전례일 판정, 옮김 계산의 빈 날 판정이 이 규칙 하나를 쓴다. 그 밖에서 유효 우선순위로 견주는 곳(옮겨 갈 축일끼리, 저녁 전례끼리)은 주일과 무관해 `null`을 넘긴다.
 
 **[R-6.1-prec7-omit]** **밀린 축일(prec 7)은 옮기지 않고 그날 기념한다**(`commemorated`, `displacedBy`를 싣는다. 사용자 결정 2026-10-24).
 
@@ -314,13 +314,13 @@ function computeTransfers(index, year, seed /* Y−1 에서 넘어온 축일(해
   for (let d = toKey(year, 1, 1); d.startsWith(head); d = shift(d, 1)) {   // 1.1 → 12.31, 날짜 순 — 순서가 결과를 정한다
     if (d === afterGuard) {                // 보호 기간을 다 돌았다 — 그 안에서 밀린 축일을 서열 순(같으면 밀린 순서)으로 배정한다(→ R-6.3-guard-order)
       held.sort((a, b) => {                // 안정 정렬. 뺄셈은 ∞ − ∞ 가 NaN 이라 쓰지 않는다
-        const pa = effectivePrecedence(a.c.observance), pb = effectivePrecedence(b.c.observance);
+        const pa = effectivePrecedence(a.c.observance, null), pb = effectivePrecedence(b.c.observance, null);   // 명절은 옮기지 않아 주일의 값이 필요 없다
         return pa === pb ? 0 : pa < pb ? -1 : 1;
       });
       for (const h of held) seat(h.c, h.from, afterGuard, h.displacedBy);
     }
     if (!ownObservancesOn(index, d).some(movesOnConflict)) continue;   // 옮길 고유 전례일이 없는 날은 옮겨 간 축일이 없다
-    const ranked  = rankCandidates([...ownAt(d, departures), ...(arrivals.get(d) ?? [])]);  // 지정 판정과 같은 정렬 키(→ R-6.2-tie-ladder — compareCandidates). guard 는 넣지 않는다(→ R-6.3-holy-week-guard)
+    const { ranked } = rankCandidates([...ownAt(d, departures), ...(arrivals.get(d) ?? [])]);  // 지정 판정과 같은 정렬 키(→ R-6.2-tie-ladder — compareCandidates). guard 는 넣지 않는다(→ R-6.3-holy-week-guard)
     const staying = new Set(ranked);       // 이 날에 남아 있는 후보 — 옮겨 간 것은 남을 밀어낼 수 없다
     for (const c of ranked.slice(1)) {     // 지정 전례일을 뺀 나머지, ranked 순 = R-6.2-first-come 「같은 기원이면 ranked 순서(R-6.2-tie-ladder 정렬 키)」
       // 옮겨 온 축일은 다시 옮기지 않는다(R-6.2-first-come — 0단계에서 옮겨 온 축일 포함). movesOnConflict = transferable ∧ precedence≠null ∧ ≠commemorate_only
@@ -385,7 +385,7 @@ const EMPTY_PASS = () => ({ arrivals: new Map(), departures: new Map(), optional
 
 - 여기서 「고유 후보」는 본 루프와 **같은 집합**이다. 그 날짜의 고유 전례일(`ownObservancesOn`)과 격자에서, 그날 옮겨 간 활성화된 선택 봉헌과 저녁 전례를 뺀 것이다(위 코드의 `ownAt`). 옮겨 지키기로 한 승천은 목요일에 없으므로 그 목요일로 옮겨 가려는 다른 축일을 막지 않는다.
 - 빈 날의 조건은 둘이다.
-  - ① 그 고유 후보 가운데 `c`보다 **높은**(유효값이 작은) 것이 없다. 같은 값의 고유 후보는 옮겨 온 축일 우선(→ R-6.2-chain-model)에 따라 `c`가 밀어내므로 막지 않는다.
+  - ① 그 고유 후보 가운데 `c`보다 **높은**(유효값이 작은) 것이 없다. 같은 값의 고유 후보는 옮겨 온 축일 우선(→ R-6.2-chain-model)에 따라 `c`가 밀어내므로 막지 않는다. 유효값은 그날 고유 후보의 순위 규칙(`rankingOf`)으로 세므로, 명절과 겹친 주일에서 명절은 그 주일 다음 순위다(합성 C-6.1-4e).
   - ② **이미 옮겨 온 후보가 하나도 없다.** 우선순위를 보지 않는다(→ R-6.2-first-come, 합성 C-6.5-7). 같은 날 기원의 둘은 그날 순위대로 먼저 처리된 쪽이 먼저 옮겨 온다(→ R-6.2-first-come).
 - `precedence: null` 후보와 `optional`은 막지 않는다.
 - **해를 넘긴 날짜.** 다음 해 배정(`nextYearSeats(index, year, activated)`, 위)은 늦게 계산한다. 목적지가 해를 넘길 때만 부르므로, 해를 넘기지 않으면 다음 해의 부활절 계산이 돌지 않는다(§4.9). **`dest`가 해를 넘겼으면 `departures` 대신 `nextDepartures`를 보고, `arrivals`에는 `nextArrivals`를 더해서 본다.** 이 계산이 이미 그 1월 날로 넘긴 옮겨 온 축일(먼저 밀린 12월 축일)도 그 날을 막아야 하기 때문이다. `arrivals` **대신** 다음 해 배정만 보면 12월 축일 둘이 같은 1월 날에 배정된다(2026-10-11 정정, 사용자 결정, 합성 케이스 C-6.5-18. 13차 리뷰가 다음 해 배정을 들일 때는 「대신」이었다).

@@ -1394,7 +1394,7 @@ test("C-6.1-4 명절 ∧ 연중 주일 — 주일 격자가 지정 전례일이�
   // 그날 명절의 유효 우선순위는 연중 주일(5) 바로 다음이고, 후보의 값과 표의 값(0)은 그대로다
   // 주일의 우선순위는 함께 순위를 세우는 목록의 주일 격자에서 읽는다. 주일 격자가 없으면 명절은 표의 값이다
   same([ctx.sundayPrecedenceIn(r.candidates), ctx.effectivePrecedence(cand(r, "lunar11-seol").observance, ctx.sundayPrecedenceIn(r.candidates)), cand(r, "lunar11-seol").observance.precedence], [5, 5.5, 0]);
-  same([ctx.sundayPrecedenceIn(rb("2027-02-08").candidates), ctx.effectivePrecedence(cand(r, "lunar11-seol").observance)], [null, 0]);
+  same([ctx.sundayPrecedenceIn(rb("2027-02-08").candidates), ctx.effectivePrecedence(cand(r, "lunar11-seol").observance, null)], [null, 0]);
   same(r.candidates.map((c) => c.observance.id), ["lunar11-seol", "grid:ordinary-x-sunday"]);
 });
 
@@ -1411,8 +1411,9 @@ test("C-6.1-4b 명절 ∧ 절기 주일 — 절기 주일도 명절보다 선순
 
 test("C-6.1-4c 주일에 온 명절 ∧ 주일보다 선순위인 축일 — 그 축일이 지정 전례일이고 옮기지 않으며, 명절은 proper로 남는다(ADR-036 §7 규칙 1, 5, 사용자 결정 2026-11-09)", () => {
   // 2025-02-02는 연중 주일(합성 표에는 주의 세례 기준 주차가 없어 x)이고 설과 주의 봉헌(A 특례, 유효 1.5)이 함께 있다. 2025-09-28은 연중 주일이고 추석과 합성 C 축일(4)이 함께 있다.
+  // 2026-09-27은 연중 주일이고 추석과 주요축일 가(3)가 함께 있다.
   // 평일이면 명절이 선순위라 축일을 옮기지만(규칙 1), 주일에 온 명절은 그 주일 다음 순위라 주일보다 선순위인 축일보다 후순위다.
-  // 2025-2050 실데이터에는 이 경우가 없다
+  // 2025-2050 실데이터에는 주의 봉헌을 옮겨 지키기로 한 2030-02-03(픽스처 A-2030-02-03)뿐이다
   const t = passEngine(passTables([
     SAN("d0202-p", "02.02", "합성 주의 봉헌", { rank: "major_feast", precedence: 3, outranks_sunday: true, transferable: true, transfer_to: "next_day" }),
     MOV("d0928-c", "09.28", { precedence: 4, priority_group: "C" }),
@@ -1424,20 +1425,28 @@ test("C-6.1-4c 주일에 온 명절 ∧ 주일보다 선순위인 축일 — 그
   same([officialId(feb), fate(feb, "d0202-p"), fate(feb, "lunar11-seol")], ["d0202-p", ["proper", null], ["proper", null]]);
   const sep = t.at("2025-09-28");
   same([officialId(sep), fate(sep, "d0928-c"), fate(sep, "lunar815-chuseok")], ["d0928-c", ["proper", null], ["proper", null]]);
+
+  const a = passEngine(passTables([
+    MOV("d0927-a", "09.27", { precedence: 3, priority_group: "A" }),
+    SAN("lunar815-chuseok", null, "추석", { lunar: "8-15", rank: "regional_festival", precedence: 0 }),
+  ], [], { years: { "2026": { "8-15": "09-27" } } }));
+  same(count(a.pass(2026).departures), 0);
+  const sepA = a.at("2026-09-27");
+  same([gridOf(sepA).observance.rank, officialId(sepA), fate(sepA, "d0927-a"), fate(sepA, "lunar815-chuseok")], ["sunday", "d0927-a", ["proper", null], ["proper", null]]);
 });
 
 test("C-6.1-4d 주일에 온 명절 ∧ 그 주일보다 후순위인 주요축일 — 축일은 다음날로 옮기고, 밀어낸 것은 명절이 아니라 주일 격자다(ADR-036 §7 규칙 5)", () => {
   // 2026-12-27은 성탄 1주일(2)이고 추석과 우선순위 3인 합성 축일이 함께 있다. 2025-09-28은 연중 주일(5)이고 추석과 주요축일 나(6)가 함께 있다.
   // 명절은 그 주일 다음 순위(2.5, 5.5)라 두 축일은 주일보다도 명절보다도 후순위다. 2025-2050 실데이터에는 이 경우가 없다
-  const advent = passEngine(passTables([
+  const christmas1 = passEngine(passTables([
     MOV("d1227-a", "12.27", { precedence: 3 }),
     SAN("lunar815-chuseok", null, "추석", { lunar: "8-15", rank: "regional_festival", precedence: 0 }),
   ], [], { years: { "2026": { "8-15": "12-27" } } }));
-  const dec = advent.at("2026-12-27");
+  const dec = christmas1.at("2026-12-27");
   const decGrid = dec.candidates.find((c) => c.observance.id.startsWith("grid:")).observance;
   same([decGrid.rank, officialId(dec), fate(dec, "lunar815-chuseok")], ["privileged_sunday", decGrid.id, ["proper", null]]);
-  same(seats(advent.pass(2026).departures, "2026-12"), { "2026-12-27": ["d1227-a->2026-12-28"] });
-  same(advent.pass(2026).departures.get("2026-12-27")[0].displacedBy, decGrid.id);
+  same(seats(christmas1.pass(2026).departures, "2026-12"), { "2026-12-27": ["d1227-a->2026-12-28"] });
+  same(christmas1.pass(2026).departures.get("2026-12-27")[0].displacedBy, decGrid.id);
 
   const ordinary = passEngine(passTables([
     MOV("d0928-b", "09.28"),
@@ -1773,7 +1782,7 @@ const HOLY_WEEK_ROWS = [
   TMP("t-easter", "부활대축일", { kind: "easter_offset", days: 0 }, { season: "easter", type: "feast" }),
 ];
 
-test("R-6.3-holy-week-guard 옮김 계산 — 보호 기간은 주요축일을 밀지도 막지도 않는다 · 그날의 대축일 · 주일에 질 때만 보호 기간 뒤 첫 빈 날로", () => {
+test("R-6.3-holy-week-guard 옮김 계산 — 보호 기간은 주요축일을 밀지도 막지도 않는다 · 그날의 대축일이나 주일보다 후순위일 때만 보호 기간 뒤 첫 빈 날로", () => {
   const t = passEngine(passTables([
     MOV("d0330-b", "03.30"),                                           // 성주간 월 — 그날 지킨다
     MOV("d0402-a", "04.02", { precedence: 3, priority_group: "A" }),   // 성 목요일에 밀린다
