@@ -28,6 +28,20 @@ export function stripEsmMarker(src) {
             .replace(/\n\s*export\s*\{\s*\}\s*;?\s*$/, "");
 }
 
+const HELPERS_PATH = path.resolve(__dirname, "../../js/app/helpers.js");
+const HELPERS_SOURCE = stripEsmMarker(fs.readFileSync(HELPERS_PATH, "utf8"));
+
+/**
+ * The real `window.appHelpers` (helpers.js only defines functions at load, so an empty context is enough). Tests that
+ * slice a block using one of its functions take it from here instead of a hand-copied stub that would drift.
+ */
+export function loadAppHelpers() {
+  const ctx = vm.createContext({});
+  ctx.window = ctx;
+  vm.runInContext(HELPERS_SOURCE, ctx, { filename: "helpers.js" });
+  return ctx.appHelpers;
+}
+
 const STATE_MACHINE_PATH = path.resolve(__dirname, "../../js/sync/state-machine.js");
 const SOURCE = stripEsmMarker(fs.readFileSync(STATE_MACHINE_PATH, "utf8"));
 const REFRESH_STORE_PATH = path.resolve(__dirname, "../../js/sync/refresh-store.js");

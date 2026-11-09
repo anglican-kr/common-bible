@@ -886,7 +886,17 @@ export interface CandidateCollects {
 // Phase 1 of the app.js modularization (ADR-018). Common DOM helpers shared
 // by all app/* modules.
 
+/** 소속교회 목록의 교구 하나(ADR-041 §6) — 교회는 이름의 사전순이다. `id`는 본당 표의 `church_id`다. */
+export interface ParishGroup {
+  diocese: string;
+  churches: { id: string; name: string }[];
+}
+
 export interface AppHelpers {
+  /** 「북.」으로 시작하는 성당(북한에 있던 성당)인가 — 축성일 줄과 소속교회 목록에서 뺀다(ADR-038 §3, ADR-041 §6). */
+  isFormerNorthChurch: (name: string) => boolean;
+  /** 본당 표(`local-observances.json`) → 소속교회 목록. 북한에 있던 성당, 교구나 식별자가 없는 줄은 뺀다(ADR-041 §6). */
+  parishGroups: (table: any) => ParishGroup[];
   _$: (id: string) => HTMLElement;
   chUnit: (bookId: string) => string;
   el: <K extends keyof HTMLElementTagNameMap>(

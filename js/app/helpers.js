@@ -425,10 +425,48 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     return target;
   }
 
+  // ── 본당 표 (데이터 local-observances.json) ──
+
+  /**
+   * 「북.」으로 시작하는 성당은 북한에 있던 성당이다. 전례독서의 축성일 줄(ADR-038 §3)에도, 소속교회 목록(ADR-041 §6)에도
+   * 넣지 않는다. 두 곳이 이 함수 하나를 쓴다.
+   * @param {string} name @returns {boolean}
+   */
+  function isFormerNorthChurch(name) {
+    return name.startsWith("북.");
+  }
+
+  // 소속교회 목록의 교구 묶음 차례. 표에 이 밖의 교구가 생기면 그 뒤에 이름순으로 둔다.
+  const PARISH_DIOCESES = ["서울", "대전", "부산"];
+
+  /**
+   * 본당 표를 소속교회 목록(교구별 교회)으로 바꾼다(ADR-041 §6). 북한에 있던 성당, 교구나 식별자가 없는 줄은 넣지 않는다.
+   * 두 줄인 교회(축성일이 둘)는 식별자가 같아 한 항목이다. 묶음 안의 차례는 이름의 사전순이다(사용자 확인 2026-11-05).
+   * @param {any} table @returns {import("../types.js").ParishGroup[]}
+   */
+  function parishGroups(table) {
+    /** @type {Map<string, Map<string, string>>} */
+    const byDiocese = new Map();
+    for (const p of (table && Array.isArray(table.parishes) ? table.parishes : [])) {
+      if (!p || typeof p.church_id !== "string" || !p.church_id || typeof p.name !== "string" || typeof p.diocese !== "string") continue;
+      if (isFormerNorthChurch(p.name)) continue;
+      let churches = byDiocese.get(p.diocese);
+      if (!churches) byDiocese.set(p.diocese, (churches = new Map()));
+      churches.set(p.church_id, p.name);
+    }
+    const rank = (/** @type {string} */ d) => (PARISH_DIOCESES.includes(d) ? PARISH_DIOCESES.indexOf(d) : PARISH_DIOCESES.length);
+    return [...byDiocese.entries()]
+      .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b, "ko"))
+      .map(([diocese, churches]) => ({
+        diocese,
+        churches: [...churches.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, "ko")),
+      }));
+  }
+
   return {
     _$, chUnit, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
     HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot, SCROLL_ANCHORING, barBottom, scrollUnderBar,
-    publishBarHeight,
+    publishBarHeight, isFormerNorthChurch, parishGroups,
   };
 })();
 

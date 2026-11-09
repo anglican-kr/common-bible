@@ -264,16 +264,23 @@ test("applyToLegacyKeys는 소속교회 식별자를 그대로 쓰고, 해제(�
   assert.equal(localStorage.getItem("bible-parish"), "2345e6");
 });
 
-test("옛 키를 옮길 때 소속교회 식별자는 숫자로 읽히는 값도 문자열 그대로 옮긴다(ADR-041 §6)", () => {
+test("옛 키를 옮길 때 JSON으로 읽어 같은 글자로 돌아오지 않는 값은 문자열 그대로 옮긴다(ADR-041 §6)", () => {
   // JSON으로 읽으면 "2345e6"은 2345000000, "2e9999"는 Infinity(쓰면 "null")가 된다
-  for (const id of ["2345e6", "2e9999", "234567", "jqdnsv"]) {
-    const { store, localStorage } = load({ "bible-parish": id, "bible-theme": "dark" });
+  for (const id of ["2345e6", "2e9999", "jqdnsv"]) {
+    const { store, localStorage } = load({ "bible-parish": id });
     store.migrateLegacyIfNeeded();
     const saved = storedDoc(localStorage);
     assert.deepEqual(saved.settings.parish, { v: id, _u: 0 });
     store.applyToLegacyKeys(saved);
     assert.equal(localStorage.getItem("bible-parish"), id);
   }
+  // 같은 글자로 돌아오는 값은 전처럼 JSON 값이다. 숫자만으로 된 식별자도 기기에 다시 쓰면 같은 글자다
+  const { store, localStorage } = load({ "bible-parish": "234567", "bible-font-size": "18", "bible-cite-show": "true", "bible-theme": "dark" });
+  store.migrateLegacyIfNeeded();
+  const saved = storedDoc(localStorage);
+  assert.deepEqual([saved.settings.parish.v, saved.settings.fontSize.v, saved.settings.citeShow.v, saved.settings.theme.v], [234567, 18, true, "dark"]);
+  store.applyToLegacyKeys(saved);
+  assert.equal(localStorage.getItem("bible-parish"), "234567");
 });
 
 // ── 저장 결과 (known-issues §15.4, 실패를 성공과 같은 값으로 돌려주지 않는다) ──

@@ -17,6 +17,8 @@ MOBILE_VIEWPORT = {"width": 390, "height": 844}
 # Init script that wipes every app-owned localStorage key the SPA writes.
 # Inject via `context.add_init_script(CLEAR_APP_STORAGE)` so each new page
 # starts from a clean slate.
+# Playwright는 초기화 스크립트 여럿의 실행 차례를 정하지 않는다. 비운 뒤 값을 넣는 시험은 한 스크립트로 잇는다
+# (`ctx.add_init_script(CLEAR_APP_STORAGE + "localStorage.setItem(...)")`). 따로 넣으면 비우기가 나중에 실행될 수 있다.
 CLEAR_APP_STORAGE = """
 (() => {
   const keys = [

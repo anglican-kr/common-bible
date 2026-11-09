@@ -1001,7 +1001,7 @@ def test_drive_diag_copy_shows_feedback(browser, fake_drive, fake_oauth):
 
         page.locator("#settings-anchor .settings-btn").click()
         page.wait_for_selector(".settings-popover", state="visible")
-        info_btn = page.get_by_role("button", name="백업 및 동기화 안내")   # 소속교회에도 ⓘ 단추가 있다(ADR-041 §7)
+        info_btn = page.get_by_role("button", name="백업 및 동기화 안내", exact=True)   # 소속교회에도 ⓘ 단추가 있고, 닫기 단추는 「…안내 닫기」다(ADR-041 §7)
         info_btn.click()
         page.wait_for_timeout(200)
 

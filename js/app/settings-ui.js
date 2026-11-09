@@ -21,7 +21,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
   /** @typedef {import("../types.js").ColorSchemeEntry} ColorSchemeEntry */
   /** @typedef {import("../types.js").StartPage} StartPage */
 
-  const { _$, el, clearNode } = window.appHelpers;
+  const { _$, el, clearNode, parishGroups } = window.appHelpers;
   const { createOverlay } = window.appOverlay;
   const {
     FONT_SIZES, DEFAULT_FONT_SIZE, COLOR_SCHEMES, START_PAGES,
@@ -430,87 +430,80 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
   }
 
   /**
-   * The description an ⓘ button opens below its row, with a close button that hands focus back to the ⓘ button
-   * (백업 & 동기화 builds its own: it adds the account line and the diagnosis button).
-   * @param {HTMLButtonElement} infoBtn @param {string} text @returns {HTMLDivElement}
+   * The description an ⓘ button opens below its row (ADR-041 §7). `head` takes the top line beside the close button
+   * (백업 & 동기화 puts the account there, the text then goes below); without it the text sits there. `extra` follows.
+   * The row follows the button's `aria-expanded`, so the app-wide Escape fallback that collapses expanded triggers
+   * (app.js) hides it too. Closing hands focus back to the ⓘ button.
+   * @param {HTMLButtonElement} infoBtn @param {string} text
+   * @param {{ head?: HTMLElement | null, extra?: HTMLElement[] }} [opts]
+   * @returns {HTMLDivElement}
    */
-  function makeInfoRow(infoBtn, text) {
+  function makeInfoRow(infoBtn, text, { head = null, extra = [] } = {}) {
     const row = el("div", { className: "settings-drive-info-row", id: `settings-info-${++_toggleIdSeq}` });
     row.hidden = true;
+    const desc = el("div", { className: "settings-drive-info-desc" }, text);
     const top = el("div", { className: "settings-drive-info-top" });
-    top.appendChild(el("div", { className: "settings-drive-info-desc" }, text));
-    const closeBtn = el("button", { className: "settings-drive-info-close", type: "button", "aria-label": "닫기" }, "✕");
+    top.appendChild(head ?? desc);
+    // 두 설명을 함께 열어도 스크린 리더가 어느 것을 닫는지 알게 ⓘ 단추의 이름을 붙인다.
+    const closeBtn = el("button", { className: "settings-drive-info-close", type: "button", "aria-label": `${infoBtn.getAttribute("aria-label")} 닫기` }, "✕");
     top.appendChild(closeBtn);
     row.appendChild(top);
+    if (head) row.appendChild(desc);
+    for (const node of extra) row.appendChild(node);
+
     infoBtn.setAttribute("aria-controls", row.id);
-    infoBtn.addEventListener("click", () => {
-      const open = row.hidden;
-      row.hidden = !open;
-      infoBtn.setAttribute("aria-expanded", String(open));
-    });
-    closeBtn.addEventListener("click", () => { row.hidden = true; infoBtn.setAttribute("aria-expanded", "false"); infoBtn.focus(); });
+    /** @param {boolean} open */
+    const setOpen = (open) => { row.hidden = !open; infoBtn.setAttribute("aria-expanded", String(open)); };
+    infoBtn.addEventListener("click", () => setOpen(infoBtn.getAttribute("aria-expanded") !== "true"));
+    closeBtn.addEventListener("click", () => { setOpen(false); infoBtn.focus(); });
+    new MutationObserver(() => { row.hidden = infoBtn.getAttribute("aria-expanded") !== "true"; })
+      .observe(infoBtn, { attributes: true, attributeFilter: ["aria-expanded"] });
     return row;
   }
 
   // ── 소속교회 (ADR-041 §6, §7, §9) ──
-  // 교구 묶음의 차례. 표에 이 밖의 교구가 생기면 그 뒤에 이름순으로 둔다.
-  const PARISH_DIOCESES = ["서울", "대전", "부산"];
   const PARISH_INFO = "교회 축성일과 교구설립일에 그날의 전례독서와 본기도를 보여줍니다.";
   const PARISH_LOAD_FAILED = "교회 목록을 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 설정을 다시 열어 주세요.";
+  const PARISH_LIST_OUTDATED = "교회 목록을 아직 업데이트하지 못했습니다. 잠시 뒤 설정을 다시 열어 주세요.";
+  // 응답 없이 멈춘 요청(연결은 됐지만 답이 오지 않는 망)을 이 시간 뒤에 받지 못한 것으로 본다. 서비스 워커는 캐시에
+  // 없으면 시간 제한 없이 네트워크로 요청한다.
+  const PARISH_LIST_TIMEOUT_MS = 10_000;
 
-  /**
-   * 본당 표를 교구별 교회 목록으로 바꾼다. 「북.」으로 시작하는 성당(북한에 있던 성당)과 교구가 없는 줄은 넣지 않는다. 두 줄인 교회
-   * (축성일이 둘)는 한 항목이다. 묶음 안의 차례는 이름의 사전순이다(사용자 확인 2026-11-05).
-   * @param {any} table @returns {{ diocese: string, churches: { id: string, name: string }[] }[]}
-   */
-  function parishGroups(table) {
-    /** @type {Map<string, Map<string, string>>} */
-    const byDiocese = new Map();
-    for (const p of (table && Array.isArray(table.parishes) ? table.parishes : [])) {
-      if (!p || typeof p.church_id !== "string" || !p.church_id || typeof p.name !== "string" || typeof p.diocese !== "string") continue;
-      if (p.name.startsWith("북.")) continue;
-      if (!byDiocese.has(p.diocese)) byDiocese.set(p.diocese, new Map());
-      /** @type {Map<string, string>} */ (byDiocese.get(p.diocese)).set(p.church_id, p.name);
-    }
-    const rank = (/** @type {string} */ d) => (PARISH_DIOCESES.includes(d) ? PARISH_DIOCESES.indexOf(d) : PARISH_DIOCESES.length);
-    return [...byDiocese.keys()]
-      .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b, "ko"))
-      .map((diocese) => ({
-        diocese,
-        churches: [.../** @type {Map<string, string>} */ (byDiocese.get(diocese)).entries()]
-          .map(([id, name]) => ({ id, name }))
-          .sort((a, b) => a.name.localeCompare(b.name, "ko")),
-      }));
-  }
-
-  /** @type {Promise<ReturnType<typeof parishGroups>> | null} */
+  /** @type {Promise<import("../types.js").ParishGroup[]> | null} */
   let _parishList = null;
   /**
-   * 교회 목록을 본당 표에서 받는다. 받은 목록은 기억하고, 받지 못하면 다음에 설정을 열 때 다시 받는다.
-   * @returns {Promise<ReturnType<typeof parishGroups>>}
+   * 교회 목록을 본당 표에서 받는다. 받은 목록은 기억하고, 받지 못하면 다음에 설정을 열 때 다시 받는다. 옛 표(업데이트 전에
+   * 받아 둔 사본이라 식별자가 없음)면 `outdated`가 참인 오류로 끝난다.
+   * @returns {Promise<import("../types.js").ParishGroup[]>}
    */
   function loadParishList() {
-    return (_parishList ??= fetch("/data/lectionary/local-observances.json")
+    if (_parishList) return _parishList;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), PARISH_LIST_TIMEOUT_MS);
+    return (_parishList = fetch("/data/lectionary/local-observances.json", { signal: ctrl.signal })
       .then((res) => {
         if (!res.ok) throw new Error(`local-observances.json: ${res.status}`);
         return res.json();
       })
       .then((table) => {
         const groups = parishGroups(table);
-        // 식별자가 없는 옛 표(업데이트 전에 받아 둔 사본)는 고를 것이 없어, 받지 못한 것과 같게 안내한다.
-        if (!groups.length) throw new Error("local-observances.json: no church ids");
+        if (!groups.length) throw Object.assign(new Error("local-observances.json: no church ids"), { outdated: true });
         return groups;
       })
+      .finally(() => clearTimeout(timer))
       .catch((e) => { _parishList = null; throw e; }));
   }
 
   /**
-   * 소속교회 행과 그 ⓘ 설명 행을 섹션에 넣는다. 목록을 받는 동안 선택 상자는 「불러오는 중」 하나뿐이고 고를 수 없다.
-   * 받지 못하면 고를 수 없게 둔 채 행 아래에 안내를 보인다. 저장한 값이 목록에 없으면 「선택 안 함」으로 보이되 지우지 않는다.
+   * 소속교회 행과 그 ⓘ 설명 행을 섹션에 넣는다(ADR-041 §9). 목록을 받는 동안 선택 상자는 「불러오는 중」 하나뿐이고 고를 수
+   * 없다. 받지 못하면 「목록 없음」으로 고를 수 없게 두고 설명 행 아래에 안내를 보인다. 저장한 값이 목록에 없으면 「목록에
+   * 없는 교회」 항목을 더해 그것을 고른 채 보인다. 「선택 안 함」을 고르면 저장한 값이 지워진다.
    * @param {HTMLElement} section
    */
   function appendParishRows(section) {
     const infoBtn = makeInfoButton("소속교회 안내");
+    /** @type {HTMLOptionElement | null} */
+    let missingOption = null;
     const { row, select } = makeSelectRow({
       labelText: "소속교회",
       value: "",
@@ -519,12 +512,15 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
       onChange: (churchId) => {
         saveParish(churchId);
         const name = select.selectedOptions[0]?.textContent ?? "";
+        // 목록에 없던 값을 바꿨으면 그 항목은 더 고를 일이 없다
+        if (missingOption && !missingOption.selected) { missingOption.remove(); missingOption = null; }
         announce(churchId ? `소속교회 ${name}` : "소속교회 선택 안 함");
       },
     });
     select.disabled = true;
+    const infoRow = makeInfoRow(infoBtn, PARISH_INFO);
     section.appendChild(row);
-    section.appendChild(makeInfoRow(infoBtn, PARISH_INFO));
+    section.appendChild(infoRow);
 
     loadParishList().then((groups) => {
       if (!select.isConnected) return;   // the surface was rebuilt or closed meanwhile
@@ -532,15 +528,18 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
       const known = groups.some((g) => g.churches.some((c) => c.id === saved));
       fillSelect(select, [
         ["", "선택 안 함"],
+        ...(saved && !known ? [/** @type {[string, string]} */ ([saved, "목록에 없는 교회"])] : []),
         ...groups.map((g) => ({ label: `${g.diocese}교구`, options: g.churches.map((c) => /** @type {[string, string]} */ ([c.id, c.name])) })),
-      ], known ? saved : "");
+      ], saved);
+      if (saved && !known) missingOption = select.options[1];
       select.disabled = false;
-    }, () => {
+    }, (/** @type {any} */ e) => {
       if (!select.isConnected) return;
       fillSelect(select, [["", "목록 없음"]], "");
-      const note = el("p", { className: "settings-drive-note", id: `settings-note-${++_toggleIdSeq}` }, PARISH_LOAD_FAILED);
+      const note = el("p", { className: "settings-drive-note", id: `settings-note-${++_toggleIdSeq}` },
+        e && e.outdated ? PARISH_LIST_OUTDATED : PARISH_LOAD_FAILED);
       select.setAttribute("aria-describedby", note.id);
-      row.after(note);
+      infoRow.after(note);
     });
   }
 
@@ -808,19 +807,13 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
         }
 
         // Info row — description always present; email line + diag button only
-        // when authenticated.
-        const infoRow = el("div", { className: "settings-drive-info-row", id: `settings-info-${++_toggleIdSeq}` });
-        infoBtn.setAttribute("aria-controls", infoRow.id);
-        infoRow.hidden = true;
-        const infoTop = el("div", { className: "settings-drive-info-top" });
-        if (driveAuthed) {
-          const email = window.driveSync.getUserEmail();
-          infoTop.appendChild(el("div", { className: "settings-drive-info-email" }, `계정: ${email ?? "연결됨"}`));
-        }
-        const closeBtn = el("button", { className: "settings-drive-info-close", type: "button", "aria-label": "닫기" }, "✕");
-        infoTop.appendChild(closeBtn);
-        infoRow.appendChild(infoTop);
-        infoRow.appendChild(el("div", { className: "settings-drive-info-desc" }, "북마크·설정·읽기 위치를 Google Drive에 백업하고, 여러 기기를 이용하는 경우 자동으로 동기화합니다."));
+        // when authenticated. Same part as 소속교회 (makeInfoRow): closing returns focus
+        // to the ⓘ button, so the destructive 초기화 button below doesn't grab focus by
+        // DOM order when the close button hides itself.
+        /** @type {HTMLElement[]} */
+        const extra = [];
+        /** @type {HTMLDivElement | null} */
+        let infoRow = null;
         if (driveAuthed) {
           const diagBtn = el("button", { className: "settings-drive-diag-btn", type: "button" }, "동기화 진단 정보 복사");
           diagBtn.addEventListener("click", async () => {
@@ -832,19 +825,17 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
               // Clipboard API unavailable — show text in a selectable textarea.
               const ta = el("textarea", { readOnly: true, rows: "6", style: "width:100%;font-size:0.7rem;margin-top:0.4rem;resize:none;" });
               ta.value = window.syncDebugLog?.dump() ?? "(로그 없음)";
-              infoRow.appendChild(ta);
+              infoRow?.appendChild(ta);
               ta.select();
             }
           });
-          infoRow.appendChild(diagBtn);
+          extra.push(diagBtn);
         }
+        infoRow = makeInfoRow(infoBtn, "북마크·설정·읽기 위치를 Google Drive에 백업하고, 여러 기기를 이용하는 경우 자동으로 동기화합니다.", {
+          head: driveAuthed ? el("div", { className: "settings-drive-info-email" }, `계정: ${window.driveSync.getUserEmail() ?? "연결됨"}`) : null,
+          extra,
+        });
         systemSection.appendChild(infoRow);
-
-        const toggleInfo = () => { const open = infoRow.hidden; infoRow.hidden = !open; infoBtn.setAttribute("aria-expanded", String(open)); };
-        infoBtn.addEventListener("click", toggleInfo);
-        // Return focus to the trigger so the destructive 초기화 button below
-        // doesn't grab focus by DOM order when the close button hides itself.
-        closeBtn.addEventListener("click", () => { infoRow.hidden = true; infoBtn.setAttribute("aria-expanded", "false"); infoBtn.focus(); });
 
         if (!driveAuthed) {
           const statusText = window.driveSync.getStatus();

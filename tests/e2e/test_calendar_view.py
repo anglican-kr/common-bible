@@ -1004,8 +1004,7 @@ def test_list_scroll_padding_is_the_measured_bar_height(browser, width, font):
     따라 높아지고 낮아진다(글자 크기 16px에서 약 57px, 24px에서 약 70px). 데스크톱은 윗줄(검색 칸)이 펼쳐져 있으면 그만큼 더 높고, 윗줄이 접히거나
     펼쳐지면 여백도 따라간다. 60px로 적었을 때는 그 차이만큼 스크롤 고정이 상단 바에 가려진 줄을 기준으로 삼거나 보이는 줄을 건너뛰었다."""
     ctx = browser.new_context(viewport={"width": width, "height": 800}, user_agent=IPHONE_UA if width < 769 else None)
-    ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(f"localStorage.setItem('bible-font-size', '{font}');")
+    ctx.add_init_script(CLEAR_APP_STORAGE + f"localStorage.setItem('bible-font-size', '{font}');")
     measure = """() => ({
         padding: parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop),
         bar: document.getElementById('sticky-group').getBoundingClientRect().bottom,
