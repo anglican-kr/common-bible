@@ -1234,7 +1234,7 @@ const GUARD_ID = GUARD_PREFIX + "holy-week";
  * (`settle`)의 순위에만 들어가 그 기간의 prec 7 축일을 생략시킨다 — 부활 8일의 평일 축일은 그날 지키고(책자,
  * 사용자 결정 2026-10-24), 성지주일의 축일은 그날 기념한다(기도서 「절기주일에 지켜야 한다면 기념한다」, 사용자 결정
  * 2026-11-07 → R-6.3-holy-week-guard). 옮김 계산은 이것을 보지 않는다(주요축일은 그날 지키고
- * 그날의 대축일 · 주일에 질 때만 옮긴다). 그날의 후보(§5.5 출처 ①~⑤)로는 내지 않는다 — 뷰에 보이지 않는다.
+ * 그날의 대축일이나 주일보다 후순위일 때만 옮긴다). 그날의 후보(§5.5 출처 ①~⑤)로는 내지 않는다 — 뷰에 보이지 않는다.
  * @param {string} dateStr
  * @returns {Candidate[]}
  */
@@ -1263,15 +1263,35 @@ function isIneligible(obs) {
  * (등급이 없다), 지향 · 이름 줄은 9(등급은 있지만 그날의 독서를 정하지 않는다 — → R-6.1-ineligible),
  * A 특례(`outranks_sunday`)는 1 과 2 사이라 1.5, 그 밖은 데이터 값 그대로다. **`rank` 로 비교하지
  * 않는다** — `major_feast` 가 3 · 4 · 6 으로 갈린다.
+ *
+ * 주일에 온 명절(설, 추석)은 그 주일 바로 다음 순위다(절기 주일 2.5, 연중 주일 5.5. ADR-036 §7 규칙 5, 사용자가 신부님께
+ * 확인해 2026-11-09에 확정). 명절은 대재일과 주요축일보다 선순위이면서 주일보다는 후순위라 데이터의 숫자 하나(0)로 담기지
+ * 않는다. 표의 값은 그대로 두고 순위를 세울 때만 바꾼다. 그 주일의 우선순위는 함께 순위를 세우는 후보 목록의 주일 격자에서
+ * 읽는다(`sundayPrecedenceIn`). 주일 격자가 없는 목록(주일이 아닌 날)은 값이 `null`이라 표의 값 그대로다. 그날의 순위는
+ * `rankingOf`가 만든 규칙으로 세운다. 그 밖에서 이 값으로 견주는 곳(옮겨 갈 축일끼리의 정렬, 저녁 전례의 정렬)은 주일과
+ * 무관해 `null`을 넘긴다. 둘째 인자는 생략할 수 없어 빠뜨리면 타입 검사가 잡는다.
  * @param {Observance} obs
+ * @param {number | null} sunday 함께 순위를 세우는 목록에 있는 주일 격자의 우선순위(`sundayPrecedenceIn`), 없으면 `null`
  * @returns {number}
  */
-function effectivePrecedence(obs) {
+function effectivePrecedence(obs, sunday) {
   const p = obs.precedence;
   if (typeof p !== "number" || !Number.isFinite(p)) return Number.POSITIVE_INFINITY;
   if (isIneligible(obs)) return 9;
   if (obs.outranks_sunday === true) return 1.5;
+  if (typeof sunday === "number" && obs.rank === "regional_festival") return sunday + 0.5;
   return p;
+}
+
+/**
+ * 후보 목록에 있는 주일 격자의 우선순위(절기 주일 2, 연중 주일 5). 주일 격자가 없으면 `null`이다. 그날의 순위를 세우는 목록에는
+ * 언제나 그날의 격자가 들어 있으므로(`settle`, 옮김 계산의 `ownAt`), 주일의 우선순위를 따로 계산하지 않고 그 격자에서 읽는다.
+ * @param {Candidate[]} cands
+ * @returns {number | null}
+ */
+function sundayPrecedenceIn(cands) {
+  const grid = cands.find((c) => c.observance.id.startsWith(GRID_PREFIX) && c.observance.type === "sunday");
+  return grid && typeof grid.observance.precedence === "number" ? grid.observance.precedence : null;
 }
 
 /** 범주 순서의 칸(→ R-6.2-tie-ladder) — 옮겨 온 축일 0 > 이동 축일 1 > 월별 축일 2 > 격자 3 > 합성 guard 4. */
@@ -1287,13 +1307,14 @@ function ladderOf(/** @type {Candidate} */ c) {
  * 순위 비교 — 키는 `(유효 precedence, 범주 순서, 고유 본기도, id)` 이고 앞이 선순위다(→ R-6.2-tie-ladder).
  * 고유 본기도(`has_proper`)가 있는 쪽이 먼저인 키는 같은 범주 안에서 우선순위가 같을 때의 순서를 정한다 — prec 7 축일 다섯
  * 쌍 가운데 한쪽만 고유 본기도를 가진 것은 3.01 뿐이라 삼일절이 데이빗 앞에 선다(→ R-6.1-prec7-tie-pairs).
- * 마지막 `id` 사전순은 결정성만 지키는 안전망이다(§5.3 과 같은 안정 정렬).
+ * 마지막 `id` 사전순은 결정성만 지키는 안전망이다(§5.3과 같은 안정 정렬).
  * @param {Candidate} a @param {Candidate} b
+ * @param {number | null} sunday 함께 순위를 세우는 목록에 있는 주일 격자의 우선순위(`sundayPrecedenceIn`)
  * @returns {number}
  */
-function compareCandidates(a, b) {
-  const pa = effectivePrecedence(a.observance);
-  const pb = effectivePrecedence(b.observance);
+function compareCandidates(a, b, sunday) {
+  const pa = effectivePrecedence(a.observance, sunday);
+  const pb = effectivePrecedence(b.observance, sunday);
   if (pa !== pb) return pa < pb ? -1 : 1;   // 뺄셈은 ∞ − ∞ 가 NaN 이다
   const la = ladderOf(a);
   const lb = ladderOf(b);
@@ -1304,9 +1325,30 @@ function compareCandidates(a, b) {
   return compareIds(a.observance.id, b.observance.id);
 }
 
-/** 순위대로 정렬한 새 배열 — 입력 순서에 기대지 않는다. */
-function rankCandidates(/** @type {Candidate[]} */ cands) {
-  return [...cands].sort(compareCandidates);
+/** @typedef {{precedence: (obs: Observance) => number, compare: (a: Candidate, b: Candidate) => number}} Ranking */
+
+/**
+ * 후보 목록 하나의 순위 규칙. 목록의 주일 격자에서 주일의 우선순위를 한 번 읽고(`sundayPrecedenceIn`), 그 값으로 유효 우선순위와
+ * 비교를 만든다. 그날의 정렬, 지정 전례일 판정, 빈 날 판정이 모두 이 규칙을 쓰므로 한 날 안에서 주일의 값이 갈리지 않는다.
+ * @param {Candidate[]} cands
+ * @returns {Ranking}
+ */
+function rankingOf(cands) {
+  const sunday = sundayPrecedenceIn(cands);
+  return {
+    precedence: (obs) => effectivePrecedence(obs, sunday),
+    compare: (a, b) => compareCandidates(a, b, sunday),
+  };
+}
+
+/**
+ * 순위대로 정렬한 새 배열과 그 순위 규칙(`rankingOf`). 입력 순서에 기대지 않는다.
+ * @param {Candidate[]} cands
+ * @returns {{ranked: Candidate[], ranking: Ranking}}
+ */
+function rankCandidates(cands) {
+  const ranking = rankingOf(cands);
+  return { ranked: [...cands].sort(ranking.compare), ranking };
 }
 
 /**
@@ -1376,11 +1418,12 @@ function displacerOf(ranked, c, staying) {
  * `proper` · `transferred_in` 인 것이다 — guard 는 후보가 아니라 지정 전례일이 되지 않는다(성주간 평일의 지정 전례일은
  * 격자다). 격자가 언제나 있으므로 유효한 날짜에는 지정 전례일이 있다.
  * @param {string} dateStr @param {Candidate[]} cands 그날의 후보 전부(옮겨 간 축일 · 선택 봉헌 포함)
- * @returns {{candidates: Candidate[], official: Candidate | null}} candidates 는 입력과 같은 순서 — 재분류된 것만 새 객체
+ * @returns {{candidates: Candidate[], official: Candidate | null, ranking: Ranking}} candidates 는 입력과 같은 순서 — 재분류된 것만 새 객체.
+ *   ranking 은 그날의 순위를 세운 규칙이라 표시 순서를 정할 때 다시 쓴다
  */
 function settle(dateStr, cands) {
   const staying = cands.filter((c) => c.status === "proper" || c.status === "transferred_in");
-  const ranked = rankCandidates([...staying, ...guardCandidates(dateStr)]);
+  const { ranked, ranking } = rankCandidates([...staying, ...guardCandidates(dateStr)]);
   /** @type {Map<Candidate, Candidate>} */
   const reclassified = new Map();
   for (const c of staying) {
@@ -1402,8 +1445,8 @@ function settle(dateStr, cands) {
   const official = ranked.map(after).find((c) =>
     !c.observance.id.startsWith(GUARD_PREFIX)
     && (c.status === "proper" || c.status === "transferred_in")
-    && effectivePrecedence(c.observance) <= 8) || null;
-  return { candidates: cands.map(after), official };
+    && ranking.precedence(c.observance) <= 8) || null;
+  return { candidates: cands.map(after), official, ranking };
 }
 
 // ── §6.2 · §6.5 옮김 계산 (B1) ──
@@ -1496,7 +1539,7 @@ function movesOnConflict(o) {
  * **1단계 — 날짜 순 밀려 옮김.** 그날의 후보(고유 전례일 — 옮겨 지키기로 한 선택 봉헌은 뺀다 — · 격자 · 옮겨 온 축일)를
  * 지정 판정과 같은 순위(`rankCandidates`)로 세우고, 옮길 수 있는 고유 후보가 밀렸으면(`displacerOf` —
  * `settle` 의 「밀렸다」와 같은 판정) 다음 빈 날로 보낸다. 보호 기간의 guard 는 여기 넣지 않는다 — 성주간 ·
- * 부활 8일의 주요축일은 그날 지키고 그날의 대축일 · 주일(실제 후보)에 질 때만 옮긴다(→ R-6.3-holy-week-guard).
+ * 부활 8일의 주요축일은 그날 지키고 그날의 대축일이나 주일(실제 후보)보다 후순위일 때만 옮긴다(→ R-6.3-holy-week-guard).
  * 옮겨 간 것은 그날의 남은 후순위 후보를 밀지 못한다(`staying`). 옮겨 온 축일은 다시 옮기지 않는다(→ R-6.2-first-come). 옮길 날 수가
  * `MAX_SHIFT` 를 넘으면 옮기지 않고 `defects` 에 적는다 — 그 축일은 기원 날짜에 `proper` 로 남는다.
  *
@@ -1561,8 +1604,11 @@ function computeTransfers(index, year, seed, activated) {
     // 그날의 고유 후보 가운데 c 보다 높은 것이 없다 — 같은 값은 c 가 민다(→ R-6.2-chain-model). 보호 기간은
     // 막지 않는다 — 성 금요일 · 부활대축일 같은 실제 후보가 막고, 성 토요일은 성 토요일 행(prec 1)이 막는다(부활밤은
     // 저녁 전례라 순위에 없다, → R-6.1-evening)
-    const mine = effectivePrecedence(c.observance);
-    return !ownAt(dest, next ? next.nextDepartures : departures).some((w) => effectivePrecedence(w.observance) < mine);
+    // c 도 그날 순위에 들어가므로 그날의 규칙으로 함께 센다
+    const own = ownAt(dest, next ? next.nextDepartures : departures);
+    const { precedence } = rankingOf(own);
+    const mine = precedence(c.observance);
+    return !own.some((w) => precedence(w.observance) < mine);
   };
 
   // ── 1단계: 밀려 옮김 — 1.1 → 12.31 날짜 순. next_day 는 앞으로만 가므로 d 에 이르면 arrivals.get(d) 는 완성돼 있다
@@ -1586,8 +1632,9 @@ function computeTransfers(index, year, seed, activated) {
       // 서열 순(유효 precedence) — 같으면 밀린 순서 그대로(안정 정렬). 부활 3.26 인 해는 성 토요일에 밀린 수태고지(prec 3)가
       // 먼저 밀린 요셉(prec 6)보다 먼저 4.3 에 배정된다(→ R-6.3-guard-order — 영국 Common Worship 의 요셉 규칙과 같다)
       held.sort((a, b) => {
-        const pa = effectivePrecedence(a.c.observance);
-        const pb = effectivePrecedence(b.c.observance);
+        // 옮겨 갈 축일끼리 견준다. 명절은 옮기지 않으므로 주일의 값이 필요 없다
+        const pa = effectivePrecedence(a.c.observance, null);
+        const pb = effectivePrecedence(b.c.observance, null);
         return pa === pb ? 0 : pa < pb ? -1 : 1;
       });
       for (const h of held) seat(h.c, h.from, afterGuard, h.displacedBy);
@@ -1595,7 +1642,7 @@ function computeTransfers(index, year, seed, activated) {
     // 옮길 수 있는 고유 전례일이 없는 날은 옮겨 간 축일이 생기지 않는다(옮겨 온 축일은 다시 옮기지 않는다) — 순위를 세우지 않는다
     if (!ownObservancesOn(index, d).some(movesOnConflict)) continue;
     // guard 는 넣지 않는다 — 보호 기간이 주요축일을 밀지 않는다(→ R-6.3-holy-week-guard)
-    const ranked = rankCandidates([...ownAt(d, departures), ...(arrivals.get(d) || [])]);
+    const { ranked } = rankCandidates([...ownAt(d, departures), ...(arrivals.get(d) || [])]);
     const staying = new Set(ranked);   // 옮겨 간 것은 남은 후순위 후보를 밀어낼 수 없다
     for (const c of ranked.slice(1)) {   // 순위 순 — 같은 기원이면 정렬 키 순으로 먼저 배정된다(→ R-6.2-first-come)
       if (c.status !== "proper" || !movesOnConflict(c.observance)) continue;   // 옮겨 온 축일 · 격자는 옮기지 않는다
@@ -1719,12 +1766,12 @@ function resolveDateIn(index, dateStr, pass) {
   /** @type {Candidate} */
   const grid = { observance: gridObservance(dateStr, coord), status: "proper" };
 
-  const { candidates, official } = settle(dateStr, [...feasts, ...moved, grid]);
-  const own = candidates.slice(0, feasts.length).sort(compareCandidates);
+  const { candidates, official, ranking } = settle(dateStr, [...feasts, ...moved, grid]);
+  const own = candidates.slice(0, feasts.length).sort(ranking.compare);   // 지정 전례일을 고른 규칙과 같은 순위
   // 같은 저녁에 둘 이상이어도 표의 행 순서에 기대지 않는다(C-5.5-5) — 낮의 후보와 같은 키로 줄 세운다.
   /** @type {Candidate[]} */
   const evening = eveningRows.map((o) => ({ observance: o, status: "proper", evening: true }));
-  evening.sort(compareCandidates);
+  evening.sort((a, b) => compareCandidates(a, b, null));   // 저녁 전례에는 명절이 없다. 내일로 정의된 행도 있어 오늘의 주일로 견주지 않는다
   return {
     date: dateStr,
     coord,

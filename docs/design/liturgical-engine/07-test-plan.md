@@ -37,7 +37,7 @@
   - **모든 성인**: O-2026-11-01-all-saints-on-sunday, O-2024-11-03-all-saints, O-2025-11-02-all-saints.
   - **주의 봉헌**: O-2026-02-01-presentation, O-2024-02-04-presentation, O-2028-01-30-presentation, O-2034-02-05-presentation, O-2031-02-02-presentation-on-sunday, O-2049-01-31-presentation.
   - **주의 변모**: O-2026-08-09-transfiguration, O-2024-08-04-transfiguration, O-2025-08-03-transfiguration, O-2028-08-06-transfiguration-on-sunday.
-  - **활성화**: A-2028-01-30-presentation-activated, A-2049-01-31-presentation-activated, A-2030-02-03-presentation-vs-seollal(잠정), A-2026-05-17-ascension-activated, A-2026-08-09-transfiguration-activated.
+  - **활성화**: A-2028-01-30-presentation-activated, A-2049-01-31-presentation-activated, A-2030-02-03-presentation-vs-seollal, A-2026-05-17-ascension-activated, A-2026-08-09-transfiguration-activated.
   - **주일과 옮겨 온 축일에 함께 밀린 축일**(→ R-6.2-chain-model): A-2025-11-03-all-souls-all-saints-activated, A-2071-06-01-visitation-ascension-activated.
 - `winners.cases.json`
   - **주님의 세례**: W-2026-01-11-baptism-of-the-lord.
@@ -99,11 +99,11 @@
   - **⑥ 연도 경계.** 합성 표(12.31 `next_day` 주요축일과, 그날을 차지하는 **가변** 상위 후보. 고정일끼리는 동시 봉헌이라 옮기지 않는다. 유닛은 12.31이 성탄 1주일인 2028)로 `resolveDate("Y+1-01-01")`에 `from: "Y-12-31"` 옮겨 온 축일이 보이는지, 그리고 `Y+1` 캐시만 먼저 만들어도 같은 결과인지(이월 경로) 본다.
     - **해를 넘긴 선착순.** 12월 축일 둘이 같은 1월 날을 노리면 먼저 밀린 쪽이 배정되고 다음은 그다음 날이다(`isFree`가 해를 넘긴 날짜에서 이 계산의 옮겨 온 축일과 다음 해 배정을 함께 보는지).
   - **⑦ 선택 봉헌.** `optionals.cases.json`의 O- 케이스 전부(승천, 공현, 모든 성인, 주의 봉헌 `nearby_sunday` 경계, 주의 변모. 미결28, → R-6.2-nearby-sunday).
-    - **활성화(`activated`).** A- 케이스 전부(0단계 선색인, 밀려 옮김 없음, 목적지가 명절인 해(미결19), 옮겨 온 축일을 다시 옮기지 않음. §6.2 활성화 계약). 이 케이스만 I-2(검토 문서)의 「옮겨 가지 않은 옮겨 온 축일은 지정 전례일」에서 빠진다. `activated`를 바꾸면 `transferCache`가 비워져 같은 연도의 `resolveDate` 결과가 바뀐다(캐시를 재사용하면 실패).
+    - **활성화(`activated`).** A- 케이스 전부(0단계 선색인, 밀려 옮김 없음, 목적지가 명절과 겹친 주일인 해(미결19 닫힘), 옮겨 온 축일을 다시 옮기지 않음. §6.2 활성화 계약). 2026-11-09부터 실데이터의 A- 케이스는 모두 I-2(검토 문서)의 「옮겨 가지 않은 옮겨 온 축일은 지정 전례일」을 지킨다. `activated`를 바꾸면 `transferCache`가 비워져 같은 연도의 `resolveDate` 결과가 바뀐다(캐시를 재사용하면 실패).
     - **합성: 목적지 충돌.** 옮겨 지키기로 한 선택 봉헌의 목적지 주일 전날(토요일)에 가변 후보(명절)가 A 축일을 밀도록 꾸민 표에서, 그 주일의 `official`은 선택 봉헌이고 A는 월요일 `transferred_in`이다(0단계 선착, §6.2 활성화 계약).
     - **합성: 옮겨 간 후순위 후보 제외.** 고정일 W(prec 3), 가변 V(prec 5, transferable), 고정일 C(prec 6, transferable)를 같은 날에 둔 표에서 V만 옮겨지고 C는 `proper`로 남는다(옮겨 간 V를 세면 C도 옮겨진다).
     - **옮겨 지키기로 한 선택 봉헌이 비운 원래 날.** 승천을 주일로 옮겨 지키기로 한 해에 그 목요일로 옮겨 가려는 다른 축일(합성)이 목요일에 배정된다. `isFree`가 옮겨 지키기로 한 선택 봉헌을 고유 후보에서 빼지 않으면 금요일로 밀린다.
-    - **합성: 옮겨 온 축일을 다시 옮기지 않음.** 옮겨 지키기로 한 선택 봉헌이 목적지에서 후순위가 되어도(명절) 그날 옮길 고유 축일이 함께 있는 표에서, 봉헌은 `transferred_in`으로 남고 고유 축일만 옮겨진다. 실데이터 A-2030-02-03-presentation-vs-seollal은 그날 옮길 고유 축일이 없어 옮김 계산이 그날을 건너뛰므로 명시 분기를 가려내지 못한다.
+    - **합성: 옮겨 온 축일을 다시 옮기지 않음.** 옮겨 지키기로 한 선택 봉헌이 목적지에서 후순위가 되어도(성탄 1주일) 그날 옮길 고유 축일이 함께 있는 표에서, 봉헌은 `transferred_in`으로 남고 고유 축일만 옮겨진다. 실데이터에는 이 경우가 없다. 2030-02-03은 주일에 온 명절이 그 주일 다음 순위가 되어(2026-11-09) 봉헌이 지정 전례일이다.
   - **⑧ 불변식**(1900-2100 모든 해, `arrivals`와 `departures`만. `optionals`는 뺀다).
     - 옮겨 간 축일 수 = 옮겨 온 축일 수 − 이월로 옮겨 온 축일 수다(이월로 옮겨 온 축일이 옮겨 간 기록은 전년도 계산에 있다. 합성 ⑥에서 `Y+1`은 옮겨 온 축일 1, 옮겨 간 축일 0이 맞다).
     - 그 날짜를 옮겨 가지 않은 옮겨 온 축일은 그 날짜의 지정 전례일이다(`official`).

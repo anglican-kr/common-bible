@@ -487,7 +487,7 @@ test("B1 불변식 — 2025~2050 모든 날에 지정 전례일이 하나 있고
       const o = r.official;
       if (!o || !r.candidates.includes(o)) { bad.push(`${d} 지정 전례일이 없거나 후보 밖`); continue; }
       if (!(o.status === "proper" || o.status === "transferred_in")) bad.push(`${d} 지정 전례일 status ${o.status}`);
-      if (ctx.effectivePrecedence(o.observance) > 8) bad.push(`${d} 지정 자격 없음 ${o.observance.id}`);
+      if (ctx.effectivePrecedence(o.observance, ctx.sundayPrecedenceIn(r.candidates)) > 8) bad.push(`${d} 지정 자격 없음 ${o.observance.id}`);
       if (!COLORS.includes(r.color) || !r.colors.includes(r.color) || r.colors.some((c) => !COLORS.includes(c))) {
         bad.push(`${d} 색 ${r.color} / ${JSON.stringify(r.colors)}`);
       }
@@ -522,18 +522,35 @@ test("C-6.1-3 명절 > 대재일 — 2032-02-11 설이 지정 전례일, 재의 
   same(ctx.fastOf(moved), "major");
 });
 
-test("C-6.1-4 명절 ∧ 연중 주일 — 설 2027 · 2030 · 2034 · 2037 · 2040 · 2050, 추석 2032 · 2035 · 2039 · 2042: 명절 지정 전례일, 주일 격자 proper", { skip: SKIP }, () => {
+test("C-6.1-4 명절 ∧ 연중 주일 — 설 2027 · 2030 · 2034 · 2037 · 2040 · 2050, 추석 2032 · 2035 · 2039 · 2042: 주일 격자가 지정 전례일이고 명절은 proper로 남는다(ADR-036 §7 규칙 5, 사용자 확정 2026-11-09)", { skip: SKIP }, () => {
   const days = [
     ...[2027, 2030, 2034, 2037, 2040, 2050].map((y) => [lunarDay(y, "1-1"), "lunar11-설날"]),
     ...[2032, 2035, 2039, 2042].map((y) => [lunarDay(y, "8-15"), "lunar815-추석-명절"]),
   ];
   for (const [d, id] of days) {
     const r = resolve(d);
-    same([ctx.dayOfWeek(d), r.coord.season, offId(r), gridIn(r).status, gridIn(r).observance.rank], [0, "ordinary", id, "proper", "sunday"], d);
+    const fest = r.candidates.find((c) => c.observance.id === id);
+    assert.ok(fest, `${d} 명절 후보 ${id}`);
+    // 그날 명절의 유효 우선순위는 연중 주일(5) 바로 다음이고, 표의 값(0)은 그대로다
+    same([ctx.dayOfWeek(d), r.coord.season, offId(r), gridIn(r).observance.rank, fest.status, ctx.effectivePrecedence(fest.observance, ctx.sundayPrecedenceIn(r.candidates)), fest.observance.precedence],
+      [0, "ordinary", gridIn(r).observance.id, "sunday", "proper", 5.5, 0], d);
   }
-  // 2025~2050 에 명절이 주일인 해는 이 열이 전부다 — 목록이 데이터와 어긋나면 잡힌다
+  // 그날 기념으로 남는 축일(우선순위 7)을 밀어낸 것은 명절이 아니라 주일 격자다
+  for (const [d, id] of [["2032-09-19", "d0919-탈수스의-데오도르"], ["2035-09-16", "d0916-니니안"]]) {
+    const r = resolve(d);
+    const kept = pick(r, id);
+    assert.ok(kept, `${d} 후보 ${id}`);
+    same([kept.status, kept.displacedBy], ["commemorated", gridIn(r).observance.id], d);
+  }
+  // 2025-2050년에 명절이 주일인 날은 이 열이 전부다. 목록이 데이터와 어긋나면 잡힌다. 평일의 명절은 여전히 지정 전례일이다(규칙 1, 2)
   const all = [];
-  for (let y = 2025; y <= 2050; y++) for (const k of ["1-1", "8-15"]) if (ctx.dayOfWeek(lunarDay(y, k)) === 0) all.push(lunarDay(y, k));
+  for (let y = 2025; y <= 2050; y++) {
+    for (const [k, id] of [["1-1", "lunar11-설날"], ["8-15", "lunar815-추석-명절"]]) {
+      const d = lunarDay(y, k);
+      if (ctx.dayOfWeek(d) === 0) all.push(d);
+      else same(offId(resolve(d)), id, d);
+    }
+  }
   same(all.sort(), days.map(([d]) => d).sort());
 });
 
@@ -551,7 +568,7 @@ test("C-6.1-7 · C-2-1 precedence null 인 이동 축일 행은 후보로 있되
         if (!c || c.status !== "proper") bad.push(`${d} ${row.id} 후보 ${c && c.status}`);
         if (offId(r) === row.id) bad.push(`${d} ${row.id} 지정 전례일`);
         // 주의 변모 주일 · 가정 · 평화통일 · 맥추감사 · 추수감사 — 그날 지정 전례일은 격자거나 그 주일보다 선순위인 축일(2.2 주의 봉헌, 왕이신 그리스도 주일 등)
-        if (!offId(r).startsWith("grid:") && ctx.effectivePrecedence(r.official.observance) >= gridIn(r).observance.precedence) {
+        if (!offId(r).startsWith("grid:") && ctx.effectivePrecedence(r.official.observance, ctx.sundayPrecedenceIn(r.candidates)) >= gridIn(r).observance.precedence) {
           bad.push(`${d} ${row.id} 지정 전례일 ${offId(r)}`);
         }
       }
@@ -951,7 +968,8 @@ test("I-1~I-8 · I-11 옮김 계산 불변식 — 1900~2100 (activated = ∅)", 
       // I-11 — 옮겨 온 날짜는 주일이 아니고 그날 유효 precedence ≤ 2 인 고유 후보(명절 · 대축일 · 대재일 · A 특례 · 절기
       // 주일)가 없다. I-3(옮겨 온 축일 ∉ 보호 기간)은 폐기 — 보호 기간이 막지 않는다(→ R-6.3-holy-week-guard)
       const own = ctx.ownObservancesOn(ix().cal, D);
-      if (ctx.dayOfWeek(D) === 0 || own.some((o) => ctx.effectivePrecedence(o) <= 2)) bad.push(`I-11 ${D} ${cs.map((c) => c.observance.id)}`);
+      // 주일이면 앞 조건이 먼저 잡으므로 뒤 조건은 주일이 아닌 날만 본다(주일의 값 null — 명절은 표의 값 0)
+      if (ctx.dayOfWeek(D) === 0 || own.some((o) => ctx.effectivePrecedence(o, null) <= 2)) bad.push(`I-11 ${D} ${cs.map((c) => c.observance.id)}`);
       // I-2 — 옮겨 온 축일은 옮겨 가지 않으므로(I-6) 그날의 지정 전례일이다. 한 날에 옮겨 온 축일은 하나다(선착순)
       const r = resolve(D);
       if (cs.length !== 1 || !r.official || r.official.status !== "transferred_in" || r.official.observance.id !== cs[0].observance.id) {
