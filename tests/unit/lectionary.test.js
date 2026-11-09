@@ -894,7 +894,7 @@ test("buildLectionaryModel: 그날 축성 · 축복된 교회는 종류마다 �
 // ── 소속교회의 축성일(ADR-041 §6, §8) ─────────────────────────────────────────
 
 const MINE = "k7m3qx";
-/** 본당 표의 축성일 분류(엔진 `findDedications`가 싣는 값) — 축성은 주요축일 C, 축복은 기념일이다. */
+/** 본당 표의 축성일 분류(엔진 `findDedications`가 싣는 값). 축성은 주요축일 C, 축복은 기념일이다. */
 const CONSECRATION = { rank: "major_feast", precedence: 4, priority_group: "C", color: "white", common: "dedication", transferable: false, transfer_to: null };
 const BLESSING = { rank: "commemoration", precedence: 7, priority_group: null, color: "white", common: "dedication", transferable: false, transfer_to: null };
 const DEDICATIONS = [

@@ -1943,7 +1943,7 @@ function buildDedicationIndex(table) {
     const entry = {
       name: p.name, kind: d.kind,
       church_id: typeof p.church_id === "string" && p.church_id !== "" ? p.church_id : null,
-      // 축성일 전례일의 분류 — 표의 값 그대로 싣는다. 화면이 소속교회의 축성일 후보를 이 값으로 만든다(lectionary.js `myDedicationOf`)
+      // 축성일 전례일의 분류는 표의 값 그대로 싣는다. 화면이 소속교회의 축성일 후보를 이 값으로 만든다(lectionary.js `myDedicationOf`)
       rank: typeof d.rank === "string" ? d.rank : null,
       precedence: typeof d.precedence === "number" && Number.isFinite(d.precedence) ? d.precedence : null,
       priority_group: d.priority_group === "A" || d.priority_group === "B" || d.priority_group === "C" ? d.priority_group : null,
