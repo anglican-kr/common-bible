@@ -1,4 +1,5 @@
 ---
+pr: 539
 date: 2026-11-09
 branch: feat/parish-setting
 title: "feat: 설정에서 소속교회 고르기"
