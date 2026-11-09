@@ -1,4 +1,5 @@
 ---
+pr: 543
 date: 2026-11-10
 branch: feat/diocese-founding-collect
 title: "feat: 소속교회가 속한 교구의 설립일에 설립 본기도를 덧붙임"
