@@ -500,9 +500,13 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
   const loadParishOptions = listLoader("local-observances.json", (table) => parishGroups(table)
     .map((g) => ({ label: `${g.diocese}교구`, options: g.churches.map((c) => /** @type {[string, string]} */ ([c.id, c.name])) })));
 
-  /** 성인 목록 — 월별 축일 표의 `saints`, 데이터가 정한 이름순 그대로다(ADR-041 §5). */
+  /**
+   * 성인 목록 — 월별 축일 표의 `saints`, 데이터가 정한 이름순 그대로다(ADR-041 §5). 축일이 하나도 없는 성인은 넣지 않는다. 엔진의 색인
+   * (`buildCalendarIndex`의 `saintFeasts`)과 같은 기준이라, 고를 수 있는 성인은 모두 줄이 생길 수 있다(PR #545 리뷰).
+   */
   const loadSaintOptions = listLoader("sanctoral.json", (table) => (table && Array.isArray(table.saints) ? table.saints : [])
-    .filter((/** @type {any} */ s) => s && typeof s.id === "string" && s.id && typeof s.title === "string")
+    .filter((/** @type {any} */ s) => s && typeof s.id === "string" && s.id && typeof s.title === "string"
+      && Array.isArray(s.feasts) && s.feasts.some((/** @type {unknown} */ f) => typeof f === "string"))
     .map((/** @type {any} */ s) => /** @type {[string, string]} */ ([s.id, s.title])));
 
   /** @param {SelectOption[]} options @param {string} value */

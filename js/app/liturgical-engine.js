@@ -896,10 +896,10 @@ function buildCalendarIndex(tables) {
   periods.sort((a, b) => compareIds(a.period.id, b.period.id));
   /** @type {Map<string, string[]>} */
   const saintFeasts = new Map();
+  // 설정의 세례명 목록(settings-ui.js `loadSaintOptions`)과 같은 기준이다. 식별자가 있고 축일이 하나 이상인 성인만 싣는다
   for (const row of rowsOf(t.sanctoral, "saints")) {
-    if (typeof row.id === "string" && Array.isArray(row.feasts)) {
-      saintFeasts.set(row.id, row.feasts.filter((/** @type {unknown} */ f) => typeof f === "string"));
-    }
+    const feasts = Array.isArray(row.feasts) ? row.feasts.filter((/** @type {unknown} */ f) => typeof f === "string") : [];
+    if (typeof row.id === "string" && row.id && feasts.length) saintFeasts.set(row.id, feasts);
   }
   return {
     sanctoralByDate,
