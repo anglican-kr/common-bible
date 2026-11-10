@@ -1,4 +1,5 @@
 ---
+pr: 548
 date: 2026-11-11
 branch: feat/baptismal-info-all-saints
 title: "feat: 세례명 안내에 모든 성인의 날 문장 추가"
