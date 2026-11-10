@@ -1,4 +1,5 @@
 ---
+pr: 545
 date: 2026-11-10
 branch: feat/baptismal-saint
 title: "feat: 설정에서 세례명 고르기"
