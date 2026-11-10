@@ -1044,12 +1044,15 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     const pair = own ? !!linked : !!linkCollects(sets, collectsFor(collectEntries, c));
     const rows = pair ? sets.map((o) => o.group) : [sets.length ? sets[0].group : null];
     // 설과 겹쳐 옮겨 온 축일(2049-02-03)은 줄에 「· 2월 2일에서 옮겨 옴」만 둔다 — 둘을 이으면 41자라 폭 320px에서 두 줄을 넘는다. 제목 아래 안내는 둘 다 알린다.
-    const suffix = (statusSuffix(c) || originSuffix(c)) + alternateSuffix(c);
+    // 세례명 줄은 다른 사람이 보는 이름 줄의 글 그대로다. 기리는 성인은 긴 이름이 링크이고 「축일」이 꼬리 글이다(「레오나드(은수자, 6세기) 축일」).
+    // 고유 독서가 있어 기념만 하는 축일(`passiveDays` — 「사도 성 베드로의 탈옥」)은 이름 줄처럼 짧은 이름뿐이다(사용자 결정 2026-11-10, ADR-041 §5)
+    const saintLine = c === mySaint && !passiveDays.includes(c);
+    const suffix = saintLine ? " 축일" : (statusSuffix(c) || originSuffix(c)) + alternateSuffix(c);
     return rows.map((g, i) => {
-      const name = choiceNameOf(c, g, pair);
+      const name = saintLine ? String(c.observance.name || "") : choiceNameOf(c, g, pair);
       return {
         candidate: c,
-        name: shortName(name),
+        name: saintLine ? name : shortName(name),
         suffix,
         title: name + suffix,
         href: hrefFor(date, { obs: obsOf(c), track: trackOf(c), set: pair ? i + 1 : null, collect: null }, defaults),
@@ -1077,7 +1080,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     ].filter(Boolean).join(" · ") || null,
     collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked,
     ending: endingCodeOf(memorialCollects[memorialCollects.length - 1] || chosenCollect), memorialCollects,
-    // 세례명 줄이 있으면 제목 아래 이름 줄에서 그 성인을 뺀다. 같은 글이 두 번 보이지 않게 한다(사용자 결정 2026-11-10, ADR-041 §5)
+    // 세례명 줄이 있으면 그 성인의 이름 줄은 목록의 줄로 옮겨 간다. 글은 같고, 같은 글이 두 번 보이지 않는다(사용자 결정 2026-11-10, ADR-041 §5)
     memorialSaints: memorial.saints.filter((c) => c !== mySaint), passiveDays: passiveDays.filter((c) => c !== mySaint),
     commemorations, textlessDays, foundingLines: foundingLines(foundings), mySaint,
     // 고른 화면이 소속교회나 세례명 때문에 생긴 것인가 — 문서 제목에 교회 이름과 세례명을 싣지 않는다(ADR-041 §8)

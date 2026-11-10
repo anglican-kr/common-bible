@@ -212,13 +212,14 @@ const saintIdOf = (title) => {
   return s.id;
 };
 
-test("세례명 — 공통 독서만 있는 성인(2026-11-06 레오나드)과 주일에 기념만 하는 성인(2026-07-26 안나, 요아킴)이 그 사람에게만 목록의 줄이고 이름 줄에서 빠진다(ADR-041 §5)", { skip: SKIP }, () => {
+test("세례명 — 공통 독서만 있는 성인(2026-11-06 레오나드)과 주일에 기념만 하는 성인(2026-07-26 안나, 요아킴)의 이름 줄이 그 사람에게만 목록의 줄로 옮겨 간다(ADR-041 §5)", { skip: SKIP }, () => {
   const leonard = saintIdOf("레오나드(은수자, 6세기)");
   const none = model("2026-11-06");
   assert.ok(none.memorialSaints.some((c) => id(c) === "d1106-레오나드") && !none.choices.some((c) => id(c.candidate) === "d1106-레오나드"));
   const m = model("2026-11-06", NONE, null, false, "", leonard);
   assert.strictEqual(ctx.shortName(m.dayName), "연중 31주 금요일");
-  same(otherRows(m).find(([name]) => name === "레오나드"), ["레오나드", "/lectionary/2026-11-06?obs=my-saint"]);
+  same(otherRows(m).find(([name]) => name === "레오나드(은수자, 6세기)"), ["레오나드(은수자, 6세기)", "/lectionary/2026-11-06?obs=my-saint"]);
+  assert.ok(ctx.headLinesOf(m).others.includes("레오나드(은수자, 6세기) 축일"));
   assert.ok(!m.memorialSaints.some((c) => id(c) === "d1106-레오나드"), "이름 줄에서 빠진다");
   assert.ok(m.memorialCollects.some((c) => c.common), "평일 본기도 뒤에 잇는 성인 본기도는 그대로다");
   const picked = model("2026-11-06", { obs: "my-saint" }, null, false, "", leonard);
@@ -227,17 +228,20 @@ test("세례명 — 공통 독서만 있는 성인(2026-11-06 레오나드)과 �
   for (const title of ["안나(성모 마리아의 어머니)", "요아킴(성모 마리아의 아버지)"]) {
     const s = model("2026-07-26", NONE, null, false, "", saintIdOf(title));
     assert.strictEqual(ctx.shortName(s.dayName), "연중 17주일", title);
-    same(otherRows(s).find(([name]) => name === "안나와 요아킴"), ["안나와 요아킴", "/lectionary/2026-07-26?obs=my-saint"], title);
+    same(otherRows(s).find(([name]) => name === "안나와 요아킴(성모 마리아의 양친)"), ["안나와 요아킴(성모 마리아의 양친)", "/lectionary/2026-07-26?obs=my-saint"], title);
     same(s.memorialSaints, [], title);
   }
 });
 
-test("세례명 — 2025-2050 모든 날, 세례명 성인의 축일은 제목이거나 전례독서 목록의 줄이고, 생략되거나 옮겨 간 날만 없다(ADR-041 §5)", { skip: SKIP }, () => {
+test("세례명 — 2025-2050 모든 날, 세례명 성인의 축일은 제목이거나 전례독서 목록의 줄이고, 생략되거나 옮겨 간 날만 없다. 세례명 줄의 글은 다른 사람이 보는 이름 줄의 글이다(ADR-041 §5)", { skip: SKIP }, () => {
   /** @type {Map<string, any[]>} */
   const byFeast = new Map();
   for (const s of read("sanctoral.json").saints) for (const f of s.feasts) byFeast.set(f, [...(byFeast.get(f) || []), s]);
   const bad = [];
-  const count = { title: 0, mine: 0, public: 0, absent: 0 };
+  const count = { title: 0, mine: 0, public: 0, absent: 0, noLine: 0 };
+  /** @type {Map<string, any>} 세례명이 없는 사람이 보는 그날의 모델 */
+  const publicModels = new Map();
+  const publicModel = (d) => publicModels.get(d) || publicModels.set(d, model(d, NONE, null, false)).get(d);
   for (let t = Date.UTC(2025, 0, 1); t <= Date.UTC(2050, 11, 31); t += 86_400_000) {
     const d = new Date(t).toISOString().slice(0, 10);
     for (const c of resolve(d).candidates) {
@@ -252,6 +256,13 @@ test("세례명 — 2025-2050 모든 날, 세례명 성인의 축일은 제목�
         } else if (row && m.mySaint && id(m.mySaint) === id(c)) {
           count.mine++;
           if (row.href !== `/lectionary/${d}?obs=my-saint` || named) bad.push(`${d} ${s.title} 세례명 줄 ${row.href} ${named}`);
+          // 다른 사람에게 그 성인의 이름 줄이 있으면 같은 글이다. 없으면(평일의 3.1 데이빗 — 기본 독서가 삼일절이라 기리는 성인이 아니다) 기리는 성인의 형식이다
+          const pub = publicModel(d);
+          const text = row.name + row.suffix;
+          const expected = pub.passiveDays.some((x) => id(x) === id(c)) ? ctx.shortName(c.observance.name) : `${c.observance.name} 축일`;
+          const hasLine = [...pub.memorialSaints, ...pub.passiveDays].some((x) => id(x) === id(c));
+          if (!hasLine) count.noLine++;
+          if (text !== expected || (hasLine && !ctx.headLinesOf(pub).names.includes(text))) bad.push(`${d} ${s.title} 줄의 글 「${text}」`);
           if (id(model(d, { obs: "my-saint" }, null, false, "", s.id).selected) !== id(c)) bad.push(`${d} ${s.title} my-saint로 열리지 않는다`);
         } else if (row) {
           count.public++;
@@ -266,8 +277,9 @@ test("세례명 — 2025-2050 모든 날, 세례명 성인의 축일은 제목�
   }
   same(bad, []);
   // 공통 독서만 있는 성인이 많아 세례명 줄이 가장 많고(2,218번), 고유 독서가 있어 제목인 날(898번)과 생략되는 날(116번)이 있다.
-  // 제목이 아닌데 누구에게나 보이는 줄은 2025-2050에 없다(2026-11-10 데이터)
+  // 제목이 아닌데 누구에게나 보이는 줄은 2025-2050에 없다(2026-11-10 데이터). 다른 사람에게 이름 줄이 없는 세례명 줄은 평일의 3.1 데이빗뿐이다
   assert.ok(count.mine > count.title && count.title > 0 && count.absent > 0, JSON.stringify(count));
+  assert.ok(count.noLine > 0 && count.noLine < 30, JSON.stringify(count));
 });
 
 test("본당 표의 교회 교구가 모두 교구 설립일 행과 짝이 맞고, 교구 이름은 「교구」를 뗀 이름이다(설립일 찾기가 이름으로 잇는다)", { skip: SKIP }, () => {

@@ -2378,8 +2378,8 @@ def _with_saint(title):
 
 
 def test_my_saint_row_has_a_fixed_address_and_keeps_the_name_out_of_page_views(desktop_context):
-    """레오나드를 세례명으로 고른 사람은 2026-11-06(연중 31주 금요일)에 목록의 「레오나드」 줄을 본다. 제목 아래 「레오나드… 축일」 줄은
-    빠진다. 그 줄의 주소는 `?obs=my-saint`이고, 고르면 문서 제목은 「전례독서」라 방문 기록에 성인 이름이 없다(ADR-041 §5, §8)."""
+    """레오나드를 세례명으로 고른 사람은 2026-11-06(연중 31주 금요일)에 제목 아래 이름 줄 「레오나드(은수자, 6세기) 축일」 대신 같은 글의
+    목록 줄을 본다. 성인 이름이 링크이고 그 주소는 `?obs=my-saint`다. 고르면 문서 제목은 「전례독서」라 방문 기록에 성인 이름이 없다(ADR-041 §5, §8)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-11-06")
     assert "레오나드" not in _choices(page)
@@ -2389,7 +2389,9 @@ def test_my_saint_row_has_a_fixed_address_and_keeps_the_name_out_of_page_views(d
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-11-06")
     assert page.inner_text(".lect-day") == "연중 31주 금요일"
-    assert "레오나드" in _choices(page)
+    assert "레오나드(은수자, 6세기) 축일" in _choices(page)
+    row = page.locator(".lect-choice", has_text="레오나드")
+    assert row.locator(".lect-choice-name").inner_text() == "레오나드(은수자, 6세기)"
     assert not [t for t in page.eval_on_selector_all(".lect-day-saint", "els => els.map(e => e.textContent)") if "레오나드" in t]
     page.locator(".lect-choice", has_text="레오나드").click()
     _wait_day(page, "레오나드(은수자, 6세기)")
@@ -2407,7 +2409,7 @@ def test_choosing_a_saint_in_settings_redraws_the_lectionary_when_the_popover_cl
     pop = open_settings(page)
     page.wait_for_function(SAINT_READY)
     pop.get_by_label("세례명", exact=True).select_option(label="레오나드(은수자, 6세기)")
-    assert pop.is_visible() and "레오나드" not in _choices(page)
+    assert pop.is_visible() and not [c for c in _choices(page) if "레오나드" in c]
     page.keyboard.press("Escape")
     pop.wait_for(state="hidden")
-    page.wait_for_function("() => [...document.querySelectorAll('.lect-choice')].some((a) => a.textContent === '레오나드')", timeout=20_000)
+    page.wait_for_function("() => [...document.querySelectorAll('.lect-choice')].some((a) => a.textContent === '레오나드(은수자, 6세기) 축일')", timeout=20_000)

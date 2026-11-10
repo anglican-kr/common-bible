@@ -535,7 +535,7 @@ test("buildLectionaryModel: 평일에 밀려서 기념만 하는 축일 — 기�
   assert.strictEqual(sun.ending, "A");
 });
 
-test("buildLectionaryModel: 세례명 성인의 축일 — 공통 독서만 있어 감추던 성인이 그 사람에게만 목록의 줄(`?obs=my-saint`)이 되고, 이름 줄에서는 빠진다(ADR-041 §5, §8, 사용자 결정 2026-11-10)", () => {
+test("buildLectionaryModel: 세례명 성인의 축일 — 공통 독서만 있어 감추던 성인의 이름 줄이 그 사람에게만 누를 수 있는 목록의 줄(`?obs=my-saint`)로 옮겨 간다(ADR-041 §5, §8, 사용자 결정 2026-11-10)", () => {
   const saint = cand(obs("d1106-레오나드", "레오나드(은수자, 6세기)", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "monastic" }));
   const grid = cand(obs("grid:ordinary-31-weekday-fri", "연중 31주 금요일", { rank: "feria", precedence: 8, color: "green" }));
   const r = resolvedOf("2026-11-06", [saint, grid], saint);
@@ -556,13 +556,15 @@ test("buildLectionaryModel: 세례명 성인의 축일 — 공통 독서만 있�
   same(none.choices.map((c) => c.candidate.observance.id), [grid.observance.id]);
   same(none.memorialSaints.map((c) => c.observance.id), ["d1106-레오나드"]);
   assert.strictEqual(none.mySaint, null);
-  // 고른 사람은 목록의 줄이고 주소는 고정된 값이다. 이름 줄에서는 빠지고, 평일 본기도 뒤에 잇는 성인 본기도는 그대로다
+  // 고른 사람에게는 이름 줄과 같은 글(「레오나드(은수자, 6세기) 축일」)이 목록의 줄이 되고 주소는 고정된 값이다. 긴 이름이 링크이고 「축일」은 꼬리 글이다.
+  // 이름 줄에서는 빠지고, 평일 본기도 뒤에 잇는 성인 본기도는 그대로다
   const m = build(q, mine);
   assert.strictEqual(m.selected, grid);
   assert.strictEqual(m.mySaint, saint);
   same(m.choices.map((c) => c.candidate.observance.id), [saint.observance.id, grid.observance.id]);
   const row = m.choices.find((c) => c.candidate === saint);
-  assert.strictEqual(row.name, "레오나드");
+  same([row.name, row.suffix], ["레오나드(은수자, 6세기)", " 축일"]);
+  same(ctx.headLinesOf(m).others, ctx.headLinesOf(none).names.filter((l) => l.startsWith("레오나드")));   // 다른 사람이 보는 글과 같다
   assert.match(row.href, /[?&]obs=my-saint(&|$)/);
   assert.doesNotMatch(row.href, /레오나드/);
   same(m.memorialSaints, []);
@@ -599,6 +601,7 @@ test("buildLectionaryModel: 세례명 성인이 주일과 겹쳐 기념만 하�
   const r1 = resolvedOf("2026-07-26", [sunday, a1], sunday);
   const m1 = ctx.buildLectionaryModel(r1, q, groupsOf, entriesOf(a1, sunday), null, [], false, [], null, mine);
   same(m1.choices.map((c) => c.candidate.observance.id), ["grid:ordinary-17-sunday", "d0726-안나와-요아킴"]);
+  same(ctx.headLinesOf(m1).others, ["안나와 요아킴(성모 마리아의 양친) 축일"]);
   same(m1.memorialSaints, []);
   const s1 = ctx.buildLectionaryModel(r1, { ...q, obs: "my-saint" }, groupsOf, entriesOf(a1, sunday), null, [], false, [], null, mine);
   assert.strictEqual(s1.selected, a1);
@@ -611,6 +614,16 @@ test("buildLectionaryModel: 세례명 성인이 주일과 겹쳐 기념만 하�
   const m2 = ctx.buildLectionaryModel(r2, q, groupsOf, entriesOf(a2, sat), null, [], false, [], null, mine);
   assert.strictEqual(m2.selected, a2);
   assert.strictEqual(m2.mySaint, null);
+
+  // 고유 독서가 있는 사도 축일이 주일에 기념만 하는 날(2027-08-01 사도 성 베드로의 탈옥)은 이름 줄에 이름만 보이므로, 줄도 이름뿐이다
+  const peter = cand(obs("d0801-사도-성-베드로의-탈옥", "사도 성 베드로의 탈옥", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "apostle" }), "commemorated");
+  const groupsP = groupsOfFrom({ "grid:ordinary-17-sunday": [group("s", FOUR)], "d0801-사도-성-베드로의-탈옥": [group("p", FOUR)] });
+  const entriesP = [{ candidate: sunday, collects: [collect("d-c", "그날")] }, { candidate: peter, collects: [collect("p-c", "사도 베드로를")] }];
+  const rP = resolvedOf("2027-08-01", [sunday, peter], sunday);
+  const noneP = ctx.buildLectionaryModel(rP, q, groupsP, entriesP, null, [], false, [], null, new Set());
+  const mP = ctx.buildLectionaryModel(rP, q, groupsP, entriesP, null, [], false, [], null, new Set(["d0801-사도-성-베드로의-탈옥"]));
+  same(ctx.headLinesOf(noneP).names, ["사도 성 베드로의 탈옥"]);
+  same([ctx.headLinesOf(mP).names, ctx.headLinesOf(mP).others], [[], ["사도 성 베드로의 탈옥"]]);
 
   // 성주간에 생략되는 날은 줄이 없다
   const a3 = anna("omitted");
