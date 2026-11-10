@@ -319,7 +319,7 @@ HIG의 절제된 깊이 표현이다. 라이트 기준 값이며, **다크에서
 | 토글 스위치 | `.settings` 토글 | iOS, Material, desktop 변형. ON일 때 `--accent`. 상태 설명(`.settings-toggle-caption`, 외경)은 이름 오른쪽 같은 줄에 `--font-xs`, `--text-secondary`로 두고, 들어가지 않으면 이름 아래로 내린다 | ADR-023 |
 | 세그먼트 | `.btn-group`·`.toolbar-btn[aria-pressed]` | 설정에서 값을 고르는 단추 묶음이다(시작 화면, 글자 크기, 테마). 묶음의 폭은 모두 11rem이고 단추가 그 폭을 똑같이 나눈다. 왼쪽 테두리가 없는 단추도 폭이 같도록 `grid`로 나눈다 | ADR-041 |
 | 설정 섹션 | `.settings-section`·`.settings-section-title` | 설정의 묶음이다. 차례는 시작, 성서, 전례독서, 모양, 시스템이다. 이름은 `<h2>`이고 `--font-xs`, 굵기 600, `--text-secondary`다. 첫 섹션 뒤로 섹션마다 위에 `--border` 1px 가로선을 둔다 | ADR-041 |
-| 선택 상자 | `.settings-select-wrap`·`.settings-select` | 소속교회가 쓴다(2026-11-09). 교구 묶음은 `<optgroup>`이다. 브라우저 기본 `<select>`에 `.toolbar-btn`과 같은 상자(높이 28px, `--font-xs`, `--bg-card`, `--border`, `--radius-xs`)를 씌운다. 최소 폭은 `.settings-action-btn`과 같은 8em이다. OS의 화살표를 지우고 꺾쇠는 감싼 요소에 CSS로 그린다. 고르면 화면을 다시 그리지 않아 포커스가 그대로다 | ADR-041 |
+| 선택 상자 | `.settings-select-wrap`·`.settings-select` | 세례명과 소속교회가 쓴다(2026-11-09, 세례명 2026-11-10). 교구 묶음은 `<optgroup>`이다. 브라우저 기본 `<select>`에 `.toolbar-btn`과 같은 상자(높이 28px, `--font-xs`, `--bg-card`, `--border`, `--radius-xs`)를 씌운다. 폭은 세그먼트 묶음과 같은 11rem이고, 넘치는 글(세례명의 긴 호칭)은 닫힌 상자에서 말줄임(…)으로 자른다(2026-11-10). 펼친 목록은 OS의 고르기 화면이라 전체가 보인다. OS의 화살표를 지우고 꺾쇠는 감싼 요소에 CSS로 그린다. 고르면 화면을 다시 그리지 않아 포커스가 그대로다 | ADR-041 |
 | 검색 | `#search-bar`(데스크탑), 탭 바 모핑 후 `/search` 전체화면(모바일) | 반응형 전환 | ADR-005·029·030 |
 | 북마크 | `.bm-*` 트리, 모달, 스와이프 | 드로어(모바일 시트/데스크탑 패널) | ADR-011 |
 | 절 선택 바 | `#verse-select-bar` | 하단에 떠 있는 독(아이콘 알약 버튼, 취소 원형, 부유 카운트 칩) | ADR-010·030 |

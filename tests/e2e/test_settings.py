@@ -50,6 +50,8 @@ def test_popover_has_labeled_sections_in_order(browser):
         lectionary = pop.locator(".settings-section", has=page.locator("h2", has_text="전례독서"))
         assert lectionary.get_by_role("switch", name="대체 독서 표시").is_checked() is False
         assert lectionary.get_by_label("소속교회", exact=True).count() == 1
+        # 대체 독서 표시, 세례명, 소속교회의 차례다(ADR-041 §1)
+        assert lectionary.locator(".settings-label").all_inner_texts() == ["대체 독서 표시", "세례명", "소속교회"]
         appearance = pop.locator(".settings-section", has=page.locator("h2", has_text="모양"))
         assert appearance.get_by_role("button", name="글자 크게").count() == 1
         system = pop.locator(".settings-section", has=page.locator("h2", has_text="시스템"))
@@ -67,6 +69,7 @@ def test_mobile_settings_view_has_the_same_sections(browser):
         page.wait_for_selector(".settings-view .btn-group")
         _assert_sections(page.evaluate(SECTION_FACTS, ".settings-view"))
         assert page.locator(".settings-view").get_by_label("소속교회", exact=True).count() == 1
+        assert page.locator(".settings-view").get_by_label("세례명", exact=True).count() == 1
     finally:
         ctx.close()
 
@@ -325,12 +328,15 @@ def test_keyboard_opens_on_first_control_and_focus_stays_trapped(browser):
         ctx.close()
 
 
-# 소속교회 선택 상자(ADR-041 §9)가 목록을 받아 고를 수 있게 되었는가
-PARISH_READY = "() => { const s = document.querySelector('.settings-popover .settings-select'); return !!s && !s.disabled; }"
-LIST_IS_OPEN = "() => document.querySelector('.settings-popover .settings-select').matches(':open')"
+# 팝오버의 선택 상자를 라벨로 찾는다. 전례독서 섹션에 세례명과 소속교회 둘이 있다(ADR-041 §1)
+SELECT_NAMED = "(name) => [...document.querySelectorAll('.settings-popover .settings-select')].find((s) => s.labels[0]?.textContent === name)"
+# 선택 상자(ADR-041 §9)가 목록을 받아 고를 수 있게 되었는가
+PARISH_READY = f"() => {{ const s = ({SELECT_NAMED})('소속교회'); return !!s && !s.disabled; }}"
+SAINT_READY = f"() => {{ const s = ({SELECT_NAMED})('세례명'); return !!s && !s.disabled; }}"
+LIST_IS_OPEN = f"() => ({SELECT_NAMED})('소속교회').matches(':open')"
 # Chromium은 목록을 연 채 누른 Esc를 페이지로 보내지 않는다. 보내는 브라우저에서 일어날 일을 키 입력 사건을 직접 내어 본다.
-ESC_REACHES_PAGE = """() => document.querySelector('.settings-popover .settings-select')
-  .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))"""
+ESC_REACHES_PAGE = f"""() => ({SELECT_NAMED})('소속교회')
+  .dispatchEvent(new KeyboardEvent('keydown', {{ key: 'Escape', bubbles: true }}))"""
 
 
 def test_escape_on_open_select_list_keeps_popover(browser):
@@ -540,6 +546,118 @@ def test_parish_saved_id_missing_from_the_list_is_kept_until_cleared(browser):
         select.select_option(label="선택 안 함")
         assert _ls(page, "bible-parish") == ""
         assert select.locator("option", has_text="목록에 없는 교회").count() == 0
+    finally:
+        ctx.close()
+
+
+# ── 세례명 (ADR-041 §5, §7, §9) ──────────────────────────────────────────────
+
+SAINTS = """async () => (await (await fetch('/data/lectionary/sanctoral.json')).json()).saints"""
+
+
+def test_saint_select_lists_saints_in_the_table_order_and_saves_the_id(browser):
+    """세례명은 데이터 성인 표의 차례(이름순) 그대로인 112명의 목록이고, 고르면 성인 식별자를 저장하고 알린다. 상자의 폭은 11rem이라
+    긴 호칭은 말줄임으로 잘리고 팝오버가 넓어지지 않는다. 소속교회 상자도 같은 폭이다(ADR-041 §5, §8, §9, 사용자 결정 2026-11-10)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open(page)
+        pop = open_settings(page)
+        page.wait_for_function(SAINT_READY)
+        select = pop.get_by_label("세례명", exact=True)
+        saints = page.evaluate(SAINTS)
+        assert len(saints) == 112
+        options = select.evaluate("(s) => [...s.options].map((o) => [o.value, o.textContent])")
+        assert options == [["", "선택 안 함"]] + [[s["id"], s["title"]] for s in saints]
+        assert all(CHURCH_ID.fullmatch(s["id"]) for s in saints)
+
+        page.evaluate(RECORD_ANNOUNCEMENTS)
+        peter = next(s["id"] for s in saints if s["title"] == "사도 성 베드로")
+        select.select_option(label="사도 성 베드로")
+        assert _ls(page, "bible-baptismal-saint") == peter
+        page.wait_for_function("() => window.__said.includes('세례명 사도 성 베드로')")
+
+        # 가장 긴 호칭(36자)을 골라도 상자는 11rem이고 글이 잘린다. 팝오버는 가로로 넘치지 않는다
+        select.select_option(label="토마스 크랜머(캔터베리 대주교, 전례개혁자, 순교자, 1556년)")
+        page.wait_for_function(PARISH_READY)
+        facts = page.evaluate(f"""() => {{
+          const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+          const box = (name) => ({SELECT_NAMED})(name);
+          const pop = document.querySelector('.settings-popover');
+          return {{ rem, saint: box('세례명').getBoundingClientRect().width, parish: box('소속교회').getBoundingClientRect().width,
+            overflow: getComputedStyle(box('세례명')).textOverflow, popFits: pop.scrollWidth <= pop.clientWidth }};
+        }}""")
+        assert abs(facts["saint"] - 11 * facts["rem"]) < 1 and abs(facts["parish"] - 11 * facts["rem"]) < 1, facts
+        assert facts["overflow"] == "ellipsis" and facts["popFits"], facts
+
+        close_popovers(page)
+        pop.wait_for(state="hidden")
+        pop = open_settings(page)
+        page.wait_for_function(SAINT_READY)
+        select = pop.get_by_label("세례명", exact=True)
+        assert select.locator("option:checked").inner_text() == "토마스 크랜머(캔터베리 대주교, 전례개혁자, 순교자, 1556년)"
+        select.select_option(label="선택 안 함")
+        assert _ls(page, "bible-baptismal-saint") == ""
+        page.wait_for_function("() => window.__said.at(-1) === '세례명 선택 안 함'")
+    finally:
+        ctx.close()
+
+
+def test_saint_info_and_the_notes_when_the_list_cannot_load(browser):
+    """세례명의 ⓘ 단추가 설명을 연다. 성인 목록을 받지 못하면 「목록 없음」으로 고를 수 없게 두고 성인 목록의 안내를 보인다.
+    소속교회는 그대로 고를 수 있다(ADR-041 §7, §9)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.route("**/data/lectionary/sanctoral.json", lambda route: route.abort())
+    page = ctx.new_page()
+    try:
+        _open(page)
+        pop = open_settings(page)
+        btn = pop.get_by_role("button", name="세례명 안내", exact=True)
+        btn.click()
+        desc = pop.locator(f"#{btn.get_attribute('aria-controls')}")
+        assert "세례명과 일치하는 성인 축일에 성인을 기념하는 전례독서를 보여줍니다." in desc.inner_text()
+        assert desc.get_by_role("button", name="세례명 안내 닫기", exact=True).count() == 1
+        note = pop.get_by_text("성인 목록을 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 설정을 다시 열어 주세요.", exact=True)
+        note.wait_for()
+        select = pop.get_by_label("세례명", exact=True)
+        assert select.is_disabled() and select.locator("option").all_inner_texts() == ["목록 없음"]
+        assert select.get_attribute("aria-describedby") == note.get_attribute("id")
+        page.wait_for_function(PARISH_READY)
+    finally:
+        ctx.close()
+
+
+def test_saint_list_from_an_outdated_table_and_a_saved_id_missing_from_the_list(browser):
+    """성인 목록이 없는 옛 표(업데이트 전에 받아 둔 사본)면 업데이트를 안내한다. 저장한 식별자가 목록에 없으면 「목록에 없는 성인」을
+    고른 채 보이고 값을 지우지 않는다(ADR-041 §9)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.route("**/data/lectionary/sanctoral.json",
+              lambda route: route.fulfill(status=200, content_type="application/json", body='{"entries": []}'))
+    page = ctx.new_page()
+    try:
+        _open(page)
+        pop = open_settings(page)
+        pop.get_by_text("성인 목록을 아직 업데이트하지 못했습니다. 잠시 뒤 설정을 다시 열어 주세요.", exact=True).wait_for()
+        assert pop.get_by_label("세례명", exact=True).is_disabled()
+    finally:
+        ctx.close()
+
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE + "localStorage.setItem('bible-baptismal-saint', 'zzzzzz')")
+    page = ctx.new_page()
+    try:
+        _open(page)
+        pop = open_settings(page)
+        page.wait_for_function(SAINT_READY)
+        select = pop.get_by_label("세례명", exact=True)
+        assert select.locator("option:checked").inner_text() == "목록에 없는 성인"
+        assert _ls(page, "bible-baptismal-saint") == "zzzzzz"
+        select.select_option(label="선택 안 함")
+        assert _ls(page, "bible-baptismal-saint") == ""
+        assert select.locator("option", has_text="목록에 없는 성인").count() == 0
     finally:
         ctx.close()
 

@@ -1507,7 +1507,12 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
   border: 1px solid var(--border);
   border-radius: var(--radius-xs);
   height: 28px;
-  min-width: 8em;
+  /* Same width as the rows' 11rem segment groups. A long saint title (up to 36 characters, 세례명) is cut with an
+     ellipsis in the closed box; the open list is the OS picker and shows it whole (ADR-041 §9). */
+  width: 11rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   padding: 0 2em 0 0.7em;
   cursor: pointer;
 }

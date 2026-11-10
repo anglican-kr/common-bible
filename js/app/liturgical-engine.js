@@ -95,6 +95,8 @@
  * 연도 메모다 — 표에 의존하므로 `anchorCache` 처럼 순수 파생값이 아니라 인덱스에 붙는다.
  * `eveningTomorrowDays` 는 내일로 정의돼 오늘 저녁에 드리는 저녁 전례(→ R-6.1-evening)의 정의 월일 — `resolveDateIn`
  * 이 그 전날에만 내일의 전례일을 본다. null(규칙 · 음력 행이 끼어 미리 모른다) · 없음(손으로 만든 인덱스)이면 날마다 본다.
+ * `saintFeasts` 는 세례명의 성인 식별자 → 그 성인이 지키는 축일의 전례일 id(ADR-041 §5, 월별 축일 표의 `saints`). 없으면(손으로 만든 인덱스,
+ * 업데이트 전의 표) 세례명 줄이 없다.
  * @typedef {{
  *   sanctoralByDate: Map<string, Observance[]>, sanctoralByLunar: Map<string, Observance[]>,
  *   temporal: Observance[], periods: Array<{period: LiturgicalPeriod, from: string, to: string}>,
@@ -102,6 +104,7 @@
  *   kasi: {years?: Record<string, Record<string, string>>} | null,
  *   movable: Map<number, Map<string, Observance[]>>,
  *   eveningTomorrowDays?: Set<string> | null,
+ *   saintFeasts?: Map<string, string[]>,
  * }} CalendarIndex
  */
 
@@ -891,6 +894,13 @@ function buildCalendarIndex(tables) {
     if (typeof row.id === "string" && from && to) periods.push({ period: row, from, to });
   }
   periods.sort((a, b) => compareIds(a.period.id, b.period.id));
+  /** @type {Map<string, string[]>} */
+  const saintFeasts = new Map();
+  for (const row of rowsOf(t.sanctoral, "saints")) {
+    if (typeof row.id === "string" && Array.isArray(row.feasts)) {
+      saintFeasts.set(row.id, row.feasts.filter((/** @type {unknown} */ f) => typeof f === "string"));
+    }
+  }
   return {
     sanctoralByDate,
     sanctoralByLunar,
@@ -900,6 +910,7 @@ function buildCalendarIndex(tables) {
     kasi: t.kasi && typeof t.kasi === "object" ? t.kasi : null,
     movable: new Map(),
     eveningTomorrowDays: eveningTomorrowDaysOf(sanctoralByDate),
+    saintFeasts,
   };
 }
 
@@ -2488,6 +2499,16 @@ function findFoundings(dateStr, parish = "") {
   if (!p) return [];
   return findFoundingsIn(lectionaryIndex, `${String(p.m).padStart(2, "0")}.${String(p.d).padStart(2, "0")}`, parish);
 }
+
+/**
+ * 세례명의 성인(성인 식별자, 빈 문자열은 선택 안 함)이 지키는 축일의 전례일 id(ADR-041 §5). 고르지 않았거나 목록에 없는 성인, 업데이트
+ * 전의 표(성인 목록이 없다)면 빈 집합이다. 프리로드 규칙은 `resolveDate`와 같다.
+ * @param {string} saintId @returns {Set<string>}
+ */
+function findSaintFeasts(saintId) {
+  if (!calendarIndex) throw new Error("preloadCalendar() must be awaited before findSaintFeasts()");
+  return new Set((saintId && calendarIndex.saintFeasts?.get(saintId)) || []);
+}
 // ── END LITURGICAL_PRELOAD ──
 
 export {
@@ -2497,7 +2518,7 @@ export {
   easterDate, advent1Date, baptismDate, liturgicalYearOf, yearAnchors,
   seasonOf, sundayCycle, weekdayCycle, evalRule,
   buildOrdinalIndex, ordinalWeekOf, lunarDatesOf, spansOf, inSpan,
-  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, findDedications, findFoundings, fastOf,
+  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, findDedications, findFoundings, findSaintFeasts, fastOf,
   setActivatedOptionals,
   // 같은 유형의 성인 둘 이상을 공통 본기도 하나에 모은다(독서 뷰 — 사용자 결정 2026-11-03).
   joinNames, fillCommonName,

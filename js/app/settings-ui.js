@@ -29,7 +29,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     loadStartupBehavior, saveStartupBehavior,
     loadStartPage, saveStartPage,
     loadLectionaryAltShow, saveLectionaryAltShow,
-    loadParish, saveParish,
+    loadParish, saveParish, loadBaptismalSaint, saveBaptismalSaint,
     loadColorScheme, saveColorScheme,
     loadTheme, saveTheme,
     loadBookOrder, saveBookOrder,
@@ -462,87 +462,132 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     return row;
   }
 
-  // ── 소속교회 (ADR-041 §6, §7, §9) ──
-  const PARISH_INFO = "교회 축성일과 교구설립일에 그날의 전례독서와 본기도를 보여줍니다.";
-  const PARISH_LOAD_FAILED = "교회 목록을 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 설정을 다시 열어 주세요.";
-  const PARISH_LIST_OUTDATED = "교회 목록을 아직 업데이트하지 못했습니다. 잠시 뒤 설정을 다시 열어 주세요.";
+  // ── 목록에서 고르는 설정: 세례명, 소속교회 (ADR-041 §5, §6, §7, §9) ──
   // 응답 없이 멈춘 요청(연결은 됐지만 답이 오지 않는 망)을 이 시간 뒤에 받지 못한 것으로 본다. 서비스 워커는 캐시에
   // 없으면 시간 제한 없이 네트워크로 요청한다.
-  const PARISH_LIST_TIMEOUT_MS = 10_000;
+  const LIST_TIMEOUT_MS = 10_000;
 
-  /** @type {Promise<import("../types.js").ParishGroup[]> | null} */
-  let _parishList = null;
   /**
-   * 교회 목록을 본당 표에서 받는다. 받은 목록은 기억하고, 받지 못하면 다음에 설정을 열 때 다시 받는다. 옛 표(업데이트 전에
-   * 받아 둔 사본이라 식별자가 없음)면 `outdated`가 참인 오류로 끝난다.
-   * @returns {Promise<import("../types.js").ParishGroup[]>}
+   * 데이터 표 하나를 받아 선택 상자의 항목으로 바꾸는 함수를 만든다. 받은 목록은 기억하고, 받지 못하면 다음에 설정을 열 때 다시 받는다.
+   * 옛 표(업데이트 전에 받아 둔 사본이라 식별자가 없음)면 항목이 없어 `outdated`가 참인 오류로 끝난다.
+   * @param {string} file  `/data/lectionary/` 아래의 파일 이름
+   * @param {(table: any) => SelectOption[]} optionsOf
+   * @returns {() => Promise<SelectOption[]>}
    */
-  function loadParishList() {
-    if (_parishList) return _parishList;
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), PARISH_LIST_TIMEOUT_MS);
-    return (_parishList = fetch("/data/lectionary/local-observances.json", { signal: ctrl.signal })
-      .then((res) => {
-        if (!res.ok) throw new Error(`local-observances.json: ${res.status}`);
-        return res.json();
-      })
-      .then((table) => {
-        const groups = parishGroups(table);
-        if (!groups.length) throw Object.assign(new Error("local-observances.json: no church ids"), { outdated: true });
-        return groups;
-      })
-      .finally(() => clearTimeout(timer))
-      .catch((e) => { _parishList = null; throw e; }));
+  function listLoader(file, optionsOf) {
+    /** @type {Promise<SelectOption[]> | null} */
+    let pending = null;
+    return () => {
+      if (pending) return pending;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), LIST_TIMEOUT_MS);
+      return (pending = fetch(`/data/lectionary/${file}`, { signal: ctrl.signal })
+        .then((res) => {
+          if (!res.ok) throw new Error(`${file}: ${res.status}`);
+          return res.json();
+        })
+        .then((table) => {
+          const options = optionsOf(table);
+          if (!options.length) throw Object.assign(new Error(`${file}: no ids`), { outdated: true });
+          return options;
+        })
+        .finally(() => clearTimeout(timer))
+        .catch((e) => { pending = null; throw e; }));
+    };
+  }
+
+  /** 교회 목록 — 본당 표의 교회를 교구별로 묶는다(ADR-041 §6, §9). */
+  const loadParishOptions = listLoader("local-observances.json", (table) => parishGroups(table)
+    .map((g) => ({ label: `${g.diocese}교구`, options: g.churches.map((c) => /** @type {[string, string]} */ ([c.id, c.name])) })));
+
+  /** 성인 목록 — 월별 축일 표의 `saints`, 데이터가 정한 이름순 그대로다(ADR-041 §5). */
+  const loadSaintOptions = listLoader("sanctoral.json", (table) => (table && Array.isArray(table.saints) ? table.saints : [])
+    .filter((/** @type {any} */ s) => s && typeof s.id === "string" && s.id && typeof s.title === "string")
+    .map((/** @type {any} */ s) => /** @type {[string, string]} */ ([s.id, s.title])));
+
+  /** @param {SelectOption[]} options @param {string} value */
+  function hasOption(options, value) {
+    return options.some((o) => (Array.isArray(o) ? o[0] === value : o.options.some(([v]) => v === value)));
   }
 
   /**
-   * 소속교회 행과 그 ⓘ 설명 행을 섹션에 넣는다(ADR-041 §9). 목록을 받는 동안 선택 상자는 「불러오는 중」 하나뿐이고 고를 수
-   * 없다. 받지 못하면 「목록 없음」으로 고를 수 없게 두고 설명 행 아래에 안내를 보인다. 저장한 값이 목록에 없으면 「목록에
-   * 없는 교회」 항목을 더해 그것을 고른 채 보인다. 「선택 안 함」을 고르면 저장한 값이 지워진다.
+   * 목록에서 고르는 설정의 행과 그 ⓘ 설명 행을 섹션에 넣는다(ADR-041 §9). 목록을 받는 동안 선택 상자는 「불러오는 중」 하나뿐이고 고를 수
+   * 없다. 받지 못하면 「목록 없음」으로 고를 수 없게 두고 설명 행 아래에 안내를 보인다. 저장한 값이 목록에 없으면 「목록에 없는 …」 항목을
+   * 더해 그것을 고른 채 보인다. 「선택 안 함」을 고르면 저장한 값이 지워진다.
+   * 전례독서 화면과 캘린더 목록은 이 값을 쓰지만, 여기서 다시 그리지 않는다. 닫힌 선택 상자에서 화살표 키를 누르면 칸마다 값이 바뀌므로,
+   * 그때마다 화면을 다시 그리면 팝오버가 닫힌다(WCAG 3.2.2, PR #542 리뷰). 팝오버가 닫힐 때 다시 그린다(`initSettings`)
    * @param {HTMLElement} section
+   * @param {{ label: string, info: string, load: () => Promise<SelectOption[]>, saved: () => string, save: (value: string) => void,
+   *   missing: string, failed: string, outdated: string }} spec
    */
-  function appendParishRows(section) {
-    const infoBtn = makeInfoButton("소속교회 안내");
+  function appendListRows(section, { label, info, load, saved, save, missing, failed, outdated }) {
+    const infoBtn = makeInfoButton(`${label} 안내`);
     /** @type {HTMLOptionElement | null} */
     let missingOption = null;
     const { row, select } = makeSelectRow({
-      labelText: "소속교회",
+      labelText: label,
       value: "",
       options: [["", "불러오는 중"]],
       labelExtra: infoBtn,
-      onChange: (churchId) => {
-        saveParish(churchId);
+      onChange: (value) => {
+        save(value);
         const name = select.selectedOptions[0]?.textContent ?? "";
         // 목록에 없던 값을 바꿨으면 그 항목은 더 고를 일이 없다
         if (missingOption && !missingOption.selected) { missingOption.remove(); missingOption = null; }
-        // 전례독서 화면과 캘린더 목록은 소속교회의 축성일을 싣지만, 여기서 다시 그리지 않는다. 닫힌 선택 상자에서 화살표 키를 누르면
-        // 칸마다 값이 바뀌므로, 그때마다 화면을 다시 그리면 팝오버가 닫힌다(WCAG 3.2.2, PR #542 리뷰). 팝오버가 닫힐 때 다시 그린다(`initSettings`)
-        announce(churchId ? `소속교회 ${name}` : "소속교회 선택 안 함");
+        announce(value ? `${label} ${name}` : `${label} 선택 안 함`);
       },
     });
     select.disabled = true;
-    const infoRow = makeInfoRow(infoBtn, PARISH_INFO);
+    const infoRow = makeInfoRow(infoBtn, info);
     section.appendChild(row);
     section.appendChild(infoRow);
 
-    loadParishList().then((groups) => {
+    load().then((options) => {
       if (!select.isConnected) return;   // the surface was rebuilt or closed meanwhile
-      const saved = loadParish();
-      const known = groups.some((g) => g.churches.some((c) => c.id === saved));
+      const value = saved();
+      const known = hasOption(options, value);
       fillSelect(select, [
         ["", "선택 안 함"],
-        ...(saved && !known ? [/** @type {[string, string]} */ ([saved, "목록에 없는 교회"])] : []),
-        ...groups.map((g) => ({ label: `${g.diocese}교구`, options: g.churches.map((c) => /** @type {[string, string]} */ ([c.id, c.name])) })),
-      ], saved);
-      if (saved && !known) missingOption = select.options[1];
+        ...(value && !known ? [/** @type {[string, string]} */ ([value, missing])] : []),
+        ...options,
+      ], value);
+      if (value && !known) missingOption = select.options[1];
       select.disabled = false;
     }, (/** @type {any} */ e) => {
       if (!select.isConnected) return;
       fillSelect(select, [["", "목록 없음"]], "");
       const note = el("p", { className: "settings-drive-note", id: `settings-note-${++_toggleIdSeq}` },
-        e && e.outdated ? PARISH_LIST_OUTDATED : PARISH_LOAD_FAILED);
+        e && e.outdated ? outdated : failed);
       select.setAttribute("aria-describedby", note.id);
       infoRow.after(note);
+    });
+  }
+
+  /** 세례명(ADR-041 §5, §7). @param {HTMLElement} section */
+  function appendSaintRows(section) {
+    appendListRows(section, {
+      label: "세례명",
+      info: "세례명과 일치하는 성인 축일에 성인을 기념하는 전례독서를 보여줍니다.",
+      load: loadSaintOptions,
+      saved: loadBaptismalSaint,
+      save: saveBaptismalSaint,
+      missing: "목록에 없는 성인",
+      failed: "성인 목록을 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 설정을 다시 열어 주세요.",
+      outdated: "성인 목록을 아직 업데이트하지 못했습니다. 잠시 뒤 설정을 다시 열어 주세요.",
+    });
+  }
+
+  /** 소속교회(ADR-041 §6, §7). @param {HTMLElement} section */
+  function appendParishRows(section) {
+    appendListRows(section, {
+      label: "소속교회",
+      info: "교회 축성일과 교구설립일에 그날의 전례독서와 본기도를 보여줍니다.",
+      load: loadParishOptions,
+      saved: loadParish,
+      save: saveParish,
+      missing: "목록에 없는 교회",
+      failed: "교회 목록을 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 설정을 다시 열어 주세요.",
+      outdated: "교회 목록을 아직 업데이트하지 못했습니다. 잠시 뒤 설정을 다시 열어 주세요.",
     });
   }
 
@@ -676,6 +721,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
         else announce(result);
       },
     }));
+    appendSaintRows(lectionarySection);
     appendParishRows(lectionarySection);
     target.appendChild(lectionarySection);
 

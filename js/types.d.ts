@@ -83,6 +83,7 @@ export type SettingKey =
   | "citeShow"
   | "audioShow"
   | "lectionaryAltShow"
+  | "baptismalSaint"
   | "parish";
 
 // Per-setting value type. All settings store one MTimed wrapper; the inner
@@ -1112,6 +1113,9 @@ export interface AppStorage {
   // 전례독서 목록에 대체 독서의 줄을 보이는가(ADR-038 §3). 처음에는 숨긴다(사용자 결정 2026-11-05).
   loadLectionaryAltShow: () => boolean;
   saveLectionaryAltShow: (on: boolean) => void;
+  // 세례명의 성인 식별자(ADR-041 §5, 데이터 `sanctoral.json`의 `saints[].id`). 빈 문자열은 선택 안 함이다. Drive 동기화 대상.
+  loadBaptismalSaint: () => string;
+  saveBaptismalSaint: (saintId: string) => void;
   // 소속교회의 교회 식별자(ADR-041 §6, 데이터 본당 표의 `church_id`). 빈 문자열은 선택 안 함이다. Drive 동기화 대상.
   loadParish: () => string;
   saveParish: (churchId: string) => void;

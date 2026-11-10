@@ -2211,7 +2211,10 @@ def test_alternate_setting_shows_rows_in_place_and_a_link_still_opens_when_off(d
 LOCAL_OBSERVANCES = Path(__file__).resolve().parents[2] / "data" / "lectionary" / "local-observances.json"
 # 방문 기록으로 보낸 것(`trackPageView` — gtag-init.js가 dataLayer에 쌓는다)
 PAGE_VIEWS = "() => (window.dataLayer || []).filter((a) => a[0] === 'event' && a[1] === 'page_view').map((a) => ({ ...a[2] }))"
-PARISH_READY = "() => { const s = document.querySelector('.settings-popover .settings-select'); return !!s && !s.disabled; }"
+# 팝오버의 선택 상자를 라벨로 찾는다. 전례독서 섹션에 세례명과 소속교회 둘이 있다(ADR-041 §1)
+SELECT_NAMED = "(name) => [...document.querySelectorAll('.settings-popover .settings-select')].find((s) => s.labels[0]?.textContent === name)"
+PARISH_READY = f"() => {{ const s = ({SELECT_NAMED})('소속교회'); return !!s && !s.disabled; }}"
+SAINT_READY = f"() => {{ const s = ({SELECT_NAMED})('세례명'); return !!s && !s.disabled; }}"
 
 
 def _church_id(name):
@@ -2360,3 +2363,51 @@ def test_diocese_founding_collect_follows_the_parish(desktop_context):
     assert "1965년 5월 27일 서울교구설립일" in page.inner_text(".lect-head")
     texts = page.eval_on_selector_all(".lect-collect-text", "els => els.map(e => e.textContent)")
     assert any("이곳에 서울교구를 세우심을" in t and "이 교구를 기억하시고" in t for t in texts), texts
+
+
+# ── ⑩ 세례명(ADR-041 §5, §8) ──
+
+SANCTORAL = Path(__file__).resolve().parents[2] / "data" / "lectionary" / "sanctoral.json"
+
+
+def _with_saint(title):
+    """저장소를 비우는 스크립트 뒤에 실행되어 세례명을 고른 기기를 만든다."""
+    saints = json.loads(SANCTORAL.read_text(encoding="utf-8"))["saints"]
+    sid = next(s["id"] for s in saints if s["title"] == title)
+    return f"localStorage.setItem('bible-baptismal-saint', {json.dumps(sid)})"
+
+
+def test_my_saint_row_has_a_fixed_address_and_keeps_the_name_out_of_page_views(desktop_context):
+    """레오나드를 세례명으로 고른 사람은 2026-11-06(연중 31주 금요일)에 목록의 「레오나드」 줄을 본다. 제목 아래 「레오나드… 축일」 줄은
+    빠진다. 그 줄의 주소는 `?obs=my-saint`이고, 고르면 문서 제목은 「전례독서」라 방문 기록에 성인 이름이 없다(ADR-041 §5, §8)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-11-06")
+    assert "레오나드" not in _choices(page)
+    assert "레오나드(은수자, 6세기) 축일" in page.inner_text(".lect-head")
+
+    desktop_context.add_init_script(_with_saint("레오나드(은수자, 6세기)"))
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-11-06")
+    assert page.inner_text(".lect-day") == "연중 31주 금요일"
+    assert "레오나드" in _choices(page)
+    assert not [t for t in page.eval_on_selector_all(".lect-day-saint", "els => els.map(e => e.textContent)") if "레오나드" in t]
+    page.locator(".lect-choice", has_text="레오나드").click()
+    _wait_day(page, "레오나드(은수자, 6세기)")
+    assert page.url == f"{BASE}/lectionary/2026-11-06?obs=my-saint"
+    assert page.title() == "전례독서 — 공동번역성서"
+    page.wait_for_function(f"() => ({PAGE_VIEWS})().some((v) => v.page_location.includes('my-saint'))")
+    for v in page.evaluate(PAGE_VIEWS):
+        assert "레오나드" not in v["page_title"] and "레오나드" not in v["page_location"], v
+
+
+def test_choosing_a_saint_in_settings_redraws_the_lectionary_when_the_popover_closes(desktop_context):
+    """전례독서 화면에서 세례명을 고르면 팝오버가 닫힌 뒤 화면을 다시 그려 그 성인의 줄이 생긴다(ADR-041 §5, §8)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-11-06")
+    pop = open_settings(page)
+    page.wait_for_function(SAINT_READY)
+    pop.get_by_label("세례명", exact=True).select_option(label="레오나드(은수자, 6세기)")
+    assert pop.is_visible() and "레오나드" not in _choices(page)
+    page.keyboard.press("Escape")
+    pop.wait_for(state="hidden")
+    page.wait_for_function("() => [...document.querySelectorAll('.lect-choice')].some((a) => a.textContent === '레오나드')", timeout=20_000)
