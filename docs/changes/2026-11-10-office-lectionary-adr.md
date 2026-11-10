@@ -1,4 +1,5 @@
 ---
+pr: 547
 date: 2026-11-10
 branch: docs/office-lectionary-adr
 title: "docs: 성무일과 전례독서 데이터의 ADR"
