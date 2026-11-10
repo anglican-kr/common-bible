@@ -78,7 +78,7 @@ const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
  *   choices: LectionaryChoice[], selectedNote: string | null,
  *   collects: CollectOption[], collectLabels: string[], collectIndex: number, collectsLinked: boolean, ending: "A" | "B" | "C",
  *   memorialCollects: CollectOption[], memorialSaints: Candidate[], passiveDays: Candidate[], commemorations: Candidate[], textlessDays: Candidate[],
- *   foundingLines: string[], dedicationLines: string[], transferNotes: string[], mySaint: Candidate | null,
+ *   foundingLines: string[], dedicationLines: string[], transferNotes: string[], mySaint: Candidate | null, privateSelection: boolean,
  *   colors: string[], colorAlt: string[], ownColor: boolean, colorsOr: boolean,
  *   fast: "major" | "minor" | null, cycle: string | null, empty: boolean,
  *   hrefs: { prev: string | null, next: string | null, today: string, tracks: Array<{ track: 1 | 2, href: string, active: boolean }>, options: string[], collects: string[] },
@@ -968,8 +968,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   // 세례명 줄 — 세례명 성인의 축일인데 다른 사람에게는 목록에 없는 후보(ADR-041 §5). 공통 독서만 있거나 주일과 겹쳐 기념만 하는 날이다.
   // 성주간에 생략되거나 옮겨 간 날, 기본 독서로 이미 제목인 날은 없다. 누구에게나 보이는 줄은 그대로 두어 보통 주소를 쓴다
   const mySaint = saintFeasts.size ? resolved.candidates.find((c) => saintFeasts.has(c.observance.id) && c !== publicInitial
-    && !c.evening && c.status !== "omitted" && c.status !== "transferred_out" && hiddenForAll(c)
-    && (groupsOf(c).length > 0 || collectsFor(collectEntries, c).length > 0)) || null : null;
+    && !c.evening && c.status !== "omitted" && c.status !== "transferred_out" && hiddenForAll(c) && !textless(c)) || null : null;
   // 소속교회의 축성일은 공통 독서뿐이어도 감추지 않는다. 공통 독서를 감추는 규칙의 예외다(ADR-041 §6). 세례명 줄도 같다(§5)
   const hiddenOwn = (/** @type {Candidate} */ c) => c !== dedication && c !== mySaint && hiddenForAll(c);
   // 전례독서 목록에 있는 이름 있는 후보와 독서 · 본기도가 똑같은 격자도 넣지 않는다 — 눌러도 같은 화면이다(사용자 결정 2026-11-04).
@@ -988,9 +987,10 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     && !isHiddenCandidate(c, publicInitial, groupsOf(c)));
   const transferNotes = resolved.candidates.flatMap((c) => (c.status === "transferred_out" && c.to
     ? [transferOutNote(c.observance.name, c.to)] : []));
-  // 세례명 줄은 성인의 전례일 id 대신 고정된 값으로 가리킨다. 그날 세례명 줄이 없는 사람이 열면 기본 독서다(ADR-041 §8)
-  const picked = query.obs === MY_SAINT_ID && mySaint ? mySaint : selectCandidate(candidates, query.obs, initial);
-  const selected = hidden(picked) ? initial : picked;
+  // 세례명 줄은 고정된 값(`my-saint`)으로만 연다. 그날 세례명 줄이 없는 사람이 열면 기본 독서다(ADR-041 §8). 성인의 전례일 id로 가리키면
+  // 다른 사람에게처럼 기본 독서다. 같은 주소가 받는 사람의 설정에 따라 다른 본문이 되지 않게 한다(ADR-041 §4, PR #545 리뷰)
+  const picked = query.obs === MY_SAINT_ID ? (mySaint || initial) : selectCandidate(candidates, query.obs, initial);
+  const selected = hidden(picked) || (picked === mySaint && query.obs !== MY_SAINT_ID) ? initial : picked;
   const obsOf = (/** @type {Candidate} */ c) => (c === mySaint ? MY_SAINT_ID : c.observance.id);
 
   const groups = groupsOf(selected);
@@ -1080,6 +1080,8 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     // 세례명 줄이 있으면 제목 아래 이름 줄에서 그 성인을 뺀다. 같은 글이 두 번 보이지 않게 한다(사용자 결정 2026-11-10, ADR-041 §5)
     memorialSaints: memorial.saints.filter((c) => c !== mySaint), passiveDays: passiveDays.filter((c) => c !== mySaint),
     commemorations, textlessDays, foundingLines: foundingLines(foundings), mySaint,
+    // 고른 화면이 소속교회나 세례명 때문에 생긴 것인가 — 문서 제목에 교회 이름과 세례명을 싣지 않는다(ADR-041 §8)
+    privateSelection: (!!dedication && selected === dedication) || (!!mySaint && selected === mySaint),
     // 소속교회의 축성일이 제목이거나 전례독서 목록의 줄이면 축성일 줄에서 그 교회를 뺀다. 같은 글이 두 번 보이지 않게 한다(`dedicationLines`)
     dedicationLines: dedicationLines(dedications, mine && dedication ? mine.churchId : null), transferNotes,
     colors, colorAlt, ownColor, colorsOr, fast: fastOf(resolved),
@@ -1950,7 +1952,7 @@ async function renderLectionaryView(parsed) {
   }
   // 문서 제목도 머리처럼 고른 전례일의 이름이다(2026-11-04, buildHeader). 다만 소속교회의 축성일과 세례명 줄이면 「전례독서」뿐이다. 문서 제목은
   // Google Analytics의 방문 기록(`page_title`)으로 나가므로 교회 이름과 세례명을 싣지 않는다(ADR-041 §8)
-  if (model.selected.observance.id === MY_DEDICATION_ID || model.selected === model.mySaint) return PAGE_TITLE;
+  if (model.privateSelection) return PAGE_TITLE;
   return `${shortName(model.dayName)} ${PAGE_TITLE}`;
 }
 

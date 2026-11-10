@@ -576,8 +576,10 @@ test("buildLectionaryModel: 세례명 성인의 축일 — 공통 독서만 있�
   same(s.memorialSaints, []);
   assert.ok(s.hrefs.collects.every((h) => /[?&]obs=my-saint(&|$)/.test(h)), s.hrefs.collects.join());
   assert.doesNotMatch(s.choices.find((c) => c.candidate === grid).href, /obs=/);   // 기본 독서는 날짜뿐이다
-  // 성인의 전례일 id로 가리켜도 같은 줄이고, 주소는 고정된 값으로 적는다
-  assert.strictEqual(build({ ...q, obs: saint.observance.id }, mine).selected, saint);
+  // 성인의 전례일 id로 가리키면 다른 사람에게처럼 기본 독서다. 같은 주소가 받는 사람의 설정에 따라 다른 본문이 되지 않는다(PR #545 리뷰)
+  assert.strictEqual(build({ ...q, obs: saint.observance.id }, mine).selected, grid);
+  // 세례명 줄의 화면만 문서 제목에서 이름을 감춘다(ADR-041 §8)
+  same([m.privateSelection, s.privateSelection], [false, true]);
   // 세례명이 다른 사람이나 고르지 않은 사람이 이 주소를 열면 기본 독서다
   assert.strictEqual(build({ ...q, obs: "my-saint" }, new Set(["d0101-다른-성인"])).selected, grid);
   assert.strictEqual(build({ ...q, obs: "my-saint" }, new Set()).selected, grid);

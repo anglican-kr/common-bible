@@ -146,9 +146,10 @@ test("소속교회 축성일 — 평일이면 축성일이 먼저(공통 독서 
     ["용인성당 축성일", ["common:dedication-s1", "common:dedication-s2"], ["common:dedication-c1"]]);
   same(otherRows(m), [["연중 3주 금요일", "/lectionary/2025-01-31?obs=grid%3Aordinary-3-weekday-fri"]]);
   assert.ok(!m.dedicationLines.some((l) => l.includes("용인성당")), "제목의 교회는 축성일 줄에서 빠진다");
+  assert.ok(m.privateSelection, "축성일 화면은 문서 제목에서 교회 이름을 감춘다");
   // 소속교회가 없으면 그날은 평일이고, 축성일 줄에 교회가 보인다
   const none = model("2025-01-31", NONE, null, false);
-  same([none.dayName, none.dedicationLines.some((l) => l.includes("용인성당"))], ["연중 3주 금요일", true]);
+  same([none.dayName, none.dedicationLines.some((l) => l.includes("용인성당")), none.privateSelection], ["연중 3주 금요일", true, false]);
 
   // 안셀름 축일(공통 독서뿐이라 기본 독서는 부활 1주 월요일)과 겹친 강릉성당 축성일. 성인의 이름 줄은 남고 본기도는 평일 줄을 고를 때만 잇는다
   const gangneung = churchIdOf("강릉성당");
