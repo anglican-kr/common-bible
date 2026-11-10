@@ -1,4 +1,5 @@
 ---
+pr: 549
 date: 2026-11-11
 branch: fix/search-test-office-labels
 title: "fix: 표기 시험에서 성무일과의 읽을 수 없는 표기 제외"
