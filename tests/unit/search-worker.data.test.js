@@ -29,8 +29,17 @@ function extractBlock(name, source) {
 }
 
 const OFFICE_FILE = "office-readings.json";
-/** 기도서의 번호와 공동번역의 번호가 달라 인쇄된 표기와 저장된 장과 절이 다르다(데이터 원문의 `[번호]` 줄). */
-const OFFICE_RENUMBERED = new Set(["다니 3:98-4:15", "요나 1:1-17", "말라 4:1-6"]);
+/**
+ * 기도서의 번호와 공동번역의 번호가 달라 인쇄된 표기와 저장된 장과 절이 다르다(데이터 원문의 `[번호]` 줄).
+ * 표기와 저장값의 짝으로 뺀다. 「요나 2:1-10」은 546쪽만 영어 번호이고, 519쪽은 공동번역 번호라 그대로 대조한다.
+ * @type {Map<string, string>} 표기 → 저장된 `refs`의 JSON
+ */
+const OFFICE_RENUMBERED = new Map([
+  ["다니 3:98-4:15", '[{"chapter":3,"verseSpec":"31-33"},{"chapter":4,"verseSpec":"1-15"}]'],
+  ["요나 1:1-17", '[{"chapter":1,"verseSpec":"1-16"},{"chapter":2,"verseSpec":"1"}]'],
+  ["요나 2:1-10", '[{"chapter":2,"verseSpec":"2-11"}]'],
+  ["말라 4:1-6", '[{"chapter":3,"verseSpec":"19-24"}]'],
+]);
 
 /** 장 번호 없이 절만 적을 수 있는 한 장짜리 책의 `bookId`(데이터 `parse_office_readings.py`의 `ONE_CHAPTER_BOOKS`). */
 const ONE_CHAPTER_BOOKS = new Set(["phlm", "2john", "3john", "jude", "obad"]);
@@ -39,9 +48,9 @@ const ONE_CHAPTER_BOOKS = new Set(["phlm", "2john", "3john", "jude", "obad"]);
  * 성무일과 표기는 인쇄된 모양 그대로다(ADR-042 §3). 검색창이 구절로 읽지 못하는 모양만 대조에서 뺀다.
  * 나머지는 감사성찬례와 같이 대조한다. 읽게 할지는 성무일과 화면을 만들 때 정한다(ADR-042 미결 10).
  */
-function searchCannotReadOffice({ label, bookId }) {
+function searchCannotReadOffice({ label, bookId, refs }) {
   if (/[()[\]]|중/.test(label)) return true; // 생략 표시(소괄호, 대괄호)와 「중」
-  if (OFFICE_RENUMBERED.has(label)) return true;
+  if (OFFICE_RENUMBERED.get(label) === JSON.stringify(refs)) return true;
   if (ONE_CHAPTER_BOOKS.has(bookId)) return !label.includes(":"); // `2요한 1-8`처럼 장 번호가 없다
   if (bookId === "lps") {
     // `시편 107:31-43, 108`에서 쉼표 뒤의 숫자 하나는 시편의 장인데, 검색창은 앞 장의 절로 읽는다
