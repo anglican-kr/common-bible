@@ -617,7 +617,8 @@ def test_saint_info_and_the_notes_when_the_list_cannot_load(browser):
         btn = pop.get_by_role("button", name="세례명 안내", exact=True)
         btn.click()
         desc = pop.locator(f"#{btn.get_attribute('aria-controls')}")
-        assert "세례명과 일치하는 성인 축일에 성인을 기념하는 전례독서를 보여줍니다." in desc.inner_text()
+        assert ("세례명과 일치하는 성인 축일에 성인을 기념하는 전례독서를 보여줍니다. "
+                "성인 목록에 세례명이 없는 분들에게는 모든 성인의 날이 있습니다! ❤️") in desc.inner_text()
         assert desc.get_by_role("button", name="세례명 안내 닫기", exact=True).count() == 1
         note = pop.get_by_text("성인 목록을 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 설정을 다시 열어 주세요.", exact=True)
         note.wait_for()

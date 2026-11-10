@@ -572,7 +572,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
   function appendSaintRows(section) {
     appendListRows(section, {
       label: "세례명",
-      info: "세례명과 일치하는 성인 축일에 성인을 기념하는 전례독서를 보여줍니다.",
+      info: "세례명과 일치하는 성인 축일에 성인을 기념하는 전례독서를 보여줍니다. 성인 목록에 세례명이 없는 분들에게는 모든 성인의 날이 있습니다! ❤️",
       load: loadSaintOptions,
       saved: loadBaptismalSaint,
       save: saveBaptismalSaint,
