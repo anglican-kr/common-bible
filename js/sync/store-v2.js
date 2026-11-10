@@ -34,6 +34,7 @@ const _SETTING_LS_KEYS = {
   citeShow:        "bible-cite-show",
   audioShow:       "bible-audio-show",
   lectionaryAltShow: "bible-lectionary-alt-show",
+  baptismalSaint:  "bible-baptismal-saint",
   parish:          "bible-parish",
 };
 const _LR_KEY = "bible-last-read";
@@ -267,6 +268,7 @@ function _emptyDoc() {
       citeShow:        { v: null, _u: 0 },
       audioShow:       { v: null, _u: 0 },
       lectionaryAltShow: { v: null, _u: 0 },
+      baptismalSaint:  { v: null, _u: 0 },
       parish:          { v: null, _u: 0 },
     },
     lastRead: { v: null, _u: 0 },

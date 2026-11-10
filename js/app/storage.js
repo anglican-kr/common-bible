@@ -55,6 +55,9 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
   // 소속교회(ADR-041 §6, §8). 값은 데이터 본당 표의 교회 식별자(`church_id`, 무작위 6자)이고 빈 문자열은 선택 안 함이다.
   // 해제도 빈 문자열로 저장한다. 동기화가 기기에 쓸 때 `null`은 건너뛰어(`applyToLegacyKeys`) 해제가 다른 기기로 가지 않는다.
   const PARISH_KEY = "bible-parish";
+  // 세례명(ADR-041 §5, §8). 값은 데이터 성인 표의 성인 식별자(`sanctoral.json`의 `saints[].id`, 무작위 6자)이고 빈 문자열은
+  // 선택 안 함이다. 해제를 빈 문자열로 저장하는 까닭은 소속교회와 같다.
+  const BAPTISMAL_SAINT_KEY = "bible-baptismal-saint";
   // ADR-038 §1 — 캘린더 탭이 돌아갈 마지막 캘린더 보기의 주소. 앱을 다시 열어도 이어진다(사용자 결정 2026-11-07). 로컬 전용.
   const CALENDAR_LAST_VIEW_KEY = "bible-calendar-last-view";
   const SEARCH_HISTORY_MAX = 30; // storage cap (LRU)
@@ -652,6 +655,27 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
     } catch (_) {}
   }
 
+  /**
+   * 세례명의 성인 식별자. 고르지 않았으면 빈 문자열이다(ADR-041 §5).
+   * @returns {string}
+   */
+  function loadBaptismalSaint() {
+    try {
+      return localStorage.getItem(BAPTISMAL_SAINT_KEY) ?? "";
+    } catch {
+      return "";
+    }
+  }
+
+  /** @param {string} saintId 빈 문자열은 선택 안 함 */
+  function saveBaptismalSaint(saintId) {
+    try {
+      localStorage.setItem(BAPTISMAL_SAINT_KEY, saintId);
+      window.syncStoreV2?.saveSetting("baptismalSaint", saintId);
+      if (window.driveSync) window.driveSync.scheduleUpload();
+    } catch (_) {}
+  }
+
   return {
     FONT_SIZES, DEFAULT_FONT_SIZE, COLOR_SCHEMES, SEARCH_HISTORY_MAX, START_PAGES,
     saveReadingPosition, loadReadingPosition, clearReadingPosition,
@@ -670,6 +694,7 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
     loadLectionaryTrack, saveLectionaryTrack,
     loadLectionaryCardsFolded, saveLectionaryCardsFolded,
     loadLectionaryAltShow, saveLectionaryAltShow,
+    loadBaptismalSaint, saveBaptismalSaint,
     loadParish, saveParish,
     loadCalendarLastView, saveCalendarLastView,
     _loadNudgeState, _saveNudgeState,

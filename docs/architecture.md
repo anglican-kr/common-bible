@@ -202,7 +202,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | `js/app/helpers.js`                | 공통 DOM 헬퍼(`_$`/`el`/`clearNode`/`setInert`/`trapFocus`)와 `emptyState` 빌더. 헤더 아이콘을 그리는 `headerIcon`과 `HEADER_ICON_PATHS`(헤더 아이콘 SVG 규격 하나와 글리프마다 path 하나. 집 단추와 인용 시트 뒤로 단추가 함께 쓴다). 새 탭에서 열리는 클릭인지 판정하는 `isModifiedClick`(전역 `<a>` 인터셉터와 탭 처리기가 함께 쓴다). 같은 화면을 다시 그린 뒤 누른 컨트롤로 포커스와 화면 위치를 돌려주는 `focusSpotOf`와 `restoreFocusSpot`(라우터가 연결한다. 캘린더 목록은 스크롤 중에 상단 바를 다시 그릴 때 직접 쓴다. 포커스를 잃었을 때만 돌려주고, `#app` 밖의 고정된 컨트롤은 포커스만 돌려준다. ADR-031 §5). 브라우저에 스크롤 고정이 있는지를 나타내는 `SCROLL_ANCHORING`. 상단 바(`#sticky-group`)의 아래쪽을 그때 재는 `barBottom`, 요소를 상단 바 바로 아래에 두는 스크롤 `scrollUnderBar`(데스크톱에서 윗줄이 접힌 뒤 다시 맞춘다. 캘린더 목록과 이어 읽기가 쓴다), 그 높이를 CSS 변수 `--top-bar-h`에 넣어 두는 `publishBarHeight`(앱이 시작할 때 `app.js`가 호출한다) | ~440    |
 | `js/app/overlay.js`                | 오버레이 생명주기를 한 곳에서 맡는 컨트롤러 `createOverlay`(scrim, `trapFocus`, Esc 키, `inert`, 포커스 복원, 애니메이션을 거친 닫기), 시트 팩토리, 열린 오버레이를 모두 닫는 `closeAllOverlays()`와 그 등록부 ([ADR-032](decisions/032-component-view-layer.md), ADR-034 PR5b) | ~330    |
 | `js/app/storage.js`                | localStorage 헬퍼, UI 공유 상수, 북마크 두 사본을 수정 시각을 올리지 않고 고쳐 쓰는 `rewriteBookmarks`, 전례독서 트랙 기억(`bible-lectionary-track`)과 독서 카드 접힘 기억(`bible-lectionary-cards-folded`), 마지막 캘린더 보기(`bible-calendar-last-view`)                                      | ~660    |
-| `js/app/settings-ui.js`            | 설정 팝오버와 모바일 설정 화면(섹션 다섯, ADR-041), 외관 적용, 인용과 주석 토글, Drive 줄(연결, 해제, 진단 복사, 끝나지 않은 삭제를 알리는 `.settings-drive-note`). 로그인 상태가 바뀌면 두 화면을 모두 다시 그린다 | ~950    |
+| `js/app/settings-ui.js`            | 설정 팝오버와 모바일 설정 화면(섹션 다섯, ADR-041), 외관 적용, 인용과 주석 토글, Drive 줄(연결, 해제, 진단 복사, 끝나지 않은 삭제를 알리는 `.settings-drive-note`). 로그인 상태가 바뀌면 두 화면을 모두 다시 그린다 | ~1200   |
 | `js/app/install.js`                | PWA 설치 감지, 안내 모달, 설치 안내 넛지                                                                                                                                          | ~495    |
 | `js/app/search.js`                 | 검색 워커 연결, 결과 그리기, 이력 패널, 시트([ADR-033](decisions/033-search-options.md)). 쪽 링크는 포커스 키를 달고(라우터가 포커스를 돌려준다. ADR-031 §5), 쪽이 바뀌면 라이브 영역이 말로 알린다. 결과 건수 줄은 `h2`다 | ~1,595  |
 | `js/app/reading-context.js`        | 현재 책과 장, 절 선택 모드의 공유 상태                                                                                                                                        | ~35     |
@@ -389,7 +389,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | --- | --- | --- | --- |
 | `localStorage` | `bible-bookmarks-v2` | 동기화 문서 v2. 북마크(`items`, `tombstones`), 설정, 이어읽기를 담고 레코드마다 수정 시각이 있다 | ✅ |
 | `localStorage` | `bible-bookmarks` | 옛 트리 사본. 저장할 때마다 동기화 문서 다음에 쓴다(ADR-015 D7). 2026-05-04 전의 버전이 이 키에만 둔 목록은 동기화 문서로 옮기고, 옮기기 전까지는 목록을 여기서 읽는다 | (호환) |
-| `localStorage` | `bible-font-size`, `bible-theme`, `bible-color-scheme`, `bible-book-order`, `bible-startup`, `bible-start-page`, `bible-cite-show`, `bible-audio-show`, `bible-lectionary-alt-show`, `bible-parish` | 설정 10종 (v2 문서의 설정과 같은 값) | ✅ |
+| `localStorage` | `bible-font-size`, `bible-theme`, `bible-color-scheme`, `bible-book-order`, `bible-startup`, `bible-start-page`, `bible-cite-show`, `bible-audio-show`, `bible-lectionary-alt-show`, `bible-baptismal-saint`, `bible-parish` | 설정 11종 (v2 문서의 설정과 같은 값) | ✅ |
 | `localStorage` | `bible-last-read` | 마지막 읽기 위치 (이어읽기 배너) | ✅ |
 | `localStorage` | `bible-sync-meta` | `{schemaVersion, deviceId}` | (메타) |
 | `localStorage` | `bible-drive-sync` | 켬 표지("0", "1"). 다른 탭은 이 키의 `storage` 이벤트로 로그아웃을 안다 | (메타) |

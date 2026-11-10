@@ -264,6 +264,16 @@ test("applyToLegacyKeys는 소속교회 식별자를 그대로 쓰고, 해제(�
   assert.equal(localStorage.getItem("bible-parish"), "2345e6");
 });
 
+test("세례명은 동기화하는 설정이다 — 옛 키를 옮기고, 받은 식별자와 해제(빈 문자열)를 기기에 쓴다(ADR-041 §5, §8)", () => {
+  const { store, localStorage } = load({ "bible-baptismal-saint": "2345e6" });
+  store.migrateLegacyIfNeeded();
+  assert.deepEqual(storedDoc(localStorage).settings.baptismalSaint, { v: "2345e6", _u: 0 });   // 숫자로 읽히는 식별자도 글자 그대로
+  store.applyToLegacyKeys(doc({ settings: { baptismalSaint: { v: "", _u: 2 } } }));
+  assert.equal(localStorage.getItem("bible-baptismal-saint"), "");
+  store.applyToLegacyKeys(doc({ settings: { baptismalSaint: { v: "vmbkfb", _u: 3 } } }));
+  assert.equal(localStorage.getItem("bible-baptismal-saint"), "vmbkfb");
+});
+
 test("옛 키를 옮길 때 JSON으로 읽어 같은 글자로 돌아오지 않는 값은 문자열 그대로 옮긴다(ADR-041 §6)", () => {
   // JSON으로 읽으면 "2345e6"은 2345000000, "2e9999"는 Infinity(쓰면 "null")가 된다
   for (const id of ["2345e6", "2e9999", "jqdnsv"]) {
