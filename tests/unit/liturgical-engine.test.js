@@ -2112,7 +2112,8 @@ test("C-3.4-2 세례명의 성인이 지키는 축일은 월별 축일 표의 `s
   assert.strictEqual(e0.findSaintFeasts("vmbkfb").size, 0);
   const saints = [
     { id: "vmbkfb", name: "베드로", title: "사도 성 베드로", feasts: ["d0629-사도-성-베드로와-바울로", "d0801-사도-성-베드로의-탈옥", 7] },
-    { id: "k7m3qx", feasts: "d0101-x" }, null, { feasts: ["d0102-x"] }, { id: "k7m3qy", feasts: [] }, { id: "k7m3qz", feasts: [3] },
+    { id: "k7m3qx", feasts: "d0101-x" }, null, { feasts: ["d0102-x"] }, { id: "k7m3qy", title: "가", feasts: [] }, { id: "k7m3qz", title: "나", feasts: [3, ""] },
+    { id: "k7m3qw", feasts: ["d1106-레오나드"] }, { id: "k7m3qv", title: "", feasts: ["d1106-레오나드"] },   // 호칭이 없으면 설정 목록에 없으므로 싣지 않는다
   ];
   const files = { ...FILES, sanctoral: { ...CAL_TABLES.sanctoral, saints } };
   const e = loadEngine((url) => {
@@ -2121,7 +2122,7 @@ test("C-3.4-2 세례명의 성인이 지키는 축일은 월별 축일 표의 `s
   });
   await e.preloadCalendar();
   same([...e.findSaintFeasts("vmbkfb")], ["d0629-사도-성-베드로와-바울로", "d0801-사도-성-베드로의-탈옥"]);   // 글자가 아닌 값은 버린다
-  for (const id of ["", "zzzzzz", "k7m3qx", "k7m3qy", "k7m3qz"]) assert.strictEqual(e.findSaintFeasts(id).size, 0, id);   // 축일이 없는 성인은 싣지 않는다
+  for (const id of ["", "zzzzzz", "k7m3qx", "k7m3qy", "k7m3qz", "k7m3qw", "k7m3qv"]) assert.strictEqual(e.findSaintFeasts(id).size, 0, id);   // 축일이나 호칭이 없는 성인은 싣지 않는다
   assert.strictEqual(vm.runInContext("calendarIndex", e).saintFeasts.size, 1);
 });
 

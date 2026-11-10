@@ -2382,8 +2382,9 @@ def test_my_saint_row_has_a_fixed_address_and_keeps_the_name_out_of_page_views(d
     목록 줄을 본다. 성인 이름이 링크이고 그 주소는 `?obs=my-saint`다. 고르면 문서 제목은 「전례독서」라 방문 기록에 성인 이름이 없다(ADR-041 §5, §8)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-11-06")
-    assert "레오나드" not in _choices(page)
-    assert "레오나드(은수자, 6세기) 축일" in page.inner_text(".lect-head")
+    # 세례명이 없으면 레오나드는 목록의 줄이 아니라 제목 아래 이름 줄이다(PR #545 리뷰. 목록과 이름 줄을 따로 본다)
+    assert not [c for c in _choices(page) if "레오나드" in c]
+    assert "레오나드(은수자, 6세기) 축일" in page.eval_on_selector_all(".lect-day-saint", "els => els.map(e => e.textContent)")
 
     desktop_context.add_init_script(_with_saint("레오나드(은수자, 6세기)"))
     page = desktop_context.new_page()

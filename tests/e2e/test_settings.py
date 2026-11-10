@@ -629,22 +629,30 @@ def test_saint_info_and_the_notes_when_the_list_cannot_load(browser):
         ctx.close()
 
 
+def _fulfill_json(body):
+    """경로 처리 함수 — Playwright는 받는 인자 수를 보고 요청 객체를 넘기므로, 기본값 인자로 본문을 묶지 않는다."""
+    return lambda route: route.fulfill(status=200, content_type="application/json", body=body)
+
+
 def test_saint_list_from_an_outdated_table_and_a_saved_id_missing_from_the_list(browser):
     """성인 목록이 없는 옛 표(업데이트 전에 받아 둔 사본)면 업데이트를 안내한다. 축일이 없는 성인은 엔진도 싣지 않으므로 목록에 넣지
     않는다(PR #545 리뷰). 저장한 식별자가 목록에 없으면 「목록에 없는 성인」을 고른 채 보이고 값을 지우지 않는다(ADR-041 §9)."""
-    ctx = browser.new_context()
-    ctx.add_init_script(CLEAR_APP_STORAGE)
-    body = '{"entries": [], "saints": [{"id": "k7m3qx", "name": "가", "title": "가 성인"}, {"id": "k7m3qy", "name": "나", "title": "나 성인", "feasts": []}]}'
-    ctx.route("**/data/lectionary/sanctoral.json",
-              lambda route: route.fulfill(status=200, content_type="application/json", body=body))
-    page = ctx.new_page()
-    try:
-        _open(page)
-        pop = open_settings(page)
-        pop.get_by_text("성인 목록을 아직 업데이트하지 못했습니다. 잠시 뒤 설정을 다시 열어 주세요.", exact=True).wait_for()
-        assert pop.get_by_label("세례명", exact=True).is_disabled()
-    finally:
-        ctx.close()
+    old_tables = [
+        '{"entries": []}',   # 성인 목록이 없는 옛 표
+        '{"entries": [], "saints": [{"id": "k7m3qx", "name": "가", "title": "가 성인"}, {"id": "k7m3qy", "name": "나", "title": "나 성인", "feasts": []}]}',
+    ]
+    for body in old_tables:
+        ctx = browser.new_context()
+        ctx.add_init_script(CLEAR_APP_STORAGE)
+        ctx.route("**/data/lectionary/sanctoral.json", _fulfill_json(body))
+        page = ctx.new_page()
+        try:
+            _open(page)
+            pop = open_settings(page)
+            pop.get_by_text("성인 목록을 아직 업데이트하지 못했습니다. 잠시 뒤 설정을 다시 열어 주세요.", exact=True).wait_for()
+            assert pop.get_by_label("세례명", exact=True).is_disabled(), body
+        finally:
+            ctx.close()
 
     ctx = browser.new_context()
     ctx.add_init_script(CLEAR_APP_STORAGE + "localStorage.setItem('bible-baptismal-saint', 'zzzzzz')")
