@@ -89,6 +89,7 @@
 - **data 저장소** 작업은 별도 클론(`~/projects/common-bible-data`)에서 한다. 앱의 `data/` 서브모듈 안에서 커밋하지 않는다. 그 저장소에는 원장이 없고 main이 보호되지 않는다. 서브모듈 운영은 README 「git 서브모듈 운영」.
 - **data 저장소의 파이프라인 코드(`src/**`)를 바꾼 PR은 다시 만든 산출물과 `bible-manifest.json`도 올린다**(2026-11-07, data#61). 그 저장소의 `pipeline.yml`이 PR에서 파이프라인을 돌려 커밋된 산출물(`bible/`, `search-*.json` 등)과 비교하고, 이어서 `gen_manifests.py --check`로 매니페스트의 해시를 비교한다. 산출물만 올리면 매니페스트가 이어서 걸린다. 바꾼 단계를 돌리고(`python src/search_indexer.py`) `python scripts/gen_manifests.py`를 돌려 둘 다 커밋한다. 입력(`source/*.md`)만 고친 PR은 머지 뒤 CI가 채우므로 drift가 빨개도 정상이다(data 저장소 README 「자동 빌드」).
 - **앱 `sync-data.yml`의 실패**는 대개 설계서의 사실 블록 대조 때문이다. 데이터가 문서의 실측치를 바꾸면 실패한다(2026-10-12, 10-13, 10-15).
+- **데이터 PR이 `lectionary/`에 파일을 더하거나 표기 형식을 바꾸면, 머지하기 전에 앱 유닛 전체를 그 데이터로 돌린다**(2026-11-11, data#72). 앱의 실데이터 시험은 `data/lectionary/`의 JSON을 모두 읽는데, 데이터 PR의 검사는 앱 시험을 돌리지 않는다. 성무일과 파일이 머지된 뒤에야 `sync-data.yml`이 실패해 앱의 데이터 포인터가 멈췄다. 앱 작업 폴더에서 `git -C data fetch origin <브랜치>`와 `git -C data checkout --detach <SHA>`로 포인터를 잠시 그 브랜치에 맞추고 `node --test tests/unit/*.test.js`를 돌린 뒤, 포인터를 원래대로 되돌린다(커밋에 넣지 않는다).
 - **데이터 저장소의 `build.yml`을 고치는 PR**은 머지만으로 빌드가 실행된다. 그 워크플로의 `paths`에 자기 파일이 있기 때문이다. 손으로 다시 실행하면 동기화도 두 번 실행된다(2026-10-26, #439와 #440). 겹쳐 실행되어도 `sync-data.yml`의 동시 실행 제한과 같은 포인터 PR 확인이 자동 PR을 하나로 줄인다.
 - **배포 목록**: 새 데이터 디렉터리를 만들면 server 저장소의 `scripts/deploy-manifest.txt`에도 더한다. 목록에 없는 파일은 빌드가 조용히 빼고 성공한다(server#1).
 
