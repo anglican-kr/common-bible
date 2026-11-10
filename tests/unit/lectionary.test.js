@@ -615,7 +615,8 @@ test("buildLectionaryModel: 세례명 성인이 주일과 겹쳐 기념만 하�
   assert.strictEqual(m2.selected, a2);
   assert.strictEqual(m2.mySaint, null);
 
-  // 고유 독서가 있는 사도 축일이 주일에 기념만 하는 날(2027-08-01 사도 성 베드로의 탈옥)은 이름 줄에 이름만 보이므로, 줄도 이름뿐이다
+  // 고유 독서가 있는 사도 축일이 주일에 기념만 하는 날은 이름 줄에 이름만 보이므로, 세례명 줄도 이름뿐이다. 지금 성인 표에는 이런 축일이
+  // 없어(사건 축일은 세례명 축일이 아니다, data#71) 2027-08-01 사도 성 베드로의 탈옥으로 만든 가상의 경우다
   const peter = cand(obs("d0801-사도-성-베드로의-탈옥", "사도 성 베드로의 탈옥", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "apostle" }), "commemorated");
   const groupsP = groupsOfFrom({ "grid:ordinary-17-sunday": [group("s", FOUR)], "d0801-사도-성-베드로의-탈옥": [group("p", FOUR)] });
   const entriesP = [{ candidate: sunday, collects: [collect("d-c", "그날")] }, { candidate: peter, collects: [collect("p-c", "사도 베드로를")] }];
