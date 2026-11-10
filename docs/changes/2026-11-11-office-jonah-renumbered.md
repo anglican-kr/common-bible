@@ -1,4 +1,5 @@
 ---
+pr: 551
 date: 2026-11-11
 branch: fix/office-jonah-renumbered
 title: "fix: 표기 시험에 성무일과 요나 칸의 번호 정정 반영"
