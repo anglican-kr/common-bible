@@ -44,7 +44,7 @@ import {
 const { _$, clearNode, chUnit, isModifiedClick, focusSpotOf, restoreFocusSpot, barBottom } = window.appHelpers;
 const {
   START_PAGES, loadStartupBehavior, loadStartPage, loadReadingPosition, saveReadingPosition, loadBookOrder,
-  loadLectionaryAltShow, loadParish,
+  loadLectionaryAltShow, loadParish, loadBaptismalSaint,
 } = window.appStorage;
 const { dismissLaunchScreen } = window.appSettings;
 const { readingContext } = window;
@@ -407,20 +407,20 @@ function isFreshLaunch() {
 }
 
 // 지금 화면을 그릴 때 읽은 설정. 동기화로 받은 값이 화면을 바꾸는지 redrawIfSyncedSettingsChanged가 이 값과 견준다.
-const drawnSettings = () => ({ altShow: loadLectionaryAltShow(), parish: loadParish(), bookOrder: loadBookOrder() });
+const drawnSettings = () => ({ altShow: loadLectionaryAltShow(), parish: loadParish(), saint: loadBaptismalSaint(), bookOrder: loadBookOrder() });
 let _drawnWith = drawnSettings();
 
 /**
  * 동기화로 받은 값이나 설정 팝오버에서 바꾼 값이 열려 있는 화면의 내용을 바꾸면 다시 그린다(ADR-041 §8). 병합 결과를 저장할 때마다,
  * 그리고 설정 팝오버가 닫힐 때 호출되지만, 값이 그대로이거나 그 값을 쓰지 않는 화면이면 다시 그리지 않아 읽던 위치와 열린 창이 그대로 남는다.
- * 대체 독서 표시와 소속교회는 전례독서 화면과 캘린더 목록이 쓴다. 소속교회는 바뀌는 일이 드물어 그린 날의 축성일과 견주지 않고, 바뀌면
- * 다시 그린다(PR #542 리뷰 3회차. 견주던 판정이 그린 뒤에 더한 목록 줄과 어긋났다). 외경은 화면에 성서 목록이 있는지로 본다. 데스크톱의 설정, 북마크, 빈 검색 주소도 성서 목록을 그리기 때문이다.
+ * 대체 독서 표시, 소속교회, 세례명은 전례독서 화면과 캘린더 목록이 쓴다. 소속교회와 세례명은 바뀌는 일이 드물어 그린 날의 축성일이나 축일과
+ * 견주지 않고, 바뀌면 다시 그린다(PR #542 리뷰 3회차. 견주던 판정이 그린 뒤에 더한 목록 줄과 어긋났다). 외경은 화면에 성서 목록이 있는지로 본다. 데스크톱의 설정, 북마크, 빈 검색 주소도 성서 목록을 그리기 때문이다.
  * @returns {Promise<void> | undefined} 다시 그릴 때 그 끝을 알리는 약속. 다시 그린 화면이 제목을 알리므로 동기화 안내는 그 뒤에 띄운다
  */
 function redrawIfSyncedSettingsChanged() {
   const here = parsePath();
   const changed = here.view === "lectionary" || (here.view === "calendar" && here.mode === "list")   // 목록 줄도 전례독서 목록의 글을 싣는다
-    ? loadLectionaryAltShow() !== _drawnWith.altShow || loadParish() !== _drawnWith.parish
+    ? loadLectionaryAltShow() !== _drawnWith.altShow || loadParish() !== _drawnWith.parish || loadBaptismalSaint() !== _drawnWith.saint
     : $app.querySelector(".book-list") !== null && loadBookOrder() !== _drawnWith.bookOrder;
   if (!changed) return undefined;
   // 캘린더 목록은 맨 위 줄을 스크롤이 멈출 때 주소에 남긴다. route()가 순번을 올리면 낡은 화면이라 남기지 못하므로 그 전에 알린다(ADR-038 §2).

@@ -2105,6 +2105,27 @@ test("C-3.4-1 프리로드 전 동기 API 는 명확한 메시지로 throw", () 
   assert.throws(() => e.findDedications("2026-04-21"), /preloadLectionary\(\) must be awaited before findDedications\(\)/);
 });
 
+test("C-3.4-2 세례명의 성인이 지키는 축일은 월별 축일 표의 `saints`에서 찾는다 — 고르지 않았거나 목록에 없거나 업데이트 전의 표면 빈 집합(ADR-041 §5)", async () => {
+  const e0 = loadEngine(fakeFetch([]));
+  assert.throws(() => e0.findSaintFeasts("vmbkfb"), /preloadCalendar\(\) must be awaited before findSaintFeasts\(\)/);
+  await e0.preloadCalendar();   // 합성 표에는 성인 목록이 없다 — 업데이트 전의 표와 같다
+  assert.strictEqual(e0.findSaintFeasts("vmbkfb").size, 0);
+  const saints = [
+    { id: "vmbkfb", name: "베드로", title: "사도 성 베드로", feasts: ["d0629-사도-성-베드로와-바울로", "d0801-사도-성-베드로의-탈옥", 7] },
+    { id: "k7m3qx", feasts: "d0101-x" }, null, { feasts: ["d0102-x"] }, { id: "k7m3qy", title: "가", feasts: [] }, { id: "k7m3qz", title: "나", feasts: [3, ""] },
+    { id: "k7m3qw", feasts: ["d1106-레오나드"] }, { id: "k7m3qv", title: "", feasts: ["d1106-레오나드"] },   // 호칭이 없으면 설정 목록에 없으므로 싣지 않는다
+  ];
+  const files = { ...FILES, sanctoral: { ...CAL_TABLES.sanctoral, saints } };
+  const e = loadEngine((url) => {
+    const name = url.replace(/^\/data\/lectionary\//, "").replace(/\.json$/, "");
+    return Promise.resolve({ ok: name in files, json: () => Promise.resolve(files[name]) });
+  });
+  await e.preloadCalendar();
+  same([...e.findSaintFeasts("vmbkfb")], ["d0629-사도-성-베드로와-바울로", "d0801-사도-성-베드로의-탈옥"]);   // 글자가 아닌 값은 버린다
+  for (const id of ["", "zzzzzz", "k7m3qx", "k7m3qy", "k7m3qz", "k7m3qw", "k7m3qv"]) assert.strictEqual(e.findSaintFeasts(id).size, 0, id);   // 축일이나 호칭이 없는 성인은 싣지 않는다
+  assert.strictEqual(vm.runInContext("calendarIndex", e).saintFeasts.size, 1);
+});
+
 test("C-3.5-1 반절 경계 표는 독서 묶음과 함께 실리고 「책:장:절+상하」로 찾는다 — 없으면 null(절 전체를 그린다, 사용자 결정 2026-10-22)", async () => {
   const e = loadEngine(fakeFetch([]));
   await e.preloadLectionary();

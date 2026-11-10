@@ -230,8 +230,8 @@ const lec = () => (lecIndex ??= ctx.buildLectionaryIndex({
   readings: read("eucharist-readings.json"), collects: read("eucharist-collects.json"),
   commons: read("commons.json"), localObservances: read("local-observances.json"),
 }));
-/** 공개 래퍼(`lectionaryModelOf`)와 같은 조합의 전례독서 모델. `parish`는 설정 「소속교회」의 교회 식별자다. */
-function headModel(d, parish = "") {
+/** 공개 래퍼(`lectionaryModelOf`)와 같은 조합의 전례독서 모델. `parish`는 설정 「소속교회」의 교회 식별자, `saint`는 「세례명」의 성인 식별자다. */
+function headModel(d, parish = "", saint = "") {
   const r = resolve(d);
   const cache = new Map();
   const groupsOf = (c) => {
@@ -243,9 +243,9 @@ function headModel(d, parish = "") {
   const mine = ctx.myDedicationOf(dedications, parish);
   const collects = ctx.findCollectsIn(lec(), index(), mine ? { ...r, candidates: [mine.candidate, ...r.candidates] } : r);
   return ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOf, collects, null,
-    dedications, false, ctx.findFoundingsIn(lec(), key, parish), mine);
+    dedications, false, ctx.findFoundingsIn(lec(), key, parish), mine, new Set((saint && index().saintFeasts.get(saint)) || []));
 }
-const rowOf = (d, parish = "") => ctx.listRowOf(headModel(d, parish), "2026-11-07");
+const rowOf = (d, parish = "", saint = "") => ctx.listRowOf(headModel(d, parish, saint), "2026-11-07");
 /** 본당 표에서 교회 이름으로 찾은 교회 식별자. */
 const churchIdOf = (name) => read("local-observances.json").parishes.find((p) => p.name === name).church_id;
 
@@ -257,6 +257,15 @@ test("목록 줄. 소속교회를 고르면 전례독서 화면처럼 축성일�
   assert.ok(founding.lines.includes("1965년 5월 27일 서울교구설립일"), founding.lines.join(" | "));
   assert.ok(!rowOf("2026-05-27").lines.some((l) => l.includes("교구설립일")));
   assert.ok(!rowOf("2026-05-27", churchIdOf("부산주교좌성당")).lines.some((l) => l.includes("교구설립일")));
+});
+
+test("목록 줄. 세례명을 고르면 전례독서 화면처럼 그 성인의 이름 줄이 다른 전례일의 줄로 옮겨 가고, 글은 다른 사람과 같다(ADR-041 §5, 사용자 결정 2026-11-10)", { skip: SKIP }, () => {
+  const leonard = read("sanctoral.json").saints.find((s) => s.title === "레오나드(은수자, 6세기)").id;
+  const none = rowOf("2026-11-06");
+  const mine = rowOf("2026-11-06", "", leonard);
+  same([none.title, mine.title], ["연중 31주 금요일", "연중 31주 금요일"]);
+  assert.ok(mine.lines.includes("레오나드(은수자, 6세기) 축일"), mine.lines.join(" | "));
+  same([...mine.lines].sort(), [...none.lines].sort());   // 같은 글이 두 번 보이지 않고, 빠지는 글도 없다
 });
 
 test("목록 줄 — 11.6은 전례독서처럼 제목이 평일 이름이고 레오나드는 이름 줄이다", { skip: SKIP }, () => {

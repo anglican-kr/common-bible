@@ -278,6 +278,18 @@ test("loadLectionaryAltShow/saveLectionaryAltShow: 처음에는 숨기고, 동�
   assert.equal(loadStorage({ localStorageInit: { "bible-lectionary-alt-show": "false" } }).appStorage.loadLectionaryAltShow(), false);
 });
 
+test("loadBaptismalSaint/saveBaptismalSaint: 처음에는 빈 문자열이고, 고르면 성인 식별자를, 해제하면 빈 문자열을 저장하고 동기화한다(ADR-041 §5, §8)", () => {
+  const h = loadStorage();
+  assert.equal(h.appStorage.loadBaptismalSaint(), "");
+  h.appStorage.saveBaptismalSaint("vmbkfb");
+  assert.equal(h.appStorage.loadBaptismalSaint(), "vmbkfb");
+  assert.equal(h.localStorage.getItem("bible-baptismal-saint"), "vmbkfb");
+  h.appStorage.saveBaptismalSaint("");
+  assert.equal(h.appStorage.loadBaptismalSaint(), "");
+  assert.deepEqual(h.syncStoreV2._calls.saveSetting, [{ key: "baptismalSaint", val: "vmbkfb" }, { key: "baptismalSaint", val: "" }]);
+  assert.equal(h.driveSync._calls.scheduleUpload, 2);
+});
+
 test("loadParish/saveParish: 처음에는 빈 문자열이고, 고르면 식별자를, 해제하면 빈 문자열을 저장하고 동기화한다(ADR-041 §6, §8)", () => {
   const h = loadStorage();
   assert.equal(h.appStorage.loadParish(), "");
