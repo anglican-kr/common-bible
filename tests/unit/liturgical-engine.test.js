@@ -656,7 +656,7 @@ const CAL_TABLES = {
     SAN("d1225-성탄-밤", "12.25", "성탄 밤", { rank: "principal", precedence: 1 }),   // 저녁 전례 — 실제 id(EVENING_LITURGIES 키, R-6.1-evening)
     SAN("d1225-dawn", "12.25", "성탄 새벽", { rank: "principal", precedence: 1 }),
     SAN("d0929-founding", "09.29", "대한성공회 설립 기념일", { rank: "major_feast", precedence: 4 }),
-    SAN("d0929-michael", "09.29", "성 미카엘과 모든 천사들", { rank: "major_feast", precedence: 3 }),
+    SAN("d0929-michael", "09.29", "성 미가엘과 모든 천사들", { rank: "major_feast", precedence: 3 }),
     SAN("d1231-sylvester", "12.31", "실베스터(로마의 주교, 335년)", { sanctoral_class: "pastor", common_names: ["실베스터"], has_proper: false }),
     SAN("d1231-wycliffe", "12.31", "위클리프(종교개혁자, 1384년)", { sanctoral_class: "teacher", has_proper: false }),
     SAN("d0101-name", "01.01", "거룩한 이름 예수", { rank: "major_feast", precedence: 3, sanctoral_class: "lord" }),
@@ -741,7 +741,7 @@ const LEC_TABLES = {
     feastRec("d1225-day", "12.25", "성탄 낮"),
     feastRec("d1225-성탄-밤", "12.25", "성탄 밤"),
     feastRec("d1225-dawn", "12.25", "성탄 새벽"),
-    feastRec("d0929-joint", "09.29", "성 미카엘과 모든 천사들 / 대한성공회 설립 기념일"),
+    feastRec("d0929-joint", "09.29", "성 미가엘과 모든 천사들 / 대한성공회 설립 기념일"),
     feastRec("d0101-name", "01.01", "거룩한 이름 예수"),
     feastRec("d0624-baptist", "06.24", "성 세례요한 탄생 축일"),     // 띄어쓰기 하나로 이름 조인이 빠진다
     feastRec("d1130-andrew", "11.30", "성 안드레아"),
@@ -1484,7 +1484,7 @@ test("C-6.1-5 A > C > B (잠정 — ADR-036 §6) · 고정일끼리는 동시 �
   same(r.candidates.map((c) => `${c.observance.id}:${c.status}`),
     ["d0612-a:proper", "d0612-c:proper", "d0612-b:proper", "grid:ordinary-x-weekday-fri:proper"]);
   assert.ok(r.candidates.every((c) => !("displacedBy" in c)));
-  // 9.29 — 미카엘(3)이 설립 기념일(4)보다 앞서고 설립 기념일은 proper(미결18)
+  // 9.29 — 미가엘(3)이 설립 기념일(4)보다 앞서고 설립 기념일은 proper(미결18)
   const m = resolve("2026-09-29");
   same(officialId(m), "d0929-michael");
   same(fate(m, "d0929-founding"), ["proper", null]);
