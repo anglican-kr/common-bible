@@ -1124,14 +1124,14 @@ test("buildLectionaryModel: 축성일이 먼저 열려도 그날의 기본 독�
 test("buildLectionaryModel: 본기도 없이 그날 지키는 다른 전례일의 독서를 그대로 받는 후보는 이름 줄 — 빌려 준 쪽이 옮겨 갔거나 본기도가 없으면 목록에 남는다(사용자 결정 2026-11-07, PR #510 리뷰)", () => {
   const q = { obs: null, track: null, set: null, collect: null };
   const ids = (cs) => cs.map((c) => c.observance.id);
-  const mich = cand(obs("d0929-mich", "성 미카엘과 모든 천사들", { rank: "major_feast", precedence: 3, color: "white" }));
+  const mich = cand(obs("d0929-mich", "성 미가엘과 모든 천사들", { rank: "major_feast", precedence: 3, color: "white" }));
   const mission = cand(obs("d0929-mission", "대한성공회 선교 기념일", { rank: "major_feast", precedence: 4, color: "white" }));
   const grid = cand(obs("grid:ordinary-26-weekday-wed", "연중 26주 수요일", { rank: "feria", precedence: 8, color: "green" }));
   const shared = [group("joint", FOUR)];
   const groupsOf = groupsOfFrom({ "d0929-mich": shared, "d0929-mission": shared, "grid:ordinary-26-weekday-wed": [group("g", FOUR)] });
-  const entries = (lender) => [{ candidate: lender, collects: [collect("m-c", "미카엘")] }, { candidate: mission, collects: [] },
+  const entries = (lender) => [{ candidate: lender, collects: [collect("m-c", "미가엘")] }, { candidate: mission, collects: [] },
     { candidate: grid, collects: [collect("g-c", "연중")] }];
-  // 9.29 — 빌려 준 성 미카엘이 그날의 기본 독서이고 본기도가 있다 → 이름 줄
+  // 9.29 — 빌려 준 성 미가엘이 그날의 기본 독서이고 본기도가 있다 → 이름 줄
   const m = ctx.buildLectionaryModel(resolvedOf("2027-09-29", [mich, mission, grid], mich), q, groupsOf, entries(mich), null, [], true);
   same(ids(m.textlessDays), ["d0929-mission"]);
   assert.ok(!m.choices.some((c) => c.candidate === mission));
@@ -1150,11 +1150,11 @@ test("buildLectionaryModel: 본기도 없이 그날 지키는 다른 전례일�
 });
 
 test("buildLectionaryModel: 관구 설립일에는 「1992년 9월 29일 관구설립일」 줄을 두고, 그 본기도를 고른 전례일의 본기도 뒤에 잇는다 — 주일에도, 다른 전례일을 골라도(사용자 결정 2026-11-05, 2026-11-07)", () => {
-  const mich = cand(obs("d0929-mich", "성 미카엘과 모든 천사들", { rank: "major_feast", precedence: 3, color: "white" }));
+  const mich = cand(obs("d0929-mich", "성 미가엘과 모든 천사들", { rank: "major_feast", precedence: 3, color: "white" }));
   const grid = cand(obs("grid:ordinary-26-sunday", "연중 26주일", { rank: "sunday", precedence: 5, color: "green" }));
   const r = resolvedOf("2030-09-29", [mich, grid], mich);
   const groupsOf = groupsOfFrom({ "d0929-mich": [group("m", FOUR)], "grid:ordinary-26-sunday": [group("g", FOUR)] });
-  const entries = [{ candidate: mich, collects: [collect("m-c", "미카엘")] }, { candidate: grid, collects: [collect("g-c", "연중")] }];
+  const entries = [{ candidate: mich, collects: [collect("m-c", "미가엘")] }, { candidate: grid, collects: [collect("g-c", "연중")] }];
   const province = { level: "province", name: "대한성공회", label: "관구", date: "09.29", year: 1992,
     collect: { id: "common:anniversary-province-대한성공회", title: "설립일", collect_no: 1, collect_total: 1, text: "관구", ending: "C", common: "anniversary" } };
   const q = { obs: null, track: null, set: null, collect: null };

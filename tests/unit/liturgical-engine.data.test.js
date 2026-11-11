@@ -338,7 +338,7 @@ test("C-5.6-4 성인 공통 독서 폴백 — 양성 · 음성 · 불변식 81 /
     const got = ids(d, p);
     assert.ok(got.length > 0 && got.every((id) => id.startsWith(`common:${cls}-s`)), `${p} ${got}`);
   }
-  // 음성 — 06.24 는 띄어쓰기로 이름 조인이 빠져도 고유, 스테파노는 고유, 분류 없는 축일(세계평화 — 미결51)은 빈 배열
+  // 음성 — 06.24 는 띄어쓰기로 이름 조인이 빠져도 고유, 스데파노는 고유, 분류 없는 축일(세계평화 — 미결51)은 빈 배열
   for (const [d, p] of [["2026-06-24", "d0624"], ["2026-12-26", "d1226"]]) {
     const got = groupsAt(d, p);
     assert.ok(got.length > 0 && got.every((g) => g.common === null), p);
@@ -411,8 +411,8 @@ test("미결12 잠정 — 실데이터 1:N 좁히기 (C-5.6-5 는 미결12 가 �
     const name = ix().cal.sanctoralByDate.get("12.25").find((o) => o.id === id).name;
     assert.ok(gs.length > 0 && gs.every((g) => recOf(g).name === name), id);
   }
-  const mich = groupsAt("2026-09-29", "d0929-성-미카엘").map((g) => g.id);
-  // 슬래시 합성 레코드(「성 미카엘과 모든 천사들 / 대한성공회 설립 기념일」) — 대한성공회 선교 기념일은 이름이 맞지 않아 좁히기에
+  const mich = groupsAt("2026-09-29", "d0929-성-미가엘").map((g) => g.id);
+  // 슬래시 합성 레코드(「성 미가엘과 모든 천사들 / 대한성공회 설립 기념일」) — 대한성공회 선교 기념일은 이름이 맞지 않아 좁히기에
   // 실패하고 날짜의 레코드를 그대로 받는다. 화면은 이것을 본문 없는 날로 본다(lectionary.js `borrowsReadings`, 2026-11-07)
   same(groupsAt("2026-09-29", "d0929-대한성공회").map((g) => g.id), mich);
   assert.ok(mich.length > 0);

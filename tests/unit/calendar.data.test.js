@@ -71,9 +71,9 @@ const others = (d) => d.others.map((o) => o.name + o.suffix + (o.away ? " [away]
 
 // ── A2 계획의 날짜 예(사용자 결정 2026-10-15) ────────────────────────────────
 
-test("2026-09-29 — 칸은 대표 하나(성 미카엘과 모든 천사들), 줄에는 대한성공회 선교 기념일도", { skip: SKIP }, () => {
+test("2026-09-29 — 칸은 대표 하나(성 미가엘과 모든 천사들), 줄에는 대한성공회 선교 기념일도", { skip: SKIP }, () => {
   const d = day("2026-09-29");
-  assert.strictEqual(d.cellName, "성 미카엘과 모든 천사들");
+  assert.strictEqual(d.cellName, "성 미가엘과 모든 천사들");
   same(others(d), ["대한성공회 선교 기념일"]);
   same(d.colors, ["white"]);
 });

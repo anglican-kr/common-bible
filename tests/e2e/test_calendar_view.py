@@ -124,7 +124,7 @@ def test_cell_opens_lectionary_and_the_tab_returns_to_the_last_month(mobile_cont
 # ── ④ 칸의 이름 · 색 점 · 링크 이름 ──
 
 def test_cells_show_one_name_colour_dots_and_full_label(desktop_context):
-    """2026년 9월 — 9.29 미카엘(설립 기념일은 칸에 없다) · 9.18 추계재 자색 · 9.16 니니안 자 · 백 · 9.13 주일 「연중24주」 · 9.2 이름 없는 평일."""
+    """2026년 9월 — 9.29 미가엘(설립 기념일은 칸에 없다) · 9.18 추계재 자색 · 9.16 니니안 자 · 백 · 9.13 주일 「연중24주」 · 9.2 이름 없는 평일."""
     page = desktop_context.new_page()
     _open(page, "calendar/2026-09")
 
@@ -137,9 +137,9 @@ def test_cells_show_one_name_colour_dots_and_full_label(desktop_context):
             f".cal-grid a.cal-cell[href='/lectionary/{date}'] .cal-dot",
             "els => els.map(e => [...e.classList].find(c => c.startsWith('lit-swatch--')).slice(12))")
 
-    assert name("2026-09-29") == "성 미카엘과 모든 천사들"
+    assert name("2026-09-29") == "성 미가엘과 모든 천사들"
     assert dots("2026-09-29") == ["white"]
-    assert _cell(page, "2026-09-29").get_attribute("aria-label") == "9월 29일 화요일, 성 미카엘과 모든 천사들, 백색"
+    assert _cell(page, "2026-09-29").get_attribute("aria-label") == "9월 29일 화요일, 성 미가엘과 모든 천사들, 백색"
     assert name("2026-09-18") == "추계재" and dots("2026-09-18") == ["violet"]
     # 링크 이름은 칸에 보이는 이름 그대로 — 대표(연중 24주 금요일)가 아니라(WCAG 2.5.3, PR #348 리뷰)
     assert _cell(page, "2026-09-18").get_attribute("aria-label") == "9월 18일 금요일, 추계재, 자색"
