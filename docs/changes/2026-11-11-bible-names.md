@@ -1,4 +1,5 @@
 ---
+pr: 552
 date: 2026-11-11
 branch: docs/bible-names
 title: "docs: 성서 인물 이름은 공동번역 표기로"
