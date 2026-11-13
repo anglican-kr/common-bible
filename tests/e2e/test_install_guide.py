@@ -35,6 +35,10 @@ def _open_modal_body(browser, ua: str) -> str | None:
     """Launch a new context with the given UA, open the install modal, return body text."""
     ctx = browser.new_context(user_agent=ua)
     page = ctx.new_page()
+    # 인앱브라우저는 첫 방문에도 안내가 저절로 열린다. 여기서는 설정에서 여는 길만 본다.
+    page.add_init_script(
+        "localStorage.setItem('bible-install-nudge', JSON.stringify({visits: 0, nextShow: 2, neverShow: true}));"
+    )
     page.goto(BASE)
     page.wait_for_selector(".settings-btn")
     page.click(".settings-btn")
@@ -128,6 +132,48 @@ def test_unknown_web_view_is_not_handed_off(browser):
     page.wait_for_selector(".settings-btn")
     page.wait_for_timeout(1500)
     assert page.evaluate("sessionStorage.getItem('bible-inapp-left')") is None
+    ctx.close()
+
+
+def test_failed_hand_off_opens_the_guide(browser):
+    """전환을 시도했는데 화면이 그대로 보이면(테스트 브라우저는 kakaotalk:// 을 열지 못한다)
+    첫 방문이어도 안내가 저절로 열려 「브라우저에서 열기」와 「주소 복사」를 보인다."""
+    ctx = browser.new_context(user_agent=_KAKAOTALK_ANDROID_UA)
+    page = ctx.new_page()
+    page.goto(BASE + "/gen/1")
+    page.wait_for_selector("#install-modal:not([hidden])", timeout=8000)
+    text = page.inner_text("#install-modal-body")
+    assert "브라우저에서 열기" in text and "주소 복사" in text
+    ctx.close()
+
+
+def test_unknown_web_view_gets_the_guide_on_first_visit(browser):
+    """전환 주소가 없는 웹뷰는 첫 방문에 안내가 열린다."""
+    ctx = browser.new_context(user_agent=_ANDROID_WEBVIEW_UA)
+    page = ctx.new_page()
+    page.goto(BASE + "/gen/1")
+    page.wait_for_selector("#install-modal:not([hidden])", timeout=6000)
+    text = page.inner_text("#install-modal-body")
+    assert "주소 복사" in text and "브라우저에서 열기" not in text
+    ctx.close()
+
+
+def test_copy_falls_back_to_a_selectable_field(browser):
+    """클립보드를 쓸 수 없는 웹뷰에서는 주소를 글상자에 보여 손으로 복사하게 한다."""
+    ctx = browser.new_context(user_agent=_ANDROID_WEBVIEW_UA)
+    page = ctx.new_page()
+    page.add_init_script(
+        "Object.defineProperty(navigator, 'clipboard', {value: {writeText: () => Promise.reject(new Error('denied'))}});"
+        "document.execCommand = () => false;"
+    )
+    page.goto(BASE + "/gen/1")
+    page.wait_for_selector("#install-modal:not([hidden])", timeout=6000)
+    page.get_by_role("button", name="주소 복사").click()
+    field = page.locator("#install-modal-body .install-url-field")
+    field.wait_for()
+    assert field.input_value() == BASE + "/gen/1"
+    assert "길게 눌러" in page.inner_text("#install-modal-body")
+    assert page.get_by_role("button", name="주소 복사").count() == 1
     ctx.close()
 
 

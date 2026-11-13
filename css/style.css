@@ -2918,6 +2918,21 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+/* The copy button and its fallback field sit directly in the parent's layout. */
+#install-modal-body .install-copy { display: contents; }
+#install-modal-body .install-url-field {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  /* --text-secondary keeps the field boundary at 3:1 or more (WCAG 1.4.11). */
+  border: 1px solid var(--text-secondary);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: var(--font-base);
+}
 #install-modal-body .install-cta--end {
   display: block;
   margin-left: auto;

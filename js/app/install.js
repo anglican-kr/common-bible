@@ -48,12 +48,44 @@ const IN_APP_TOKENS = [
 
 const IN_APP_LEFT_KEY = "bible-inapp-left";
 const LINE_EXTERNAL_PARAM = "openExternalBrowser";
+// Give up the hand-off when the load event takes longer than this — a late
+// redirect would pull away someone who is already reading.
+const HAND_OFF_LOAD_WAIT_MS = 3000;
+// A hand-off that worked puts another app in front and hides this document.
+// Still visible after this long means it failed.
+const HAND_OFF_CHECK_MS = 2500;
+
+// Tokens the non-Safari iOS browsers add to the UA. Safari has none of them.
+const IOS_BROWSER_TOKENS = /CriOS|FxiOS|EdgiOS|OPiOS|GSA/;
+
+function isIOSDevice() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); // iPadOS 13+
+}
+
+// Returns the iOS major version, or 0 if not iOS / version is unknown.
+// Sources, in order of reliability:
+//   1. "CPU iPhone OS X_Y" / "CPU OS X_Y" — present on iPhone and on iPad
+//      when not in desktop-class UA mode. Reliable.
+//   2. "Version/X.Y" — Safari's marketing version, which tracks iOS major.
+//      Fallback for iPadOS desktop-class UA (masquerades as Mac).
+//   3. iPad-masking with no Version/ token (e.g. CriOS on iPad in desktop
+//      mode) — assume 17 (modern), since older iPadOS Chrome did not mask.
+function getIOSMajor() {
+  const ua = navigator.userAgent;
+  const osMatch = ua.match(/OS (\d+)_/);
+  if (osMatch) return parseInt(osMatch[1], 10);
+  const isIPadMask = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  if (!isIPadMask) return 0;
+  const verMatch = ua.match(/Version\/(\d+)/);
+  if (verMatch) return parseInt(verMatch[1], 10);
+  return 17; // best-effort: modern iPadOS without Version/ token
+}
 
 /** @returns {{ app: string; ios: boolean } | null} */
 function detectInAppBrowser() {
   const ua = navigator.userAgent;
-  const ios = /iPad|iPhone|iPod/.test(ua) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const ios = isIOSDevice();
   for (const [app, re] of IN_APP_TOKENS) {
     if (re.test(ua)) return { app, ios };
   }
@@ -61,7 +93,7 @@ function detectInAppBrowser() {
   // a "Safari/" token and the other browsers their own (CriOS, FxiOS, …);
   // a bare WKWebView has neither.
   if (!ios && /Android/.test(ua) && /; wv\)/.test(ua)) return { app: "webview", ios };
-  if (ios && !/Safari\/|CriOS|FxiOS|EdgiOS|OPiOS|GSA/.test(ua)) return { app: "webview", ios };
+  if (ios && !/Safari\//.test(ua) && !IOS_BROWSER_TOKENS.test(ua)) return { app: "webview", ios };
   return null;
 }
 
@@ -93,13 +125,15 @@ function externalBrowserUrl(inApp, href) {
 
   if (inApp.ios) {
     // x-safari-https:// opens Safari from iOS 17. Undocumented by Apple.
-    const os = navigator.userAgent.match(/OS (\d+)_/);
-    if (os && parseInt(os[1], 10) < 17) return null;
+    const major = getIOSMajor();
+    if (major && major < 17) return null;
     return `x-safari-${scheme}://${u.host}${u.pathname}${u.search}${u.hash}`;
   }
   // Android: an intent with no package resolves to the default browser.
-  // The fragment is dropped — "#Intent" owns it.
-  return `intent://${u.host}${u.pathname}${u.search}#Intent;scheme=${scheme};end`;
+  // The fragment is dropped — "#Intent" owns it. With no browser to take it,
+  // the web view loads the fallback URL (this same page) instead of an error.
+  return `intent://${u.host}${u.pathname}${u.search}#Intent;scheme=${scheme};` +
+    `S.browser_fallback_url=${encodeURIComponent(u.href)};end`;
 }
 
 // Arrived in the device browser from Line — drop the hand-off query from the
@@ -114,30 +148,66 @@ function dropHandOffQuery() {
   } catch {}
 }
 
+// The hand-off URL for this visit, or null when we stay: not an in-app
+// browser, no known way out, or this tab session already tried once.
+function handOffUrl() {
+  const inApp = detectInAppBrowser();
+  if (!inApp) return null;
+  if (install.isStandalone()) return null;
+  const url = externalBrowserUrl(inApp, location.href);
+  if (!url) return null;
+  try {
+    if (sessionStorage.getItem(IN_APP_LEFT_KEY)) return null;
+  } catch {
+    return null; // cannot remember the attempt — never risk a redirect loop
+  }
+  return url;
+}
+
 // Called by the app.js bootstrap after the first view is on screen, and the
 // hand-off itself waits for the load event — one started while the document
 // is still loading stops the remaining scripts and the load event (seen in
 // Chromium), leaving a blank or forever-loading page behind if it fails.
 // Returns true when a hand-off was started. One attempt per tab session: if
 // it failed, or the user comes back to the in-app browser and reloads, we stay.
+// When the hand-off does not happen (load too slow) or does not work (the
+// document is still visible afterwards), the install guide opens instead.
 function maybeLeaveInAppBrowser() {
-  const inApp = detectInAppBrowser();
-  if (!inApp) return false;
-  if (install.isStandalone()) return false;
-  const url = externalBrowserUrl(inApp, location.href);
+  const url = handOffUrl();
   if (!url) return false;
-  try {
-    if (sessionStorage.getItem(IN_APP_LEFT_KEY)) return false;
-    sessionStorage.setItem(IN_APP_LEFT_KEY, "1");
-  } catch {
-    return false; // cannot remember the attempt — never risk a redirect loop
-  }
+  const viaReplace = detectInAppBrowser()?.app === "line";
+  let settled = false;
+
   const go = () => {
-    if (inApp.app === "line") location.replace(url);
+    if (settled) return;
+    settled = true;
+    try {
+      sessionStorage.setItem(IN_APP_LEFT_KEY, "1");
+    } catch {
+      return;
+    }
+    let left = document.visibilityState === "hidden";
+    const onVisibility = () => { if (document.visibilityState === "hidden") left = true; };
+    document.addEventListener("visibilitychange", onVisibility);
+    setTimeout(() => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      if (!left) showInAppGuide();
+    }, HAND_OFF_CHECK_MS);
+    if (viaReplace) location.replace(url);
     else location.href = url;
   };
-  if (document.readyState === "complete") go();
-  else window.addEventListener("load", go, { once: true });
+
+  if (document.readyState === "complete") {
+    go();
+  } else {
+    window.addEventListener("load", go, { once: true });
+    setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener("load", go);
+      showInAppGuide();
+    }, HAND_OFF_LOAD_WAIT_MS);
+  }
   return true;
 }
 // ── END IN_APP ──
@@ -163,34 +233,13 @@ const install = (() => {
     );
   }
 
-  // Returns the iOS major version, or 0 if not iOS / version is unknown.
-  // Sources, in order of reliability:
-  //   1. "CPU iPhone OS X_Y" / "CPU OS X_Y" — present on iPhone and on iPad
-  //      when not in desktop-class UA mode. Reliable.
-  //   2. "Version/X.Y" — Safari's marketing version, which tracks iOS major.
-  //      Fallback for iPadOS desktop-class UA (masquerades as Mac).
-  //   3. iPad-masking with no Version/ token (e.g. CriOS on iPad in desktop
-  //      mode) — assume 17 (modern), since older iPadOS Chrome did not mask.
-  function getIOSMajor() {
-    const ua = navigator.userAgent;
-    const osMatch = ua.match(/OS (\d+)_/);
-    if (osMatch) return parseInt(osMatch[1], 10);
-    const isIPadMask = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
-    if (!isIPadMask) return 0;
-    const verMatch = ua.match(/Version\/(\d+)/);
-    if (verMatch) return parseInt(verMatch[1], 10);
-    return 17; // best-effort: modern iPadOS without Version/ token
-  }
-
   function detectPlatform() {
     if (isStandalone()) return "installed";
     if (detectInAppBrowser()) return "in-app";
     const ua = navigator.userAgent;
-    const isIOS = /iPad|iPhone|iPod/.test(ua) ||
-      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); // iPadOS 13+
-    if (isIOS) {
+    if (isIOSDevice()) {
       // All iOS browsers wrap WebKit. Safari UA omits the CriOS/FxiOS/etc tokens.
-      const isSafari = !/CriOS|FxiOS|EdgiOS|OPiOS|GSA/.test(ua);
+      const isSafari = !IOS_BROWSER_TOKENS.test(ua);
       if (isSafari) return "ios-safari";
       // iOS 17+ exposes "Add to Home Screen" inside Chrome/Firefox/Edge/Opera
       // share sheets, and the resulting icon launches in standalone mode.
@@ -292,6 +341,56 @@ function _buildNeverShowRow() {
   return row;
 }
 
+// "주소 복사" button. Many in-app web views have no Clipboard API, so fall back
+// to execCommand, and when that fails too show the address in a field the
+// user can long-press and copy.
+/** @param {string} text */
+function _buildCopyButton(text) {
+  const wrap = el("div", { className: "install-copy" });
+  const btn = el("button", { className: "install-cta", type: "button" }, "주소 복사");
+  const copied = () => {
+    btn.textContent = "복사됨";
+    setTimeout(() => { btn.textContent = "주소 복사"; }, 2000);
+  };
+  const legacyCopy = () => {
+    const ta = /** @type {HTMLTextAreaElement} */ (el("textarea", { readonly: "", "aria-hidden": "true" }));
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    wrap.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch {}
+    ta.remove();
+    btn.focus();
+    return ok;
+  };
+  const showField = () => {
+    if (wrap.querySelector(".install-url-field")) return;
+    const field = /** @type {HTMLInputElement} */ (el("input", {
+      className: "install-url-field", type: "text", readonly: "", "aria-label": "이 쪽의 주소",
+    }));
+    field.value = text;
+    field.addEventListener("focus", () => field.select());
+    wrap.appendChild(field);
+    wrap.appendChild(el("p", { className: "install-note", role: "status" },
+      "복사하지 못했습니다. 위 주소를 길게 눌러 복사해 주세요."));
+    field.focus();
+  };
+  btn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      copied();
+    } catch {
+      if (legacyCopy()) copied();
+      else showField();
+    }
+  });
+  wrap.appendChild(btn);
+  return wrap;
+}
+
 /** @param {string} platform */
 function buildInstallBody(platform) {
   clearNode($installModalBody);
@@ -317,17 +416,7 @@ function buildInstallBody(platform) {
       openBtn.addEventListener("click", () => { location.href = url; });
       row.appendChild(openBtn);
     }
-    const copyBtn = el("button", { className: "install-cta", type: "button" }, "주소 복사");
-    copyBtn.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(location.href);
-        copyBtn.textContent = "복사됨";
-        setTimeout(() => { copyBtn.textContent = "주소 복사"; }, 2000);
-      } catch {
-        copyBtn.textContent = "복사 실패";
-      }
-    });
-    row.appendChild(copyBtn);
+    row.appendChild(_buildCopyButton(location.href));
     $installModalBody.appendChild(row);
     if (!url) {
       $installModalBody.appendChild(el("p", { className: "install-note" },
@@ -498,17 +587,7 @@ function buildInstallBody(platform) {
       "이 페이지 주소를 복사해 Safari에서 열어 주세요."));
     $installModalBody.appendChild(el("p", { className: "install-bookmark-notice" },
       "Safari에서 이용하시는 경우, 7일 이상 방문하지 않으면 앱에 저장한 북마크가 삭제될 수 있으므로 홈 화면에 추가해서 사용하세요."));
-    const btn = el("button", { className: "install-cta", type: "button" }, "주소 복사");
-    btn.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(location.origin + "/");
-        btn.textContent = "복사됨";
-        setTimeout(() => { btn.textContent = "주소 복사"; }, 2000);
-      } catch {
-        btn.textContent = "복사 실패";
-      }
-    });
-    $installModalBody.appendChild(btn);
+    $installModalBody.appendChild(_buildCopyButton(location.origin + "/"));
     return;
   }
 
@@ -627,7 +706,17 @@ function maybeShowInstallNudge() {
   state.visits += 1;
   _saveNudgeState(state);
 
-  if (state.visits < state.nextShow) return;
+  if (platform === "in-app") {
+    // About to be handed to the device browser — maybeLeaveInAppBrowser opens
+    // the guide itself if that does not work.
+    if (handOffUrl()) return;
+    // Stuck here with no way out (unknown web view, iOS ≤16): do not wait for
+    // a second visit. Shared links are first visits, and in-app storage is
+    // often wiped before a second one is counted.
+    if (state.visits > 1 && state.visits < state.nextShow) return;
+  } else if (state.visits < state.nextShow) {
+    return;
+  }
 
   // Delay so the page content renders first
   setTimeout(() => {
@@ -639,6 +728,18 @@ function maybeShowInstallNudge() {
     _saveNudgeState(current);
     openInstallModal();
   }, 1500);
+}
+
+// The hand-off to the device browser did not happen or did not work: open the
+// guide now, whatever the visit count. It carries "브라우저에서 열기" and "주소 복사".
+function showInAppGuide() {
+  if (install.detectPlatform() !== "in-app") return;
+  const state = _loadNudgeState();
+  if (state.neverShow) return;
+  if (installOverlay.isOpen) return;
+  state.nextShow = state.visits + 3;
+  _saveNudgeState(state);
+  openInstallModal();
 }
 // ── END NUDGE ──
 
