@@ -1,4 +1,5 @@
 ---
+pr: 554
 date: 2026-11-13
 branch: claude/pensive-noether-pujqct
 title: "feat: 인앱브라우저에서 기기의 브라우저로 자동 전환"
