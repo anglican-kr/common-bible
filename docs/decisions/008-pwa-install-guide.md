@@ -16,6 +16,7 @@
 | iOS Safari | 불가 | 공유 → 홈 화면에 추가 |
 | iOS Chrome/Firefox/기타 | 불가 (WebKit 래퍼) | 공유 → 홈 화면에 추가(iOS 17+), iOS 16 이하는 Safari로 열어야 함 |
 | Desktop Safari/Firefox | 불가 | 지원 없음 |
+| 인앱브라우저(카카오톡, 네이버, 인스타그램 등) | 불가 | 없음. 기기의 브라우저에서 다시 열어야 한다 |
 
 네이티브 앱 스토어의 설치 안내처럼 **한 화면에서 내 기기에 맞는 경로만** 보여 주지 않으면 사용자는 금방 떠난다.
 
@@ -50,6 +51,12 @@
 - iOS의 Chrome, Firefox, Edge, Opera 등은 모두 `ios-other`로 묶어 「Safari에서 열어 주세요」와 주소 복사 버튼만 보였다.
 - 채택 안 함(2026-05-11). 이유: iOS 17부터 Chrome, Firefox, Edge, Opera 등의 공유 시트에도 「홈 화면에 추가」가 보이고, 그렇게 추가한 아이콘은 독립 실행(standalone) 모드의 WebKit 컨테이너에서 실행된다. 「iOS는 Safari에서만 설치할 수 있다」는 전제가 더 이상 사실이 아니다. 그래서 iOS 버전으로 나눴다(아래 「1. 플랫폼과 설치 상태 감지」).
 
+### 인앱브라우저에서는 설치 안내에서만 브라우저로 내보내기
+
+- 인앱브라우저에서도 본문은 그대로 읽게 두고, 사용자가 설치 안내를 열었을 때만 「브라우저에서 열기」 단추를 보이는 방법이다. 공유받은 구절만 읽으려는 사람을 다른 앱으로 보내지 않는다.
+- 채택 안 함(2026-11-13, 사용자 결정). 이유: 공유된 링크로 들어온 사람은 대부분 인앱브라우저에서 처음 만나는데, 거기서는 설치할 수 없고 저장한 북마크도 브라우저로 넘어가지 않는다. 설치 안내를 스스로 찾아 여는 사람은 적으므로 들어오면 곧바로 브라우저로 옮긴다(아래 「7. 인앱브라우저」).
+- 재검토 조건: 자동 전환 때문에 읽기가 끊긴다는 사용자 의견이 나오거나, 주요 앱이 전환 주소를 막아 빈 화면이나 오류 화면이 생길 때.
+
 ## 결정
 
 **C안 채택**. 설정 팝오버에 「앱 설치 → 안내」 행을 더하고, 누르면 플랫폼별 내용을 그리는 모달을 연다.
@@ -60,6 +67,7 @@
 
 ```
 installed   / 이미 standalone으로 실행 중
+in-app      / 다른 앱 안의 브라우저(카카오톡, 라인, 네이버, 인스타그램, 페이스북, 그 밖의 웹뷰)
 ios-safari  / iPhone·iPad Safari
 ios-other   / iOS Chrome/Firefox/Edge/OPiOS/GSA
 android     / Android Chromium
@@ -92,6 +100,7 @@ unsupported / Firefox/Safari 데스크톱 등
 | `ios-legacy`          | 「Safari에서 열어 주세요」 + 주소 복사 버튼 |
 | `android`/`desktop`   | 플랫폼에 맞는 CTA 버튼 → `beforeinstallprompt.prompt()` |
 | `unsupported`         | 지원 브라우저 안내 |
+| `in-app`              | 「이 안에서는 설치할 수 없습니다」 + 「브라우저에서 열기」 단추(전환 주소를 아는 앱만) + 주소 복사 단추 |
 
 `ios-other`는 스크린샷 대신 텍스트로 안내한다. 브라우저마다 공유 버튼 위치가 달라 스크린샷 하나로는 정확하지 않기 때문이다(2026-05-11).
 
@@ -118,13 +127,45 @@ unsupported / Firefox/Safari 데스크톱 등
 
 SHELL_FILES에는 넣지 **않는다**. 안내 이미지는 설치를 처음 안내할 때만 요청되고, 전역 stale-while-revalidate 핸들러(`sw.js`)가 처음 요청받을 때 캐시에 저장한다. 모든 사용자에게 미리 캐시를 강제할 이유가 없다.
 
+### 7. 인앱브라우저 (2026-11-13)
+
+메신저나 SNS 앱에서 링크를 누르면 그 앱 안의 브라우저(인앱브라우저)로 열린다. 여기에는 「홈 화면에 추가」가 없고 `beforeinstallprompt` 이벤트도 오지 않아 설치할 수 없다. 저장소도 기기의 브라우저와 분리되어 있다. 그래서 인앱브라우저를 알아보고 **첫 화면을 그린 직후 기기의 브라우저로 옮긴다**.
+
+**감지.** UA 문자열의 앱 토큰으로 구별한다(`detectInAppBrowser()`). 독립 실행 판정이 먼저다.
+
+| 앱 | UA 토큰 |
+|----|---------|
+| 카카오톡 | `KAKAOTALK` |
+| 라인 | `Line/` |
+| 네이버 | `NAVER(inapp` |
+| 인스타그램 | `Instagram` |
+| 페이스북 | `FBAN`, `FBAV`, `FB_IAB` |
+| 그 밖의 웹뷰 | Android는 `; wv)`, iOS는 `Safari/` 토큰도 다른 브라우저의 토큰(`CriOS` 등)도 없는 UA |
+
+**전환 주소.** 보고 있던 주소(경로와 쿼리)를 그대로 넘긴다(`externalBrowserUrl()`).
+
+| 환경 | 방법 |
+|------|------|
+| 카카오톡(iOS, Android) | `kakaotalk://web/openExternal?url=<주소>` |
+| 라인(iOS, Android) | 주소에 `openExternalBrowser=1` 쿼리를 붙여 다시 연다. 브라우저에 도착하면 이 쿼리를 주소에서 지운다(`dropHandOffQuery()`) |
+| Android의 네이버, 인스타그램, 페이스북 | `intent://<호스트><경로>#Intent;scheme=https;end`. 기본 브라우저가 연다 |
+| iOS 17+의 네이버, 인스타그램, 페이스북 | `x-safari-https://<호스트><경로>`. Apple이 문서로 밝히지 않은 주소 형식이라 실기기에서 확인해야 한다 |
+| iOS 16 이하의 위 세 앱, 그 밖의 웹뷰 | 전환 주소 없음. 자동 전환을 하지 않는다 |
+
+**자동 전환.** 첫 화면을 그린 뒤, 시작할 때의 나머지 일(서비스 워커 등록 등)을 모두 시작하고 나서 전환 주소로 이동한다(`maybeLeaveInAppBrowser()`, `js/app.js`의 시작 코드가 맨 끝에 부른다). 문서를 다 읽기(`load` 이벤트) 전이면 그때까지 기다린다. 문서를 읽는 도중에 이동을 시작하면 Chromium은 남은 스크립트를 실행하지 않고 `load`도 끝내지 않아, 전환이 실패했을 때 빈 화면이나 계속 읽는 중인 화면이 남는다(2026-11-13 확인). 화면을 먼저 그려 두면 전환이 실패하거나 사용자가 인앱브라우저로 돌아와도 본문이 보인다. 탭 세션에서 한 번만 시도한다(`sessionStorage`의 `bible-inapp-left`). 전환이 실패했거나 사용자가 인앱브라우저로 돌아와 새로 고칠 때 다시 다른 앱으로 넘어가지 않게 하려는 것이다. 라인은 쿼리가 이미 붙어 있으면 다시 시도하지 않는다.
+
+**이름을 모르는 웹뷰는 자동 전환하지 않는다.** `intent://`를 처리하지 않는 Android 웹뷰는 본문 대신 오류 화면(`ERR_UNKNOWN_URL_SCHEME`)을 보인다. 전환 주소를 처리한다고 알려진 앱만 목록에 둔다.
+
+**전환이 안 됐을 때.** 인앱브라우저에 남은 사용자는 본문을 그대로 읽을 수 있다. `in-app`은 자동 안내 대상이라, 설치 안내 모달이 「브라우저에서 열기」와 「주소 복사」를 보인다.
+
 ## 트레이드오프와 주의 사항
 
 1. **iOS 버전마다 공유 시트 UI가 다르다**: iOS 13-14와 15+는 주소창 위치(위와 아래)가 다르다. 스크린샷 하나로 일반화하고 "iOS 버전에 따라 메뉴 위치가 조금 다를 수 있습니다"라는 안내로 보완한다. 버전마다 나누는 것은 비용에 비해 효용이 작다.
 2. **iPadOS 13+ UA 판정법**: `navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1`이 지금 유일한 판정 수단이다. 앞으로 `navigator.userAgentData`가 안정되면 바꾼다.
 3. **Android 말고 다른 모바일 Chromium**: Samsung Internet 등은 UA에 `Android` 토큰이 있어 `android`로 분류된다. 설치 메뉴 위치는 다르지만 `beforeinstallprompt` 경로는 같아서, 안내문이 정확히 맞지 않을 수 있다. 감지를 고치는 것은 나중에 검토한다.
 4. **`beforeinstallprompt`는 1회 쓰면 다시 뜨지 않는다**: 사용자가 한 번 거부하면 Chromium은 같은 세션에서 다시 띄우지 않는다. 지금 모달은 첫 프롬프트의 결과에 따라 버튼을 비활성으로 둔다. 다시 방문하면 새로 뜨므로 실제 영향은 작다.
-5. **첫 방문 자동 노출 없음**: 설치로 이어지는 비율이 필요하면, N회 재방문 뒤의 토스트 같은 별도 트리거를 뒤의 ADR에서 도입한다. 이 ADR은 「요청할 때만 보인다」로 한정한다.
+5. **인앱브라우저 목록은 손으로 관리한다**: 목록에 없는 앱은 「그 밖의 웹뷰」로 분류되어 주소 복사 안내만 받는다. iOS의 `SFSafariViewController`를 쓰는 앱은 UA가 Safari와 같아 구별할 수 없다. 앱이 UA 토큰이나 전환 주소를 바꾸면 전환이 조용히 실패하고, 그때는 모달의 안내로 넘어간다.
+6. **첫 방문 자동 노출 없음**: 설치로 이어지는 비율이 필요하면, N회 재방문 뒤의 토스트 같은 별도 트리거를 뒤의 ADR에서 도입한다. 이 ADR은 「요청할 때만 보인다」로 한정한다.
 
 ## 관련 파일
 
@@ -135,11 +176,13 @@ SHELL_FILES에는 넣지 **않는다**. 안내 이미지는 설치를 처음 안
 - `css/style.css` `#install-scrim`, `#install-modal`: 모달 스타일
 - `assets/install-guide/ios-iphone-share.svg`, `ios-ipad-share.svg`: 안내 SVG(플레이스홀더)
 - `tests/e2e/test_install_guide.py` — 플랫폼별 UA override 검증(iOS 17 Chrome, iOS 16 Chrome 분기 포함)
-- `tests/unit/install.test.js` — iOS 16과 iPad 마스킹 경우 4건, nudge의 `ios-other` 재분류
+- `tests/unit/install.test.js` — iOS 16과 iPad 마스킹 경우 4건, nudge의 `ios-other` 재분류, 인앱브라우저 감지와 전환 주소, 자동 전환을 한 번만 하는지
+- `js/app/install.js` `detectInAppBrowser()`, `externalBrowserUrl()`, `maybeLeaveInAppBrowser()`: 인앱브라우저 감지, 전환 주소, 자동 전환
 
 ## 다시 검토할 조건
 
 - 설치율이 낮게 측정되면 재방문 N회 뒤 1회 배너(닫기 기억) 도입을 검토한다.
 - 실기기 스크린샷을 확보하면 SVG 플레이스홀더를 사진 기반 안내로 바꾼다.
 - iOS 18+에서 `apple-app-site-association`이나 Smart App Banner 정책이 PWA까지 넓어지면 별도 분기를 더한다.
+- 인앱브라우저의 전환 주소(특히 `x-safari-https://`)가 실기기에서 동작하지 않으면 그 앱을 자동 전환 목록에서 빼고 안내만 보인다.
 - `navigator.userAgentData`의 브라우저 보급률이 충분해지면 UA 문자열 파싱을 UA-CH로 바꾼다.

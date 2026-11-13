@@ -203,7 +203,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | `js/app/overlay.js`                | 오버레이 생명주기를 한 곳에서 맡는 컨트롤러 `createOverlay`(scrim, `trapFocus`, Esc 키, `inert`, 포커스 복원, 애니메이션을 거친 닫기), 시트 팩토리, 열린 오버레이를 모두 닫는 `closeAllOverlays()`와 그 등록부 ([ADR-032](decisions/032-component-view-layer.md), ADR-034 PR5b) | ~330    |
 | `js/app/storage.js`                | localStorage 헬퍼, UI 공유 상수, 북마크 두 사본을 수정 시각을 올리지 않고 고쳐 쓰는 `rewriteBookmarks`, 전례독서 트랙 기억(`bible-lectionary-track`)과 독서 카드 접힘 기억(`bible-lectionary-cards-folded`), 마지막 캘린더 보기(`bible-calendar-last-view`)                                      | ~660    |
 | `js/app/settings-ui.js`            | 설정 팝오버와 모바일 설정 화면(섹션 다섯, ADR-041), 외관 적용, 인용과 주석 토글, Drive 줄(연결, 해제, 진단 복사, 끝나지 않은 삭제를 알리는 `.settings-drive-note`). 로그인 상태가 바뀌면 두 화면을 모두 다시 그린다 | ~1200   |
-| `js/app/install.js`                | PWA 설치 감지, 안내 모달, 설치 안내 넛지                                                                                                                                          | ~495    |
+| `js/app/install.js`                | PWA 설치 감지, 인앱브라우저 자동 전환, 안내 모달, 설치 안내 넛지                                                                                                                                          | ~645    |
 | `js/app/search.js`                 | 검색 워커 연결, 결과 그리기, 이력 패널, 시트([ADR-033](decisions/033-search-options.md)). 쪽 링크는 포커스 키를 달고(라우터가 포커스를 돌려준다. ADR-031 §5), 쪽이 바뀌면 라이브 영역이 말로 알린다. 결과 건수 줄은 `h2`다 | ~1,595  |
 | `js/app/reading-context.js`        | 현재 책과 장, 절 선택 모드의 공유 상태                                                                                                                                        | ~35     |
 | `js/app/verse-spec.js`             | 절 스펙의 파싱, 비교, 직렬화, 병합. 북마크에 저장하는 표기 `verseNumberSpec`, 옛 버전 표기를 옮기는 `wholeVerseSpec`(ADR-010 「옛 저장값」), `verseInstanceKey`, 바깥에서 들어온 절 범위를 검사하는 `isWellFormedSpec`(가져오기 파일과 주소가 함께 쓴다. ADR-040). 다른 모듈에 의존하지 않는다(leaf. ADR-034). ADR-038 §3의 렌더 기반이다            | ~455    |
@@ -516,6 +516,7 @@ OAuth 측면 (가장 큰 공격 표면):
 - **iOS Safari 탭 7일 자동 데이터 삭제 (ITP)**: 홈 화면에 설치하지 않고 Safari 탭에서만 쓰면 7일 동안 쓰지 않을 때 저장된 데이터가 비워진다(Apple의 Intelligent Tracking Prevention 정책). 대응은 설치 안내 모달을 강화하는 것이다([ADR-008](decisions/008-pwa-install-guide.md)). 홈 화면에 추가된 PWA는 이 정책의 영향을 받지 않는다.
 - **외부 권한 회수**: 사용자가 Google 계정 설정에서 권한을 끊으면 다음 조용한 갱신이 `invalid_grant`로 실패하고, 앱은 IndexedDB를 비운 뒤 NEEDS_CONSENT로 돌아간다. (OAuth 앱 검수를 2026-05-19에 통과해 갱신 토큰에 만료 기간이 없다.)
 - **iOS의 Chrome, Firefox, Edge**: iOS의 모든 브라우저는 내부적으로 Safari 엔진(WebKit)을 쓴다. iOS 17 이상은 공유 메뉴의 「홈 화면에 추가」로 설치할 수 있어 그 안내를 보이고(`ios-other`), iOS 16 이하는 「Safari에서 열어」 안내로 끝난다(`ios-legacy`. [ADR-008](decisions/008-pwa-install-guide.md) 개정 2026-05-11). 다른 브라우저와 동기화 데이터 분리는 보장되지 않는다.
+- **인앱브라우저**: 메신저나 SNS 앱 안의 브라우저에서는 설치할 수 없고 저장소도 기기의 브라우저와 분리된다. 알려진 앱(카카오톡, 라인, 네이버, 인스타그램, 페이스북)은 첫 화면을 그린 직후 기기의 브라우저로 옮기고, 그 밖의 웹뷰와 iOS 16 이하는 안내만 보인다([ADR-008](decisions/008-pwa-install-guide.md) §7). Safari와 UA가 같은 `SFSafariViewController`는 구별하지 못한다.
 - **백엔드 부재**: 사용자별 통계, 다중 기기 푸시, 서버 쪽 검색 등은 모두 할 수 없다. 의도적인 트레이드오프다. 운영비 0이 더 중요하다.
 - **성서 번역본 1종**: 성서 본문은 공동번역만 다룬다. 전례시편과 송가는 기도서의 번역으로 전례용 책(`lps`, `cant`)에 따로 싣는다. 번역 대조는 로드맵 밖이다.
 - 미해결 이슈와 후속 백로그의 기준 문서는 [`known-issues.md`](known-issues.md)다.
