@@ -1383,6 +1383,7 @@ declare global {
     openInstallModal?: () => void;
     closeInstallModal?: () => void;
     maybeShowInstallNudge?: () => void;
+    maybeLeaveInAppBrowser?: () => boolean;
 
     // UI side-effects defined in app.js. Optional because state-machine.js
     // guards each call with `typeof ... === "function"`.

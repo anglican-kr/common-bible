@@ -2913,6 +2913,11 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
 [data-theme="dark"] #install-modal-body .install-cta {
   color: #1a1a2e;
 }
+#install-modal-body .install-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
 #install-modal-body .install-cta--end {
   display: block;
   margin-left: auto;

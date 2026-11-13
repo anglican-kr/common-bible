@@ -88,7 +88,24 @@ function loadInstallState(opts = {}) {
     standaloneNavigator = false,
     standaloneDisplayMode = false,
     fullscreenDisplayMode = false,
+    href = "https://bible.anglican.kr/gen/1",
+    sessionItems = {},
+    sessionThrows = false,
+    readyState = "complete",
   } = opts;
+
+  // location / history / sessionStorage stubs for maybeLeaveInAppBrowser.
+  const nav = { assigned: [], replaced: [], replacedState: [] };
+  const locationStub = {
+    get href() { return href; },
+    set href(v) { nav.assigned.push(v); },
+    replace: (v) => { nav.replaced.push(v); },
+  };
+  const session = { ...sessionItems };
+  const sessionStorageStub = {
+    getItem: (k) => { if (sessionThrows) throw new Error("denied"); return k in session ? session[k] : null; },
+    setItem: (k, v) => { if (sessionThrows) throw new Error("denied"); session[k] = String(v); },
+  };
 
   const mq = makeMatchMedia();
   mq.setMatches("(display-mode: standalone)", !!standaloneDisplayMode);
@@ -114,24 +131,38 @@ function loadInstallState(opts = {}) {
   const ctx = {
     Object, Array, Set, Map, JSON, console, Error, Promise,
     Boolean, Number, String,
+    URL, RegExp, parseInt, encodeURIComponent,
     window: windowStub,
     navigator: windowStub.navigator,
+    location: locationStub,
+    document: { readyState },
+    history: { state: null, replaceState: (_s, _t, url) => { nav.replacedState.push(url); } },
+    sessionStorage: sessionStorageStub,
   };
   vm.createContext(ctx);
   // `const install = (...)` doesn't auto-expose on globalThis — the appended
   // assignment makes the IIFE result reachable from ctx.install. Same trick
   // we'd otherwise need to do for the `function maybeShowInstallNudge`
   // export (functions DO hoist as globals so it works without help).
-  vm.runInContext(extractBlock("INSTALL_STATE") + "\nglobalThis.install = install;", ctx, {
+  vm.runInContext(extractBlock("IN_APP") + "\n" + extractBlock("INSTALL_STATE") + "\nglobalThis.install = install;", ctx, {
     filename: "install-state.js",
   });
 
   return {
     install: ctx.install,
+    detectInAppBrowser: ctx.detectInAppBrowser,
+    externalBrowserUrl: ctx.externalBrowserUrl,
+    maybeLeaveInAppBrowser: ctx.maybeLeaveInAppBrowser,
+    dropHandOffQuery: ctx.dropHandOffQuery,
+    nav, session,
     /** Fire a beforeinstallprompt event. `evt` should be { prompt, userChoice }. */
     fireBeforeInstallPrompt(evt) {
       const set = windowListeners.get("beforeinstallprompt");
       if (set) for (const fn of [...set]) fn(evt);
+    },
+    fireLoad() {
+      const set = windowListeners.get("load");
+      if (set) for (const fn of [...set]) fn({});
     },
     fireAppInstalled() {
       const set = windowListeners.get("appinstalled");
@@ -505,6 +536,129 @@ test("display-mode change → notify subscribers", () => {
   // Initial + post-change → 2 calls; post-change platform should be 'installed'
   assert.equal(calls.length, 2);
   assert.equal(calls[1], "installed");
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IN_APP tests (ADR-008 §7)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const IOS = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) ";
+const AND = "Mozilla/5.0 (Linux; Android 14; SM-S921N; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.0.0 Mobile Safari/537.36";
+const UA = {
+  kakaoIOS: IOS + "Mobile/15E148 KAKAOTALK 10.8.5",
+  kakaoAndroid: AND + ";KAKAOTALK 2410850",
+  lineIOS: IOS + "Mobile/15E148 Safari Line/14.5.0",
+  naverAndroid: AND + " NAVER(inapp; search; 2000; 12.9.5)",
+  naverIOS: IOS + "Mobile/15E148 NAVER(inapp; search; 2000; 12.9.5; 15PRO)",
+  naverIOS16: IOS.replace("17_4", "16_6") + "Mobile/15E148 NAVER(inapp; search; 2000; 12.9.5; 14)",
+  instagramAndroid: AND + " Instagram 330.0.0.40.92 Android",
+  facebookIOS: IOS + "Mobile/15E148 [FBAN/FBIOS;FBAV/460.0.0;FBBV/1]",
+  webviewAndroid: AND,
+  webviewIOS: IOS + "Mobile/15E148",
+  safari: IOS + "Version/17.4 Mobile/15E148 Safari/604.1",
+  chromeAndroid: "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+};
+
+test("in-app: detects each known app and the generic web views", () => {
+  const cases = [
+    ["kakaoIOS", "kakaotalk", true], ["kakaoAndroid", "kakaotalk", false],
+    ["lineIOS", "line", true], ["naverAndroid", "naver", false],
+    ["instagramAndroid", "instagram", false], ["facebookIOS", "facebook", true],
+    ["webviewAndroid", "webview", false], ["webviewIOS", "webview", true],
+  ];
+  for (const [key, app, ios] of cases) {
+    const h = loadInstallState({ userAgent: UA[key], platform: ios ? "iPhone" : "Linux armv8l" });
+    assert.deepEqual({ ...h.detectInAppBrowser() }, { app, ios }, key);
+    assert.equal(h.install.detectPlatform(), "in-app", key);
+  }
+});
+
+test("in-app: real browsers are not in-app", () => {
+  for (const key of ["safari", "chromeAndroid"]) {
+    const h = loadInstallState({ userAgent: UA[key], platform: key === "safari" ? "iPhone" : "Linux armv8l" });
+    assert.equal(h.detectInAppBrowser(), null, key);
+    assert.notEqual(h.install.detectPlatform(), "in-app", key);
+  }
+});
+
+test("in-app: standalone wins over in-app detection", () => {
+  const h = loadInstallState({ userAgent: UA.webviewIOS, platform: "iPhone", standaloneNavigator: true });
+  assert.equal(h.install.detectPlatform(), "installed");
+  assert.equal(h.maybeLeaveInAppBrowser(), false);
+  assert.deepEqual(h.nav.assigned, []);
+});
+
+test("in-app: hand-off URL per app", () => {
+  const href = "https://bible.anglican.kr/gen/1?v=3";
+  const url = (key) => {
+    const h = loadInstallState({ userAgent: UA[key], platform: /IOS/.test(key) ? "iPhone" : "Linux armv8l" });
+    return h.externalBrowserUrl(h.detectInAppBrowser(), href);
+  };
+  assert.equal(url("kakaoIOS"), "kakaotalk://web/openExternal?url=" + encodeURIComponent(href));
+  assert.equal(url("kakaoAndroid"), "kakaotalk://web/openExternal?url=" + encodeURIComponent(href));
+  assert.equal(url("lineIOS"), href + "&openExternalBrowser=1");
+  assert.equal(url("naverAndroid"), "intent://bible.anglican.kr/gen/1?v=3#Intent;scheme=https;end");
+  assert.equal(url("instagramAndroid"), "intent://bible.anglican.kr/gen/1?v=3#Intent;scheme=https;end");
+  assert.equal(url("naverIOS"), "x-safari-https://bible.anglican.kr/gen/1?v=3");
+  assert.equal(url("facebookIOS"), "x-safari-https://bible.anglican.kr/gen/1?v=3");
+  assert.equal(url("naverIOS16"), null, "x-safari-https needs iOS 17");
+  assert.equal(url("webviewAndroid"), null, "unknown web views are never redirected");
+  assert.equal(url("webviewIOS"), null);
+});
+
+test("in-app: auto hand-off happens once per tab session", () => {
+  const h = loadInstallState({ userAgent: UA.kakaoAndroid, platform: "Linux armv8l" });
+  assert.equal(h.maybeLeaveInAppBrowser(), true);
+  assert.equal(h.nav.assigned.length, 1);
+  assert.match(h.nav.assigned[0], /^kakaotalk:\/\/web\/openExternal\?url=/);
+  assert.equal(h.session["bible-inapp-left"], "1");
+  assert.equal(h.maybeLeaveInAppBrowser(), false, "second call stays");
+  assert.equal(h.nav.assigned.length, 1);
+});
+
+test("in-app: hand-off waits for the load event", () => {
+  const h = loadInstallState({ userAgent: UA.kakaoAndroid, platform: "Linux armv8l", readyState: "interactive" });
+  assert.equal(h.maybeLeaveInAppBrowser(), true);
+  assert.deepEqual(h.nav.assigned, [], "not while the document is loading");
+  h.fireLoad();
+  assert.equal(h.nav.assigned.length, 1);
+});
+
+test("in-app: no hand-off when the attempt cannot be remembered", () => {
+  const h = loadInstallState({ userAgent: UA.kakaoAndroid, platform: "Linux armv8l", sessionThrows: true });
+  assert.equal(h.maybeLeaveInAppBrowser(), false);
+  assert.deepEqual(h.nav.assigned, []);
+});
+
+test("in-app: Line reloads with the query, and does not loop when it is already there", () => {
+  const h = loadInstallState({ userAgent: UA.lineIOS, platform: "iPhone" });
+  assert.equal(h.maybeLeaveInAppBrowser(), true);
+  assert.deepEqual(h.nav.replaced, ["https://bible.anglican.kr/gen/1?openExternalBrowser=1"]);
+  const again = loadInstallState({
+    userAgent: UA.lineIOS, platform: "iPhone",
+    href: "https://bible.anglican.kr/gen/1?openExternalBrowser=1",
+  });
+  assert.equal(again.maybeLeaveInAppBrowser(), false);
+  assert.deepEqual(again.nav.replaced, []);
+  again.dropHandOffQuery();
+  assert.deepEqual(again.nav.replacedState, [], "inside Line the query stays — it is the loop guard");
+});
+
+test("in-app: device browser drops Line's hand-off query from the address", () => {
+  const h = loadInstallState({
+    userAgent: UA.safari, platform: "iPhone",
+    href: "https://bible.anglican.kr/gen/1?v=3&openExternalBrowser=1",
+  });
+  h.dropHandOffQuery();
+  assert.equal(h.maybeLeaveInAppBrowser(), false);
+  assert.deepEqual(h.nav.replacedState, ["/gen/1?v=3"]);
+  assert.deepEqual(h.nav.assigned, []);
+});
+
+test("in-app: unknown web view is left alone", () => {
+  const h = loadInstallState({ userAgent: UA.webviewAndroid, platform: "Linux armv8l" });
+  assert.equal(h.maybeLeaveInAppBrowser(), false);
+  assert.deepEqual(h.nav.assigned, []);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

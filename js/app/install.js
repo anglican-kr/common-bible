@@ -15,6 +15,7 @@ const { _loadNudgeState, _saveNudgeState } = window.appStorage;
 
 // Platform detection states:
 //   "installed"    — already running as a standalone PWA, nothing to show
+//   "in-app"       — in-app browser (KakaoTalk, Line, …); cannot install, open in the device browser
 //   "ios-safari"   — iPhone/iPad Safari; manual "Add to Home Screen" guide
 //   "ios-other"    — iOS 17+ Chrome/Firefox/Edge/etc; share-menu install guide
 //   "ios-legacy"   — iOS ≤16 non-Safari (Add-to-Home-Screen unsupported); open in Safari
@@ -24,6 +25,122 @@ const { _loadNudgeState, _saveNudgeState } = window.appStorage;
 //
 // beforeinstallprompt is captured and stored so the install modal can call prompt()
 // on user gesture. The `appinstalled` event and display-mode change both flip state.
+
+// ── BEGIN IN_APP ──
+// Exercised by tests/unit/install.test.js. In-app browsers (the web view a
+// messenger or SNS app opens links in) cannot install a PWA: no "Add to Home
+// Screen", no beforeinstallprompt, and storage is separate from the device
+// browser. We detect them by UA token and hand the current URL to the device
+// browser (ADR-008 §7).
+
+// Apps known to handle the hand-off URLs below. Anything else that looks like
+// a web view is "webview": detected, but never redirected automatically —
+// an Android web view that does not handle intent:// shows an error page
+// (ERR_UNKNOWN_URL_SCHEME) instead of the text.
+/** @type {Array<[string, RegExp]>} */
+const IN_APP_TOKENS = [
+  ["kakaotalk", /KAKAOTALK/i],
+  ["line", /\bLine\//],
+  ["naver", /NAVER\(inapp/i],
+  ["instagram", /Instagram/],
+  ["facebook", /FBAN|FBAV|FB_IAB/],
+];
+
+const IN_APP_LEFT_KEY = "bible-inapp-left";
+const LINE_EXTERNAL_PARAM = "openExternalBrowser";
+
+/** @returns {{ app: string; ios: boolean } | null} */
+function detectInAppBrowser() {
+  const ua = navigator.userAgent;
+  const ios = /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  for (const [app, re] of IN_APP_TOKENS) {
+    if (re.test(ua)) return { app, ios };
+  }
+  // Generic web views. Android marks them with "; wv)". On iOS Safari carries
+  // a "Safari/" token and the other browsers their own (CriOS, FxiOS, …);
+  // a bare WKWebView has neither.
+  if (!ios && /Android/.test(ua) && /; wv\)/.test(ua)) return { app: "webview", ios };
+  if (ios && !/Safari\/|CriOS|FxiOS|EdgiOS|OPiOS|GSA/.test(ua)) return { app: "webview", ios };
+  return null;
+}
+
+// The URL that makes the in-app browser hand `href` to the device browser,
+// or null when there is no known way (unknown web view, iOS ≤16, or Line
+// already asked once).
+/**
+ * @param {{ app: string; ios: boolean }} inApp
+ * @param {string} href
+ * @returns {string | null}
+ */
+function externalBrowserUrl(inApp, href) {
+  let u;
+  try { u = new URL(href); } catch { return null; }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+  const scheme = u.protocol.slice(0, -1);
+
+  if (inApp.app === "kakaotalk") {
+    return "kakaotalk://web/openExternal?url=" + encodeURIComponent(u.href);
+  }
+  if (inApp.app === "line") {
+    // Line reloads the URL in the device browser when it sees this query.
+    // Already present means Line did not honour it — do not loop.
+    if (u.searchParams.has(LINE_EXTERNAL_PARAM)) return null;
+    u.searchParams.set(LINE_EXTERNAL_PARAM, "1");
+    return u.href;
+  }
+  if (inApp.app === "webview") return null;
+
+  if (inApp.ios) {
+    // x-safari-https:// opens Safari from iOS 17. Undocumented by Apple.
+    const os = navigator.userAgent.match(/OS (\d+)_/);
+    if (os && parseInt(os[1], 10) < 17) return null;
+    return `x-safari-${scheme}://${u.host}${u.pathname}${u.search}${u.hash}`;
+  }
+  // Android: an intent with no package resolves to the default browser.
+  // The fragment is dropped — "#Intent" owns it.
+  return `intent://${u.host}${u.pathname}${u.search}#Intent;scheme=${scheme};end`;
+}
+
+// Arrived in the device browser from Line — drop the hand-off query from the
+// address. Runs at module load, before routing reads the URL.
+function dropHandOffQuery() {
+  if (detectInAppBrowser()) return;
+  try {
+    const u = new URL(location.href);
+    if (!u.searchParams.has(LINE_EXTERNAL_PARAM)) return;
+    u.searchParams.delete(LINE_EXTERNAL_PARAM);
+    history.replaceState(history.state, "", u.pathname + u.search + u.hash);
+  } catch {}
+}
+
+// Called by the app.js bootstrap after the first view is on screen, and the
+// hand-off itself waits for the load event — one started while the document
+// is still loading stops the remaining scripts and the load event (seen in
+// Chromium), leaving a blank or forever-loading page behind if it fails.
+// Returns true when a hand-off was started. One attempt per tab session: if
+// it failed, or the user comes back to the in-app browser and reloads, we stay.
+function maybeLeaveInAppBrowser() {
+  const inApp = detectInAppBrowser();
+  if (!inApp) return false;
+  if (install.isStandalone()) return false;
+  const url = externalBrowserUrl(inApp, location.href);
+  if (!url) return false;
+  try {
+    if (sessionStorage.getItem(IN_APP_LEFT_KEY)) return false;
+    sessionStorage.setItem(IN_APP_LEFT_KEY, "1");
+  } catch {
+    return false; // cannot remember the attempt — never risk a redirect loop
+  }
+  const go = () => {
+    if (inApp.app === "line") location.replace(url);
+    else location.href = url;
+  };
+  if (document.readyState === "complete") go();
+  else window.addEventListener("load", go, { once: true });
+  return true;
+}
+// ── END IN_APP ──
 
 // ── BEGIN INSTALL_STATE ──
 // Exercised by tests/unit/install.test.js. Platform detection state machine
@@ -67,6 +184,7 @@ const install = (() => {
 
   function detectPlatform() {
     if (isStandalone()) return "installed";
+    if (detectInAppBrowser()) return "in-app";
     const ua = navigator.userAgent;
     const isIOS = /iPad|iPhone|iPod/.test(ua) ||
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); // iPadOS 13+
@@ -134,6 +252,8 @@ const install = (() => {
 })();
 // ── END INSTALL_STATE ──
 
+dropHandOffQuery();
+
 // Tag the document so CSS can distinguish a real browser tab from a
 // standalone PWA. CSS @media (display-mode: browser) is unreliable on Safari,
 // which reports browser mode even in installed standalone (mdn/browser-compat-data
@@ -178,6 +298,42 @@ function buildInstallBody(platform) {
 
   if (platform === "installed") {
     $installModalBody.appendChild(el("p", {}, "이미 앱으로 설치되어 있습니다."));
+    return;
+  }
+
+  if (platform === "in-app") {
+    const inApp = detectInAppBrowser() || { app: "webview", ios: false };
+    /** @type {Record<string, string>} */
+    const names = { kakaotalk: "카카오톡", line: "라인", naver: "네이버 앱", instagram: "인스타그램", facebook: "페이스북" };
+    const where = names[inApp.app] || "이 앱";
+    $installModalBody.appendChild(el("p", {},
+      `${where} 안에서는 홈 화면에 앱을 설치할 수 없습니다.`));
+    $installModalBody.appendChild(el("p", {},
+      `${inApp.ios ? "Safari" : "Chrome"} 같은 브라우저에서 열면 설치할 수 있습니다.`));
+    const row = el("div", { className: "install-cta-row" });
+    const url = externalBrowserUrl(inApp, location.href);
+    if (url) {
+      const openBtn = el("button", { className: "install-cta", type: "button" }, "브라우저에서 열기");
+      openBtn.addEventListener("click", () => { location.href = url; });
+      row.appendChild(openBtn);
+    }
+    const copyBtn = el("button", { className: "install-cta", type: "button" }, "주소 복사");
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(location.href);
+        copyBtn.textContent = "복사됨";
+        setTimeout(() => { copyBtn.textContent = "주소 복사"; }, 2000);
+      } catch {
+        copyBtn.textContent = "복사 실패";
+      }
+    });
+    row.appendChild(copyBtn);
+    $installModalBody.appendChild(row);
+    if (!url) {
+      $installModalBody.appendChild(el("p", { className: "install-note" },
+        "주소를 복사해 브라우저의 주소창에 붙여 넣어 주세요."));
+    }
+    $installModalBody.appendChild(_buildNeverShowRow());
     return;
   }
 
@@ -462,7 +618,8 @@ function maybeShowInstallNudge() {
   const platform = install.detectPlatform();
   // Only nudge platforms where installation is meaningful and possible
   const nudgeable =
-    platform === "ios-safari" || platform === "ios-other" || platform === "android";
+    platform === "ios-safari" || platform === "ios-other" || platform === "android" ||
+    platform === "in-app";
   if (!nudgeable) return;
   if (_loadNudgeState().neverShow) return;
 
@@ -492,5 +649,6 @@ window.install = install;
 window.openInstallModal = openInstallModal;
 window.closeInstallModal = closeInstallModal;
 window.maybeShowInstallNudge = maybeShowInstallNudge;
+window.maybeLeaveInAppBrowser = maybeLeaveInAppBrowser;
 
-export { install, openInstallModal, closeInstallModal, maybeShowInstallNudge };
+export { install, openInstallModal, closeInstallModal, maybeShowInstallNudge, maybeLeaveInAppBrowser };

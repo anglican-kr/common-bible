@@ -301,7 +301,7 @@ function registerServiceWorker() {
 // All deferred init calls below resolve via the window facade set by their
 // owning module: route / loadVersion / initCompactHeader (views.js),
 // initBookmarkSheetDrag / initBookmarkDrawerResize (bookmark.js),
-// maybeShowInstallNudge (install.js). registerServiceWorker is module-local
+// maybeShowInstallNudge / maybeLeaveInAppBrowser (install.js). registerServiceWorker is module-local
 // to this file.
 window.addEventListener("DOMContentLoaded", () => {
   const idle = window.requestIdleCallback ?? ((cb) => setTimeout(cb, 200));
@@ -338,6 +338,9 @@ window.addEventListener("DOMContentLoaded", () => {
       }
       maybeShowInstallNudge();
       if (window.driveSync) window.driveSync.initDriveSync();
+      // Last: an in-app browser hands the page to the device browser (ADR-008 §7).
+      // Everything above is already under way if the hand-off stalls this document.
+      window.maybeLeaveInAppBrowser?.();
     });
   }));
 });

@@ -20,6 +20,11 @@ _ANDROID_UA = (
     "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
 )
+_ANDROID_WEBVIEW_UA = (
+    "Mozilla/5.0 (Linux; Android 14; SM-S921N; wv) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Version/4.0 Chrome/124.0.0.0 Mobile Safari/537.36"
+)
+_KAKAOTALK_ANDROID_UA = _ANDROID_WEBVIEW_UA + ";KAKAOTALK 2410850"
 _DESKTOP_UA = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
@@ -73,6 +78,18 @@ def _open_modal_body(browser, ua: str) -> str | None:
             [],
         ),
         (
+            "KakaoTalk in-app browser offers to open the device browser",
+            _KAKAOTALK_ANDROID_UA,
+            ["카카오톡", "브라우저에서 열기", "주소 복사"],
+            ["홈 화면에 추가"],
+        ),
+        (
+            "Unknown web view only offers to copy the address",
+            _ANDROID_WEBVIEW_UA,
+            ["설치할 수 없습니다", "주소 복사"],
+            ["브라우저에서 열기"],
+        ),
+        (
             "Desktop Chromium shows install CTA",
             _DESKTOP_UA,
             ["앱 설치"],
@@ -87,6 +104,31 @@ def test_install_guide_content(browser, label, ua, must_contain, must_not_contai
         assert s in text, f"[{label}] expected {s!r} in modal body"
     for s in must_not_contain:
         assert s not in text, f"[{label}] unexpected {s!r} in modal body"
+
+
+# ── 인앱브라우저 자동 전환 (maybeLeaveInAppBrowser, ADR-008 §7) ─────────────
+
+
+def test_in_app_hand_off_keeps_the_page_readable(browser):
+    """카카오톡 인앱브라우저는 첫 화면을 그린 뒤 전환을 한 번 시도하고,
+    전환이 되지 않아도(테스트 브라우저는 kakaotalk:// 을 열지 못한다) 본문이 남아야 한다."""
+    ctx = browser.new_context(user_agent=_KAKAOTALK_ANDROID_UA)
+    page = ctx.new_page()
+    page.goto(BASE + "/gen/1")
+    page.wait_for_function("sessionStorage.getItem('bible-inapp-left') === '1'", timeout=5000)
+    assert "한처음에" in page.inner_text("main#app")
+    ctx.close()
+
+
+def test_unknown_web_view_is_not_handed_off(browser):
+    """이름을 모르는 웹뷰는 자동 전환하지 않는다 — 전환 주소를 처리하지 못하면 오류 화면이 뜬다."""
+    ctx = browser.new_context(user_agent=_ANDROID_WEBVIEW_UA)
+    page = ctx.new_page()
+    page.goto(BASE + "/gen/1")
+    page.wait_for_selector(".settings-btn")
+    page.wait_for_timeout(1500)
+    assert page.evaluate("sessionStorage.getItem('bible-inapp-left')") is None
+    ctx.close()
 
 
 # ── 자동 넛지 (maybeShowInstallNudge) ────────────────────────────────────────
