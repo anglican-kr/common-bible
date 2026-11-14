@@ -88,7 +88,39 @@ function loadInstallState(opts = {}) {
     standaloneNavigator = false,
     standaloneDisplayMode = false,
     fullscreenDisplayMode = false,
+    href = "https://bible.anglican.kr/gen/1",
+    sessionItems = {},
+    sessionThrows = false,
+    readyState = "complete",
+    nudgeNeverShow = false,
+    sessionSetThrows = false,
   } = opts;
+  const clock = { now: 1_000_000 };
+
+  // Timers, document visibility and the guide opener for maybeLeaveInAppBrowser.
+  /** @type {Array<{ fn: Function; ms: number }>} */
+  const timers = [];
+  const guideCalls = [];
+  const docListeners = new Set();
+  const documentStub = {
+    readyState,
+    visibilityState: "visible",
+    addEventListener: (type, fn) => { if (type === "visibilitychange") docListeners.add(fn); },
+    removeEventListener: (_type, fn) => { docListeners.delete(fn); },
+  };
+
+  // location / history / sessionStorage stubs for maybeLeaveInAppBrowser.
+  const nav = { assigned: [], replaced: [], replacedState: [] };
+  const locationStub = {
+    get href() { return href; },
+    set href(v) { nav.assigned.push(v); },
+    replace: (v) => { nav.replaced.push(v); },
+  };
+  const session = { ...sessionItems };
+  const sessionStorageStub = {
+    getItem: (k) => { if (sessionThrows) throw new Error("denied"); return k in session ? session[k] : null; },
+    setItem: (k, v) => { if (sessionThrows || sessionSetThrows) throw new Error("denied"); session[k] = String(v); },
+  };
 
   const mq = makeMatchMedia();
   mq.setMatches("(display-mode: standalone)", !!standaloneDisplayMode);
@@ -114,24 +146,56 @@ function loadInstallState(opts = {}) {
   const ctx = {
     Object, Array, Set, Map, JSON, console, Error, Promise,
     Boolean, Number, String,
+    URL, RegExp, parseInt, encodeURIComponent,
     window: windowStub,
     navigator: windowStub.navigator,
+    location: locationStub,
+    document: documentStub,
+    Date: { now: () => clock.now },
+    setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
+    showInAppGuide: () => { if (!nudgeNeverShow) guideCalls.push(true); },
+    history: { state: null, replaceState: (_s, _t, url) => { nav.replacedState.push(url); } },
+    sessionStorage: sessionStorageStub,
   };
   vm.createContext(ctx);
   // `const install = (...)` doesn't auto-expose on globalThis — the appended
   // assignment makes the IIFE result reachable from ctx.install. Same trick
   // we'd otherwise need to do for the `function maybeShowInstallNudge`
   // export (functions DO hoist as globals so it works without help).
-  vm.runInContext(extractBlock("INSTALL_STATE") + "\nglobalThis.install = install;", ctx, {
+  vm.runInContext(extractBlock("IN_APP") + "\n" + extractBlock("INSTALL_STATE") + "\nglobalThis.install = install;", ctx, {
     filename: "install-state.js",
   });
 
   return {
     install: ctx.install,
+    detectInAppBrowser: ctx.detectInAppBrowser,
+    externalBrowserUrl: ctx.externalBrowserUrl,
+    maybeLeaveInAppBrowser: ctx.maybeLeaveInAppBrowser,
+    dropHandOffQuery: ctx.dropHandOffQuery,
+    handOffUrl: ctx.handOffUrl,
+    nav, session, timers, guideCalls, clock,
+    fireWindow(type) {
+      const set = windowListeners.get(type);
+      if (set) for (const fn of [...set]) fn({});
+    },
+    /** Fire the pending timers scheduled with exactly `ms`. */
+    fireTimers(ms) {
+      const due = timers.filter((t) => t.ms === ms);
+      for (const t of due) { timers.splice(timers.indexOf(t), 1); t.fn(); }
+    },
+    /** Another app came to the front: the document is hidden. */
+    hideDocument() {
+      documentStub.visibilityState = "hidden";
+      for (const fn of [...docListeners]) fn({});
+    },
     /** Fire a beforeinstallprompt event. `evt` should be { prompt, userChoice }. */
     fireBeforeInstallPrompt(evt) {
       const set = windowListeners.get("beforeinstallprompt");
       if (set) for (const fn of [...set]) fn(evt);
+    },
+    fireLoad() {
+      const set = windowListeners.get("load");
+      if (set) for (const fn of [...set]) fn({});
     },
     fireAppInstalled() {
       const set = windowListeners.get("appinstalled");
@@ -152,6 +216,9 @@ function loadNudge(opts = {}) {
   const {
     platformReturn = "ios-safari",
     initialState = { visits: 0, nextShow: 1, neverShow: false },
+    handOff = null,
+    handOffMark = false,
+    overlayOpen = false,
   } = opts;
 
   let savedState = { ...initialState };
@@ -177,6 +244,9 @@ function loadNudge(opts = {}) {
     _loadNudgeState: () => ({ ...savedState }),
     _saveNudgeState: (s) => { savedState = { ...s }; },
     openInstallModal: () => { openCalls.push(true); },
+    handOffUrl: () => handOff,
+    hasHandOffMark: () => handOffMark,
+    installOverlay: { isOpen: overlayOpen },
     setTimeout: (fn, ms) => {
       timers.push({ fn, ms });
       return timers.length;
@@ -187,6 +257,7 @@ function loadNudge(opts = {}) {
 
   return {
     maybeShowInstallNudge: ctx.maybeShowInstallNudge,
+    showInAppGuide: ctx.showInAppGuide,
     detectCalls, openCalls, timers,
     getState: () => ({ ...savedState }),
     setPlatform: (p) => { currentPlatform = p; },
@@ -508,8 +579,373 @@ test("display-mode change → notify subscribers", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// IN_APP tests (ADR-008 §7)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const IOS = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) ";
+const AND = "Mozilla/5.0 (Linux; Android 14; SM-S921N; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.0.0 Mobile Safari/537.36";
+const UA = {
+  kakaoIOS: IOS + "Mobile/15E148 KAKAOTALK 10.8.5",
+  kakaoAndroid: AND + ";KAKAOTALK 2410850",
+  lineIOS: IOS + "Mobile/15E148 Safari Line/14.5.0",
+  naverAndroid: AND + " NAVER(inapp; search; 2000; 12.9.5)",
+  naverIOS: IOS + "Mobile/15E148 NAVER(inapp; search; 2000; 12.9.5; 15PRO)",
+  naverIOS16: IOS.replace("17_4", "16_6") + "Mobile/15E148 NAVER(inapp; search; 2000; 12.9.5; 14)",
+  instagramAndroid: AND + " Instagram 330.0.0.40.92 Android",
+  facebookIOS: IOS + "Mobile/15E148 [FBAN/FBIOS;FBAV/460.0.0;FBBV/1]",
+  webviewAndroid: AND,
+  webviewIOS: IOS + "Mobile/15E148",
+  safari: IOS + "Version/17.4 Mobile/15E148 Safari/604.1",
+  chromeAndroid: "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+};
+
+test("in-app: detects each known app and the generic web views", () => {
+  const cases = [
+    ["kakaoIOS", "kakaotalk", true], ["kakaoAndroid", "kakaotalk", false],
+    ["lineIOS", "line", true], ["naverAndroid", "naver", false],
+    ["instagramAndroid", "instagram", false], ["facebookIOS", "facebook", true],
+    ["webviewAndroid", "webview", false], ["webviewIOS", "webview", true],
+  ];
+  for (const [key, app, ios] of cases) {
+    const h = loadInstallState({ userAgent: UA[key], platform: ios ? "iPhone" : "Linux armv8l" });
+    assert.deepEqual({ ...h.detectInAppBrowser() }, { app, ios }, key);
+    assert.equal(h.install.detectPlatform(), "in-app", key);
+  }
+});
+
+test("in-app: real browsers are not in-app", () => {
+  for (const key of ["safari", "chromeAndroid"]) {
+    const h = loadInstallState({ userAgent: UA[key], platform: key === "safari" ? "iPhone" : "Linux armv8l" });
+    assert.equal(h.detectInAppBrowser(), null, key);
+    assert.notEqual(h.install.detectPlatform(), "in-app", key);
+  }
+});
+
+test("in-app: standalone wins over in-app detection", () => {
+  const h = loadInstallState({ userAgent: UA.webviewIOS, platform: "iPhone", standaloneNavigator: true });
+  assert.equal(h.install.detectPlatform(), "installed");
+  assert.equal(h.maybeLeaveInAppBrowser(), false);
+  assert.deepEqual(h.nav.assigned, []);
+});
+
+test("in-app: hand-off URL per app", () => {
+  const plain = "https://bible.anglican.kr/gen/1?v=3";
+  // Every hand-off URL carries the "already handed off" mark.
+  const href = plain + "&openExternalBrowser=1";
+  const url = (key, from = plain) => {
+    const h = loadInstallState({ userAgent: UA[key], platform: /IOS/.test(key) ? "iPhone" : "Linux armv8l" });
+    return h.externalBrowserUrl(h.detectInAppBrowser(), from);
+  };
+  assert.equal(url("kakaoIOS", href), url("kakaoIOS"), "the mark is not added twice");
+  assert.equal(url("kakaoIOS"), "kakaotalk://web/openExternal?url=" + encodeURIComponent(href));
+  assert.equal(url("kakaoAndroid"), "kakaotalk://web/openExternal?url=" + encodeURIComponent(href));
+  assert.equal(url("lineIOS"), href);
+  // The fallback URL carries mark "0": the hand-off failed.
+  const intent = "intent://bible.anglican.kr/gen/1?v=3&openExternalBrowser=1#Intent;scheme=https;S.browser_fallback_url=" +
+    encodeURIComponent(plain + "&openExternalBrowser=0") + ";end";
+  assert.equal(url("naverAndroid"), intent);
+  assert.equal(url("instagramAndroid"), intent);
+  assert.equal(url("naverIOS"), "x-safari-https://bible.anglican.kr/gen/1?v=3&openExternalBrowser=1");
+  assert.equal(url("facebookIOS"), "x-safari-https://bible.anglican.kr/gen/1?v=3&openExternalBrowser=1");
+  assert.equal(url("naverIOS16"), null, "x-safari-https needs iOS 17");
+  assert.equal(url("webviewAndroid"), null, "unknown web views are never redirected");
+  assert.equal(url("webviewIOS"), null);
+});
+
+test("in-app: auto hand-off happens once per tab session", () => {
+  const h = loadInstallState({ userAgent: UA.kakaoAndroid, platform: "Linux armv8l" });
+  assert.equal(h.maybeLeaveInAppBrowser(), true);
+  assert.equal(h.nav.assigned.length, 1);
+  assert.match(h.nav.assigned[0], /^kakaotalk:\/\/web\/openExternal\?url=/);
+  assert.equal(h.session["bible-inapp-left"], "1");
+  assert.equal(h.maybeLeaveInAppBrowser(), false, "second call stays");
+  assert.equal(h.nav.assigned.length, 1);
+});
+
+test("in-app: hand-off waits for the load event", () => {
+  const h = loadInstallState({ userAgent: UA.kakaoAndroid, platform: "Linux armv8l", readyState: "interactive" });
+  assert.equal(h.maybeLeaveInAppBrowser(), true);
+  assert.deepEqual(h.nav.assigned, [], "not while the document is loading");
+  h.fireLoad();
+  assert.equal(h.nav.assigned.length, 1);
+});
+
+test("in-app: iPad sending a desktop UA reads the iOS version from Version/", () => {
+  const mac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) ";
+  const url = (version) => {
+    const h = loadInstallState({
+      userAgent: mac + `Version/${version} Mobile/15E148 NAVER(inapp; search; 2000; 12.9.5)`,
+      platform: "MacIntel", maxTouchPoints: 5,
+    });
+    return h.externalBrowserUrl(h.detectInAppBrowser(), "https://bible.anglican.kr/gen/1");
+  };
+  assert.equal(url("16.6"), null, "iPadOS 16 has no x-safari-https");
+  assert.equal(url("17.4"), "x-safari-https://bible.anglican.kr/gen/1?openExternalBrowser=1");
+});
+
+test("in-app: the attempt is recorded only when the hand-off actually starts", () => {
+  const h = loadInstallState({ userAgent: UA.kakaoAndroid, platform: "Linux armv8l", readyState: "interactive" });
+  assert.equal(h.maybeLeaveInAppBrowser(), true);
+  assert.equal(h.session["bible-inapp-left"], undefined, "still waiting for load");
+  h.fireLoad();
+  assert.equal(h.session["bible-inapp-left"], "1");
+});
+
+test("in-app: load slower than 3s → no hand-off, the guide opens instead", () => {
+  const h = loadInstallState({ userAgent: UA.kakaoAndroid, platform: "Linux armv8l", readyState: "interactive" });
+  assert.equal(h.maybeLeaveInAppBrowser(), true);
+  h.fireTimers(3000);
+  assert.equal(h.guideCalls.length, 1);
+  h.fireLoad();
+  assert.deepEqual(h.nav.assigned, [], "a late load does not pull the reader away");
+  assert.equal(h.session["bible-inapp-left"], "1", "a reload of this tab stays too");
+  assert.equal(h.handOffUrl(), null);
+});
+
+test("in-app: load in time → the 3s timer does nothing", () => {
+  const h = loadInstallState({ userAgent: UA.kakaoAndroid, platform: "Linux armv8l", readyState: "interactive" });
+  h.maybeLeaveInAppBrowser();
+  h.fireLoad();
+  h.fireTimers(3000);
+  assert.equal(h.nav.assigned.length, 1);
+  assert.equal(h.guideCalls.length, 0);
+});
+
+test("in-app: still visible 2.5s after the hand-off → it failed, the guide opens", () => {
+  const h = loadInstallState({ userAgent: UA.naverAndroid, platform: "Linux armv8l" });
+  assert.equal(h.maybeLeaveInAppBrowser(), true);
+  assert.equal(h.guideCalls.length, 0);
+  h.fireTimers(2500);
+  assert.equal(h.guideCalls.length, 1);
+});
+
+test("in-app: document hidden after the hand-off → it worked, no guide", () => {
+  const h = loadInstallState({ userAgent: UA.naverAndroid, platform: "Linux armv8l" });
+  h.maybeLeaveInAppBrowser();
+  h.hideDocument();
+  h.fireTimers(2500);
+  assert.equal(h.guideCalls.length, 0);
+});
+
+test("in-app: pagehide or blur after the hand-off also counts as away", () => {
+  for (const type of ["pagehide", "blur"]) {
+    const h = loadInstallState({ userAgent: UA.naverIOS, platform: "iPhone" });
+    h.maybeLeaveInAppBrowser();
+    h.fireWindow(type);
+    h.fireTimers(2500);
+    assert.equal(h.guideCalls.length, 0, type);
+  }
+});
+
+test("in-app: check timer firing late → the web view was suspended, no guide", () => {
+  const h = loadInstallState({ userAgent: UA.naverIOS, platform: "iPhone" });
+  h.maybeLeaveInAppBrowser();
+  h.clock.now += 60_000; // came back a minute later; no event was delivered
+  h.fireTimers(2500);
+  assert.equal(h.guideCalls.length, 0);
+});
+
+test("in-app: a marked URL opened in an in-app browser again is not handed off twice", () => {
+  for (const [key, platform] of [["kakaoAndroid", "Linux armv8l"], ["naverIOS", "iPhone"], ["instagramAndroid", "Linux armv8l"]]) {
+    const h = loadInstallState({
+      userAgent: UA[key], platform,
+      href: "https://bible.anglican.kr/gen/1?openExternalBrowser=1",
+    });
+    assert.equal(h.install.detectPlatform(), "in-app", key);
+    assert.equal(h.handOffUrl(), null, key);
+    assert.equal(h.maybeLeaveInAppBrowser(), false, key);
+    assert.deepEqual(h.nav.assigned, [], key);
+    h.dropHandOffQuery();
+    assert.deepEqual(h.nav.replacedState, [], "the mark stays — it is the loop guard");
+  }
+});
+
+test("in-app: Android Naver receiving a handed-off URL is the default browser — an ordinary Android browser", () => {
+  // The hand-off lands in a new Naver tab whose sessionStorage is empty.
+  const h = loadInstallState({
+    userAgent: UA.naverAndroid, platform: "Linux armv8l",
+    href: "https://bible.anglican.kr/gen/1?v=3&openExternalBrowser=1",
+  });
+  assert.equal(h.detectInAppBrowser(), null);
+  assert.equal(h.install.detectPlatform(), "android");
+  assert.equal(h.maybeLeaveInAppBrowser(), false);
+  h.dropHandOffQuery();
+  assert.deepEqual(h.nav.replacedState, ["/gen/1?v=3"], "the mark goes");
+  assert.equal(h.session["bible-inapp-home"], "1", "and the tab remembers");
+});
+
+test("in-app: the Naver default-browser tab stays an ordinary browser after the mark is gone", () => {
+  const h = loadInstallState({
+    userAgent: UA.naverAndroid, platform: "Linux armv8l",
+    sessionItems: { "bible-inapp-home": "1" },
+  });
+  assert.equal(h.install.detectPlatform(), "android");
+  assert.equal(h.maybeLeaveInAppBrowser(), false, "a reload does not hand off");
+});
+
+test("in-app: Naver default-browser tab that cannot remember keeps the mark", () => {
+  const h = loadInstallState({
+    userAgent: UA.naverAndroid, platform: "Linux armv8l", sessionThrows: true,
+    href: "https://bible.anglican.kr/gen/1?openExternalBrowser=1",
+  });
+  h.dropHandOffQuery();
+  assert.deepEqual(h.nav.replacedState, []);
+  assert.equal(h.install.detectPlatform(), "android");
+});
+
+test("in-app: Android Naver reloaded from the fallback URL (mark 0) is a failed hand-off, still in-app", () => {
+  const h = loadInstallState({
+    userAgent: UA.naverAndroid, platform: "Linux armv8l",
+    href: "https://bible.anglican.kr/gen/1?openExternalBrowser=0",
+  });
+  assert.equal(h.install.detectPlatform(), "in-app");
+  assert.equal(h.maybeLeaveInAppBrowser(), false);
+  h.dropHandOffQuery();
+  assert.deepEqual(h.nav.replacedState, []);
+});
+
+test("in-app: attempt cannot be recorded at hand-off time → stay and open the guide", () => {
+  const h = loadInstallState({ userAgent: UA.kakaoAndroid, platform: "Linux armv8l", sessionSetThrows: true });
+  assert.equal(h.maybeLeaveInAppBrowser(), true);
+  assert.deepEqual(h.nav.assigned, []);
+  assert.equal(h.guideCalls.length, 1);
+});
+
+test("in-app: the link-preview crawler (kakaotalk-scrap) is not an in-app browser", () => {
+  const h = loadInstallState({ userAgent: "facebookexternalhit/1.1; kakaotalk-scrap/1.0; +https://devtalk.kakao.com/t/scrap/33984" });
+  assert.equal(h.detectInAppBrowser(), null);
+});
+
+test("in-app: the installed app drops the hand-off mark even though its UA has no Safari token", () => {
+  const h = loadInstallState({
+    userAgent: UA.webviewIOS, platform: "iPhone", standaloneNavigator: true,
+    href: "https://bible.anglican.kr/gen/1?openExternalBrowser=1",
+  });
+  h.dropHandOffQuery();
+  assert.deepEqual(h.nav.replacedState, ["/gen/1"]);
+});
+
+test("in-app: shareableHref leaves the hand-off mark out", () => {
+  const h = loadInstallState({
+    userAgent: UA.lineIOS, platform: "iPhone",
+    href: "https://bible.anglican.kr/gen/1?v=3&openExternalBrowser=1#v3",
+  });
+  assert.equal(h.ctx.shareableHref(), "https://bible.anglican.kr/gen/1?v=3#v3");
+});
+
+test("in-app: handOffUrl is null once this tab session has tried", () => {
+  const h = loadInstallState({ userAgent: UA.kakaoIOS, platform: "iPhone" });
+  assert.match(h.handOffUrl(), /^kakaotalk:/);
+  h.maybeLeaveInAppBrowser();
+  assert.equal(h.handOffUrl(), null);
+});
+
+test("in-app: no hand-off when the attempt cannot be remembered", () => {
+  const h = loadInstallState({ userAgent: UA.kakaoAndroid, platform: "Linux armv8l", sessionThrows: true });
+  assert.equal(h.maybeLeaveInAppBrowser(), false);
+  assert.deepEqual(h.nav.assigned, []);
+});
+
+test("in-app: Line reloads with the query, and does not loop when it is already there", () => {
+  const h = loadInstallState({ userAgent: UA.lineIOS, platform: "iPhone" });
+  assert.equal(h.maybeLeaveInAppBrowser(), true);
+  assert.deepEqual(h.nav.replaced, ["https://bible.anglican.kr/gen/1?openExternalBrowser=1"]);
+  const again = loadInstallState({
+    userAgent: UA.lineIOS, platform: "iPhone",
+    href: "https://bible.anglican.kr/gen/1?openExternalBrowser=1",
+  });
+  assert.equal(again.maybeLeaveInAppBrowser(), false);
+  assert.deepEqual(again.nav.replaced, []);
+  again.dropHandOffQuery();
+  assert.deepEqual(again.nav.replacedState, [], "inside Line the query stays — it is the loop guard");
+});
+
+test("in-app: device browser drops Line's hand-off query from the address", () => {
+  const h = loadInstallState({
+    userAgent: UA.safari, platform: "iPhone",
+    href: "https://bible.anglican.kr/gen/1?v=3&openExternalBrowser=1",
+  });
+  h.dropHandOffQuery();
+  assert.equal(h.maybeLeaveInAppBrowser(), false);
+  assert.deepEqual(h.nav.replacedState, ["/gen/1?v=3"]);
+  assert.deepEqual(h.nav.assigned, []);
+});
+
+test("in-app: unknown web view is left alone", () => {
+  const h = loadInstallState({ userAgent: UA.webviewAndroid, platform: "Linux armv8l" });
+  assert.equal(h.maybeLeaveInAppBrowser(), false);
+  assert.deepEqual(h.nav.assigned, []);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // NUDGE tests
 // ─────────────────────────────────────────────────────────────────────────────
+
+test("nudge: in-app with no way out → opens on the first visit", () => {
+  const h = loadNudge({
+    platformReturn: "in-app",
+    initialState: { visits: 0, nextShow: 2, neverShow: false },
+  });
+  h.maybeShowInstallNudge();
+  assert.equal(h.timers.length, 1);
+  h.fireTimers();
+  assert.equal(h.openCalls.length, 1);
+  assert.equal(h.getState().nextShow, 4);
+});
+
+test("nudge: in-app after the first visit follows nextShow", () => {
+  const h = loadNudge({
+    platformReturn: "in-app",
+    initialState: { visits: 1, nextShow: 4, neverShow: false },
+  });
+  h.maybeShowInstallNudge();
+  assert.equal(h.timers.length, 0);
+});
+
+test("nudge: in-app about to be handed off → counts the visit, opens nothing", () => {
+  const h = loadNudge({
+    platformReturn: "in-app",
+    initialState: { visits: 1, nextShow: 2, neverShow: false },
+    handOff: "kakaotalk://web/openExternal?url=x",
+  });
+  h.maybeShowInstallNudge();
+  assert.equal(h.getState().visits, 2);
+  assert.equal(h.timers.length, 0);
+});
+
+test("nudge: in-app page reloaded from a hand-off URL → opens whatever the count, visit not counted twice", () => {
+  const h = loadNudge({
+    platformReturn: "in-app",
+    initialState: { visits: 5, nextShow: 8, neverShow: false },
+    handOffMark: true,
+  });
+  h.maybeShowInstallNudge();
+  assert.equal(h.getState().visits, 5);
+  h.fireTimers();
+  assert.equal(h.openCalls.length, 1);
+});
+
+test("showInAppGuide: opens at once and pushes nextShow", () => {
+  const h = loadNudge({
+    platformReturn: "in-app",
+    initialState: { visits: 1, nextShow: 2, neverShow: false },
+  });
+  h.showInAppGuide();
+  assert.equal(h.openCalls.length, 1);
+  assert.equal(h.getState().nextShow, 4);
+});
+
+test("showInAppGuide: neverShow, an open modal, or another platform → nothing", () => {
+  const never = loadNudge({ platformReturn: "in-app", initialState: { visits: 1, nextShow: 2, neverShow: true } });
+  never.showInAppGuide();
+  assert.equal(never.openCalls.length, 0);
+  const open = loadNudge({ platformReturn: "in-app", overlayOpen: true });
+  open.showInAppGuide();
+  assert.equal(open.openCalls.length, 0);
+  const safari = loadNudge({ platformReturn: "ios-safari" });
+  safari.showInAppGuide();
+  assert.equal(safari.openCalls.length, 0);
+});
 
 test("nudge: ios-safari + visits hits nextShow → opens modal after 1500ms", () => {
   const h = loadNudge({
