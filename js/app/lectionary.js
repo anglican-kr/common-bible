@@ -364,29 +364,64 @@ function setCondition(/** @type {ReadingGroup} */ group) {
 }
 
 /**
- * 괄호 선택 구절 세트의 바탕 — 앞선 선택지 가운데 슬롯 구성이 같고 **한 슬롯만** 라벨이 다른(짧은) 것, 가장 가까운 것.
- * 실데이터의 괄호 세트 34건이 전부 이 형식이다(2026-10-12 실측). 없으면 -1.
- * @param {ReadingOption[]} options @param {ReadingGroup} g
+ * 두 세트의 슬롯 구성이 같고 **한 슬롯만** 라벨이 다르면 그 슬롯의 쌍(`a`는 세트 `a`의 것, `b`는 세트 `b`의 것), 아니면 null.
+ * 괄호 세트의 바탕 찾기(`bracketBaseOf`)와 「또는」 뒤의 짧은 본문 찾기(`findLongBase`)가 같은 비교를 쓴다.
+ * @param {ReadingGroup} a @param {ReadingGroup} b
+ * @returns {{ a: ReadingSlot, b: ReadingSlot } | null}
  */
-function findBracketBase(options, g) {
-  for (let i = options.length - 1; i >= 0; i--) {
-    const base = options[i].group;
-    if (base.readings.length !== g.readings.length) continue;
-    let diff = 0;
-    let ok = true;
-    for (const r of g.readings) {
-      const s = base.readings.find((x) => x && x.slot === r.slot);
-      if (!s || s.bookId !== r.bookId) { ok = false; break; }
-      if (s.label !== r.label) diff++;
-    }
-    if (ok && diff === 1) return i;
+function soleDiff(a, b) {
+  if (a.readings.length !== b.readings.length) return null;
+  /** @type {{ a: ReadingSlot, b: ReadingSlot } | null} */
+  let found = null;
+  for (const r of b.readings) {
+    const s = a.readings.find((x) => x && x.slot === r.slot);
+    if (!s) return null;
+    if (s.label === r.label) continue;
+    if (found) return null;
+    found = { a: s, b: r };
   }
-  return -1;
+  return found;
+}
+
+/**
+ * 슬롯의 절 범위 조각 — 장마다 `verseSpec`을 쉼표로 나눈 것(1장의 `39-45,46-55`는 `1:39-45`와 `1:46-55`). 괄호 세트의
+ * 범위는 바탕의 조각에 괄호 안의 조각을 더한 것이다. 화면용 라벨이 아니라 파서가 만든 범위를 읽는다.
+ * @param {ReadingSlot} slot @returns {string[]}
+ */
+function refPieces(slot) {
+  return (slot.refs || []).flatMap((r) => String(r.verseSpec).split(",").map((p) => `${r.chapter}:${p.trim()}`));
+}
+
+/**
+ * 괄호 선택 구절 세트 `sets[at]`의 바탕 — 그 앞의 괄호 세트가 아닌 세트 가운데 슬롯 구성이 같고 **한 슬롯만** 라벨이 다른 것.
+ * 실데이터의 괄호 세트 38건이 전부 이 형식이다(2026-10-12 실측, 2026-11-05에 넷 더함). 없으면 null.
+ * 후보가 여럿이면 ① 절 범위 조각이 모두 괄호 세트에 있는 것(책자의 「27:11-54(55-60)」에서 괄호 밖이 바탕이다. 실데이터
+ * 38건이 모두 여기에 든다), ② 그 슬롯의 절이 모두 괄호 세트에 들어 있는 것(반절이 있으면 절 번호로 알 수 없어 뺀다),
+ * ③ 나머지의 차례로 고르고, 같은 단계에서는 가장 가까운 것이다. 선택지를 합치기 전의 세트 목록에서 정하므로 합치는
+ * 순서에 따라 달라지지 않는다(리뷰 2026-11-14).
+ * @param {ReadingGroup[]} sets @param {number} at
+ * @returns {ReadingGroup | null}
+ */
+function bracketBaseOf(sets, at) {
+  const g = sets[at];
+  /** @type {Array<ReadingGroup | null>} */
+  const tier = [null, null, null];
+  for (let i = at - 1; i >= 0; i--) {
+    const c = sets[i];
+    if (c.set_note === BRACKET_NOTE) continue;
+    const d = soleDiff(c, g);
+    if (!d || d.a.bookId !== d.b.bookId) continue;
+    const pieces = refPieces(d.b);
+    const rank = refPieces(d.a).every((p) => pieces.includes(p)) ? 0
+      : !hasHalfVerse(d.a) && !hasHalfVerse(d.b) && slotWithin(d.a, d.b) ? 1 : 2;
+    if (!tier[rank]) tier[rank] = c;
+  }
+  return tier[0] || tier[1] || tier[2];
 }
 
 /**
  * 슬롯 `short`의 절이 모두 슬롯 `long`에 들어 있는가 — 같은 책이고, `short`의 장마다 `long`이 그 장 전체(`all`)이거나
- * `short`가 적은 절을 모두 덮는다. `short`가 장 전체이면 `long`도 그 장 전체여야 한다.
+ * `short`가 적은 절이 모두 `long`에 있다. `short`가 장 전체이면 `long`도 그 장 전체여야 한다.
  * @param {ReadingSlot} short @param {ReadingSlot} long
  */
 function slotWithin(short, long) {
@@ -416,17 +451,16 @@ function findLongBase(options, g) {
   const i = options.length - 1;
   if (i < 0 || options[i].short || g.set_note === BRACKET_NOTE || setCondition(g) !== null) return -1;
   const base = options[i].group;
-  if (base.title !== g.title || base.common !== g.common || setCondition(base) !== null) return -1;
-  if (base.readings.length !== g.readings.length) return -1;
-  let within = 0;
-  for (const r of g.readings) {
-    const l = base.readings.find((x) => x && x.slot === r.slot);
-    if (!l) return -1;
-    if (l.label === r.label) continue;
-    if (!slotWithin(r, l)) return -1;
-    within++;
-  }
-  return within === 1 ? i : -1;
+  if (base.set_note === BRACKET_NOTE || base.title !== g.title || base.common !== g.common || setCondition(base) !== null) return -1;
+  const d = soleDiff(base, g);
+  if (!d || hasHalfVerse(d.a) || hasHalfVerse(d.b)) return -1;
+  // Strictly shorter: the same verses under another label are not a short form.
+  return slotWithin(d.b, d.a) && !slotWithin(d.a, d.b) ? i : -1;
+}
+
+/** 반절(「6a」, 「6b」)이 있는 슬롯인가 — 절 포함 판정(`slotWithin`)은 반절을 절 전체로 읽으므로 합치지 않는다. */
+function hasHalfVerse(/** @type {ReadingSlot} */ slot) {
+  return (slot.refs || []).some((r) => /\d[a-z]/i.test(String(r.verseSpec)));
 }
 
 /**
@@ -444,15 +478,28 @@ function findLongBase(options, g) {
 function readingOptions(sets, baseName) {
   /** @type {ReadingOption[]} */
   const out = [];
-  for (const [idx, g] of sets.entries()) {
+  // Bracket bases are settled on the raw set list first, so merging below cannot change or lose them.
+  /** @type {Map<ReadingGroup, ReadingGroup>} */
+  const baseOf = new Map();
+  sets.forEach((g, i) => {
+    const base = g.set_note === BRACKET_NOTE ? bracketBaseOf(sets, i) : null;
+    if (base) baseOf.set(g, base);
+  });
+  const bases = new Set(baseOf.values());
+  for (const g of sets) {
     if (g.set_note === BRACKET_NOTE) {
-      const i = findBracketBase(out, g);
-      if (i >= 0) { out[i] = { group: g, short: out[i].group, label: "" }; continue; }
+      const base = baseOf.get(g) || null;
+      // A base is never merged with a 「또는」 set (`bases` below), so its option has no short form yet.
+      const i = base ? out.findIndex((o) => o.group === base) : -1;
+      // A second bracket set on the same base is its own option at its own place in the set order; the base stays the
+      // short form of both.
+      if (i >= 0) out[i] = { group: g, short: base, label: "" };
+      else out.push({ group: g, short: base, label: "" });
+      continue;
     }
-    // A set that a later bracket set builds on stays its own option — one option can show only one shorter form.
-    const laterBracketBase = sets.slice(idx + 1).some((b) => b.set_note === BRACKET_NOTE && findBracketBase([{ group: g, short: null, label: "" }], b) >= 0);
-    const longBase = laterBracketBase ? -1 : findLongBase(out, g);
-    if (longBase >= 0) { out[longBase] = { ...out[longBase], short: g }; continue; }
+    // One option shows only one shorter form: a set that a bracket set builds on is neither merged nor merged into.
+    const longBase = bases.has(g) ? -1 : findLongBase(out, g);
+    if (longBase >= 0 && !bases.has(out[longBase].group)) { out[longBase] = { ...out[longBase], short: g }; continue; }
     out.push({ group: g, short: null, label: "" });
   }
   const titles = new Set(out.map((o) => o.group.title));
@@ -1551,6 +1598,10 @@ function markOptionalVerses(article, chapter, isOptional) {
   // 표시 전용이다. `aria-hidden`과 `user-select: none`에 더해 복사 본문에서도 뺀다(`data-copy-omit`, verse-spec.js 직렬화, Copilot 리뷰 10회차)
   const bracket = (/** @type {string} */ glyph, extra = "") =>
     el("span", { className: `lect-bracket${extra}`, "aria-hidden": "true", "data-copy-omit": "" }, glyph);
+  // 〔 〕는 화면 낭독기에 숨기므로 묶음의 처음과 끝을 글로 알린다(리뷰 2026-11-14). 화면에는 보이지 않고 복사에서도 뺀다.
+  // 절 `span` 밖에 둔다(절의 글을 읽는 코드에 섞이지 않게): 시작은 첫 절과 그 앞의 ※ 앞에, 끝은 마지막 절과 그 인용 칩 뒤에.
+  // 묶음 안의 ※와 인용 칩도 두 글 사이에서 읽힌다.
+  const spoken = (/** @type {string} */ text) => el("span", { className: "sr-only lect-optional-sr", "data-copy-omit": "" }, text);
   spans.forEach((span, i) => {
     if (!optAt(i)) return;
     span.classList.add("lect-optional");
@@ -1558,21 +1609,60 @@ function markOptionalVerses(article, chapter, isOptional) {
       /** @type {Element} */
       let lead = span;
       while (lead.previousElementSibling?.classList.contains("parallel-anchor")) lead = lead.previousElementSibling;
-      if (lead !== span && !span.classList.contains("verse-poetry")) lead.before(bracket("〔"));
-      else span.insertBefore(bracket("〔"), span.firstChild);
+      const open = bracket("〔");
+      if (lead !== span && !span.classList.contains("verse-poetry")) lead.before(open);
+      else span.insertBefore(open, span.firstChild);
+      (open.parentNode === span ? lead : open).before(spoken("선택 구절 시작. "));
     }
     if (i === spans.length - 1 || !optAt(i + 1)) {
       const chip = span.nextElementSibling;
-      if (!chip || !chip.classList.contains("cite-chip")) span.appendChild(bracket("〕"));
+      const close = bracket("〕");
+      if (!chip || !chip.classList.contains("cite-chip")) { span.appendChild(close); span.after(spoken(" 선택 구절 끝.")); }
       else if (chip.classList.contains("cite-chip--poetry")) {
         span.appendChild(bracket("〕", " lect-bracket--chips-off"));
         chip.classList.add("lect-chip-closes");
+        chip.after(spoken(" 선택 구절 끝."));
       } else {
         const gap = chip.nextSibling;
-        (gap && gap.nodeType === Node.TEXT_NODE && /^\s+$/.test(gap.textContent || "") ? gap : chip).after(bracket("〕"));
+        (gap && gap.nodeType === Node.TEXT_NODE && /^\s+$/.test(gap.textContent || "") ? gap : chip).after(close);
+        close.after(spoken(" 선택 구절 끝."));
       }
     }
   });
+}
+
+/**
+ * 글(`article`)을 넘어 이어지는 선택 구절 묶음의 낭독기 안내를 하나로 잇는다 — 앞 글의 마지막 절과 바로 다음 글의 첫 절이
+ * 모두 선택 구절이고 본문이 실제로 이어지면 그 사이의 「선택 구절 끝」과 「선택 구절 시작」을 지운다(리뷰 2026-11-14).
+ * 이어지는 경우는 둘이다: 앞 장의 마지막 절(`data-chapter-last`) 뒤에 다음 장의 1절이 오거나, 같은 장에서 절 번호가 하나
+ * 늘어난다(한 장을 발췌 둘로 그린 경우). 사이에 다른 요소(읽지 못한 장의 안내)가 있거나 경계의 절이 반절로 잘렸으면
+ * (`data-halves`) 그대로 둔다. 절 `span`의 `data-vref`는 줄마다 글자가 붙으므로(「66b」) 번호만 읽는다. 장의 마지막이 병합
+ * 절이면 번호가 달라 잇지 않는다. 화면의 〔 〕는 글마다 따로 둔다.
+ * @param {HTMLElement} section
+ */
+function joinOptionalRuns(section) {
+  const articles = /** @type {HTMLElement[]} */ ([...section.querySelectorAll("article.chapter-text")]);
+  const num = (/** @type {Element} */ v) => parseInt(v.getAttribute("data-vref") || "", 10);
+  const halved = (/** @type {HTMLElement} */ article, /** @type {number} */ n) =>
+    (article.dataset.halves || "").split(",").some((h) => parseInt(h, 10) === n);
+  for (let i = 0; i + 1 < articles.length; i++) {
+    const a = articles[i];
+    const b = articles[i + 1];
+    if (a.nextElementSibling !== b) continue;
+    const before = [...a.querySelectorAll(".verse[data-vref]")];
+    const last = before[before.length - 1];
+    const first = b.querySelector(".verse[data-vref]");
+    if (!last || !first || !last.classList.contains("lect-optional") || !first.classList.contains("lect-optional")) continue;
+    const chapterA = Number(a.dataset.chapter);
+    const chapterB = Number(b.dataset.chapter);
+    const contiguous = chapterB === chapterA + 1 ? num(last) === Number(a.dataset.chapterLast) && num(first) === 1
+      : chapterB === chapterA && num(first) === num(last) + 1;
+    if (!contiguous || halved(a, num(last)) || halved(b, num(first))) continue;
+    const ends = a.querySelectorAll(".lect-optional-sr");
+    const starts = b.querySelectorAll(".lect-optional-sr");
+    if (ends.length) ends[ends.length - 1].remove();
+    if (starts.length) starts[0].remove();
+  }
 }
 
 /**
@@ -1791,6 +1881,12 @@ function buildReading(m, slot, chapters) {
     dropReadingMarks(article, slot.bookId);
     if (shortSlot) markOptionalVerses(article, run.chapter, isOptional);
     section.appendChild(article);
+  }
+  if (shortSlot) joinOptionalRuns(section);
+  // 표기만 다르고 절이 같은 짧은 본문(장 전체와 그 장의 모든 절)은 빼는 절이 없다. 그때는 주석을 두지 않는다. 짧은 본문이
+  // 긴 본문의 일부가 아니거나, 반절이 있어 절 번호로 가릴 수 없거나, 읽지 못한 장이 있으면 주석을 남긴다(리뷰 2026-11-14).
+  if (shortSlot && slotWithin(shortSlot, slot) && !hasHalfVerse(slot) && !hasHalfVerse(shortSlot) && !section.querySelector(".lect-optional, .lect-missing")) {
+    section.querySelector(".lect-optional-note")?.remove();
   }
   if (wantsGloria(slot, lastChapter)) section.appendChild(buildGloria());
   return section;
