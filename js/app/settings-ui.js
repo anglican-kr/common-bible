@@ -586,7 +586,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
   function appendParishRows(section) {
     appendListRows(section, {
       label: "소속교회",
-      info: "교회 축성일과 교구설립일에 그날의 전례독서와 본기도를 보여줍니다.",
+      info: "소속교회의 성당 축성일과 교구설립일에 그날의 전례독서와 본기도를 보여줍니다.",
       load: loadParishOptions,
       saved: loadParish,
       save: saveParish,

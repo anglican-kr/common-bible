@@ -394,13 +394,13 @@ def test_parish_select_lists_churches_by_diocese_and_saves_the_id(browser):
             assert not [n for n in g["names"] if n.startswith("북.")], g["label"]
             assert g["names"] == page.evaluate(SORTED_KO, g["names"]), g["label"]
             assert all(CHURCH_ID.fullmatch(i) for i in g["ids"]), g["label"]
-        assert groups[0]["names"].count("파주성당") == 1
+        assert groups[0]["names"].count("파주교회") == 1
 
         page.evaluate(RECORD_ANNOUNCEMENTS)
         bundang = page.evaluate(CHURCH_ID_OF, "분당성당")
-        select.select_option(label="분당성당")
+        select.select_option(label="분당교회")
         assert _ls(page, "bible-parish") == bundang
-        page.wait_for_function("() => window.__said.includes('소속교회 분당성당')")
+        page.wait_for_function("() => window.__said.includes('소속교회 분당교회')")
 
         close_popovers(page)
         pop.wait_for(state="hidden")
@@ -430,7 +430,7 @@ def test_parish_info_button_opens_the_description_and_close_returns_focus(browse
         btn.click()
         assert desc.is_visible()
         assert btn.get_attribute("aria-expanded") == "true"
-        assert "교회 축성일과 교구설립일에 그날의 전례독서와 본기도를 보여줍니다." in desc.inner_text()
+        assert "소속교회의 성당 축성일과 교구설립일에 그날의 전례독서와 본기도를 보여줍니다." in desc.inner_text()
         # 설명은 소속교회 행 바로 아래다
         assert page.evaluate("(d) => d.previousElementSibling.querySelector('select') !== null", desc.element_handle())
         assert pop.get_by_role("button", name="백업 및 동기화 안내 닫기", exact=True, include_hidden=True).count() == 1   # 그 설명은 닫혀 있다

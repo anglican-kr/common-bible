@@ -436,12 +436,31 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     return name.startsWith("북.");
   }
 
+  /**
+   * 소속교회 목록에 적는 이름 — 본당 표의 「용인성당」을 「용인교회」로 바꾼다(ADR-041 §6, 사용자 결정 2026-11-14). 소속교회는
+   * 건물이 아니라 사람들의 모임이다. 주교좌성당과 성공회대학교성당, 「성당」으로 끝나지 않는 이름(기도소)은 그대로 두고,
+   * 성가수도회성당은 「성가수도회」로 적는다(모두 사용자 결정 2026-11-14). 전례독서의 제목과 축성일 줄은 본당 표의 이름을
+   * 그대로 쓴다(축성한 것은 성당이다).
+   * @param {string} name
+   */
+  function churchName(name) {
+    if (name in CHURCH_NAMES) return CHURCH_NAMES[name];
+    return name.endsWith("성당") && !name.endsWith("주교좌성당") ? `${name.slice(0, -2)}교회` : name;
+  }
+
+  // 규칙(「성당」을 「교회」로)을 따르지 않는 이름. 본당 표의 이름이 키다.
+  /** @type {Record<string, string>} */
+  const CHURCH_NAMES = Object.assign(Object.create(null), {
+    "성공회대학교성당": "성공회대학교성당",
+    "성가수도회성당": "성가수도회",
+  });
+
   // 소속교회 목록의 교구 묶음 차례. 표에 이 밖의 교구가 생기면 그 뒤에 이름순으로 둔다.
   const PARISH_DIOCESES = ["서울", "대전", "부산"];
 
   /**
    * 본당 표를 소속교회 목록(교구별 교회)으로 바꾼다(ADR-041 §6). 북한에 있던 성당, 교구나 식별자가 없는 줄은 넣지 않는다.
-   * 두 줄인 교회(축성일이 둘)는 식별자가 같아 한 항목이다. 묶음 안의 차례는 이름의 사전순이다(사용자 확인 2026-11-05).
+   * 두 줄인 교회(축성일이 둘)는 식별자가 같아 한 항목이다. 이름은 목록에 적는 이름(`churchName`)이고, 묶음 안의 차례는 그 이름의 사전순이다(사용자 확인 2026-11-05).
    * @param {any} table @returns {import("../types.js").ParishGroup[]}
    */
   function parishGroups(table) {
@@ -452,7 +471,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
       if (isFormerNorthChurch(p.name)) continue;
       let churches = byDiocese.get(p.diocese);
       if (!churches) byDiocese.set(p.diocese, (churches = new Map()));
-      churches.set(p.church_id, p.name);
+      churches.set(p.church_id, churchName(p.name));
     }
     const rank = (/** @type {string} */ d) => (PARISH_DIOCESES.includes(d) ? PARISH_DIOCESES.indexOf(d) : PARISH_DIOCESES.length);
     return [...byDiocese.entries()]
@@ -466,7 +485,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   return {
     _$, chUnit, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
     HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot, SCROLL_ANCHORING, barBottom, scrollUnderBar,
-    publishBarHeight, isFormerNorthChurch, parishGroups,
+    publishBarHeight, isFormerNorthChurch, churchName, parishGroups,
   };
 })();
 
