@@ -1616,6 +1616,8 @@ function buildGloria() {
  * 서는 블록이라 〕를 그 줄 끝에 CSS 생성 글자로 그리고(`.lect-chip-closes`), 칩을 감출 때 보일 〕를 절 끝에 둔다
  * (`.lect-bracket--chips-off`). 그래서 〕 요소는 묶음마다 하나다. 운문 절은 블록이라 그 앞의 ※는 절과 다른 줄에 서므로
  * 〔는 절 안에 남긴다. 모두 구현하며 정함(2026-11-08, 2026-11-09).
+ * 운문 절의 〔는 절 번호(¶ 절은 ¶) 뒤에 두고 왼쪽 여백에 그린다(`.lect-bracket--hang`, 사용자 결정 2026-11-14). 절 번호 앞에
+ * 두면 번호가 〔의 폭만큼 밀린다.
  * 운문 칩 줄의 〕는 칩의 일부라 마우스를 올리면 칩 배경에 들고 누르면 인용 시트가 열린다. 운문 칩은 줄 전체가 칩이라
  * 그 줄의 다른 빈자리도 같다.
  * @param {HTMLElement} article @param {number} chapter @param {(chapter: number, n: number) => boolean} isOptional
@@ -1640,8 +1642,14 @@ function markOptionalVerses(article, chapter, isOptional) {
       /** @type {Element} */
       let lead = span;
       while (lead.previousElementSibling?.classList.contains("parallel-anchor")) lead = lead.previousElementSibling;
-      const open = bracket("〔");
+      // 운문의 절 번호(와 ¶)는 제자리에서 왼쪽 여백으로 옮겨 그리므로(style.css `.verse-poetry .verse-num`) 〔를 그 앞에 두면
+      // 번호가 〔의 폭만큼 밀린다. 〔는 번호 뒤에 두고, 본문의 첫 글자가 다른 줄과 맞도록 여백에 그린다
+      // (`.lect-bracket--hang`, 사용자 결정 2026-11-14).
+      const mark = span.firstElementChild;
+      const hang = span.classList.contains("verse-poetry") && mark === span.firstChild && !!mark?.matches(".verse-num, .versicle-mark");
+      const open = bracket("〔", hang ? " lect-bracket--hang" : "");
       if (lead !== span && !span.classList.contains("verse-poetry")) lead.before(open);
+      else if (hang && mark) mark.after(open);
       else span.insertBefore(open, span.firstChild);
       (open.parentNode === span ? lead : open).before(spoken("선택 구절 시작. "));
     }
