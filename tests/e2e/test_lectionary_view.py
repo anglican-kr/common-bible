@@ -2299,8 +2299,8 @@ def test_choosing_a_parish_in_settings_redraws_the_lectionary_when_the_popover_c
     page.wait_for_timeout(300)
     assert pop.is_visible()
     assert page.evaluate("() => localStorage.getItem('bible-parish')") == select.input_value() != ""
-    select.select_option(label="용인성당")
-    page.wait_for_function("() => window.__said.at(-1) === '소속교회 용인성당'")
+    select.select_option(label="용인교회")
+    page.wait_for_function("() => window.__said.at(-1) === '소속교회 용인교회'")
     assert pop.is_visible() and page.inner_text(".lect-day") == "연중 3주 금요일"
     page.keyboard.press("Escape")
     pop.wait_for(state="hidden")
@@ -2318,7 +2318,7 @@ def test_parish_redraw_waits_for_a_window_opened_from_the_settings_popover(brows
         _open(page, "lectionary/2025-01-31")
         pop = open_settings(page)
         page.wait_for_function(PARISH_READY)
-        pop.get_by_label("소속교회", exact=True).select_option(label="용인성당")
+        pop.get_by_label("소속교회", exact=True).select_option(label="용인교회")
         install = pop.locator('button[aria-label="앱으로 설치 안내 열기"]')
         if install.count() == 0:
             pytest.skip("이 환경에는 설치 안내 단추가 없다")
