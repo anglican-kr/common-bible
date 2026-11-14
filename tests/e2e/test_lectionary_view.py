@@ -2432,6 +2432,9 @@ def test_psalm_alternative_within_the_psalm_before_it_is_one_reading_with_bracke
     assert psalm.locator(".lect-bracket").count() == 2
     assert psalm.locator(".verse.lect-optional").count() > 0
     assert page.eval_on_selector_all(".lect-reading:has(.lect-bracket)", "els => els.length") == 1
+    # 〔 〕는 화면 낭독기에 숨긴 표시라, 묶음의 처음과 끝을 낭독기만 읽는 글로 알린다. 묶음은 하나다
+    assert [t.strip() for t in psalm.locator(".lect-optional-sr").all_text_contents()] == ["선택 구절 시작.", "선택 구절 끝."]
+    assert psalm.locator(".lect-optional-sr[aria-hidden]").count() == 0
 
 
 def test_palm_sunday_long_and_short_passion_are_one_reading_with_brackets(desktop_context):
@@ -2445,6 +2448,9 @@ def test_palm_sunday_long_and_short_passion_are_one_reading_with_brackets(deskto
     assert gospel.locator(".lect-optional-note").inner_text() == "〔 〕 안은 선택 구절 — 짧게 읽으면 마태 27:11-54"
     # 묶음은 장마다 따로다: 26:14-75, 27:1-10, 27:55-66
     assert gospel.locator(".lect-bracket").count() == 6
+    # 낭독기 안내는 장을 넘는 묶음(26:14-27:10)을 하나로 잇는다: 시작, 끝, 시작(27:55), 끝
+    assert [t.strip() for t in gospel.locator(".lect-optional-sr").all_text_contents()] == ["선택 구절 시작.", "선택 구절 끝."] * 2
+    assert gospel.locator("article[data-chapter='26'] .lect-optional-sr").count() == 1
     assert gospel.locator(".verse.lect-optional").count() > 0
     _open(page, "lectionary/2024-03-24")
     assert page.locator(".lect-card").count() == 2
