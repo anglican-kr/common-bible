@@ -726,8 +726,8 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
         else announce(result);
       },
     }));
-    appendSaintRows(lectionarySection);
     appendParishRows(lectionarySection);
+    appendSaintRows(lectionarySection);
     target.appendChild(lectionarySection);
 
     // ── Section: 모양 ──

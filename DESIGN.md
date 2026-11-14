@@ -471,6 +471,8 @@ HIG의 적응형 내비 패턴을 따른다. **좁은 화면은 하단 탭 바(U
   정해 기본 폰트(18px)에서 ≈44px가 되고 큰 폰트에서는 rem으로 함께 커진다
   (`.title-back-btn`, `.title-bookmark-btn`, `#cite-sheet-back`, `#cite-sheet-close`가 공유한다).
   고정 크기 컨트롤(오디오 재생 등)은 `min-width/min-height: var(--touch-target)`로 최소 크기를 보장한다.
+  설정의 ⓘ 단추와 설명의 닫기 단추(`.settings-drive-info-btn`, `.settings-drive-info-close`)는 예외다. 행의 높이와
+  간격 안에서 이웃한 컨트롤을 덮지 않는 데까지만 넓혀 44px보다 작다(ADR-041 §7).
 - **떠 있는 독 컨트롤은 탭 바 기준의 토큰 한 쌍을 공유한다.** 탭 알약 버튼 높이, 검색과 취소 원형
   지름, 오디오 바 높이, 절 선택 바와 북마크 선택 바의 알약 버튼과 원형은 모두 `--dock-control`(60px, 곧
   `--touch-target`에 `--space-2`의 두 배를 더한 값)을, 그 안의 아이콘은 `--dock-icon`(1.7rem, 탭 아이콘

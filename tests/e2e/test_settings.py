@@ -50,8 +50,8 @@ def test_popover_has_labeled_sections_in_order(browser):
         lectionary = pop.locator(".settings-section", has=page.locator("h2", has_text="전례독서"))
         assert lectionary.get_by_role("switch", name="대체 독서 표시").is_checked() is False
         assert lectionary.get_by_label("소속교회", exact=True).count() == 1
-        # 대체 독서 표시, 세례명, 소속교회의 차례다(ADR-041 §1)
-        assert lectionary.locator(".settings-label").all_inner_texts() == ["대체 독서 표시", "세례명", "소속교회"]
+        # 대체 독서 표시, 소속교회, 세례명의 차례다(ADR-041 §1, 사용자 결정 2026-11-14)
+        assert lectionary.locator(".settings-label").all_inner_texts() == ["대체 독서 표시", "소속교회", "세례명"]
         appearance = pop.locator(".settings-section", has=page.locator("h2", has_text="모양"))
         assert appearance.get_by_role("button", name="글자 크게").count() == 1
         system = pop.locator(".settings-section", has=page.locator("h2", has_text="시스템"))
@@ -440,6 +440,123 @@ def test_parish_info_button_opens_the_description_and_close_returns_focus(browse
         assert page.evaluate("() => document.activeElement.getAttribute('aria-label')") == "소속교회 안내"
     finally:
         ctx.close()
+
+
+# ⓘ 단추와 닫기 단추의 누르는 영역(::after)과, 그 영역이 덮는 것. 영역은 단추의 상자를 기준으로 놓이므로 계산한 값에 단추의 자리를 더한다.
+# 단추마다 화면 가운데로 스크롤한 뒤에 재므로, 좌표를 눌러 볼 때는 `only`에 그 단추의 이름을 주어 하나만 잰다.
+HIT_AREA_FACTS = """([root, only]) => {
+  const view = document.querySelector(root);
+  const box = (el) => { const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; };
+  const overlap = (a, b) => Math.min(Math.min(a.r, b.r) - Math.max(a.l, b.l), Math.min(a.b, b.b) - Math.max(a.t, b.t));
+  const area = (btn) => {
+    const after = getComputedStyle(btn, '::after');
+    const shift = new DOMMatrix(after.transform);
+    const b = box(btn);
+    const l = b.l + parseFloat(after.left) + shift.e, t = b.t + parseFloat(after.top) + shift.f;
+    return { l, t, r: l + parseFloat(after.width), b: t + parseFloat(after.height) };
+  };
+  const shown = (selector) => [...view.querySelectorAll(selector)].filter((el) => el.getClientRects().length);
+  const controls = shown('select, button, input, label, a');
+  const buttons = shown('.settings-drive-info-btn, .settings-drive-info-close');
+  return buttons.filter((btn) => !only || btn.getAttribute('aria-label') === only).map((btn) => {
+    btn.scrollIntoView({ block: 'center', behavior: 'instant' });
+    const hit = area(btn);
+    const b = box(btn);
+    const label = btn.closest('.settings-label');
+    const text = label ? box(label.firstElementChild === btn ? (() => { const r = document.createRange(); r.selectNode(label.firstChild); return r; })() : label.firstElementChild) : null;
+    const control = label ? label.closest('.settings-row').querySelector('select, .settings-action-btn') : null;
+    return {
+      name: btn.getAttribute('aria-label'),
+      info: btn.classList.contains('settings-drive-info-btn'),
+      width: hit.r - hit.l,
+      height: hit.b - hit.t,
+      hit,
+      iconOnLabelLine: text ? (b.t + b.b) / 2 > text.t && (b.t + b.b) / 2 < text.b : null,
+      controlOnLabelLine: control ? box(control).t < b.b && box(control).b > b.t : null,
+      overText: text ? overlap(hit, text) : null,
+      // 다른 컨트롤의 상자와, 다른 ⓘ 단추나 닫기 단추의 누르는 영역
+      covered: [
+        ...controls.filter((el) => el !== btn && overlap(hit, box(el)) > 0.05),
+        ...buttons.filter((el) => el !== btn && overlap(hit, area(el)) > 0.05),
+      ].map((el) => el.getAttribute('aria-label') || el.textContent.trim().slice(0, 12)),
+      corners: [[hit.l + 1, hit.t + 1], [hit.r - 1, hit.t + 1], [hit.l + 1, hit.b - 1], [hit.r - 1, hit.b - 1]]
+        .map(([x, y]) => btn.contains(document.elementFromPoint(x, y))),
+    };
+  });
+}"""
+
+
+def test_info_and_close_buttons_have_a_hit_area_wider_than_the_glyph_that_covers_nothing_else(browser):
+    """ⓘ 단추와 설명의 닫기 단추는 누르는 영역이 그림보다 넓고, 그 영역은 라벨의 글자도, 다른 컨트롤도, 서로의 영역도 덮지 않는다.
+    그림은 글자 크기를 따라 커져도 라벨과 같은 줄에 있다. 팝오버와 폭 360px 이상의 기본 글자 크기에서는 선택 상자도 같은 줄이고,
+    폭 320px에서는 선택 상자가 아랫줄에 있어도 영역이 선택 상자를 덮지 않는다. 영역의 크기는 ADR-041 §7의 수치다."""
+    # 글자 크기마다 ⓘ 영역의 폭과 높이, 닫기 영역의 높이. 닫기 영역의 폭은 늘 44px이다
+    sizes = {16: (32.6, 34.5, 36), 18: (35.2, 37.8, 38), 20: (37.8, 41.1, 40), 22: (40.3, 44, 42), 24: (42.9, 44, 44)}
+    # 끝의 둘은 선택 상자(소속교회, 세례명)와 백업 & 동기화의 단추가 라벨과 같은 줄에 있는지다. 한글 글자의 폭이 정하므로,
+    # 여유가 7px이 안 되어 글꼴에 따라 달라질 수 있는 곳은 None으로 두고 보지 않는다
+    for root, options, font, select_on_label_line, action_on_label_line in (
+        (".settings-popover", {}, 18, True, True),
+        (".settings-popover", {}, 24, True, True),
+        (".settings-view", {"viewport": MOBILE_VIEWPORT, "user_agent": IPHONE_UA}, 18, True, True),
+        (".settings-view", {"viewport": MOBILE_VIEWPORT, "user_agent": IPHONE_UA}, 24, False, None),
+        (".settings-view", {"viewport": {"width": 360, "height": 640}, "user_agent": IPHONE_UA}, 18, None, True),   # 라벨과 선택 상자 사이가 가장 좁다
+        (".settings-view", {"viewport": {"width": 360, "height": 640}, "user_agent": IPHONE_UA}, 20, False, True),
+        (".settings-view", {"viewport": {"width": 360, "height": 640}, "user_agent": IPHONE_UA}, 22, False, None),
+        (".settings-view", {"viewport": {"width": 320, "height": 640}, "user_agent": IPHONE_UA}, 16, False, True),
+        (".settings-view", {"viewport": {"width": 320, "height": 640}, "user_agent": IPHONE_UA}, 24, False, False),
+        (".settings-view", {"viewport": {"width": 768, "height": 1024}, "user_agent": IPHONE_UA}, 16, True, True),  # 설명이 한 줄이다
+    ):
+        case = (root, options.get("viewport"), font)
+        ctx = browser.new_context(**options)
+        ctx.add_init_script(CLEAR_APP_STORAGE + f"localStorage.setItem('bible-font-size', '{font}')")
+        page = ctx.new_page()
+        try:
+            if root == ".settings-popover":
+                _open(page)
+                open_settings(page)
+            else:
+                page.goto(f"{BASE}/settings")
+                page.wait_for_selector(".settings-view .btn-group")
+            view = page.locator(root)
+            info_w, info_h, close_h = sizes[font]
+
+            def check(facts):
+                for f in facts:
+                    where = (case, f["name"])
+                    if f["info"]:
+                        assert abs(f["width"] - info_w) < 0.2 and abs(f["height"] - info_h) < 0.2, (where, f["width"], f["height"])
+                        assert f["iconOnLabelLine"], where
+                        assert f["overText"] < 0.05, (where, f["overText"])
+                        on_label_line = action_on_label_line if f["name"] == "백업 및 동기화 안내" else select_on_label_line
+                        assert on_label_line is None or f["controlOnLabelLine"] is on_label_line, where
+                    else:
+                        assert abs(f["width"] - 44) < 0.2 and abs(f["height"] - close_h) < 0.2, (where, f["width"], f["height"])
+                    assert f["covered"] == [], (where, f["covered"])
+                    assert all(f["corners"]), (where, f["corners"])   # 영역의 네 귀퉁이를 누르면 이 단추가 받는다
+
+            closed = page.evaluate(HIT_AREA_FACTS, [root, None])
+            assert [f["name"] for f in closed][:2] == ["소속교회 안내", "세례명 안내"], case
+            check(closed)
+            for f in closed:
+                view.get_by_role("button", name=f["name"], exact=True).click()
+            opened = page.evaluate(HIT_AREA_FACTS, [root, None])
+            assert len(opened) == 2 * len(closed), case   # 설명마다 닫기 단추가 보인다
+            check(opened)
+            # 영역이 단추 밖으로 나가도 가로로 스크롤되지 않는다
+            assert page.evaluate("(root) => { const v = document.querySelector(root); return v.scrollWidth <= v.clientWidth"
+                                 " && document.documentElement.scrollWidth <= document.documentElement.clientWidth; }", root), case
+
+            # 그림 밖, 영역의 가장자리를 눌러도 단추가 눌린다
+            for name in ("소속교회 안내", "세례명 안내"):
+                btn = view.get_by_role("button", name=name, exact=True)
+                area = page.evaluate(HIT_AREA_FACTS, [root, f"{name} 닫기"])[0]["hit"]
+                page.mouse.click(area["l"] + 2, area["b"] - 2)
+                assert btn.get_attribute("aria-expanded") == "false", (case, name)
+                area = page.evaluate(HIT_AREA_FACTS, [root, name])[0]["hit"]
+                page.mouse.click(area["r"] - 2, area["t"] + 2)
+                assert btn.get_attribute("aria-expanded") == "true", (case, name)
+        finally:
+            ctx.close()
 
 
 def test_escape_on_the_mobile_settings_view_closes_the_open_description(browser):
