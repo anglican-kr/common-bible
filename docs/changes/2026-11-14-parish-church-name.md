@@ -1,4 +1,5 @@
 ---
+pr: 560
 date: 2026-11-14
 branch: feat/parish-church-name
 title: "feat: 소속교회 목록의 이름을 「…교회」로 표시"
