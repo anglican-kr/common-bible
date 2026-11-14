@@ -11,11 +11,12 @@
   - 지금 있는 목적지의 탭에 옅은 바탕과 굵은 글자, `aria-current="page"`가 붙는다. 캘린더와 전례독서는 「캘린더」, 그 밖의 화면(검색 결과 포함)은 「성서」다(`tabbar.js`의 `syncHeaderNav`).
   - 「성서」 탭의 동작은 모바일 탭 바의 홈 탭과 같다(`tabbar.js`의 `enterHomeTab`). 캘린더에서 누르면 마지막에 읽던 성서 화면으로, 성서 화면에서 누르면 읽던 책이 있는 구분 탭의 성서 목록으로 간다. 제목 줄의 「성서 목록으로」 집 단추는 없앴다.
   - 제목은 창의 가운데에 있다. 양옆 칸이 남는 폭을 똑같이 나누기 때문이다. 제목이 가운데 칸에 들어가지 않으면 짧은 제목으로 바꾼다(`views.js`의 `measureTitleCompactness`). 폭 900px 아래에서는 탭의 글자를 숨기고 아이콘만 남긴다.
-  - 검색창은 포커스를 받아도 넓어지지 않는다. 폭은 창 폭을 따른다(11rem에서 18rem 사이).
-  - 캘린더와 전례독서의 「오늘」은 데스크톱에서 다음 단추(›)의 오른쪽에 있다(`lectionary.js`의 `commitDateBar`). 모바일은 왼쪽 칸 그대로다.
+  - 검색창은 포커스를 받아도 넓어지지 않는다. 폭은 창 폭을 따른다(140px에서 18rem 사이).
+  - 캘린더와 전례독서의 「오늘」은 데스크톱에서 다음 단추(›)의 오른쪽에 있다(`lectionary.js`의 `placeToday`). 모바일은 왼쪽 칸 그대로다. 창 폭이 경계를 넘으면 그린 줄의 「오늘」을 옮긴다.
+  - 데스크톱인지는 한 곳에서 판정한다(`helpers.js`의 `isDesktopLayout`, `DESKTOP_LAYOUT_QUERY`). `tabbar.js`와 `lectionary.js`가 쓴다. `overlay.js`, `search.js`, `bookmark-gestures.js`는 아직 같은 조건을 따로 적고 있다.
   - 「북마크」 탭은 어느 화면에서나 북마크 패널을 연다(`bookmark.js`). 그전에는 장 목록과 장 본문의 제목 옆 단추로만 열 수 있었다. 패널이 열려 있는 동안 탭이 표시되고(`aria-expanded`), 닫으면 포커스가 탭으로 돌아온다. 장 밖의 화면에서 열면 「이 장 저장」과 「절 선택」이 꺼져 있다.
   - 패널은 아직 뒤 화면을 덮는다. 장 제목 옆의 북마크 단추와 설정 팝오버도 그대로다(「남은 일」의 2단계).
-  - 테스트: 유닛(`tabbar.test.js`의 `syncHeaderNav` +3, `helpers.test.js`의 `scrollUnderBar`, `views.test.js`의 장 선택 제목), e2e(`test_top_bar.py` 22).
+  - 테스트: 유닛(`tabbar.test.js`의 `syncHeaderNav` +3, `helpers.test.js`의 `scrollUnderBar`, `views.test.js`의 장 선택 제목), e2e(`test_top_bar.py` 25).
 - **읽던 절 저장과 되돌아가기** (2026-11-07).
   - 장 화면에서 스크롤이 멈추고 0.5초 뒤, 상단 바 아래쪽에서 20px 아래의 선보다 위에서 시작한 마지막 절을 읽던 절로 저장한다(`routing.js`의 `startScrollTracking`).
   - 이어 읽기로 돌아가면(앱을 다시 열 때, 이어 읽기 배너) 그 절의 위쪽을 상단 바 바로 아래에 둔다(`views.js`의 `renderChapter`, `helpers.js`의 `scrollUnderBar`). 화면이 자리를 잡는 다음 프레임에 한 번 더 맞춘다. 데스크톱의 상단 바는 2026-11-14부터 접히지 않아(ADR-043) 접힘을 기다리지 않는다. 다시 열고 가만히 두어도 저장된 절이 그대로다.
