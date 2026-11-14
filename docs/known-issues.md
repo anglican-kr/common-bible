@@ -119,7 +119,8 @@ ADR-038 §3의 렌더 기반이 복원하는 전례 표기는 계응 ◯(`.respo
 
 #350(§8의 셋)을 `/code-review`로 본 것 가운데 그 PR에서 고치지 않고 넘긴 것이다. 고친 것과 각 건의 조치는 원장 `docs/changes/2026-10-17-known-issues-8.md` 「리뷰 반영」에 있다. 넘긴 일곱 가운데 셋(계산 범위 판정을 하나로 모으기, 날짜 이동 줄을 하나로 모으기, 인용 시트의 꺾쇠)은 2026-10-17에 고쳐 지웠다. 원장은 `docs/changes/2026-10-17-known-issues-10-part1.md`다. 둘(라우터 수준의 포커스 복원, 화면마다 잇던 네 단계)도 같은 날 고쳐 지웠다. 원장은 `docs/changes/2026-10-17-router-focus-restore.md`다. 남은 둘은 기기에서 확인하기를 기다리는 것과 기록만 두기로 한 것이다.
 
-- §10.1 · §10.2 → [topics/routing.md](topics/routing.md)
+- **known-issues §10.2** Safari 26 이하 데스크톱에서 다시 그린 뒤 위치가 어긋나던 것은 2026-11-14에 원인이 없어졌다. 접혔다 펼쳐지는 헤더의 윗줄 때문이었는데, 데스크톱 헤더가 접히지 않는 한 줄이 됐다(ADR-043 §1, 원장 `docs/changes/2026-11-14-desktop-top-bar.md`). Safari 26 이하에서 직접 확인하지는 않았다.
+- §10.1 → [topics/routing.md](topics/routing.md)
 
 ---
 
