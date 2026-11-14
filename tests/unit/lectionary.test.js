@@ -195,7 +195,7 @@ test("selectCandidate: `?obs`가 가리키는 후보가 있으면 그것, 없으
 
 // ── 트랙 · 세트 ──────────────────────────────────────────────────────────────
 
-// 괄호 선택 구절 세트 — 복음만 더 길다(마태 9:9-13, 18-26 → 18-31). 실데이터의 괄호 세트 34건이 다 이 형식(한 슬롯만).
+// 괄호 선택 구절 세트 — 복음만 더 길다(마태 9:9-13, 18-26 → 18-31). 실데이터의 괄호 세트 38건이 다 이 형식(한 슬롯만).
 const FOUR_LONG = [FOUR[0], FOUR[1], FOUR[2], slot("gospel", "matt", 9, "9-13,18-31", "마태 9:9-13, 18-31")];
 const TRACKED = [
   group("t1s1", FOUR, { reading_track: 1, set_no: 1, set_total: 2 }),
@@ -346,6 +346,38 @@ test("readingOptions: 합치는 과정에서 세트가 사라지지 않는다 �
   same(ids(half), [["a", null], ["b", null]]);
   const sameVerses = [group("a", [FOUR[0], ps(84, "1-6", "시편 84:1-6"), FOUR[2], FOUR[3]], { set_no: 1 }), group("b", [FOUR[0], ps(84, "1-3,4-6", "시편 84:1-3, 4-6"), FOUR[2], FOUR[3]], { set_no: 2 })];
   same(ids(sameVerses), [["a", null], ["b", null]]);
+});
+
+test("readingOptions: 같은 슬롯이 둘인 세트는 합치지 않고, 절 범위가 없는 세트는 바탕이 되지 않고, 제목별 번호는 자리로 센다(리뷰 2026-11-14)", () => {
+  const ot = (chapter, spec, label) => slot("first", "gen", chapter, spec, label);
+  const ids = (sets) => ctx.readingOptions(sets, "x").map((o) => [o.group.id, o.short && o.short.id]);
+  // 화면은 슬롯을 이름으로 찾는다. 같은 이름이 둘인 세트는 어느 것이 다른지 가릴 수 없어 합치지 않는다
+  const x = ot(12, "1-9", "창세 12:1-9");
+  const twoA = [x, ot(15, "1-6", "창세 15:1-6"), FOUR[1], FOUR[3]];
+  const twoC = [x, ot(15, "1-3", "창세 15:1-3"), FOUR[1], FOUR[3]];
+  same(ids([group("a", twoA, { set_no: 1 }), group("c", twoC, { set_no: 2 })]), [["a", null], ["c", null]]);
+  // 절 범위가 없는 세트는 조각으로 견줄 수 없다. 범위가 맞는 더 가까운 세트가 바탕이다
+  const gos = (spec, label) => slot("gospel", "matt", 27, spec, label);
+  const empty = [FOUR[0], FOUR[1], FOUR[2], { ...gos("1-2", "읽지 못한 표기"), refs: [] }];
+  const base = [FOUR[0], FOUR[1], FOUR[2], gos("11-50", "마태 27:11-50")];
+  const bracket = [FOUR[0], FOUR[1], FOUR[2], gos("11-54", "마태 27:11-54")];
+  same(ids([group("e", empty, { set_no: 1 }), group("s", base, { set_no: 2 }), group("b", bracket, { set_no: 3, set_note: "괄호 선택 구절 포함" })]),
+    [["e", null], ["b", "s"]]);
+  same(ids([group("e", empty, { set_no: 1 }), group("b", bracket, { set_no: 2, set_note: "괄호 선택 구절 포함" })]), [["e", null], ["b", null]]);
+  // 병합 절(5-6)은 5로 그려진다. 짧은 본문이 6절을 읽으면 선택 구절이 아니고, 하나도 읽지 않으면 선택 구절이다
+  const long = gos("1-10", "마태 27:1-10");
+  const verses = [{ number: 4 }, { number: 5, range_end: 6 }, { number: 5 }, { number: 7 }];
+  const merged = (shortSpec) => ctx.mergedVerseTest(ctx.optionalVerseTest(long, gos(shortSpec, "x")), long, verses);
+  same([4, 5, 7].map((n) => merged("6-10")(27, n)), [true, false, false]);
+  same([4, 5, 7].map((n) => merged("7-10")(27, n)), [true, true, false]);
+  same([4, 5, 7].map((n) => merged("1-5")(27, n)), [false, false, true]);
+  // 제목이 갈리는 날: 같은 제목 안에서 합쳐도 번호가 건너뛰지 않는다
+  const ps = (spec, label) => slot("psalm", "lps", 98, spec, label);
+  const whole = [FOUR[0], ps("all", "시편 98"), FOUR[2], FOUR[3]];
+  const part = [FOUR[0], ps("1-5", "시편 98:1-5"), FOUR[2], FOUR[3]];
+  const mixed = [group("n", FOUR, { title: "성탄 밤", set_no: 1 }), group("a", whole, { title: "성탄 낮", set_no: 1 }),
+    group("b", part, { title: "성탄 낮", set_no: 2 }), group("c", FOUR, { title: "성탄 낮", set_no: 3 })];
+  same(ctx.readingOptions(mixed, "성탄").map((o) => o.label), ["성탄 밤", "성탄 낮 독서 1", "성탄 낮 독서 2"]);
 });
 
 test("readingOptions: 바탕이 없는 괄호 세트(두 슬롯이 다름)는 그대로 선택지 — 제목이 갈리면 제목으로", () => {
