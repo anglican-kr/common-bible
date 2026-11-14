@@ -40,7 +40,7 @@ import {
   appendVersesWithAids, bindCopyAttribution, absentVerseNumbers,
   LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
 } from "./views.js";
-import { specCoversVerse, verseInstanceKeys, citationSource, formatVerseRanges, halfVerseMark } from "./verse-spec.js";
+import { specCoversVerse, parseVerseSpec, verseInstanceKeys, citationSource, formatVerseRanges, halfVerseMark } from "./verse-spec.js";
 import {
   parseDate, toKey, addDays, dayOfWeek, isComputableDate, joinNames, fillCommonName,
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, findDedications, findFoundings, findSaintFeasts, fastOf, isEmber,
@@ -385,9 +385,56 @@ function findBracketBase(options, g) {
 }
 
 /**
+ * 슬롯 `short`의 절이 모두 슬롯 `long`에 들어 있는가 — 같은 책이고, `short`의 장마다 `long`이 그 장 전체(`all`)이거나
+ * `short`가 적은 절을 모두 덮는다. `short`가 장 전체이면 `long`도 그 장 전체여야 한다.
+ * @param {ReadingSlot} short @param {ReadingSlot} long
+ */
+function slotWithin(short, long) {
+  if (short.bookId !== long.bookId || !(short.refs || []).length) return false;
+  return (short.refs || []).every((r) => (long.refs || []).some((q) => {
+    if (q.chapter !== r.chapter) return false;
+    if (q.verseSpec === "all") return true;
+    const segs = r.verseSpec === "all" ? [] : parseVerseSpec(r.verseSpec);
+    if (!segs.length) return false;
+    for (const seg of segs) {
+      for (let n = seg.start; n <= seg.end; n++) if (!specCoversVerse(q.verseSpec, n)) return false;
+    }
+    return true;
+  }));
+}
+
+/**
+ * 「또는」 뒤 세트 `g`가 **바로 앞** 선택지의 짧은 본문인가 — 제목과 슬롯 구성이 같고 시편만 다르며, `g`의 시편 절이
+ * 모두 앞 선택지에 들어 있다(기도서 「시편 116 또는 116:1-9」). 그러면 앞 선택지의 자리 번호, 아니면 -1.
+ * 다른 독서가 아니라 같은 본문을 짧게 읽는 방법이라 카드로 가르지 않는다(사용자 결정 2026-11-14, ADR-038 §3 「독서 카드」).
+ * 성인 공통 독서와 고유 독서에 모두 적용한다. 조건부 세트(「…로 지킬 때」)와 이미 짧은 본문이 있는 선택지에는 합치지 않는다.
+ * 시편이 아닌 슬롯은 합치지 않는다 — 성지주일의 긴 수난 복음과 짧은 수난 복음은 카드로 고른다(가해, 다해. 나해는 짧은 수난에
+ * 괄호 세트가 따로 있다).
+ * @param {ReadingOption[]} options @param {ReadingGroup} g
+ */
+function findLongBase(options, g) {
+  const i = options.length - 1;
+  if (i < 0 || options[i].short || g.set_note === BRACKET_NOTE || setCondition(g) !== null) return -1;
+  const base = options[i].group;
+  if (base.title !== g.title || base.common !== g.common || setCondition(base) !== null) return -1;
+  if (base.readings.length !== g.readings.length) return -1;
+  let within = 0;
+  for (const r of g.readings) {
+    const l = base.readings.find((x) => x && x.slot === r.slot);
+    if (!l) return -1;
+    if (l.label === r.label) continue;
+    if (r.slot !== "psalm" || !slotWithin(r, l)) return -1;
+    within++;
+  }
+  return within === 1 ? i : -1;
+}
+
+/**
  * 고른 트랙의 세트들 → 화면의 「독서」 선택지(사용자 결정 2026-10-12 — ADR-038 §3 「구현」).
  * - 괄호 선택 구절 세트(`BRACKET_NOTE`)는 자기 바탕 세트에 **합친다** — 긴 본문을 그리고 짧은 본문과의 차이를
  *   〔 〕 로 표시한다(`short`가 그 바탕). 카드에 오르지 않는다.
+ * - 바로 앞 세트의 일부인 세트(`findLongBase`, 「또는」 뒤가 앞 본문의 일부)도 같은 방식으로 앞 세트에 합친다. 여기서는 긴 본문이
+ *   앞에 있으므로 뒤 세트가 `short`가 된다.
  * - 남는 선택지가 둘 이상이면 「또는」 대안이다 — 대안이 있는 슬롯만 바꾼 **완전한 세트**를 통째로 고른다(ADR-037
  *   §1): 「독서 1」「독서 2」. 조건부 세트는 조건(「…로 지킬 때」)이 라벨이고 그 바탕 세트는 전례일 이름이다.
  * - 제목이 갈리는 세트들(미결12 — 좁히기에 실패해 남은 것 전부가 온 날)은 제목으로 가른다.
@@ -402,6 +449,8 @@ function readingOptions(sets, baseName) {
       const i = findBracketBase(out, g);
       if (i >= 0) { out[i] = { group: g, short: out[i].group, label: "" }; continue; }
     }
+    const longBase = findLongBase(out, g);
+    if (longBase >= 0) { out[longBase] = { ...out[longBase], short: g }; continue; }
     out.push({ group: g, short: null, label: "" });
   }
   const titles = new Set(out.map((o) => o.group.title));

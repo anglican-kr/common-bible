@@ -2414,3 +2414,41 @@ def test_choosing_a_saint_in_settings_redraws_the_lectionary_when_the_popover_cl
     page.keyboard.press("Escape")
     pop.wait_for(state="hidden")
     page.wait_for_function("() => [...document.querySelectorAll('.lect-choice')].some((a) => a.textContent === '레오나드(은수자, 6세기) 축일')", timeout=20_000)
+
+
+# ── 「또는」 뒤 시편이 앞 시편의 일부인 독서 (ADR-038 §3 「독서 카드」, 사용자 결정 2026-11-14) ──
+
+
+def test_psalm_alternative_within_the_psalm_before_it_is_one_reading_with_brackets(desktop_context):
+    """9.14 성 십자가의 날은 「시편 98 또는 98:1-5」다. 다른 독서가 아니라 같은 시편을 짧게 읽는 방법이라 카드로 고르지 않고,
+    시편 전체를 싣고 6절부터를 〔 〕로 묶어 「짧게 읽으면 …」 주석을 단다."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-09-14")
+    assert page.inner_text(".lect-day") == "성 십자가의 날"
+    assert page.locator(".lect-card").count() == 0
+    psalm = page.locator(".lect-reading[data-slot='psalm']")
+    assert psalm.locator(".lect-ref").inner_text() == "시편 98"
+    assert psalm.locator(".lect-optional-note").inner_text() == "〔 〕 안은 선택 구절 — 짧게 읽으면 시편 98:1-5"
+    assert psalm.locator(".lect-bracket").count() == 2
+    assert psalm.locator(".verse.lect-optional").count() > 0
+    assert page.eval_on_selector_all(".lect-reading:has(.lect-bracket)", "els => els.length") == 1
+
+
+def test_common_readings_merge_the_shorter_psalm_and_keep_other_psalms_as_cards(desktop_context):
+    """순교자 공통 독서는 「시편 116 또는 116:1-9」, 「시편 124 또는 31:1-5」다. 앞의 둘은 한 선택지로 합쳐지고 뒤의 둘은 다른
+    시편이라 카드로 남아, 카드가 넷에서 셋이 된다. 세례명이 루시안(1.8, 순교자)인 사람의 화면으로 본다."""
+    desktop_context.add_init_script(_with_saint("안티오키아의 루시안(사제, 순교자, 312년)"))
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-01-08?obs=my-saint")
+    _wait_day(page, "안티오키아의 루시안(사제, 순교자, 312년)")
+    assert page.locator(".lect-card").count() == 3
+    psalm = page.locator(".lect-reading[data-slot='psalm']")
+    assert psalm.locator(".lect-ref").inner_text() == "시편 116"
+    assert psalm.locator(".lect-optional-note").inner_text() == "〔 〕 안은 선택 구절 — 짧게 읽으면 시편 116:1-9"
+    assert psalm.locator(".lect-bracket").count() == 2
+    # 둘째, 셋째 카드는 시편 124와 시편 31:1-5이고 선택 구절이 없다
+    for n, ref in ((2, "시편 124"), (3, "시편 31:1-5")):
+        _open(page, f"lectionary/2026-01-08?obs=my-saint&set={n}")
+        _wait_day(page, "안티오키아의 루시안(사제, 순교자, 312년)")
+        assert page.locator(".lect-reading[data-slot='psalm'] .lect-ref").inner_text() == ref
+        assert page.locator(".lect-optional-note").count() == 0
