@@ -2434,6 +2434,22 @@ def test_psalm_alternative_within_the_psalm_before_it_is_one_reading_with_bracke
     assert page.eval_on_selector_all(".lect-reading:has(.lect-bracket)", "els => els.length") == 1
 
 
+def test_palm_sunday_long_and_short_passion_are_one_reading_with_brackets(desktop_context):
+    """성지주일 가해는 「마태 26:14-27:66 또는 27:11-54」다. 짧은 수난 복음이 긴 수난 복음의 일부라 카드로 고르지 않고,
+    긴 수난 복음을 싣고 짧게 읽을 때 빼는 앞뒤 절을 〔 〕로 묶는다. 나해는 길이가 셋이라 카드 둘로 남는다."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-03-29")
+    assert page.locator(".lect-card").count() == 0
+    gospel = page.locator(".lect-reading[data-slot='gospel']")
+    assert gospel.locator(".lect-ref").inner_text() == "마태 26:14-27:66"
+    assert gospel.locator(".lect-optional-note").inner_text() == "〔 〕 안은 선택 구절 — 짧게 읽으면 마태 27:11-54"
+    # 묶음은 장마다 따로다: 26:14-75, 27:1-10, 27:55-66
+    assert gospel.locator(".lect-bracket").count() == 6
+    assert gospel.locator(".verse.lect-optional").count() > 0
+    _open(page, "lectionary/2024-03-24")
+    assert page.locator(".lect-card").count() == 2
+
+
 def test_common_readings_merge_the_shorter_psalm_and_keep_other_psalms_as_cards(desktop_context):
     """순교자 공통 독서는 「시편 116 또는 116:1-9」, 「시편 124 또는 31:1-5」다. 앞의 둘은 한 선택지로 합쳐지고 뒤의 둘은 다른
     시편이라 카드로 남아, 카드가 넷에서 셋이 된다. 세례명이 루시안(1.8, 순교자)인 사람의 화면으로 본다."""

@@ -265,17 +265,21 @@ test("readingOptions: 성인 공통 독서에서 「또는」 뒤 세트가 바�
   same([9, 10, 19].map((n) => isOptional(116, n)), [false, true, true]);
 });
 
-test("readingOptions: 「또는」 뒤가 앞 본문의 일부여도 합치지 않는 경우 — 시편이 아니면, 두 슬롯이 다르면, 일부가 아니면, 바로 앞이 아니면, 조건부 세트면", () => {
+test("readingOptions: 「또는」 뒤가 앞 본문의 일부여도 합치지 않는 경우 — 뒤에 괄호 세트가 바탕으로 삼으면, 두 슬롯이 다르면, 일부가 아니면, 바로 앞이 아니면, 조건부 세트면", () => {
   const ps = (chapter, spec, label) => slot("psalm", "lps", chapter, spec, label);
   const whole = [FOUR[0], ps(84, "all", "시편 84"), FOUR[2], FOUR[3]];
   const part = [FOUR[0], ps(84, "1-6", "시편 84:1-6"), FOUR[2], FOUR[3]];
   const ids = (sets) => ctx.readingOptions(sets, "x").map((o) => [o.group.id, o.short && o.short.id]);
   // 고유 독서(9.14 성 십자가의 날 「시편 98 또는 98:1-5」 같은 경우)도 합친다
   same(ids([group("a", whole, { set_no: 1 }), group("b", part, { set_no: 2 })]), [["a", "b"]]);
-  // 시편이 아니면 카드다(성지주일의 긴 수난과 짧은 수난)
+  // 복음도 합친다(성지주일 가해와 다해의 긴 수난과 짧은 수난)
   const longPassion = [FOUR[0], FOUR[1], FOUR[2], slot("gospel", "matt", 27, "all", "마태 27")];
   const shortPassion = [FOUR[0], FOUR[1], FOUR[2], slot("gospel", "matt", 27, "11-54", "마태 27:11-54")];
-  same(ids([group("a", longPassion, { set_no: 1 }), group("b", shortPassion, { set_no: 2 })]), [["a", null], ["b", null]]);
+  same(ids([group("a", longPassion, { set_no: 1 }), group("b", shortPassion, { set_no: 2 })]), [["a", "b"]]);
+  // 뒤에 오는 괄호 세트가 바탕으로 삼는 세트는 합치지 않는다(성지주일 나해: 긴 수난, 짧은 수난, 짧은 수난의 괄호 세트)
+  const bracketPassion = [FOUR[0], FOUR[1], FOUR[2], slot("gospel", "matt", 27, "11-60", "마태 27:11-54(55-60)")];
+  same(ids([group("a", longPassion, { set_no: 1 }), group("b", shortPassion, { set_no: 2 }), group("c", bracketPassion, { set_no: 3, set_note: "괄호 선택 구절 포함" })]),
+    [["a", null], ["c", "b"]]);
   // 조건부 세트, 제목이 다른 세트
   same(ids([group("a", whole, { set_no: 1 }), group("b", part, { set_no: 2, set_note: "주의 변모 주일로 지키는 경우" })]), [["a", null], ["b", null]]);
   same(ids([group("a", whole, { title: "성탄 밤" }), group("b", part, { title: "성탄 낮" })]), [["a", null], ["b", null]]);
