@@ -1290,6 +1290,11 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
   border: none;
   margin-left: 0.3em;
   padding: 0;
+  /* A button does not inherit the label's font size by default — the icon's em must be the label's (사용자 결정 2026-11-14). */
+  font: inherit;
+  /* Containing block of the ::after hit area (below). The transform further down would do that too, but it is
+     there to nudge the icon — the hit area must not move if the nudge goes. */
+  position: relative;
   cursor: pointer;
   color: var(--accent);
   display: inline-flex;
@@ -1304,6 +1309,34 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 50%;
+}
+
+/* Hit area of the ⓘ button and of the description's ✕ — the glyph alone is too small to press. It aims at
+   --touch-target (DESIGN.md §8) and stops where it would lie over the label, another control or the next
+   row's hit area; the measurements behind each edge are in ADR-041 §7. */
+.settings-drive-info-btn::after,
+.settings-drive-info-close::after {
+  content: "";
+  position: absolute;
+}
+/* Left: the button's own margin, so the label's last character stays free. Right: the row's gap, which is all
+   that is left before the select on a 360px screen. Height: the label's line plus the row's padding, i.e. the
+   row — 소속교회 and 세례명 are neighbours, and anything taller would lie over the other's area. */
+.settings-drive-info-btn::after {
+  left: -0.3em;
+  right: calc(-1 * var(--space-3));
+  top: 50%;
+  height: min(var(--touch-target), calc(var(--leading-relaxed) * 1em + 2 * var(--space-1)));
+  transform: translateY(-50%);
+}
+/* Up: the description's top padding and the padding of the row above it. Down: its bottom padding and the next
+   row's, where that row's select starts when the text is one line. Right: the settings popover's padding — any
+   further and the popover, which scrolls, would scroll sideways. The rest of the width goes left, over the text. */
+.settings-drive-info-close::after {
+  top: calc(-1 * (var(--space-2) + var(--space-1)));
+  bottom: calc(-2 * var(--space-1));
+  right: calc(-1 * var(--space-2));
+  width: var(--touch-target);
 }
 
 .drive-info-icon { width: 1.1em; height: 1.1em; }
@@ -1328,6 +1361,8 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
   background: none;
   border: none;
   padding: 0 0.1em;
+  /* Containing block of the ::after hit area (above). */
+  position: relative;
   cursor: pointer;
   color: var(--text);
   opacity: 0.45;
