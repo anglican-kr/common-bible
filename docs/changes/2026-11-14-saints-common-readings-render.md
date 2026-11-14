@@ -1,4 +1,5 @@
 ---
+pr: 557
 date: 2026-11-14
 branch: fix/saints-common-readings-render
 title: "fix: 「또는」 뒤 본문이 앞 본문의 일부이면 한 독서로 표시"
