@@ -1,4 +1,5 @@
 ---
+pr: 562
 date: 2026-11-14
 branch: fix/optional-verse-number
 title: "fix: 운문에서 선택 구절이 시작되는 절의 번호 위치"
