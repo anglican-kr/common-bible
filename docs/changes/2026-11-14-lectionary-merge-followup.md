@@ -1,4 +1,5 @@
 ---
+pr: 559
 date: 2026-11-14
 branch: fix/lectionary-merge-followup
 title: "fix: 전례독서 세트 합치기의 남은 빈틈"
