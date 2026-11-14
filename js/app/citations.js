@@ -442,8 +442,7 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
    * "Room above" ends at the bottom of the sticky header (#sticky-group), not
    * at the viewport top: the header paints over the tooltip (z-index 20 > 15),
    * so a tooltip placed in that band would open half hidden. The header's
-   * bottom is read on every call — the header differs by view, collapses on
-   * desktop scroll (views.js initCompactHeader), and an iOS home-screen app
+   * bottom is read on every call — the header differs by view, and an iOS home-screen app
    * adds the status bar's safe area to it. The scroll/resize follower calls
    * this too; once the anchor itself scrolls under the header the tooltip
    * slides under with it (the z-index order is meant for that — css/style.css

@@ -20,7 +20,7 @@ const $home = document.querySelector('#tab-bar [data-tab="home"]');
 
 /** @type {Window & typeof globalThis & Record<string, any>} */
 const W = /** @type {any} */ (window);
-const { isModifiedClick } = window.appHelpers;
+const { isModifiedClick, DESKTOP_LAYOUT_QUERY } = window.appHelpers;
 
 let searching = false;
 let collapsed = false; // ADR-030 P3: 스크롤 축소(탭 바 홈 원형) 상태
@@ -197,7 +197,7 @@ function exitSearch() {
 // 정리한다. 같은 포인터 인식 분기라(ADR-029 개정) 가로 폰·태블릿은 여기 걸리지 않고
 // 탭 바를 유지한다. /search 뷰는 모바일 레이아웃(search-view + in-page 입력)으로 그려져
 // 있으므로 route() 를 다시 태워 데스크탑 레이아웃(헤더 검색바 + #app 직접 결과)으로 재렌더.
-window.matchMedia("(min-width: 769px) and (pointer: fine)").addEventListener("change", (e) => {
+window.matchMedia(DESKTOP_LAYOUT_QUERY).addEventListener("change", (e) => {
   if (!e.matches || !searching) return;
   exitSearch();
   if (W.parsePath?.().view === "search") W.route?.();
@@ -228,6 +228,19 @@ $home?.addEventListener("click", (e) => {
     applyCollapsed(false);
     return;
   }
+  enterHomeTab(e);
+});
+// 데스크톱 상단 바의 「성서」 탭(#header-home, ADR-043 §3)도 같은 곳으로 간다. 탭 바가 없어 펼칠 것은 없다.
+document.getElementById("header-home")?.addEventListener("click", (e) => {
+  if (isModifiedClick(e)) return;
+  enterHomeTab(e);
+});
+
+/**
+ * 홈 탭과 데스크톱 「성서」 탭이 가는 곳. 가로챌 일이 없으면 그대로 두어 전역 <a> 인터셉터가 href="/"로 간다.
+ * @param {Event} e
+ */
+function enterHomeTab(e) {
   // ADR-031: 다른 탭(북마크·설정·검색)에서 홈으로 올 땐 마지막 읽던 위치로 복원.
   // 복원 대상이 루트뿐이면(아직 읽은 적 없음) 가로채지 않고 기본 href 진행.
   const th = W.tabHistory;
@@ -242,7 +255,7 @@ $home?.addEventListener("click", (e) => {
   }
   // ADR-031 개정: 이미 홈 스택이면 성서 목록으로 — iOS pop-to-root. 읽던 화면(장·
   // 머리말·장 목록)에서 눌렀다면 그 책의 구분 탭으로 가서 읽던 책 카드에 포커스를
-  // 맞춘다(헤더 홈 버튼 buildHomeBtn과 동일 UX — 키보드/스크린 리더 사용자가 맥락에
+  // 맞춘다(키보드/스크린 리더 사용자가 맥락에
   // 착지). 구분 탭이 없는 책(전례시편 · 송가)은 성서 목록 첫 화면으로(views.js bookListPath).
   // 목록·구분 화면(bookId 없음)에선 기본 href="/" 로 진행해 최상단.
   const p = W.parsePath?.();
@@ -253,12 +266,12 @@ $home?.addEventListener("click", (e) => {
     W.setPendingBookFocus?.(book.id);
     W.navigate(W.bookListPath(book));
   }
-});
+}
 
 // ADR-038 §1: 캘린더 탭. 다른 탭에서 오면 마지막으로 보던 캘린더 화면(전례독서 /lectionary/… 포함)으로,
 // 전례독서에서 누르면 마지막 캘린더 보기로 간다(사용자 결정 2026-11-07, 갈 곳은 tab-history.js calendarTabDest).
 // 캘린더 보기에서 누르면 가로채지 않아 정적 href="/calendar"(이번 달)로 간다.
-// 데스크톱 헤더의 캘린더 단추(#header-calendar — 탭 바가 없는 넓은 화면의 입구)도 이 처리기를 단다 —
+// 데스크톱 상단 바의 「캘린더」 탭(#header-calendar — 탭 바가 없는 넓은 화면의 입구, ADR-043)도 이 처리기를 단다 —
 // 탭과 같은 곳으로 간다(사용자 결정 2026-10-15 · PR #348 리뷰; 그전엔 정적 href 뿐이라 늘 이번 달이었다).
 // 가로 모드의 스크롤 축소(.collapsed)에서는 탭이 다 보여 이 탭도 눌린다 — 같은 동작이고, 라우트가
 // 바뀌면 축소가 풀린다(syncTabBarActive → resetTabCollapse).
@@ -440,6 +453,21 @@ const $tabBar = document.getElementById("tab-bar");
 // Reading routes (/, /<division>, /<book>/<chapter>, …) all map to the home tab.
 // ADR-030: 검색은 탭에서 분리된 #tab-search 버튼 — seg==="search" 일 때 별도로 활성.
 // ADR-038 §1 · §3: /calendar·/lectionary 는 캘린더 탭 소속 — 홈 다음 두 번째 탭(A2).
+// ── BEGIN HEADER_NAV ── (tests/unit/tabbar.test.js 가 슬라이스해 검증)
+/**
+ * 데스크톱 상단 바의 목적지 탭에 지금 있는 곳을 표시한다(ADR-043 §3). 캘린더와 전례독서는 「캘린더」, 그 밖의 화면은 「성서」다.
+ * 검색 결과, 그리고 데스크톱에서 성서 목록 위에 패널이나 팝오버로 여는 /bookmarks 와 /settings 도 「성서」다.
+ * @param {string} active  syncTabBarActive 가 정한 탭 바의 탭
+ */
+function syncHeaderNav(active) {
+  const current = active === "calendar" ? "calendar" : "home";
+  for (const a of document.querySelectorAll("#header-nav [data-nav]")) {
+    if (a.getAttribute("data-nav") === current) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  }
+}
+// ── END HEADER_NAV ──
+
 function syncTabBarActive() {
   if (!$tabBar) return;
   const seg = location.pathname.replace(/^\//, "").split("/")[0];
@@ -454,6 +482,7 @@ function syncTabBarActive() {
     if (on) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   }
+  syncHeaderNav(active);
   if ($searchBtn) {
     const on = active === "search";
     $searchBtn.classList.toggle("active", on);

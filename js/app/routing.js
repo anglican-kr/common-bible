@@ -847,7 +847,7 @@ document.addEventListener("click", (e) => {
 
 // popstate stays here (route is module-local). The DOMContentLoaded
 // bootstrap handler stayed in app.js (Phase 8 territory) — it kicks off
-// route() and the deferred init chain (initCompactHeader /
+// route() and the deferred init chain (initScrollElevation /
 // initBookmarkSheetDrag / registerServiceWorker / maybeShowInstallNudge /
 // driveSync.initDriveSync), several of which still live in app.js.
 // ADR-031: 뒤로/앞으로(POP)는 떠날 때의 스크롤로 복원(scrollRestoration=manual 이라

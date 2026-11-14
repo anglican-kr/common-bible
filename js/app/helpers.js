@@ -269,10 +269,19 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   // ── The top bar (#sticky-group) ──
   // Its height is never a number in the code: it grows with the font-size setting (rem), with the status-bar
   // inset (its padding-top, env(safe-area-inset-top) — about 62px when an iPhone Home Screen app draws under
-  // the status bar), with the desktop top row that collapses on scroll (views.js initCompactHeader) and with
-  // the resume banner and division tabs it holds. JS measures it with barBottom; CSS reads `--top-bar-h`,
+  // the status bar) and with the resume banner and division tabs it holds. JS measures it with barBottom; CSS reads `--top-bar-h`,
   // which publishBarHeight keeps up to date. The bar is pinned at `top: 0` and sits at the very top of the
   // document, so its height and its bottom edge on screen are the same number.
+
+  // ── Desktop or mobile layout (ADR-029 §1) ──
+  // Desktop = a wide window AND a mouse; everything else (phones, tablets, a narrow desktop window) is the mobile
+  // layout with the tab bar. CSS writes the same condition in its media queries.
+  const DESKTOP_LAYOUT_QUERY = "(min-width: 769px) and (pointer: fine)";
+
+  /** @returns {boolean} whether the desktop layout (top bar, side panels) is showing right now */
+  function isDesktopLayout() {
+    return typeof window.matchMedia === "function" && window.matchMedia(DESKTOP_LAYOUT_QUERY).matches;
+  }
 
   /**
    * The bottom edge of the top bar, in px from the top of the viewport — what lies above it is covered.
@@ -283,16 +292,11 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     return document.getElementById("sticky-group")?.getBoundingClientRect().bottom ?? 0;
   }
 
-  // How long scrollUnderBar waits for the desktop top row to collapse: the 0.25s transition plus the late start of
-  // the scroll listener that collapses it (views.js initCompactHeader).
-  const BAR_COLLAPSE_WAIT_MS = 1000;
-
   /**
    * Scroll the page so the top of `target` sits right under the top bar — the calendar list's row of the address
-   * (calendar.js), the verse a resumed chapter goes back to (views.js renderChapter). On desktop the scroll can
-   * collapse the bar's top row; a browser with scroll anchoring holds the target where it was through the collapse,
-   * which opens a gap under the bar, so the target is placed again once the collapse ends. Not once the reader has
-   * started to scroll (wheel, touch, pointer, key), and not after BAR_COLLAPSE_WAIT_MS.
+   * (calendar.js), the verse a resumed chapter goes back to (views.js renderChapter). Placed again on the next
+   * frame, once the layout of the new view has settled — unless the reader has started to scroll by then (wheel,
+   * touch, pointer, key): placing again would take their scroll back.
    * @param {Element} target
    */
   function scrollUnderBar(target) {
@@ -301,20 +305,15 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
       window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top - barBottom(), behavior: "instant" });
     };
     place();
-    requestAnimationFrame(place);
     const waiting = new AbortController();
-    const { signal } = waiting;
-    const stop = () => waiting.abort();
-    const collapsing = document.getElementById("breadcrumb-row");
-    collapsing?.addEventListener("transitionend", (e) => {
-      if (e.target !== collapsing) return;   // not a transition of the search field inside it
-      stop();
-      place();
-    }, { signal });
+    let moved = false;
     for (const type of ["wheel", "touchstart", "pointerdown", "keydown"]) {
-      window.addEventListener(type, stop, { passive: true, signal });
+      window.addEventListener(type, () => { moved = true; }, { passive: true, signal: waiting.signal });
     }
-    setTimeout(stop, BAR_COLLAPSE_WAIT_MS);
+    requestAnimationFrame(() => {
+      waiting.abort();
+      if (!moved) place();
+    });
   }
 
   /**
@@ -387,21 +386,17 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     // Keep the control where it was on screen. A redraw that had to fetch
     // first painted the skeleton, which clamped the scroll to the top —
     // without this the pressed control jumps, and one far down (a segment
-    // below the fold on a phone) comes back off-screen (2.4.7). The clamp can
-    // also re-expand the desktop header's search row (views.js
-    // initCompactHeader), which collapses again once the page is back down.
-    // With scroll anchoring the browser holds the content still through that
-    // collapse, so the control goes to its click-time viewport top in today's
-    // layout; without it (Safari before 27) the collapse itself moves the
-    // content, so the control goes back to its offset within the root. A
-    // control outside the root (sticky — the division tabs, the lectionary's
-    // date steps in the title row) keeps its place by itself, so the scroll is
-    // left to the view: matching its click-time top would undo a view that
-    // starts the new screen at the top, by the height the desktop header's
-    // search row regains there. A press at the very top of the page stays at the
-    // top: when the redraw adds a line above the control (the lectionary's note
-    // under the title), scrolling to hold the control would push the title up
-    // under the header. A control pushed out of view comes back further down.
+    // below the fold on a phone) comes back off-screen (2.4.7). With scroll
+    // anchoring the browser holds the content still while the page above the
+    // control changes height, so the control goes to its click-time viewport
+    // top in today's layout; without it (Safari before 27) the control goes
+    // back to its offset within the root. A control outside the root (sticky
+    // — the division tabs, the lectionary's date steps in the title row)
+    // keeps its place by itself, so the scroll is left to the view. A press at
+    // the very top of the page stays at the top: when the redraw adds a line
+    // above the control (the lectionary's note under the title), scrolling to
+    // hold the control would push the title up under the header. A control
+    // pushed out of view comes back further down.
     const r0 = target.getBoundingClientRect();
     const inRoot = !!root && root.contains(target) && spot.y > 0;
     if (inRoot && SCROLL_ANCHORING) {
@@ -416,7 +411,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     target.focus(spot.pointer ? { preventScroll: true, focusVisible: false } : { preventScroll: true });
     // Still off-screen: the control was already out of view when it was activated (a keyboard user read on
     // with Space / Page Down, focus left on the link, then pressed Enter), or — without scroll anchoring —
-    // the re-expanded header pushed it below the fold. Bring it to the middle. (A shorter page never does
+    // the taller page above pushed it below the fold. Bring it to the middle. (A shorter page never does
     // this: the scroll clamp only moves an in-flow control toward the viewport.) Out of view above means
     // covered by the top bar; a control in the bar itself (the division tabs, the date steps) is in view.
     const r = target.getBoundingClientRect();
@@ -485,7 +480,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   return {
     _$, chUnit, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
     HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot, SCROLL_ANCHORING, barBottom, scrollUnderBar,
-    publishBarHeight, isFormerNorthChurch, churchName, parishGroups,
+    publishBarHeight, isFormerNorthChurch, churchName, parishGroups, DESKTOP_LAYOUT_QUERY, isDesktopLayout,
   };
 })();
 

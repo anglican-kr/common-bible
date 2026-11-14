@@ -125,7 +125,7 @@ def wait_app_ready(page) -> None:
     """Block until the SPA shell has rendered at least one child element.
 
     Wait for ``#search-input`` *attached* (in DOM), not *visible*: on mobile the
-    header ``#breadcrumb-row`` (which contains the search bar) is ``display:none``
+    header ``#header-actions`` (which contains the search bar) is ``display:none``
     by design — search lives in the bottom tab dock instead — so the default
     ``visible`` state never resolves and every mobile test would time out.
     """

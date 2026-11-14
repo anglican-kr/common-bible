@@ -7,7 +7,7 @@
 ## 지금 동작
 
 - **상단 바 높이는 숫자로 적지 않고 잰다** (2026-11-07, `DESIGN.md` §4 「레이아웃」).
-  - 상단 바 묶음(`#sticky-group`)의 높이는 글자 크기(16px에서 약 57px, 24px에서 약 70px), 상태 표시줄 높이, 데스크톱에서 스크롤하면 접히는 윗줄, 이어 읽기 배너와 구분 탭에 따라 바뀐다.
+  - 상단 바 묶음(`#sticky-group`)의 높이는 글자 크기(16px에서 약 57px, 24px에서 약 70px), 상태 표시줄 높이, 이어 읽기 배너와 구분 탭에 따라 바뀐다. 데스크톱의 윗줄 접힘은 2026-11-14에 없어졌다(ADR-043).
   - 스크립트는 상단 바의 아래쪽을 쓸 때마다 잰다(`helpers.js`의 `barBottom`). 읽던 절 저장(`routing.js`), 검색 결과 한 쪽의 개수(`search.js`), 다시 그린 뒤 포커스 복원의 「화면 밖」 판정(`helpers.js`의 `restoreFocusSpot`)이 이 값을 쓴다. 대상을 상단 바 바로 아래에 두는 스크롤(`scrollUnderBar`)도 이 값을 쓰고, 캘린더 목록의 주소 줄과 이어 읽기의 절이 그 스크롤을 쓴다.
   - CSS는 `:root`의 변수 `--top-bar-h`를 쓴다. 앱이 시작할 때부터 `ResizeObserver`(요소의 크기가 바뀌면 알려 주는 브라우저 기능)가 상단 바를 지켜보며 높이를 넣는다(`helpers.js`의 `publishBarHeight`). 지금은 캘린더 목록의 스크롤 여백(`scroll-padding-top`)만 쓴다.
   - 테스트: 유닛 +4(`helpers.test.js`의 `barBottom`, `publishBarHeight`), e2e +4(`test_search.py` 1, `test_calendar_view.py` 3). 읽던 절과 포커스 복원의 시험은 `topics/routing.md`에 있다.

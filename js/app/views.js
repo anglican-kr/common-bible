@@ -3,7 +3,6 @@
 // Phase 7a of the app.js modularization (ADR-018). Owns:
 //  - Rendering helpers (setTitle / chapter picker / division tabs) + division
 //    constants and book-order resolution (canonical vs vulgate ordering).
-//  - Compact Header on Scroll (collapses breadcrumb past 60px scroll).
 //
 // Views and Routing join this module in Phase 7b; the file name reflects that
 // destination. (Data fetching → data-fetch.js, Audio Player → audio-player.js,
@@ -70,6 +69,8 @@ function setTitle(text, mobileText) {
     $title.removeAttribute("aria-label");
     $title.classList.remove("compact");
     $title.appendChild(document.createTextNode(text));
+    // A plain title has no short form, but the desktop top bar is fitted around it all the same (fitTopBar).
+    applyTitleCompactness();
   }
 }
 // ── END TITLE ──
@@ -162,7 +163,6 @@ function setTitleWithChapterPicker(book, currentCh) {
     if (t instanceof Element && t.tagName === "A") chapterOverlay.close();
   });
 
-  $title.appendChild(buildHomeBtn(bookListPath(book), "성서 목록으로", book.id));
   $title.appendChild(btn);
   $title.appendChild(popover);
   $title.appendChild(buildBookmarkHeaderBtn(book.id, currentCh));
@@ -458,7 +458,14 @@ function applyTitleCompactness() {
       if (timer !== null) clearTimeout(timer);
       timer = setTimeout(() => { timer = null; applyTitleCompactness(); }, 50);
     });
-    _titleResizeObs.observe($title);
+    // Watch the bar, not the title: on desktop the title cell is as wide as its text (ADR-043), so it does not
+    // change when the window does — and the side cells change with it (the tab labels at 900px, the search field).
+    _titleResizeObs.observe($title.parentElement ?? $title);
+    // The cells themselves change width without the window changing: a web font arriving after the first
+    // measure, the font-size setting, a tab's weight when the destination changes.
+    for (const cell of [$title, document.getElementById("header-nav"), document.getElementById("header-actions")]) {
+      if (cell) _titleResizeObs.observe(cell);
+    }
   }
 
   // Defer the actual measurement to the next frame. Several render paths append
@@ -475,6 +482,15 @@ function applyTitleCompactness() {
 
 function measureTitleCompactness() {
   if (!$title) return;
+  // Desktop top bar (ADR-043): the title is the middle cell of a three-cell row — fitted as a whole (fitTopBar).
+  const bar = $title.parentElement ?? null;
+  const barStyle = bar && typeof getComputedStyle === "function" ? getComputedStyle(bar) : null;
+  if (bar && barStyle && barStyle.display === "grid") {
+    fitTopBar(bar, barStyle);
+    return;
+  }
+  bar?.classList.remove("tight");
+
   const full = /** @type {HTMLElement | null} */ ($title.querySelector(".title-text-full"));
   const mobile = $title.querySelector(".title-text-mobile");
   if (!full || !mobile) {
@@ -496,6 +512,9 @@ function measureTitleCompactness() {
   full.style.display = prevDisplay;
 
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  // Picker button has a ~0.4em chevron after the label — allow for it.
+  const chevronAllowance = container.classList.contains("title-picker-btn") ? 0.8 * rem : 0;
+
   // The title text is centered (text-align: center) while the home / bookmark /
   // settings buttons are absolute-positioned at the edges. A centered string
   // overruns whichever side reaches furthest inward, symmetrically — so the room
@@ -528,41 +547,58 @@ function measureTitleCompactness() {
   }
   const breathing = 0.8 * rem;
   const sideReserve = Math.max(leftReserve, rightReserve) + breathing;
-  // Picker button has a ~0.4em chevron after the label — allow for it.
-  const chevronAllowance = container.classList.contains("title-picker-btn") ? 0.8 * rem : 0;
   const availableWidth = $title.clientWidth - 2 * sideReserve;
 
   if (naturalWidth + chevronAllowance > availableWidth + 0.5) {
     $title.classList.add("compact");
   }
 }
-// ── END BOOK_LIST_LINK ──
 
-// ── Compact Header on Scroll ──
-// Deferred: not needed until after first render and first scroll.
-
-// ── BEGIN COMPACT_HEADER ──
-// Exercised by tests/unit/views.test.js. Hysteretic toggle:
-// scrolling past 60px adds .compact to #app-header; only when returning
-// near the top (<10px) do we remove it. Listener is passive — no
-// preventDefault — so it cannot block scrolling.
-function initCompactHeader() {
-  const header = _$("app-header");
-  const THRESHOLD_ON = 60;   // collapse breadcrumb when scrolling down past this
-  const THRESHOLD_OFF = 10;  // restore breadcrumb only when near the very top
-  let isCompact = false;
-  window.addEventListener("scroll", () => {
-    const y = window.scrollY;
-    if (!isCompact && y > THRESHOLD_ON) {
-      isCompact = true;
-      header.classList.add("compact");
-    } else if (isCompact && y < THRESHOLD_OFF) {
-      isCompact = false;
-      header.classList.remove("compact");
+/**
+ * Fit the desktop top bar (ADR-043 §1, §8). The title cell is as wide as its content and both side cells take the
+ * wider one's width, which keeps the title at the centre of the window; whatever is in the title cell — a chapter
+ * title with its buttons, the date steps of the calendar and the lectionary, a search title — has the room that
+ * is left. When it does not fit, the title takes its short form (`.compact` on the title — the short book name,
+ * the month as 「2027.12」). When that is not enough the bar gets tighter (`.tight` on the bar — the tabs keep
+ * only their icons and the search field narrows), and the title goes back to its full form if the tighter bar
+ * has room for it. A title with no short form that still does not fit is cut with an ellipsis by CSS. Measured from the laid-out bar, so every button, gap and margin is counted as drawn.
+ * @param {HTMLElement} bar  #app-header @param {CSSStyleDeclaration} barStyle
+ */
+function fitTopBar(bar, barStyle) {
+  const widthOf = (/** @type {string} */ id) => document.getElementById(id)?.getBoundingClientRect().width ?? 0;
+  const gap = parseFloat(barStyle.columnGap) || 0;
+  const inner = bar.clientWidth - (parseFloat(barStyle.paddingLeft) || 0) - (parseFloat(barStyle.paddingRight) || 0);
+  // The content's own width, whether or not the cell has been squeezed below it. scrollWidth is that for a line
+  // of text; the date row is a centred flex row, which overflows to both sides while scrollWidth counts only
+  // the end side — so its width is taken from its first and last cells.
+  const contentWidth = () => {
+    const cells = Array.from($title.children).filter((c) => c.getBoundingClientRect().width > 0);
+    const span = cells.length
+      ? cells[cells.length - 1].getBoundingClientRect().right - cells[0].getBoundingClientRect().left : 0;
+    return Math.max($title.scrollWidth, span);
+  };
+  const fits = () =>
+    contentWidth() <= inner - 2 * Math.max(widthOf("header-nav"), widthOf("header-actions")) - 2 * gap + 0.5;
+  bar.classList.remove("tight");
+  $title.classList.remove("compact");
+  if (!fits()) {
+    $title.classList.add("compact");
+    if (!fits()) {
+      bar.classList.add("tight");
+      // The tighter bar may have room for the full title after all — icons for tabs lose less than a short title.
+      $title.classList.remove("compact");
+      if (!fits()) $title.classList.add("compact");
     }
-  }, { passive: true });
+  }
+  // A tab whose label is hidden shows its name on hover; one whose label is visible needs no second copy of it.
+  for (const tab of bar.querySelectorAll(".header-nav-link")) {
+    const label = tab.querySelector(".header-nav-label");
+    if (!label) continue;
+    if (label.getBoundingClientRect().width <= 1) tab.setAttribute("title", label.textContent ?? "");
+    else tab.removeAttribute("title");
+  }
 }
-// ── END COMPACT_HEADER ──
+// ── END BOOK_LIST_LINK ──
 
 // ── BEGIN SCROLL_ELEVATION ──
 // ADR-025: toggle `.scrolled` on #sticky-group based on whether the
@@ -789,7 +825,6 @@ function _observeResumeBanner(wrapper) {
  */
 function commitBookTitle(book) {
   setTitle(book.name_ko, NT_MOBILE_NAME[book.id]);
-  $title.insertBefore(buildHomeBtn(bookListPath(book), "성서 목록으로", book.id), $title.firstChild);
   $title.appendChild(buildBookmarkHeaderBtn(book.id, null));
   $title.appendChild(buildSettingsTrigger());
   hideAudioBar();
@@ -1759,7 +1794,6 @@ function renderChapter(data, book, opts) {
 function renderPrologue(data, book) {
   const mobileBookName = NT_MOBILE_NAME[book.id];
   setTitle(`${book.name_ko} 머리말`, mobileBookName ? `${mobileBookName} 머리말` : undefined);
-  $title.insertBefore(buildHomeBtn(bookListPath(book), "성서 목록으로", book.id), $title.firstChild);
   $title.appendChild(buildSettingsTrigger());
   clearNode($app);
 
@@ -1947,7 +1981,6 @@ const THIS_MONTH_LABEL = "이번 달 캘린더";
  */
 function commitLiturgicalTitle(view) {
   setTitle(LITURGICAL_VIEWS[view].title);
-  if (view === "calendar") $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
   hideAudioBar();
 }
 
@@ -1994,7 +2027,7 @@ function renderLiturgicalLoadFailure(view) {
 const appViewsRouting = {
   setTitle, setTitleWithChapterPicker,
   buildDivisionTabs, divisionLabels, divisionOrder, effectiveDivision,
-  initCompactHeader, initScrollElevation,
+  initScrollElevation,
   renderError,
   _verseSelectionUnit,
   _verseRangeKeys,
@@ -2007,8 +2040,7 @@ window.buildDivisionTabs = buildDivisionTabs;
 window.divisionLabels = divisionLabels;
 window.divisionOrder = divisionOrder;
 window.effectiveDivision = effectiveDivision;
-window.bookListPath = bookListPath;   // tabbar.js — the home tab lands where the home button does
-window.initCompactHeader = initCompactHeader;
+window.bookListPath = bookListPath;   // tabbar.js — the home tab and the desktop 성서 tab land on the book's division
 window.initScrollElevation = initScrollElevation;
 window.setPendingBookFocus = setPendingBookFocus;
 // renderError stays here (view renderer); search.js calls it as a bare global.
@@ -2021,11 +2053,11 @@ export {
   setTitle, setTitleWithChapterPicker,
   buildDivisionTabs, buildSegmentTabs, bindCopyAttribution, absentVerseNumbers, divisionLabels, divisionOrder, effectiveDivision,
   bookListPath,
-  initCompactHeader, initScrollElevation,
+  initScrollElevation,
   _verseSelectionUnit, _verseRangeKeys,
   DIVISION_LABELS,
   renderBookList, renderChapterList, renderChapter, renderPrologue,
   renderLoading, renderBibleFailure,
   appendVerses, appendVersesWithAids,
-  LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
+  LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, applyTitleCompactness, renderLiturgicalFailure, renderLiturgicalLoadFailure,
 };

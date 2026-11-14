@@ -18,8 +18,6 @@
 //   - POPOVER block — setTitleWithChapterPicker. Open/close contract + focus
 //     trap + click-outside-to-close + click-on-link-to-close. Richer DOM stub
 //     with addEventListener + classList + hidden + querySelector + contains.
-//   - COMPACT_HEADER block — initCompactHeader. Hysteretic 60px / 10px
-//     scroll-based class toggle. Window scroll listener stub.
 //   - VERSE_SELECTION block — _verseSelectionUnit (every line of a verse is
 //     one unit, by verse instance — not by the number two verses can share; a
 //     data half verse is its own unit) + _verseRangeKeys (anchor→target
@@ -244,6 +242,9 @@ function loadTitle() {
     Object, Array, String, Number, Boolean, JSON, console, Error,
     document, $title,
     announce: (msg) => { announceCalls.push(msg); },
+    // setTitle fits the desktop top bar around every title (views.js fitTopBar); it measures rendered geometry,
+    // which this DOM stub does not have.
+    applyTitleCompactness: () => {},
   };
   vm.createContext(ctx);
   vm.runInContext(EL_SHIM + extractBlock("TITLE"), ctx, {
@@ -824,12 +825,6 @@ function loadPopover() {
       const cleanup = () => { trapFocusCleanups.push(container); };
       return cleanup;
     },
-    buildHomeBtn: (target, label) => {
-      const a = new dom.RichElement("a");
-      a.setAttribute("href", target);
-      a.textContent = label;
-      return a;
-    },
     // 「성서 목록으로」 destination — the rule itself is the DIVISION block's (tested there); here only that the
     // home button takes it.
     bookListPath: (b) => `/list-for-${b.id}`,
@@ -867,63 +862,22 @@ function loadPopover() {
   };
 }
 
-// ── COMPACT_HEADER loader ────────────────────────────────────────────────────
-
-function loadCompactHeader() {
-  const dom = makeRichDom();
-  const $header = new dom.RichElement("header");
-  $header.setAttribute("id", "app-header");
-
-  const scrollListeners = [];
-  const windowStub = {
-    scrollY: 0,
-    addEventListener: (type, fn, opts) => {
-      if (type === "scroll") scrollListeners.push({ fn, opts });
-    },
-  };
-
-  const ctx = {
-    Object, Array, String, Number, Boolean, JSON, console, Error,
-    window: windowStub,
-    _$: (id) => id === "app-header" ? $header : null,
-  };
-  vm.createContext(ctx);
-  vm.runInContext(extractBlock("COMPACT_HEADER"), ctx, {
-    filename: "views-compact-header.js",
-  });
-  return {
-    ctx, dom, $header,
-    windowStub,
-    scrollListeners,
-    initCompactHeader: ctx.initCompactHeader,
-    /** Test-only: simulate a scroll event firing all registered listeners. */
-    fireScroll: (y) => {
-      windowStub.scrollY = y;
-      for (const l of scrollListeners) l.fn({});
-    },
-  };
-}
-
-// ── POPOVER tests ────────────────────────────────────────────────────────────
-
-test("setTitleWithChapterPicker: appends home btn + picker btn + popover + bookmark btn", () => {
+test("setTitleWithChapterPicker: appends picker btn + popover + bookmark btn — no home button (ADR-043 §3)", () => {
   const h = loadPopover();
   const book = { id: "gen", name_ko: "창세기", chapter_count: 50, has_prologue: false, division: "old_testament" };
   h.setTitleWithChapterPicker(book, 3);
-  // children: homeBtn, btn, popover, bookmarkBtn — 4 entries
-  assert.equal(h.$title.children.length, 4);
-  assert.equal(h.$title.children[0].tagName, "A");      // home btn (stub returns <a>)
-  assert.equal(h.$title.children[0].getAttribute("href"), "/list-for-gen"); // → bookListPath(book)
-  assert.equal(h.$title.children[1].tagName, "BUTTON"); // picker btn
-  assert.equal(h.$title.children[2].tagName, "DIV");    // popover (chapter)
-  assert.equal(h.$title.children[3].tagName, "BUTTON"); // bookmark btn
+  // children: btn, popover, bookmarkBtn — the way up to the book list is the 성서 tab, not a title button
+  assert.equal(h.$title.children.length, 3);
+  assert.equal(h.$title.children[0].tagName, "BUTTON"); // picker btn
+  assert.equal(h.$title.children[1].tagName, "DIV");    // popover (chapter)
+  assert.equal(h.$title.children[2].tagName, "BUTTON"); // bookmark btn
 });
 
 test("setTitleWithChapterPicker: psalms uses '편' unit", () => {
   const h = loadPopover();
   const book = { id: "ps", name_ko: "시편", chapter_count: 150, has_prologue: false, division: "old_testament" };
   h.setTitleWithChapterPicker(book, 23);
-  const btn = h.$title.children[1];
+  const btn = h.$title.children[0];
   assert.equal(btn.textContent, "시편 23편");
   assert.equal(h.dom.document.title, "시편 23편 — 공동번역성서");
 });
@@ -932,7 +886,7 @@ test("setTitleWithChapterPicker: non-psalms uses '장' unit", () => {
   const h = loadPopover();
   const book = { id: "gen", name_ko: "창세기", chapter_count: 50, has_prologue: false, division: "old_testament" };
   h.setTitleWithChapterPicker(book, 1);
-  const btn = h.$title.children[1];
+  const btn = h.$title.children[0];
   assert.equal(btn.textContent, "창세기 1장");
 });
 
@@ -940,7 +894,7 @@ test("setTitleWithChapterPicker: popover grid has chapter_count items", () => {
   const h = loadPopover();
   const book = { id: "gen", name_ko: "창세기", chapter_count: 5, has_prologue: false, division: "old_testament" };
   h.setTitleWithChapterPicker(book, 2);
-  const popover = h.$title.children[2];
+  const popover = h.$title.children[1];
   const grid = popover.children[0];
   assert.equal(grid.children.length, 5);
   // Each is an <a>
@@ -954,7 +908,7 @@ test("setTitleWithChapterPicker: marks current chapter with 'current' class", ()
   const h = loadPopover();
   const book = { id: "gen", name_ko: "창세기", chapter_count: 3, has_prologue: false, division: "old_testament" };
   h.setTitleWithChapterPicker(book, 2);
-  const grid = h.$title.children[2].children[0];
+  const grid = h.$title.children[1].children[0];
   assert.equal(grid.children[0].className, "popover-item");
   assert.equal(grid.children[1].className, "popover-item current");
   assert.equal(grid.children[2].className, "popover-item");
@@ -964,7 +918,7 @@ test("setTitleWithChapterPicker: prepends '머리말' link when has_prologue", (
   const h = loadPopover();
   const book = { id: "sir", name_ko: "집회서", chapter_count: 51, has_prologue: true, division: "deuterocanon" };
   h.setTitleWithChapterPicker(book, 1);
-  const grid = h.$title.children[2].children[0];
+  const grid = h.$title.children[1].children[0];
   // prologue link first, then 51 chapter links = 52 total
   assert.equal(grid.children.length, 52);
   assert.equal(grid.children[0].textContent, "머리말");
@@ -976,8 +930,8 @@ test("setTitleWithChapterPicker: btn click opens popover + traps focus", () => {
   const h = loadPopover();
   const book = { id: "gen", name_ko: "창세기", chapter_count: 5, has_prologue: false, division: "old_testament" };
   h.setTitleWithChapterPicker(book, 1);
-  const btn = h.$title.children[1];
-  const popover = h.$title.children[2];
+  const btn = h.$title.children[0];
+  const popover = h.$title.children[1];
   btn._dispatch("click", {});
   assert.equal(popover.hidden, false);
   assert.equal(btn.getAttribute("aria-expanded"), "true");
@@ -988,7 +942,7 @@ test("setTitleWithChapterPicker: opening focuses + marks the current chapter", (
   const h = loadPopover();
   const book = { id: "ps", name_ko: "시편", chapter_count: 150, has_prologue: false, division: "old_testament" };
   h.setTitleWithChapterPicker(book, 100);
-  const btn = h.$title.children[1];
+  const btn = h.$title.children[0];
   btn._dispatch("click", {});
   const active = h.dom.getActive();
   assert.equal(active.className, "popover-item current");
@@ -1000,8 +954,8 @@ test("setTitleWithChapterPicker: clicking a grid <a> closes popover", () => {
   const h = loadPopover();
   const book = { id: "gen", name_ko: "창세기", chapter_count: 3, has_prologue: false, division: "old_testament" };
   h.setTitleWithChapterPicker(book, 1);
-  const btn = h.$title.children[1];
-  const popover = h.$title.children[2];
+  const btn = h.$title.children[0];
+  const popover = h.$title.children[1];
   btn._dispatch("click", {});
   const link = popover.children[0].children[1]; // chapter 2
   popover._dispatch("click", { target: link });
@@ -1013,8 +967,8 @@ test("setTitleWithChapterPicker: clicking the mobile settings gear closes the ch
   const h = loadPopover();
   const book = { id: "gen", name_ko: "창세기", chapter_count: 5, has_prologue: false, division: "old_testament" };
   h.setTitleWithChapterPicker(book, 1);
-  const btn = h.$title.children[1];
-  const popover = h.$title.children[2];
+  const btn = h.$title.children[0];
+  const popover = h.$title.children[1];
   btn._dispatch("click", {});  // open chapter popover
   assert.equal(popover.hidden, false);
   // The mobile settings gear lives *inside* $title (appended per-view); a tap on
@@ -1025,74 +979,6 @@ test("setTitleWithChapterPicker: clicking the mobile settings gear closes the ch
   h.dom.document._dispatch("click", { target: gear });
   assert.equal(popover.hidden, true);
   assert.equal(btn.getAttribute("aria-expanded"), "false");
-});
-
-// ── COMPACT_HEADER tests ─────────────────────────────────────────────────────
-
-test("initCompactHeader: registers a passive scroll listener on window", () => {
-  const h = loadCompactHeader();
-  h.initCompactHeader();
-  assert.equal(h.scrollListeners.length, 1);
-  assert.equal(h.scrollListeners[0].opts.passive, true);
-});
-
-test("initCompactHeader: scrollY > 60 adds 'compact' to header", () => {
-  const h = loadCompactHeader();
-  h.initCompactHeader();
-  h.fireScroll(70);
-  assert.equal(h.$header.classList.contains("compact"), true);
-});
-
-test("initCompactHeader: scrollY < 10 removes 'compact'", () => {
-  const h = loadCompactHeader();
-  h.initCompactHeader();
-  h.fireScroll(70);
-  h.fireScroll(5);
-  assert.equal(h.$header.classList.contains("compact"), false);
-});
-
-test("initCompactHeader: hysteresis — between 10 and 60, no change", () => {
-  const h = loadCompactHeader();
-  h.initCompactHeader();
-  // From low: scrollY = 30 should NOT enter compact (only > 60 does)
-  h.fireScroll(30);
-  assert.equal(h.$header.classList.contains("compact"), false);
-  // Now enter compact mode
-  h.fireScroll(70);
-  assert.equal(h.$header.classList.contains("compact"), true);
-  // From high: scrollY = 30 should NOT exit compact (only < 10 does)
-  h.fireScroll(30);
-  assert.equal(h.$header.classList.contains("compact"), true);
-});
-
-test("initCompactHeader: scrollY exactly at threshold (60) does NOT toggle (strict >)", () => {
-  const h = loadCompactHeader();
-  h.initCompactHeader();
-  h.fireScroll(60);
-  assert.equal(h.$header.classList.contains("compact"), false);
-  h.fireScroll(61);
-  assert.equal(h.$header.classList.contains("compact"), true);
-});
-
-test("initCompactHeader: scrollY exactly at threshold (10) does NOT toggle (strict <)", () => {
-  const h = loadCompactHeader();
-  h.initCompactHeader();
-  h.fireScroll(70);
-  h.fireScroll(10);
-  assert.equal(h.$header.classList.contains("compact"), true);
-  h.fireScroll(9);
-  assert.equal(h.$header.classList.contains("compact"), false);
-});
-
-test("initCompactHeader: repeated transitions toggle correctly", () => {
-  const h = loadCompactHeader();
-  h.initCompactHeader();
-  for (let i = 0; i < 3; i++) {
-    h.fireScroll(80);
-    assert.equal(h.$header.classList.contains("compact"), true);
-    h.fireScroll(0);
-    assert.equal(h.$header.classList.contains("compact"), false);
-  }
 });
 
 // ── VERSE_SELECTION ──────────────────────────────────────────────────────────

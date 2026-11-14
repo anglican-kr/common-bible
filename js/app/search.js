@@ -1191,7 +1191,6 @@ async function renderSearchView(state) {
   if ((window.routeSeq?.() ?? 0) !== seq) return;
   window.setTitle("검색");
   const $title = _$("page-title");
-  $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
   $title.appendChild(window.buildSettingsTrigger());
   window.hideAudioBar();
   clearNode($app);
@@ -1235,10 +1234,9 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
 
   window.setTitle(`"${query}" 검색`);
   const $title = _$("page-title");
-  $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
   // Like every other main-header view, plant the mobile settings trigger so the
   // gear stays reachable if the window is resized down to the mobile breakpoint
-  // while on this page (where #breadcrumb-row + #settings-anchor are hidden).
+  // while on this page (where #header-actions with #settings-anchor is hidden).
   $title.appendChild(window.buildSettingsTrigger());
   window.hideAudioBar();
   clearNode($app);

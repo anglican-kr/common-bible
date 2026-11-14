@@ -956,6 +956,9 @@ export interface AppHelpers {
    * 캘린더 목록의 주소 줄과 이어 읽기의 절이 쓴다.
    */
   scrollUnderBar: (target: Element) => void;
+  // The desktop-layout condition (ADR-029 §1) — a wide window and a mouse. One string for every module that asks.
+  DESKTOP_LAYOUT_QUERY: string;
+  isDesktopLayout: () => boolean;
   /** 상단 바의 높이를 `:root`의 `--top-bar-h`에 넣고, 높이가 바뀔 때마다 고친다(CSS용). app.js가 시작할 때 한 번 호출한다. */
   publishBarHeight: () => void;
 }
@@ -1468,7 +1471,7 @@ declare global {
   // so app.js's Phase 7 territory (Views / Routing / chapter rendering /
   // initBookmarkSheetDrag) can call them as bare globals.
   // Phase 7a — views.js: data fetching + rendering helpers +
-  // initCompactHeader. Module-load assigns these to globalThis so app.js's
+  // initScrollElevation. Module-load assigns these to globalThis so app.js's
   // Phase 7b territory (Views/Routing/Audio Player) can call them as bare
   // globals.
   function loadBooks(): Promise<BooksData>;
@@ -1483,7 +1486,6 @@ declare global {
   function effectiveDivision(book: BookEntry): string;
   // 「성서 목록으로」 destination — the book's division tab, or "/" for a book in no tab (전례시편 · 송가).
   function bookListPath(book: BookEntry): string;
-  function initCompactHeader(): void;
   function initScrollElevation(): void;
   // (Phase 7a's temporary DIVISION_LABELS / OT_SUBCATEGORY{,_ORDER,_LABELS}
   // global declares were removed in Phase 7b — all callers now live inside
@@ -1493,7 +1495,7 @@ declare global {
   // trackPageView can `typeof gtag === "function"` guard + call directly.
   function gtag(...args: any[]): void;
   const dataLayer: any[];
-  function buildHomeBtn(target: string, ariaLabel: string, focusBookId?: string): HTMLButtonElement;
+  function buildHomeBtn(target: string, ariaLabel: string): HTMLButtonElement;
   function setPendingBookFocus(bookId: string): void;
   function buildSettingsTrigger(): HTMLButtonElement;
   function buildBookmarkHeaderBtn(bookId: string | null, chapter: number | null): HTMLButtonElement;

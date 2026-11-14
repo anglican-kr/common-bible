@@ -40,8 +40,8 @@ def _open_modal_body(browser, ua: str) -> str | None:
         "localStorage.setItem('bible-install-nudge', JSON.stringify({visits: 0, nextShow: 2, neverShow: true}));"
     )
     page.goto(BASE)
-    page.wait_for_selector(".settings-btn")
-    page.click(".settings-btn")
+    page.wait_for_selector("#settings-anchor .settings-btn")
+    page.click("#settings-anchor .settings-btn")
     page.wait_for_selector(".settings-popover:not([hidden])")
     btn = page.query_selector('button[aria-label="앱으로 설치 안내 열기"]')
     if btn is None:
@@ -129,7 +129,7 @@ def test_unknown_web_view_is_not_handed_off(browser):
     ctx = browser.new_context(user_agent=_ANDROID_WEBVIEW_UA)
     page = ctx.new_page()
     page.goto(BASE + "/gen/1")
-    page.wait_for_selector(".settings-btn")
+    page.wait_for_selector("#settings-anchor .settings-btn")
     page.wait_for_timeout(1500)
     assert page.evaluate("sessionStorage.getItem('bible-inapp-left')") is None
     ctx.close()
@@ -205,11 +205,11 @@ def test_android_naver_as_default_browser_is_an_ordinary_browser(browser):
     ctx = browser.new_context(user_agent=ua)
     page = ctx.new_page()
     page.goto(BASE + "/gen/1?openExternalBrowser=1")
-    page.wait_for_selector(".settings-btn")
+    page.wait_for_selector("#settings-anchor .settings-btn")
     assert page.url == BASE + "/gen/1"
     assert page.evaluate("window.install.detectPlatform()") == "android"
     page.reload()
-    page.wait_for_selector(".settings-btn")
+    page.wait_for_selector("#settings-anchor .settings-btn")
     # 새로 고침은 두 번째 방문이라 Android의 일반 설치 안내가 열린다.
     page.wait_for_selector("#install-modal:not([hidden])", timeout=6000)
     text = page.inner_text("#install-modal-body")
@@ -224,7 +224,7 @@ def test_device_browser_drops_the_hand_off_mark(browser):
     ctx = browser.new_context(user_agent=_ANDROID_UA)
     page = ctx.new_page()
     page.goto(BASE + "/gen/1?openExternalBrowser=1")
-    page.wait_for_selector(".settings-btn")
+    page.wait_for_selector("#settings-anchor .settings-btn")
     assert page.url == BASE + "/gen/1"
     ctx.close()
 
@@ -239,7 +239,7 @@ def _goto_and_wait(page, ua: str, nudge_state: dict | None = None) -> None:
     script = f"localStorage.setItem('{_NUDGE_KEY}', JSON.stringify({nudge_state!r}));" if nudge_state else f"localStorage.removeItem('{_NUDGE_KEY}');"
     page.add_init_script(script)
     page.goto(BASE)
-    page.wait_for_selector(".settings-btn")
+    page.wait_for_selector("#settings-anchor .settings-btn")
 
 
 def test_nudge_shows_on_second_visit_ios_safari(browser):
@@ -331,7 +331,7 @@ def test_nudge_not_shown_when_installed(browser):
         localStorage.removeItem('bible-install-nudge');
     """)
     page.goto(BASE)
-    page.wait_for_selector(".settings-btn")
+    page.wait_for_selector("#settings-anchor .settings-btn")
 
     page.wait_for_timeout(2500)
     assert page.locator("#install-modal").get_attribute("hidden") is not None
@@ -344,7 +344,7 @@ def test_nudge_not_shown_for_desktop(browser):
     page = ctx.new_page()
     page.add_init_script("localStorage.removeItem('bible-install-nudge');")
     page.goto(BASE)
-    page.wait_for_selector(".settings-btn")
+    page.wait_for_selector("#settings-anchor .settings-btn")
 
     page.wait_for_timeout(2500)
     assert page.locator("#install-modal").get_attribute("hidden") is not None
@@ -432,7 +432,7 @@ def test_never_show_flag_prevents_future_nudge(browser):
         f"localStorage.setItem('{_NUDGE_KEY}', JSON.stringify({{visits:1,nextShow:2,neverShow:true}}));"
     )
     page.goto(BASE)
-    page.wait_for_selector(".settings-btn")
+    page.wait_for_selector("#settings-anchor .settings-btn")
 
     page.wait_for_timeout(2500)
     assert page.locator("#install-modal").get_attribute("hidden") is not None
@@ -458,8 +458,8 @@ def test_standalone_mode_hides_install_entry(browser):
         };
     """)
     page.goto(BASE)
-    page.wait_for_selector(".settings-btn")
-    page.click(".settings-btn")
+    page.wait_for_selector("#settings-anchor .settings-btn")
+    page.click("#settings-anchor .settings-btn")
     page.wait_for_selector(".settings-popover:not([hidden])")
     btn = page.query_selector('button[aria-label="앱으로 설치 안내 열기"]')
     ctx.close()

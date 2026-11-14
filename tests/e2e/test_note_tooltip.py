@@ -24,10 +24,10 @@ _PLACE_ANCHOR = f"""(dy) => {{
   window.scrollTo({{ top: window.scrollY + a.top - bar - dy, behavior: 'instant' }});
 }}"""
 
-# 스크롤 이벤트와 툴팁의 나타나기 애니메이션(2px 이동), 상단 바의 접고 펴기가 끝날 때까지 기다린다.
+# 스크롤 이벤트와 툴팁의 나타나기 애니메이션(2px 이동)이 끝날 때까지 기다린다.
 _SETTLE = """async () => {
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-  const els = [document.getElementById('note-tooltip'), document.getElementById('breadcrumb-row')].filter(Boolean);
+  const els = [document.getElementById('note-tooltip')].filter(Boolean);
   await Promise.all(els.flatMap((el) => el.getAnimations()).map((a) => a.finished));
 }"""
 
@@ -105,9 +105,9 @@ def test_note_tooltip_follows_scroll_and_flips_before_header(browser):
         ctx.close()
 
 
-def test_note_tooltip_follows_header_reexpanding_at_top(browser):
-    """데스크톱 상단 바는 스크롤하면 접히고, 맨 위에서 10px 안으로 돌아오면 0.25초 동안 다시 펴지며 본문을 아래로 민다
-    (`views.js`의 `initCompactHeader`). 그때도 툴팁과 표지의 간격은 8px로 남고, 펴진 상단 바에 툴팁이 가리지 않는다."""
+def test_note_tooltip_follows_the_anchor_back_to_the_top(browser):
+    """데스크톱 — 스크롤한 자리에서 툴팁을 열고 맨 위로 돌아와도 툴팁과 표지의 간격은 8px로 남고, 상단 바에 툴팁이 가리지 않는다.
+    상단 바가 접혔다 펴지던 때(2026-11-14 전)에는 펴지며 본문을 아래로 미는 동안에도 따라가는지 보던 시험이다."""
     ctx, page = _open_chapter(browser, {"width": 1280, "height": 800})
     try:
         page.evaluate("() => window.scrollTo({ top: 200, behavior: 'instant' })")

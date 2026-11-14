@@ -299,7 +299,7 @@ function registerServiceWorker() {
 
 // ── Bootstrap ──
 // All deferred init calls below resolve via the window facade set by their
-// owning module: route / loadVersion / initCompactHeader (views.js),
+// owning module: route / loadVersion / initScrollElevation (views.js),
 // initBookmarkSheetDrag / initBookmarkDrawerResize (bookmark.js),
 // maybeShowInstallNudge / maybeLeaveInAppBrowser (install.js). registerServiceWorker is module-local
 // to this file.
@@ -321,11 +321,10 @@ window.addEventListener("DOMContentLoaded", () => {
   Promise.resolve().then(() => window.migrateStoredBookmarks()).catch(() => {}).finally(() => route().finally(() => {
     // 2. Load non-critical work after first paint. Each item targets a surface
     //    the user cannot interact with until they explicitly open it (drawers)
-    //    or that has no first-paint impact (version label, compact-header
-    //    scroll listener, install nudge, SW registration).
+    //    or that has no first-paint impact (version label, header
+    //    elevation observer, install nudge, SW registration).
     idle(() => {
       loadVersion();
-      initCompactHeader();
       initScrollElevation();
       initBookmarkSheetDrag();
       initBookmarkDrawerResize();
