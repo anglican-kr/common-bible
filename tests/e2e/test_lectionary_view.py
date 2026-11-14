@@ -2434,6 +2434,22 @@ def test_psalm_alternative_within_the_psalm_before_it_is_one_reading_with_bracke
     assert page.eval_on_selector_all(".lect-reading:has(.lect-bracket)", "els => els.length") == 1
     # 〔 〕는 화면 낭독기에 숨긴 표시라, 묶음의 처음과 끝을 낭독기만 읽는 글로 알린다. 묶음은 하나다
     assert [t.strip() for t in psalm.locator(".lect-optional-sr").all_text_contents()] == ["선택 구절 시작.", "선택 구절 끝."]
+    # 운문에서 〔는 절 번호 뒤, 왼쪽 여백에 선다. 번호도 본문의 첫 글자도 다른 절과 같은 자리다(사용자 결정 2026-11-14)
+    left = psalm.evaluate(r"""(sec) => {
+      const verse = (n) => sec.querySelector(`.verse[data-vref^="${n}"]`);
+      const x = (n) => verse(n).querySelector('.verse-num').getBoundingClientRect().left;
+      const textX = (n) => {
+        const node = [...verse(n).childNodes].find((c) => c.nodeType === 3 && c.textContent.trim().replace(/\u2060/g, ''));
+        const r = document.createRange(); r.setStart(node, node.textContent.search(/[^\s\u2060]/)); r.collapse(true);
+        return Math.round(r.getBoundingClientRect().left);
+      };
+      const open = sec.querySelector('.lect-bracket');
+      return { five: x(5), six: x(6), text5: textX(5), text6: textX(6),
+               openRight: Math.round(open.getBoundingClientRect().right),
+               after: open.previousElementSibling?.className, verse: open.parentElement.getAttribute('data-vref') };
+    }""")
+    assert left["text6"] == left["text5"] and left["openRight"] <= left["text6"], left
+    assert left["six"] == left["five"] and left["after"] == "verse-num" and left["verse"].startswith("6"), left
     assert psalm.locator(".lect-optional-sr[aria-hidden]").count() == 0
 
 

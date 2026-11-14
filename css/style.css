@@ -962,6 +962,16 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   margin: 0 0.1em;
   user-select: none;
 }
+/* 〔 opening a poetry verse hangs in the verse-number gutter, right after the number, so the first letter stays on
+   the poetry margin (사용자 결정 2026-11-14). The box is one glyph wide and pulled back by its own width; the glyph's
+   ink is its right half, so it stays clear of a three-digit number. A leading quote is not pulled back over it. */
+.lect-bracket--hang {
+  display: inline-block;
+  width: 1em;
+  margin: 0 0 0 -1em;
+  text-align: right;
+}
+.verse.verse-poetry .lect-bracket--hang + .hanging-quote { margin-left: 0; }
 /* A cite chip of the run's last verse sits inside the brackets (lectionary.js markOptionalVerses). A poetry chip
    stands on its own line, so 〕 ends that line as generated text of the chip — one 〕 element per run — drawn like
    .lect-bracket at the text size rather than the chip's 0.78em (`body.cites-shown .cite-chip--poetry`) and without
