@@ -1,4 +1,5 @@
 ---
+pr: 561
 date: 2026-11-14
 branch: claude/quirky-carson-njp7up
 title: "style: 탭 바의 홈 아이콘을 펼친 책으로 변경"
