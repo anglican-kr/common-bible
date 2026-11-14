@@ -373,6 +373,9 @@ function soleDiff(a, b) {
   if (a.readings.length !== b.readings.length) return null;
   /** @type {{ a: ReadingSlot, b: ReadingSlot } | null} */
   let found = null;
+  // A set that carries a slot name twice is never merged — the view looks a slot up by its name (`buildReading`).
+  const names = new Set(b.readings.map((r) => r && r.slot));
+  if (names.size !== b.readings.length) return null;
   for (const r of b.readings) {
     const s = a.readings.find((x) => x && x.slot === r.slot);
     if (!s) return null;
@@ -412,7 +415,9 @@ function bracketBaseOf(sets, at) {
     const d = soleDiff(c, g);
     if (!d || d.a.bookId !== d.b.bookId) continue;
     const pieces = refPieces(d.b);
-    const rank = refPieces(d.a).every((p) => pieces.includes(p)) ? 0
+    const own = refPieces(d.a);
+    if (!own.length) continue;   // no verse ranges to tell a base by — such a set is never a base
+    const rank = own.every((p) => pieces.includes(p)) ? 0
       : !hasHalfVerse(d.a) && !hasHalfVerse(d.b) && slotWithin(d.a, d.b) ? 1 : 2;
     if (!tier[rank]) tier[rank] = c;
   }
@@ -426,16 +431,20 @@ function bracketBaseOf(sets, at) {
  */
 function slotWithin(short, long) {
   if (short.bookId !== long.bookId || !(short.refs || []).length) return false;
-  return (short.refs || []).every((r) => (long.refs || []).some((q) => {
-    if (q.chapter !== r.chapter) return false;
-    if (q.verseSpec === "all") return true;
-    const segs = r.verseSpec === "all" ? [] : parseVerseSpec(r.verseSpec);
+  return (short.refs || []).every((r) => {
+    if (r.verseSpec === "all") return (long.refs || []).some((q) => q.chapter === r.chapter && q.verseSpec === "all");
+    const segs = parseVerseSpec(r.verseSpec);
     if (!segs.length) return false;
     for (const seg of segs) {
-      for (let n = seg.start; n <= seg.end; n++) if (!specCoversVerse(q.verseSpec, n)) return false;
+      for (let n = seg.start; n <= seg.end; n++) if (!slotCovers(long, r.chapter, n)) return false;
     }
     return true;
-  }));
+  });
+}
+
+/** 슬롯이 그 장의 그 절을 싣는가 — 절 포함 판정(`slotWithin`)과 선택 구절 판정(`optionalVerseTest`)이 함께 쓴다. */
+function slotCovers(/** @type {ReadingSlot} */ slot, /** @type {number} */ chapter, /** @type {number} */ n) {
+  return (slot.refs || []).some((r) => r.chapter === chapter && specCoversVerse(r.verseSpec, n));
 }
 
 /**
@@ -510,8 +519,9 @@ function readingOptions(sets, baseName) {
   out.forEach((o, i) => {
     const cond = setCondition(o.group);
     if (titles.size > 1) {
-      const dup = out.filter((x) => x.group.title === o.group.title).length > 1;
-      o.label = dup ? `${o.group.title} 독서 ${o.group.set_no}` : o.group.title;
+      // Numbered by place among the options of that title — merged sets leave gaps in `set_no`.
+      const same = out.filter((x) => x.group.title === o.group.title);
+      o.label = same.length > 1 ? `${o.group.title} 독서 ${same.indexOf(o) + 1}` : o.group.title;
     } else if (cond) {
       o.label = cond;
     } else if (conditional) {
@@ -531,9 +541,30 @@ function readingOptions(sets, baseName) {
  */
 function optionalVerseTest(slot, shortSlot) {
   if (!shortSlot) return () => false;
-  const covers = (/** @type {ReadingSlot} */ s, /** @type {number} */ ch, /** @type {number} */ n) =>
-    (s.refs || []).some((r) => r.chapter === ch && specCoversVerse(r.verseSpec, n));
-  return (chapter, n) => covers(slot, chapter, n) && !covers(shortSlot, chapter, n);
+  return (chapter, n) => slotCovers(slot, chapter, n) && !slotCovers(shortSlot, chapter, n);
+}
+
+/**
+ * 병합 절까지 본 선택 구절 판정 — 병합 절(`range_end`)은 첫 번호로 그려진다. 짧은 본문이 그 절의 번호 가운데 하나라도 읽으면
+ * 그 절은 짧은 본문에 남으므로, 긴 본문이 싣는 번호를 짧은 본문이 하나도 읽지 않을 때만 선택 구절이다(리뷰 2026-11-14).
+ * 같은 번호의 항목이 여럿이면 가장 먼 끝 번호를 쓴다.
+ * @param {(chapter: number, n: number) => boolean} isOptional  `optionalVerseTest`의 판정
+ * @param {ReadingSlot} slot  긴 본문
+ * @param {ReadonlyArray<{ number: number, range_end?: number | null }>} verses  그 장에서 그리는 절
+ * @returns {(chapter: number, n: number) => boolean}
+ */
+function mergedVerseTest(isOptional, slot, verses) {
+  /** @type {Map<number, number>} */
+  const ends = new Map();
+  for (const v of verses) ends.set(v.number, Math.max(ends.get(v.number) || v.number, Number(v.range_end) || v.number));
+  return (chapter, n) => {
+    let any = false;
+    for (let k = n; k <= (ends.get(n) || n); k++) {
+      if (isOptional(chapter, k)) any = true;
+      else if (slotCovers(slot, chapter, k)) return false;
+    }
+    return any;
+  };
 }
 
 /**
@@ -1879,7 +1910,7 @@ function buildReading(m, slot, chapters) {
     });
     trimHalfVerses(article, run.spec, slot.bookId, run.chapter);
     dropReadingMarks(article, slot.bookId);
-    if (shortSlot) markOptionalVerses(article, run.chapter, isOptional);
+    if (shortSlot) markOptionalVerses(article, run.chapter, mergedVerseTest(isOptional, slot, run.verses));
     section.appendChild(article);
   }
   if (shortSlot) joinOptionalRuns(section);
