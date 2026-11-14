@@ -956,6 +956,9 @@ export interface AppHelpers {
    * 캘린더 목록의 주소 줄과 이어 읽기의 절이 쓴다.
    */
   scrollUnderBar: (target: Element) => void;
+  // The desktop-layout condition (ADR-029 §1) — a wide window and a mouse. One string for every module that asks.
+  DESKTOP_LAYOUT_QUERY: string;
+  isDesktopLayout: () => boolean;
   /** 상단 바의 높이를 `:root`의 `--top-bar-h`에 넣고, 높이가 바뀔 때마다 고친다(CSS용). app.js가 시작할 때 한 번 호출한다. */
   publishBarHeight: () => void;
 }
@@ -1492,7 +1495,7 @@ declare global {
   // trackPageView can `typeof gtag === "function"` guard + call directly.
   function gtag(...args: any[]): void;
   const dataLayer: any[];
-  function buildHomeBtn(target: string, ariaLabel: string, focusBookId?: string): HTMLButtonElement;
+  function buildHomeBtn(target: string, ariaLabel: string): HTMLButtonElement;
   function setPendingBookFocus(bookId: string): void;
   function buildSettingsTrigger(): HTMLButtonElement;
   function buildBookmarkHeaderBtn(bookId: string | null, chapter: number | null): HTMLButtonElement;

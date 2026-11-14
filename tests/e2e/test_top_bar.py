@@ -10,6 +10,7 @@
   ⑥ 좁은 데스크톱 폭 — 긴 제목은 짧은 제목으로, 탭은 아이콘만(이름은 남는다), 가로 넘침 없음
   ⑦ 모바일 — 탭과 검색창, 설정 단추는 숨고 탭 바가 맡는다
   ⑧ 「북마크」 탭 — 어느 화면에서나 패널을 열고, 장 밖에서는 「이 장 저장」과 「절 선택」이 꺼져 있다
+  ⑨ 창 폭이 바뀔 때 — 넓히면 전체 제목으로 돌아오고, 「오늘」은 배치를 따라 칸을 옮긴다. 제목 줄의 단추는 글자를 덮지 않는다
 
 실데이터(data/ 서브모듈)가 필요하다 — 로컬 전용(CLAUDE.md 「테스트」).
 """
@@ -220,3 +221,67 @@ def test_bookmark_tab_does_not_offer_the_chapter_left_behind(desktop_context):
     page.locator("#header-bookmarks").click()
     page.wait_for_selector("#bookmark-drawer", state="visible")
     assert _panel_buttons(page) == {"save": True, "select": True}
+
+
+# ── ⑨ 창 폭이 바뀔 때, 제목 줄의 단추 (PR #564 리뷰) ──
+
+def test_widening_the_window_brings_the_full_title_back(browser):
+    """⑨ 좁은 창에서 짧은 제목으로 바뀐 뒤 창을 넓히면 전체 제목으로 돌아온다. 폭 변화를 내용 폭을 따르는 제목 칸에서 보았을 때는
+    다른 화면으로 옮길 때까지 짧은 제목이 남았다."""
+    ctx = browser.new_context(viewport={"width": 800, "height": 700})
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    try:
+        page = ctx.new_page()
+        _open_chapter(page, "1thess/5")
+        page.wait_for_function("() => document.getElementById('page-title').classList.contains('compact')")
+        page.set_viewport_size({"width": 1700, "height": 700})
+        page.wait_for_function("() => !document.getElementById('page-title').classList.contains('compact')")
+        page.set_viewport_size({"width": 800, "height": 700})
+        page.wait_for_function("() => document.getElementById('page-title').classList.contains('compact')")
+    finally:
+        ctx.close()
+
+
+def test_today_moves_with_the_layout_when_the_window_crosses_the_breakpoint(desktop_context):
+    """⑨ 그린 뒤 창 폭이 769px 경계를 넘으면 「오늘」이 그 배치의 칸으로 옮겨 간다 — 다시 그리지 않아도."""
+    page = desktop_context.new_page()
+    page.goto(f"{BASE}/calendar/2026-12")
+    page.wait_for_selector(".cal-grid", timeout=20_000)
+    left = lambda sel: _box(page, "#page-title " + sel)["left"]   # noqa: E731
+    assert left(".lect-today") > left("a.lect-datenav-btn[data-focus-key='next']")
+    page.set_viewport_size({"width": 600, "height": 700})
+    page.wait_for_function("() => document.querySelector('#page-title .lect-bar-start .lect-today')")
+    assert left(".lect-today") < left("a.lect-datenav-btn[data-focus-key='prev']")
+    assert page.locator("#page-title .lect-today").count() == 1
+    page.set_viewport_size({"width": 1280, "height": 700})
+    page.wait_for_function("() => document.querySelector('#page-title .lect-bar-end .lect-today')")
+    assert left(".lect-today") > left("a.lect-datenav-btn[data-focus-key='next']")
+
+
+def test_title_row_buttons_do_not_cover_the_title(desktop_context):
+    """⑨ 북마크 모아 읽기의 「북마크로 돌아가기」 단추와 장의 북마크 단추는 제목 글자 옆에 선다 — 가운데 칸의 폭이 글자 폭이라
+    절대 위치로 두면 글자를 덮는다."""
+    page = desktop_context.new_page()
+    text_box = """() => {
+        const title = document.getElementById('page-title');
+        const node = [...title.querySelectorAll('.title-text-full'), ...title.childNodes]
+            .find((n) => n.nodeType === 3 ? n.data.trim() : n.classList.contains('title-text-full') && n.getBoundingClientRect().width > 0);
+        const range = document.createRange(); range.selectNodeContents(node);
+        const r = range.getBoundingClientRect(); return { left: r.left, right: r.right };
+    }"""
+    page.goto(f"{BASE}/read/none")
+    page.wait_for_selector("#page-title .title-back-btn", timeout=20_000)
+    assert _box(page, "#page-title .title-back-btn")["right"] <= page.evaluate(text_box)["left"] + 0.5
+    _open_chapter(page, "john/3")
+    assert page.evaluate(text_box)["right"] <= _box(page, "#page-title .title-bookmark-btn")["left"] + 0.5
+
+
+def test_bookmark_tab_takes_focus_back_even_when_the_click_gave_it_none(desktop_context):
+    """⑨ 마우스로 누른 단추에 포커스를 주지 않는 브라우저(macOS Safari)에서도 패널을 닫으면 포커스가 탭으로 돌아온다."""
+    page = desktop_context.new_page()
+    _open_chapter(page)
+    page.evaluate("() => { document.activeElement?.blur(); document.getElementById('header-bookmarks').dispatchEvent(new MouseEvent('click', { bubbles: true })); }")
+    page.wait_for_selector("#bookmark-drawer", state="visible")
+    page.keyboard.press("Escape")
+    page.wait_for_selector("#bookmark-drawer", state="hidden")
+    assert page.evaluate("() => document.activeElement.id") == "header-bookmarks"

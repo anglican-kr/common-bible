@@ -676,12 +676,6 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
-/* 탭 바가 없는 데스크톱의 성서 목록 입구 — 다른 화면의 머리에서는 절대 위치이지만 여기서는 왼쪽 칸 안에 둔다. */
-.lect-bar-start > .title-back-btn {
-  position: static;
-  transform: none;
-  margin-block: calc((var(--font-lg) * var(--leading-snug) - var(--icon-btn-touch)) / 2);
-}
 .title-view-btn {
   display: flex;
   align-items: center;
@@ -2045,10 +2039,12 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
 
 /* ── Search Bar (Desktop inline) ── */
 /* The width follows the window so the three cells of the top bar fit on a narrow desktop (ADR-043 §8). It does
-   not grow on focus: the bar's side cells share the leftover width, so a wider field would push the title. */
+   not grow on focus: the bar's side cells share the leftover width, so a wider field would push the title. The
+   floor is in px: a rem floor grows with the font-size setting and, on a narrow window, makes the right cell so
+   much wider than the left one that the title leaves the centre. */
 #search-bar {
   position: relative;
-  width: clamp(11rem, 24vw, 18rem);
+  width: clamp(140px, 24vw, 18rem);
 }
 
 #search-input {
@@ -5449,7 +5445,10 @@ body.tabbar-searching #search-inpage-bar { display: none; }
     margin: 0;
     white-space: nowrap;
   }
-  /* The chapter bookmark button follows the title instead of sitting at the row's right end. */
+  /* The title cell is as wide as its content, so the buttons of the title row stand in the flow beside the text
+     instead of at the row's ends: the bookmark reading view's way back before the title, the chapter bookmark
+     button after it. Absolutely placed they would sit on top of the text. */
+  #page-title > .title-back-btn,
   #page-title > .title-bookmark-btn {
     position: static;
     transform: none;
@@ -5699,8 +5698,8 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 }
 
 /* ── Settings button placement (responsive) ──
-   Desktop: the gear lives in the top row (#settings-anchor) next to the search
-   bar and collapses with that row on scroll. Mobile: the top row is hidden, so
+   Desktop: the gear lives in the top bar (#settings-anchor) next to the search
+   bar (ADR-043). Mobile: the search bar and that gear are hidden, so
    each view mints a per-render gear into the always-visible title row (sits
    at the far right, with the bookmark button just left of it). Exactly one is
    shown per breakpoint. */

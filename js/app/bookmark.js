@@ -200,17 +200,12 @@ $driveDisconnectDelete.addEventListener("click", async () => {
 // Build the title row's "up" button. It always navigates to a fixed destination, never history.back().
 // Only the bookmark reading view uses it now (back to the bookmark list); the way up to the book list is the
 // desktop top bar's 성서 tab and the mobile tab bar's home tab (ADR-043 §3), which also carry the book focus.
-// `focusBookId`, when given, asks the book list to move focus onto the book
-// we were just reading once it renders, so keyboard users land in context.
 // The glyph comes from helpers.js headerIcon — the header icon spec lives there.
-/** @param {string} target @param {string} ariaLabel @param {string} [focusBookId] @returns {HTMLButtonElement} */
-function buildHomeBtn(target, ariaLabel, focusBookId) {
+/** @param {string} target @param {string} ariaLabel @returns {HTMLButtonElement} */
+function buildHomeBtn(target, ariaLabel) {
   const svg = headerIcon(HEADER_ICON_PATHS.home);
   const btn = el("button", { className: "title-back-btn title-home-btn", "aria-label": ariaLabel }, svg);
-  btn.addEventListener("click", () => {
-    if (focusBookId) setPendingBookFocus(focusBookId);
-    navigate(target);
-  });
+  btn.addEventListener("click", () => navigate(target));
   return btn;
 }
 
@@ -312,8 +307,8 @@ const drawerOverlay = createOverlay({
   scrim: $bookmarkScrim,
   inertSelectors: BOOKMARK_INERT_SELECTORS,
   initialFocus: () => $bookmarkDrawerClose,
+  ariaExpanded: "#header-bookmarks",   // 데스크톱 상단 바의 「북마크」 탭(ADR-043 §4)
   onOpen: () => {
-    $headerBookmarks?.setAttribute("aria-expanded", "true");
     if (_bookmarkDrawerCloseTimer) { clearTimeout(_bookmarkDrawerCloseTimer); _bookmarkDrawerCloseTimer = null; }
     $bookmarkDrawer.classList.remove("drawer-closing"); // cancel any in-flight close anim
     const scrollY = window.scrollY;
@@ -324,7 +319,6 @@ const drawerOverlay = createOverlay({
     document.body.dataset.scrollY = String(scrollY);
   },
   onClose: () => {
-    $headerBookmarks?.setAttribute("aria-expanded", "false");
     closeSwipedRow(null);
     $bmOverflowPanel.hidden = true;
     $bmOverflowBtn.setAttribute("aria-expanded", "false");
@@ -349,28 +343,33 @@ const drawerOverlay = createOverlay({
   },
 });
 
-/** @param {string | null} bookId @param {number | null} chapter  both null outside a chapter (the 「이 장 저장」 · 「절 선택」 buttons disable) */
-function openBookmarkDrawer(bookId, chapter) {
+/**
+ * @param {string | null} bookId @param {number | null} chapter  both null outside a chapter (the 「이 장 저장」 · 「절 선택」 buttons disable)
+ * @param {HTMLElement | null} [returnFocusEl]  where focus goes on close; by default the element focused just before opening
+ */
+function openBookmarkDrawer(bookId, chapter, returnFocusEl) {
   // Update toolbar visibility based on whether we're in a chapter, and render
   // the tree before the controller reveals the drawer.
   const inChapter = bookId && chapter;
   $bmSaveChapterBtn.disabled = !inChapter;
   $bmSelectVersesBtn.disabled = !inChapter;
   _rerenderActiveBookmarkTree();
-  drawerOverlay.open();
+  drawerOverlay.open(returnFocusEl);
 }
 
 function closeBookmarkDrawer() { drawerOverlay.close(); }
 
 // 데스크톱 상단 바의 「북마크」 탭(ADR-043 §4) — 어느 화면에서나 패널을 연다. 「이 장 저장」과 「절 선택」은 지금 주소가 장일 때만
 // 켠다: readingContext 는 장을 떠나도 마지막 장을 그대로 두므로, 그것만 보면 캘린더에서 연 패널이 읽던 장을 저장한다.
+// 패널이 열려 있는 동안 상단 바는 눌리지 않으므로(inert) 이 처리기는 여는 일만 한다. 탭을 다시 눌러 닫는 것은 패널이 뒤 화면을
+// 덮지 않게 되는 2단계의 일이다. 닫은 뒤 포커스가 돌아올 곳으로 탭을 넘긴다 — 마우스로 누른 단추에 포커스를 주지 않는 브라우저
+// (macOS Safari)에서는 열기 직전의 포커스가 body 라, 넘기지 않으면 닫은 뒤 Tab 이 페이지 맨 처음부터 시작한다.
 $headerBookmarks?.addEventListener("click", () => {
-  if (drawerOverlay.isOpen) { closeBookmarkDrawer(); return; }
   const p = window.parsePath?.();
   // 주소가 장이어도 그리지 못한 장(없는 장, 받지 못한 장)은 저장할 것이 없다 — 그린 장은 readingContext 와 주소가 같다.
   const inChapter = !!p && p.view === "chapter"
     && p.bookId === readingContext.bookId && p.chapter === readingContext.chapter;
-  openBookmarkDrawer(inChapter ? readingContext.bookId : null, inChapter ? readingContext.chapter : null);
+  openBookmarkDrawer(inChapter ? readingContext.bookId : null, inChapter ? readingContext.chapter : null, $headerBookmarks);
 });
 
 

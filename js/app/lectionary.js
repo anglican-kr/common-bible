@@ -47,7 +47,10 @@ import {
   optionalDestOf,
 } from "./liturgical-engine.js";
 
-const { _$, el, clearNode, emptyState, isModifiedClick, headerIcon, HEADER_ICON_PATHS, isFormerNorthChurch } = window.appHelpers;
+const {
+  _$, el, clearNode, emptyState, isModifiedClick, headerIcon, HEADER_ICON_PATHS, isFormerNorthChurch,
+  DESKTOP_LAYOUT_QUERY, isDesktopLayout,
+} = window.appHelpers;
 const { loadLectionaryTrack, saveLectionaryTrack, loadLectionaryCardsFolded, saveLectionaryCardsFolded, loadLectionaryAltShow, loadParish, loadBaptismalSaint } = window.appStorage;
 
 const $app = _$("app");
@@ -1349,16 +1352,11 @@ function buildDateStep(dir, href, label) {
 function commitDateBar(o) {
   const start = el("span", { className: "lect-bar-start" });
   const today = el("a", { className: "lect-today", href: o.todayHref, "data-focus-key": "today" }, "오늘");
-  // 데스크톱의 한 줄 상단 바에서는 「오늘」이 다음 단추(›)의 오른쪽에 온다(ADR-043 §1, 사용자 결정 2026-11-14). 오른쪽 칸의 맨 앞에
-  // 넣어 화면의 차례와 포커스의 차례가 같다. 모바일은 왼쪽 칸 그대로다(ADR-038 §1). 그린 뒤 창 폭이 기준을 넘나들면 다음에 그릴 때 맞는다.
-  const desktop = window.matchMedia("(min-width: 769px) and (pointer: fine)").matches;
-  if (!desktop) start.appendChild(today);
   const mid = el("span", { className: "lect-bar-mid" });
   mid.appendChild(buildDateStep("prev", o.prev.href, o.prev.label));
   mid.appendChild(el("span", { className: "lect-date" }, o.title));
   mid.appendChild(buildDateStep("next", o.next.href, o.next.label));
   const end = el("span", { className: "lect-bar-end" });
-  if (desktop) end.appendChild(today);
   if (o.view) {
     end.appendChild(el("a", {
       className: "title-view-btn", href: o.view.href, "aria-label": o.view.label, title: o.view.label, "data-focus-key": "view",
@@ -1368,6 +1366,27 @@ function commitDateBar(o) {
   $title.appendChild(start);
   $title.appendChild(mid);
   $title.appendChild(end);
+  placeToday(today, start, end);
+}
+
+/**
+ * 「오늘」의 자리. 데스크톱의 한 줄 상단 바에서는 다음 단추(›)의 오른쪽, 곧 오른쪽 칸의 맨 앞이다(ADR-043 §1, 사용자 결정 2026-11-14).
+ * 모바일은 왼쪽 칸이다(ADR-038 §1). 요소를 옮기므로 화면의 차례와 포커스의 차례가 같고, 포커스를 돌려줄 자리(`data-focus-key`)도 하나다.
+ * @param {Element} today @param {Element} start @param {Element} end
+ */
+function placeToday(today, start, end) {
+  if (isDesktopLayout()) end.insertBefore(today, end.firstChild);
+  else start.appendChild(today);
+}
+
+// 창 폭이 데스크톱과 모바일의 경계를 넘으면 이미 그린 줄의 「오늘」을 그 배치의 칸으로 옮긴다. 다시 그리지 않으므로 스크롤과 포커스가 그대로다.
+if (typeof window.matchMedia === "function") {
+  window.matchMedia(DESKTOP_LAYOUT_QUERY).addEventListener("change", () => {
+    const today = $title.querySelector(":scope .lect-today");
+    const start = $title.querySelector(":scope > .lect-bar-start");
+    const end = $title.querySelector(":scope > .lect-bar-end");
+    if (today && start && end) placeToday(today, start, end);
+  });
 }
 
 /**

@@ -20,7 +20,7 @@ const $home = document.querySelector('#tab-bar [data-tab="home"]');
 
 /** @type {Window & typeof globalThis & Record<string, any>} */
 const W = /** @type {any} */ (window);
-const { isModifiedClick } = window.appHelpers;
+const { isModifiedClick, DESKTOP_LAYOUT_QUERY } = window.appHelpers;
 
 let searching = false;
 let collapsed = false; // ADR-030 P3: 스크롤 축소(탭 바 홈 원형) 상태
@@ -197,7 +197,7 @@ function exitSearch() {
 // 정리한다. 같은 포인터 인식 분기라(ADR-029 개정) 가로 폰·태블릿은 여기 걸리지 않고
 // 탭 바를 유지한다. /search 뷰는 모바일 레이아웃(search-view + in-page 입력)으로 그려져
 // 있으므로 route() 를 다시 태워 데스크탑 레이아웃(헤더 검색바 + #app 직접 결과)으로 재렌더.
-window.matchMedia("(min-width: 769px) and (pointer: fine)").addEventListener("change", (e) => {
+window.matchMedia(DESKTOP_LAYOUT_QUERY).addEventListener("change", (e) => {
   if (!e.matches || !searching) return;
   exitSearch();
   if (W.parsePath?.().view === "search") W.route?.();

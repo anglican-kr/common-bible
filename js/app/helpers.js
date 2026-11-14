@@ -273,6 +273,16 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   // which publishBarHeight keeps up to date. The bar is pinned at `top: 0` and sits at the very top of the
   // document, so its height and its bottom edge on screen are the same number.
 
+  // ── Desktop or mobile layout (ADR-029 §1) ──
+  // Desktop = a wide window AND a mouse; everything else (phones, tablets, a narrow desktop window) is the mobile
+  // layout with the tab bar. CSS writes the same condition in its media queries.
+  const DESKTOP_LAYOUT_QUERY = "(min-width: 769px) and (pointer: fine)";
+
+  /** @returns {boolean} whether the desktop layout (top bar, side panels) is showing right now */
+  function isDesktopLayout() {
+    return typeof window.matchMedia === "function" && window.matchMedia(DESKTOP_LAYOUT_QUERY).matches;
+  }
+
   /**
    * The bottom edge of the top bar, in px from the top of the viewport — what lies above it is covered.
    * Measured on every call, so it is right at that moment.
@@ -470,7 +480,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   return {
     _$, chUnit, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
     HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot, SCROLL_ANCHORING, barBottom, scrollUnderBar,
-    publishBarHeight, isFormerNorthChurch, churchName, parishGroups,
+    publishBarHeight, isFormerNorthChurch, churchName, parishGroups, DESKTOP_LAYOUT_QUERY, isDesktopLayout,
   };
 })();
 

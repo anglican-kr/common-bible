@@ -456,7 +456,9 @@ function applyTitleCompactness() {
       if (timer !== null) clearTimeout(timer);
       timer = setTimeout(() => { timer = null; applyTitleCompactness(); }, 50);
     });
-    _titleResizeObs.observe($title);
+    // Watch the bar, not the title: on desktop the title cell is as wide as its text (ADR-043), so it does not
+    // change when the window does — and the side cells change with it (the tab labels at 900px, the search field).
+    _titleResizeObs.observe($title.parentElement ?? $title);
   }
 
   // Defer the actual measurement to the next frame. Several render paths append
