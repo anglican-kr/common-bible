@@ -249,6 +249,52 @@ test("readingOptions: 괄호 선택 구절 세트는 바탕(한 슬롯만 짧은
   same(opts.map((o) => [o.label, o.group.id, o.short && o.short.id]), [["독서 1", "p1", null], ["독서 2", "p3", "p2"]]);
 });
 
+test("readingOptions: 성인 공통 독서에서 「또는」 뒤 세트가 바로 앞 세트의 일부이면 앞 세트에 합친다 — 순교자 공통(시편 116 또는 116:1-9, 시편 124 또는 31:1-5)", () => {
+  const C = { common: "martyr", title: "순교자", set_total: 4 };
+  const ps = (chapter, spec, label) => slot("psalm", "lps", chapter, spec, label);
+  const a = [FOUR[0], ps(116, "all", "시편 116"), FOUR[2], FOUR[3]];
+  const b = [FOUR[0], ps(116, "1-9", "시편 116:1-9"), FOUR[2], FOUR[3]];
+  const c = [FOUR[0], ps(124, "all", "시편 124"), FOUR[2], FOUR[3]];
+  const d = [FOUR[0], ps(31, "1-5", "시편 31:1-5"), FOUR[2], FOUR[3]];
+  const sets = [group("s1", a, { ...C, set_no: 1 }), group("s2", b, { ...C, set_no: 2 }), group("s3", c, { ...C, set_no: 3 }), group("s4", d, { ...C, set_no: 4 })];
+  const opts = ctx.readingOptions(sets, "루시안");
+  // 긴 본문(s1)을 그리고 s2가 짧은 본문이다. 다른 시편(124, 31)은 그대로 카드다.
+  same(opts.map((o) => [o.label, o.group.id, o.short && o.short.id]), [["독서 1", "s1", "s2"], ["독서 2", "s3", null], ["독서 3", "s4", null]]);
+  // 선택 구절은 긴 본문에만 있는 절이다
+  const isOptional = ctx.optionalVerseTest(opts[0].group.readings[1], opts[0].short.readings[1]);
+  same([9, 10, 19].map((n) => isOptional(116, n)), [false, true, true]);
+});
+
+test("readingOptions: 「또는」 뒤가 앞 본문의 일부여도 합치지 않는 경우 — 시편이 아니면, 두 슬롯이 다르면, 일부가 아니면, 바로 앞이 아니면, 조건부 세트면", () => {
+  const ps = (chapter, spec, label) => slot("psalm", "lps", chapter, spec, label);
+  const whole = [FOUR[0], ps(84, "all", "시편 84"), FOUR[2], FOUR[3]];
+  const part = [FOUR[0], ps(84, "1-6", "시편 84:1-6"), FOUR[2], FOUR[3]];
+  const ids = (sets) => ctx.readingOptions(sets, "x").map((o) => [o.group.id, o.short && o.short.id]);
+  // 고유 독서(9.14 성 십자가의 날 「시편 98 또는 98:1-5」 같은 경우)도 합친다
+  same(ids([group("a", whole, { set_no: 1 }), group("b", part, { set_no: 2 })]), [["a", "b"]]);
+  // 시편이 아니면 카드다(성지주일의 긴 수난과 짧은 수난)
+  const longPassion = [FOUR[0], FOUR[1], FOUR[2], slot("gospel", "matt", 27, "all", "마태 27")];
+  const shortPassion = [FOUR[0], FOUR[1], FOUR[2], slot("gospel", "matt", 27, "11-54", "마태 27:11-54")];
+  same(ids([group("a", longPassion, { set_no: 1 }), group("b", shortPassion, { set_no: 2 })]), [["a", null], ["b", null]]);
+  // 조건부 세트, 제목이 다른 세트
+  same(ids([group("a", whole, { set_no: 1 }), group("b", part, { set_no: 2, set_note: "주의 변모 주일로 지키는 경우" })]), [["a", null], ["b", null]]);
+  same(ids([group("a", whole, { title: "성탄 밤" }), group("b", part, { title: "성탄 낮" })]), [["a", null], ["b", null]]);
+  // 성당 축성일: 제1독서도 다르다
+  const otherFirst = [slot("first", "gen", 28, "10-17", "창세 28:10-17"), part[1], FOUR[2], FOUR[3]];
+  same(ids([group("a", whole, { common: "dedication", set_no: 1 }), group("b", otherFirst, { common: "dedication", set_no: 2 })]), [["a", null], ["b", null]]);
+  // 겹치지만 일부는 아니다(1-12 뒤의 5-20), 짧은 것이 앞이다(1-6 뒤의 전체)
+  const overlap = [FOUR[0], ps(33, "5-20", "시편 33:5-20"), FOUR[2], FOUR[3]];
+  same(ids([group("a", FOUR, { common: "saint", set_no: 1 }), group("b", overlap, { common: "saint", set_no: 2 })]), [["a", null], ["b", null]]);
+  same(ids([group("a", part, { common: "saint", set_no: 1 }), group("b", whole, { common: "saint", set_no: 2 })]), [["a", null], ["b", null]]);
+  // 바로 앞이 아니다(전체, 다른 시편, 일부) — 이미 합친 선택지에도 더 합치지 않는다
+  const other = [FOUR[0], ps(1, "all", "시편 1"), FOUR[2], FOUR[3]];
+  same(ids([group("a", whole, { common: "saint", set_no: 1 }), group("b", other, { common: "saint", set_no: 2 }), group("c", part, { common: "saint", set_no: 3 })]),
+    [["a", null], ["b", null], ["c", null]]);
+  const part2 = [FOUR[0], ps(84, "7-11", "시편 84:7-11"), FOUR[2], FOUR[3]];
+  same(ids([group("a", whole, { common: "saint", set_no: 1 }), group("b", part, { common: "saint", set_no: 2 }), group("c", part2, { common: "saint", set_no: 3 })]),
+    [["a", "b"], ["c", null]]);
+});
+
 test("readingOptions: 바탕이 없는 괄호 세트(두 슬롯이 다름)는 그대로 선택지 — 제목이 갈리면 제목으로", () => {
   const twoDiff = [slot("first", "isa", 1, "1-9", "이사 1:1-9"), FOUR[1], FOUR[2], slot("gospel", "matt", 9, "9-13,18-31", "마태 9:9-13, 18-31")];
   const sets = [group("a", FOUR, { set_no: 1, set_total: 2 }), group("b", twoDiff, { set_no: 2, set_total: 2, set_note: "괄호 선택 구절 포함" })];
