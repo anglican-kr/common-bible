@@ -404,12 +404,12 @@ function slotWithin(short, long) {
 }
 
 /**
- * 「또는」 뒤 세트 `g`가 **바로 앞** 선택지의 짧은 본문인가 — 제목과 슬롯 구성이 같고 시편만 다르며, `g`의 시편 절이
+ * 「또는」 뒤 세트 `g`가 **바로 앞** 선택지의 짧은 본문인가 — 제목과 슬롯 구성이 같고 한 슬롯만 다르며, `g`의 그 슬롯 절이
  * 모두 앞 선택지에 들어 있다(기도서 「시편 116 또는 116:1-9」). 그러면 앞 선택지의 자리 번호, 아니면 -1.
  * 다른 독서가 아니라 같은 본문을 짧게 읽는 방법이라 카드로 가르지 않는다(사용자 결정 2026-11-14, ADR-038 §3 「독서 카드」).
  * 성인 공통 독서와 고유 독서에 모두 적용한다. 조건부 세트(「…로 지킬 때」)와 이미 짧은 본문이 있는 선택지에는 합치지 않는다.
- * 시편이 아닌 슬롯은 합치지 않는다 — 성지주일의 긴 수난 복음과 짧은 수난 복음은 카드로 고른다(가해, 다해. 나해는 짧은 수난에
- * 괄호 세트가 따로 있다).
+ * 시편과 복음을 가리지 않는다 — 성지주일 가해와 다해의 긴 수난 복음과 짧은 수난 복음도 합친다. 나해는 짧은 수난에 괄호
+ * 세트가 따로 있어(길이가 셋) `readingOptions`가 합치지 않는다.
  * @param {ReadingOption[]} options @param {ReadingGroup} g
  */
 function findLongBase(options, g) {
@@ -423,7 +423,7 @@ function findLongBase(options, g) {
     const l = base.readings.find((x) => x && x.slot === r.slot);
     if (!l) return -1;
     if (l.label === r.label) continue;
-    if (r.slot !== "psalm" || !slotWithin(r, l)) return -1;
+    if (!slotWithin(r, l)) return -1;
     within++;
   }
   return within === 1 ? i : -1;
@@ -444,12 +444,14 @@ function findLongBase(options, g) {
 function readingOptions(sets, baseName) {
   /** @type {ReadingOption[]} */
   const out = [];
-  for (const g of sets) {
+  for (const [idx, g] of sets.entries()) {
     if (g.set_note === BRACKET_NOTE) {
       const i = findBracketBase(out, g);
       if (i >= 0) { out[i] = { group: g, short: out[i].group, label: "" }; continue; }
     }
-    const longBase = findLongBase(out, g);
+    // A set that a later bracket set builds on stays its own option — one option can show only one shorter form.
+    const laterBracketBase = sets.slice(idx + 1).some((b) => b.set_note === BRACKET_NOTE && findBracketBase([{ group: g, short: null, label: "" }], b) >= 0);
+    const longBase = laterBracketBase ? -1 : findLongBase(out, g);
     if (longBase >= 0) { out[longBase] = { ...out[longBase], short: g }; continue; }
     out.push({ group: g, short: null, label: "" });
   }

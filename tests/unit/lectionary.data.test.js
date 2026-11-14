@@ -629,6 +629,15 @@ test("A3 2024-03-24 성지주일 나해 — 긴 수난 · 짧은 수난 「독�
   assert.strictEqual(isOpt(15, 47), true);
 });
 
+test("A3 2026-03-29 성지주일 가해 — 긴 수난과 짧은 수난이 한 선택지이고, 짧게 읽을 때 빼는 절이 선택 구절이다(사용자 결정 2026-11-14)", { skip: SKIP }, () => {
+  const m = model("2026-03-29");
+  same(m.options.map((o) => [o.group.set_no, o.short && o.short.set_no]), [[1, 2]]);
+  assert.strictEqual(m.cards, null);
+  const gospel = m.slots.find((s) => s.slot === "gospel");
+  const isOpt = ctx.optionalVerseTest(gospel, m.shortGroup.readings.find((r) => r.slot === "gospel"));
+  same([isOpt(26, 14), isOpt(27, 10), isOpt(27, 11), isOpt(27, 54), isOpt(27, 55)], [true, true, false, false, true]);
+});
+
 test("A3 왕이신 그리스도 주일 — 시편만 「또는」인 가해와 다해도 나해처럼 트랙 둘이다(사용자 결정 2026-11-05)", { skip: SKIP }, () => {
   const psalmOf = (c) => c.refs[1].label;
   const yearA = model("2026-11-22");
@@ -927,15 +936,22 @@ test("A3 데이터 전수 — 괄호 선택 구절 세트는 모두 바탕에 �
       const opts = ctx.readingOptions(sets, "x");
       merged += opts.filter((o) => o.short && o.group.set_note === K("BRACKET_NOTE")).length;
       for (const o of opts) {
-        if (o.short && o.group.set_note !== K("BRACKET_NOTE")) withinPsalm.push(`${o.group.title}: ${o.group.readings.find((r) => r.slot === "psalm").label} ⊃ ${o.short.readings.find((r) => r.slot === "psalm").label}`);
+        if (o.short && o.group.set_note !== K("BRACKET_NOTE")) {
+          const diff = o.group.readings.filter((r) => o.short.readings.find((x) => x.slot === r.slot).label !== r.label);
+          const year = JSON.parse(k)[5];
+          withinPsalm.push(`${o.group.title}${year ? ` ${year}` : ""}: ${diff.map((r) => `${r.label} ⊃ ${o.short.readings.find((x) => x.slot === r.slot).label}`).join(" ; ")}`);
+        }
       }
       if (opts.some((o) => o.group.set_note === K("BRACKET_NOTE") && !o.short)) bad.push(`${k} 괄호 세트가 바탕을 못 찾음`);
       if (tracks.length > 1 && opts.length > 1) bad.push(`${k} 트랙 ${t} 에 「또는」 대안 ${opts.length}`);
     }
   }
   same(bad, []);
-  // 「또는」 뒤 시편이 앞 시편의 일부인 고유 독서(사용자 결정 2026-11-14). 성지주일 가해, 다해의 긴 수난과 짧은 수난은 카드로 남는다
-  same(withinPsalm.sort(), ["라틴 문 앞의 사도 성 요한: 시편 92 ⊃ 시편 92:1-4, 11-14", "성 십자가 발견: 시편 98 ⊃ 시편 98:1-4", "성 십자가의 날: 시편 98 ⊃ 시편 98:1-5"]);
+  // 「또는」 뒤 본문이 앞 본문의 일부인 고유 독서(사용자 결정 2026-11-14). 성지주일 나해는 괄호 세트가 있어 카드로 남는다
+  same(withinPsalm.sort(), [
+    "라틴 문 앞의 사도 성 요한: 시편 92 ⊃ 시편 92:1-4, 11-14", "성 십자가 발견: 시편 98 ⊃ 시편 98:1-4", "성 십자가의 날: 시편 98 ⊃ 시편 98:1-5",
+    "성지주일 A: 마태 26:14-27:66 ⊃ 마태 27:11-54", "성지주일 C: 루가 22:14-23:56 ⊃ 루가 23:1-49",
+  ]);
   assert.strictEqual(merged, 38);   // pitfalls §21 실측(2026-10-12), 기도서 표 대조로 넷 더함(2026-11-05) — 데이터가 바뀌면 여기서 다시 센다
 });
 
