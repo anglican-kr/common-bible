@@ -177,6 +177,36 @@ def test_copy_falls_back_to_a_selectable_field(browser):
     ctx.close()
 
 
+def test_marked_url_in_app_is_not_handed_off_again(browser):
+    """「이미 넘긴 주소」 표시가 붙은 주소가 다시 인앱브라우저에서 열리면 전환하지 않고 안내를 연다.
+    방문 횟수 규칙으로는 열리지 않을 상태여도 연다. 복사하는 주소에는 표시가 없다."""
+    ctx = browser.new_context(user_agent=_KAKAOTALK_ANDROID_UA)
+    page = ctx.new_page()
+    page.add_init_script(
+        "localStorage.setItem('bible-install-nudge', JSON.stringify({visits: 5, nextShow: 8, neverShow: false}));"
+        "Object.defineProperty(navigator, 'clipboard', {value: {writeText: (t) => { window.__copied = t; return Promise.resolve(); }}});"
+    )
+    page.goto(BASE + "/gen/1?openExternalBrowser=1")
+    page.wait_for_selector("#install-modal:not([hidden])", timeout=6000)
+    assert page.evaluate("sessionStorage.getItem('bible-inapp-left')") is None
+    assert "openExternalBrowser" in page.url
+    page.get_by_role("button", name="주소 복사").click()
+    page.wait_for_function("window.__copied !== undefined")
+    assert page.evaluate("window.__copied") == BASE + "/gen/1"
+    assert "주소를 복사했습니다" in page.inner_text("#install-modal-body [role=status]")
+    ctx.close()
+
+
+def test_device_browser_drops_the_hand_off_mark(browser):
+    """기기의 브라우저에 도착하면 표시를 주소에서 지운다."""
+    ctx = browser.new_context(user_agent=_ANDROID_UA)
+    page = ctx.new_page()
+    page.goto(BASE + "/gen/1?openExternalBrowser=1")
+    page.wait_for_selector(".settings-btn")
+    assert page.url == BASE + "/gen/1"
+    ctx.close()
+
+
 # ── 자동 넛지 (maybeShowInstallNudge) ────────────────────────────────────────
 
 _NUDGE_KEY = "bible-install-nudge"

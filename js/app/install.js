@@ -39,7 +39,8 @@ const { _loadNudgeState, _saveNudgeState } = window.appStorage;
 // (ERR_UNKNOWN_URL_SCHEME) instead of the text.
 /** @type {Array<[string, RegExp]>} */
 const IN_APP_TOKENS = [
-  ["kakaotalk", /KAKAOTALK/i],
+  // Upper case only: the link-preview crawler sends "kakaotalk-scrap".
+  ["kakaotalk", /KAKAOTALK/],
   ["line", /\bLine\//],
   ["naver", /NAVER\(inapp/i],
   ["instagram", /Instagram/],
@@ -47,13 +48,20 @@ const IN_APP_TOKENS = [
 ];
 
 const IN_APP_LEFT_KEY = "bible-inapp-left";
-const LINE_EXTERNAL_PARAM = "openExternalBrowser";
+// Line hands a URL carrying this query to the device browser. Every hand-off
+// URL carries it, as the mark of "already handed off": opened in an in-app
+// browser again (Line ignored it, the Android fallback URL reloaded the page,
+// or the default browser is itself an in-app one), we do not hand off twice.
+const HAND_OFF_PARAM = "openExternalBrowser";
 // Give up the hand-off when the load event takes longer than this — a late
 // redirect would pull away someone who is already reading.
 const HAND_OFF_LOAD_WAIT_MS = 3000;
 // A hand-off that worked puts another app in front and hides this document.
 // Still visible after this long means it failed.
 const HAND_OFF_CHECK_MS = 2500;
+// The check timer firing this much later than scheduled means the web view
+// was suspended meanwhile — it was away without telling us.
+const HAND_OFF_LATE_MS = 1500;
 
 // Tokens the non-Safari iOS browsers add to the UA. Safari has none of them.
 const IOS_BROWSER_TOKENS = /CriOS|FxiOS|EdgiOS|OPiOS|GSA/;
@@ -98,8 +106,7 @@ function detectInAppBrowser() {
 }
 
 // The URL that makes the in-app browser hand `href` to the device browser,
-// or null when there is no known way (unknown web view, iOS ≤16, or Line
-// already asked once).
+// or null when there is no known way (unknown web view, iOS ≤16).
 /**
  * @param {{ app: string; ios: boolean }} inApp
  * @param {string} href
@@ -109,19 +116,15 @@ function externalBrowserUrl(inApp, href) {
   let u;
   try { u = new URL(href); } catch { return null; }
   if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+  if (inApp.app === "webview") return null;
   const scheme = u.protocol.slice(0, -1);
+  u.searchParams.set(HAND_OFF_PARAM, "1");
 
   if (inApp.app === "kakaotalk") {
     return "kakaotalk://web/openExternal?url=" + encodeURIComponent(u.href);
   }
-  if (inApp.app === "line") {
-    // Line reloads the URL in the device browser when it sees this query.
-    // Already present means Line did not honour it — do not loop.
-    if (u.searchParams.has(LINE_EXTERNAL_PARAM)) return null;
-    u.searchParams.set(LINE_EXTERNAL_PARAM, "1");
-    return u.href;
-  }
-  if (inApp.app === "webview") return null;
+  // Line reloads the URL in the device browser when it sees the query.
+  if (inApp.app === "line") return u.href;
 
   if (inApp.ios) {
     // x-safari-https:// opens Safari from iOS 17. Undocumented by Apple.
@@ -136,24 +139,49 @@ function externalBrowserUrl(inApp, href) {
     `S.browser_fallback_url=${encodeURIComponent(u.href)};end`;
 }
 
-// Arrived in the device browser from Line — drop the hand-off query from the
-// address. Runs at module load, before routing reads the URL.
-function dropHandOffQuery() {
-  if (detectInAppBrowser()) return;
+// True when this page was opened from a hand-off URL.
+function hasHandOffMark() {
+  try { return new URL(location.href).searchParams.has(HAND_OFF_PARAM); } catch { return false; }
+}
+
+// The current address without the hand-off mark — what the user should copy.
+function shareableHref() {
   try {
     const u = new URL(location.href);
-    if (!u.searchParams.has(LINE_EXTERNAL_PARAM)) return;
-    u.searchParams.delete(LINE_EXTERNAL_PARAM);
+    u.searchParams.delete(HAND_OFF_PARAM);
+    return u.href;
+  } catch {
+    return location.href;
+  }
+}
+
+// Arrived in the device browser (or the installed app) — drop the hand-off
+// mark from the address. Inside an in-app browser it stays: it is the loop
+// guard. Called at module load, before routing reads the URL.
+function dropHandOffQuery() {
+  if (detectInAppBrowser() && !install.isStandalone()) return;
+  if (!hasHandOffMark()) return;
+  try {
+    const u = new URL(shareableHref());
     history.replaceState(history.state, "", u.pathname + u.search + u.hash);
   } catch {}
 }
 
-// The hand-off URL for this visit, or null when we stay: not an in-app
-// browser, no known way out, or this tab session already tried once.
+// The hand-off URL for this page load, or null when we stay: not an in-app
+// browser, no known way out, already handed off once (the mark, or this tab
+// session's record). Judged once per page load so the nudge and the hand-off
+// cannot disagree; cleared when the hand-off starts or is given up.
+/** @type {string | null | undefined} */
+let _handOffDecision;
 function handOffUrl() {
+  if (_handOffDecision === undefined) _handOffDecision = _judgeHandOff();
+  return _handOffDecision;
+}
+function _judgeHandOff() {
   const inApp = detectInAppBrowser();
   if (!inApp) return null;
   if (install.isStandalone()) return null;
+  if (hasHandOffMark()) return null;
   const url = externalBrowserUrl(inApp, location.href);
   if (!url) return null;
   try {
@@ -170,28 +198,46 @@ function handOffUrl() {
 // Chromium), leaving a blank or forever-loading page behind if it fails.
 // Returns true when a hand-off was started. One attempt per tab session: if
 // it failed, or the user comes back to the in-app browser and reloads, we stay.
-// When the hand-off does not happen (load too slow) or does not work (the
-// document is still visible afterwards), the install guide opens instead.
+// When the hand-off does not happen (load too slow, attempt cannot be
+// recorded) or does not work (the document is still in front afterwards),
+// the install guide opens instead.
 function maybeLeaveInAppBrowser() {
   const url = handOffUrl();
   if (!url) return false;
   const viaReplace = detectInAppBrowser()?.app === "line";
   let settled = false;
 
-  const go = () => {
-    if (settled) return;
+  // Record the attempt. False when it cannot be recorded.
+  const settle = () => {
     settled = true;
+    _handOffDecision = null;
     try {
       sessionStorage.setItem(IN_APP_LEFT_KEY, "1");
+      return true;
     } catch {
-      return;
+      return false;
     }
+  };
+
+  const go = () => {
+    if (settled) return;
+    if (!settle()) { showInAppGuide(); return; }
+    // A hand-off that worked puts another app in front. Some web views are
+    // suspended before they report it, so a timer that fires late also
+    // counts as "we were away".
+    const started = Date.now();
     let left = document.visibilityState === "hidden";
+    const onAway = () => { left = true; };
     const onVisibility = () => { if (document.visibilityState === "hidden") left = true; };
     document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onAway);
+    window.addEventListener("blur", onAway);
     setTimeout(() => {
       document.removeEventListener("visibilitychange", onVisibility);
-      if (!left) showInAppGuide();
+      window.removeEventListener("pagehide", onAway);
+      window.removeEventListener("blur", onAway);
+      const late = Date.now() - started > HAND_OFF_CHECK_MS + HAND_OFF_LATE_MS;
+      if (!left && !late) showInAppGuide();
     }, HAND_OFF_CHECK_MS);
     if (viaReplace) location.replace(url);
     else location.href = url;
@@ -203,7 +249,8 @@ function maybeLeaveInAppBrowser() {
     window.addEventListener("load", go, { once: true });
     setTimeout(() => {
       if (settled) return;
-      settled = true;
+      // Recorded too: a reload of this tab must not pull the reader away either.
+      settle();
       window.removeEventListener("load", go);
       showInAppGuide();
     }, HAND_OFF_LOAD_WAIT_MS);
@@ -343,40 +390,45 @@ function _buildNeverShowRow() {
 
 // "주소 복사" button. Many in-app web views have no Clipboard API, so fall back
 // to execCommand, and when that fails too show the address in a field the
-// user can long-press and copy.
+// user can long-press and copy. The outcome goes into a status region that
+// exists from the start, so screen readers announce it.
 /** @param {string} text */
 function _buildCopyButton(text) {
   const wrap = el("div", { className: "install-copy" });
   const btn = el("button", { className: "install-cta", type: "button" }, "주소 복사");
+  const status = el("p", { className: "install-note install-copy-status", role: "status" });
   const copied = () => {
     btn.textContent = "복사됨";
+    status.textContent = "주소를 복사했습니다.";
     setTimeout(() => { btn.textContent = "주소 복사"; }, 2000);
   };
+  // Copies a selected text node — focus stays on the button.
   const legacyCopy = () => {
-    const ta = /** @type {HTMLTextAreaElement} */ (el("textarea", { readonly: "", "aria-hidden": "true" }));
-    ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    wrap.appendChild(ta);
-    ta.select();
-    ta.setSelectionRange(0, text.length);
+    const span = el("span", { className: "install-copy-source" }, text);
+    wrap.appendChild(span);
+    const sel = window.getSelection();
     let ok = false;
-    try { ok = document.execCommand("copy"); } catch {}
-    ta.remove();
-    btn.focus();
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(span);
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+      ok = document.execCommand("copy");
+    } catch {}
+    sel?.removeAllRanges();
+    span.remove();
     return ok;
   };
   const showField = () => {
-    if (wrap.querySelector(".install-url-field")) return;
-    const field = /** @type {HTMLInputElement} */ (el("input", {
-      className: "install-url-field", type: "text", readonly: "", "aria-label": "이 쪽의 주소",
-    }));
-    field.value = text;
-    field.addEventListener("focus", () => field.select());
-    wrap.appendChild(field);
-    wrap.appendChild(el("p", { className: "install-note", role: "status" },
-      "복사하지 못했습니다. 위 주소를 길게 눌러 복사해 주세요."));
-    field.focus();
+    if (!wrap.querySelector(".install-url-field")) {
+      const field = /** @type {HTMLInputElement} */ (el("input", {
+        className: "install-url-field", type: "text", readonly: "", "aria-label": "이 쪽의 주소",
+      }));
+      field.value = text;
+      field.addEventListener("focus", () => field.select());
+      wrap.insertBefore(field, status);
+    }
+    status.textContent = "복사하지 못했습니다. 위 주소를 길게 눌러 복사해 주세요.";
   };
   btn.addEventListener("click", async () => {
     try {
@@ -388,6 +440,7 @@ function _buildCopyButton(text) {
     }
   });
   wrap.appendChild(btn);
+  wrap.appendChild(status);
   return wrap;
 }
 
@@ -416,7 +469,7 @@ function buildInstallBody(platform) {
       openBtn.addEventListener("click", () => { location.href = url; });
       row.appendChild(openBtn);
     }
-    row.appendChild(_buildCopyButton(location.href));
+    row.appendChild(_buildCopyButton(shareableHref()));
     $installModalBody.appendChild(row);
     if (!url) {
       $installModalBody.appendChild(el("p", { className: "install-note" },
@@ -702,9 +755,14 @@ function maybeShowInstallNudge() {
   if (!nudgeable) return;
   if (_loadNudgeState().neverShow) return;
 
+  // A page reloaded from a hand-off URL is the same visit as the one that
+  // tried the hand-off — and proof that it failed.
+  const failedHandOff = platform === "in-app" && hasHandOffMark();
   const state = _loadNudgeState();
-  state.visits += 1;
-  _saveNudgeState(state);
+  if (!failedHandOff) {
+    state.visits += 1;
+    _saveNudgeState(state);
+  }
 
   if (platform === "in-app") {
     // About to be handed to the device browser — maybeLeaveInAppBrowser opens
@@ -713,7 +771,7 @@ function maybeShowInstallNudge() {
     // Stuck here with no way out (unknown web view, iOS ≤16): do not wait for
     // a second visit. Shared links are first visits, and in-app storage is
     // often wiped before a second one is counted.
-    if (state.visits > 1 && state.visits < state.nextShow) return;
+    if (!failedHandOff && state.visits > 1 && state.visits < state.nextShow) return;
   } else if (state.visits < state.nextShow) {
     return;
   }
