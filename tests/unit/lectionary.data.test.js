@@ -629,6 +629,15 @@ test("A3 2024-03-24 성지주일 나해 — 긴 수난 · 짧은 수난 「독�
   assert.strictEqual(isOpt(15, 47), true);
 });
 
+test("A3 2026-03-29 성지주일 가해 — 긴 수난과 짧은 수난이 한 선택지이고, 짧게 읽을 때 빼는 절이 선택 구절이다(사용자 결정 2026-11-14)", { skip: SKIP }, () => {
+  const m = model("2026-03-29");
+  same(m.options.map((o) => [o.group.set_no, o.short && o.short.set_no]), [[1, 2]]);
+  assert.strictEqual(m.cards, null);
+  const gospel = m.slots.find((s) => s.slot === "gospel");
+  const isOpt = ctx.optionalVerseTest(gospel, m.shortGroup.readings.find((r) => r.slot === "gospel"));
+  same([isOpt(26, 14), isOpt(27, 10), isOpt(27, 11), isOpt(27, 54), isOpt(27, 55)], [true, true, false, false, true]);
+});
+
 test("A3 왕이신 그리스도 주일 — 시편만 「또는」인 가해와 다해도 나해처럼 트랙 둘이다(사용자 결정 2026-11-05)", { skip: SKIP }, () => {
   const psalmOf = (c) => c.refs[1].label;
   const yearA = model("2026-11-22");
@@ -918,18 +927,70 @@ test("A3 데이터 전수 — 괄호 선택 구절 세트는 모두 바탕에 �
   }
   const bad = [];
   let merged = 0;
+  /** @type {string[]} */
+  const mergedAlternatives = [];
   for (const [k, es] of byCoord) {
     const tracks = [...new Set(es.map((e) => e.reading_track ?? null))];
     for (const t of tracks) {
       const sets = es.filter((e) => (e.reading_track ?? null) === t).sort((a, b) => a.set_no - b.set_no);
       const opts = ctx.readingOptions(sets, "x");
-      merged += opts.filter((o) => o.short).length;
+      merged += opts.filter((o) => o.short && o.group.set_note === K("BRACKET_NOTE")).length;
+      for (const o of opts) {
+        if (o.short && o.group.set_note !== K("BRACKET_NOTE")) {
+          const diff = o.group.readings.filter((r) => o.short.readings.find((x) => x.slot === r.slot).label !== r.label);
+          const year = JSON.parse(k)[5];
+          mergedAlternatives.push(`${o.group.title}${year ? ` ${year}` : ""}: ${diff.map((r) => `${r.label} ⊃ ${o.short.readings.find((x) => x.slot === r.slot).label}`).join(" ; ")}`);
+        }
+      }
       if (opts.some((o) => o.group.set_note === K("BRACKET_NOTE") && !o.short)) bad.push(`${k} 괄호 세트가 바탕을 못 찾음`);
+      // 괄호 세트의 바탕은 절 범위로 정해진다 — 바탕의 범위 조각이 모두 괄호 세트의 범위에 있다(리뷰 2026-11-14)
+      for (const o of opts) {
+        if (!o.short || o.group.set_note !== K("BRACKET_NOTE")) continue;
+        const long = o.group.readings.find((r) => o.short.readings.find((x) => x.slot === r.slot).label !== r.label);
+        const short = o.short.readings.find((x) => x.slot === long.slot);
+        if (!ctx.refPieces(short).every((p) => ctx.refPieces(long).includes(p))) bad.push(`${k} 바탕 「${short.label}」이 「${long.label}」의 조각이 아님`);
+      }
+      // 합치는 과정에서 사라지는 세트가 없다(리뷰 2026-11-14)
+      if (new Set(opts.flatMap((o) => (o.short ? [o.group, o.short] : [o.group]))).size !== sets.length) bad.push(`${k} 세트 ${sets.length}개가 선택지에 모두 있지 않음`);
       if (tracks.length > 1 && opts.length > 1) bad.push(`${k} 트랙 ${t} 에 「또는」 대안 ${opts.length}`);
     }
   }
   same(bad, []);
+  // 「또는」 뒤 본문이 앞 본문의 일부인 고유 독서(사용자 결정 2026-11-14). 성지주일 나해는 괄호 세트가 있어 카드로 남는다
+  same(mergedAlternatives.sort(), [
+    "라틴 문 앞의 사도 성 요한: 시편 92 ⊃ 시편 92:1-4, 11-14", "성 십자가 발견: 시편 98 ⊃ 시편 98:1-4", "성 십자가의 날: 시편 98 ⊃ 시편 98:1-5",
+    "성지주일 A: 마태 26:14-27:66 ⊃ 마태 27:11-54", "성지주일 C: 루가 22:14-23:56 ⊃ 루가 23:1-49",
+  ]);
   assert.strictEqual(merged, 38);   // pitfalls §21 실측(2026-10-12), 기도서 표 대조로 넷 더함(2026-11-05) — 데이터가 바뀌면 여기서 다시 센다
+});
+
+test("성인 공통 독서 — 「또는」 뒤가 바로 앞 본문의 일부인 네 분류는 한 선택지로 합쳐지고, 나머지는 그대로다(사용자 결정 2026-11-14, ADR-038 §3)", { skip: SKIP }, () => {
+  const classes = read("commons.json").classes;
+  /** @type {Record<string, any>} */
+  const got = {};
+  for (const [cls, entry] of Object.entries(classes)) {
+    const sets = (entry.readings || []).map((s) => ({
+      id: `common:${cls}-s${s.set}`, title: entry.label, reading_track: null, set_no: s.set, set_total: entry.readings.length,
+      set_note: null, readings: s.slots, common: cls,
+    }));
+    if (!sets.length) continue;
+    const opts = ctx.readingOptions(sets, "x");
+    // 합치는 과정에서 사라지는 세트가 없다(리뷰 2026-11-14)
+    assert.strictEqual(new Set(opts.flatMap((o) => (o.short ? [o.group, o.short] : [o.group]))).size, sets.length, cls);
+    got[cls] = opts.map((o) => {
+      const long = o.group.readings.find((r) => r.slot === "psalm").label;
+      return o.short ? `${long} ⊃ ${o.short.readings.find((r) => r.slot === "psalm").label}` : long;
+    });
+  }
+  same(got, {
+    martyr: ["시편 116 ⊃ 시편 116:1-9", "시편 124", "시편 31:1-5"],
+    pastor: ["시편 23", "시편 84 ⊃ 시편 84:7-11"],
+    missionary: ["시편 96:1-7", "시편 98 ⊃ 시편 98:1-4"],
+    teacher: ["시편 119:97-104", "시편 119:89-96"],
+    monastic: ["시편 34:1-8", "시편 34:1-8", "시편 133", "시편 119:161-168"],
+    saint: ["시편 15", "시편 34 ⊃ 시편 34:15-22", "시편 1"],
+    dedication: ["시편 84", "시편 84:1-6"],
+  });
 });
 
 // ── 반절 경계 표 ↔ 앱이 그리는 줄(사용자 결정 2026-10-22, 데이터 liturgical/half-verses.md) ──
