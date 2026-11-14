@@ -153,8 +153,10 @@
   <nav id="tab-bar" aria-label="주 내비게이션">
     <!-- ADR-030 후속⁵: 공유 슬라이딩 인디케이터(JS positionTabIndicator 가 활성 탭으로 이동). -->
     <span class="tab-indicator" aria-hidden="true"></span>
+    <!-- 홈 탭은 성서를 읽는 탭이라 펼친 책으로 그린다(사용자 결정 2026-11-14). 광학 크기 정규화:
+         글리프 바운딩박스(3.5-20.5 × 4.5-20) 중심에 22/24 비율 viewBox, 획 1.8 × 18.55/24. -->
     <a class="tab-item" href="/" data-tab="home" aria-label="홈">
-      <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="2.84 3.04 18.33 18.33" fill="none" stroke="currentColor" stroke-width="1.37" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.6 11.4 12 4.4l8.4 7"/><path d="M5.6 9.9V19a1 1 0 0 0 1 1h3.3v-5.4h4.2V20h3.3a1 1 0 0 0 1-1V9.9"/></svg></span>
+      <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="2.73 2.98 18.55 18.55" fill="none" stroke="currentColor" stroke-width="1.39" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6.5C10.5 5.2 8.3 4.5 4.5 4.5a1 1 0 0 0-1 1V17a1 1 0 0 0 1 1c3.8 0 6 .7 7.5 2"/><path d="M12 6.5c1.5-1.3 3.7-2 7.5-2a1 1 0 0 1 1 1V17a1 1 0 0 1-1 1c-3.8 0-6 .7-7.5 2"/><path d="M12 6.5V20"/></svg></span>
     </a>
     <!-- ADR-038 §1 (A2): 캘린더 탭 — 홈 다음 두 번째. 광학 크기 정규화(ADR-030 개정 2026-06-05):
          글리프 바운딩박스(4.5~19.5 × 3.5~20) 중심에 22/24 비율 viewBox, 획 1.8 × 18/24. -->
