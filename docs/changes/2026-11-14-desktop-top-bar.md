@@ -1,4 +1,5 @@
 ---
+pr: 564
 date: 2026-11-14
 branch: feat/desktop-top-bar
 title: "feat: 데스크톱 헤더를 한 줄 상단 바로 개편"
