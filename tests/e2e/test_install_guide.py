@@ -197,6 +197,28 @@ def test_marked_url_in_app_is_not_handed_off_again(browser):
     ctx.close()
 
 
+def test_android_naver_as_default_browser_is_an_ordinary_browser(browser):
+    """넘긴 주소가 Android의 네이버 앱에서 열리면 그 기기의 기본 브라우저가 네이버 앱이다.
+    네이버 앱은 「홈 화면에 추가」가 되므로 인앱브라우저 안내 대신 Android의 설치 안내를 보이고,
+    표시를 지우며, 새로 고쳐도 다시 넘기지 않는다."""
+    ua = _ANDROID_WEBVIEW_UA + " NAVER(inapp; search; 2000; 12.9.5)"
+    ctx = browser.new_context(user_agent=ua)
+    page = ctx.new_page()
+    page.goto(BASE + "/gen/1?openExternalBrowser=1")
+    page.wait_for_selector(".settings-btn")
+    assert page.url == BASE + "/gen/1"
+    assert page.evaluate("window.install.detectPlatform()") == "android"
+    page.reload()
+    page.wait_for_selector(".settings-btn")
+    # 새로 고침은 두 번째 방문이라 Android의 일반 설치 안내가 열린다.
+    page.wait_for_selector("#install-modal:not([hidden])", timeout=6000)
+    text = page.inner_text("#install-modal-body")
+    assert "홈 화면에 추가" in text and "설치할 수 없습니다" not in text
+    assert page.evaluate("sessionStorage.getItem('bible-inapp-left')") is None
+    assert page.url == BASE + "/gen/1"
+    ctx.close()
+
+
 def test_device_browser_drops_the_hand_off_mark(browser):
     """기기의 브라우저에 도착하면 표시를 주소에서 지운다."""
     ctx = browser.new_context(user_agent=_ANDROID_UA)

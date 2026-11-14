@@ -640,8 +640,9 @@ test("in-app: hand-off URL per app", () => {
   assert.equal(url("kakaoIOS"), "kakaotalk://web/openExternal?url=" + encodeURIComponent(href));
   assert.equal(url("kakaoAndroid"), "kakaotalk://web/openExternal?url=" + encodeURIComponent(href));
   assert.equal(url("lineIOS"), href);
+  // The fallback URL carries mark "0": the hand-off failed.
   const intent = "intent://bible.anglican.kr/gen/1?v=3&openExternalBrowser=1#Intent;scheme=https;S.browser_fallback_url=" +
-    encodeURIComponent(href) + ";end";
+    encodeURIComponent(plain + "&openExternalBrowser=0") + ";end";
   assert.equal(url("naverAndroid"), intent);
   assert.equal(url("instagramAndroid"), intent);
   assert.equal(url("naverIOS"), "x-safari-https://bible.anglican.kr/gen/1?v=3&openExternalBrowser=1");
@@ -745,17 +746,62 @@ test("in-app: check timer firing late → the web view was suspended, no guide",
 });
 
 test("in-app: a marked URL opened in an in-app browser again is not handed off twice", () => {
-  // Default browser is the Naver app: the hand-off lands in a new in-app tab
-  // whose sessionStorage is empty.
+  for (const [key, platform] of [["kakaoAndroid", "Linux armv8l"], ["naverIOS", "iPhone"], ["instagramAndroid", "Linux armv8l"]]) {
+    const h = loadInstallState({
+      userAgent: UA[key], platform,
+      href: "https://bible.anglican.kr/gen/1?openExternalBrowser=1",
+    });
+    assert.equal(h.install.detectPlatform(), "in-app", key);
+    assert.equal(h.handOffUrl(), null, key);
+    assert.equal(h.maybeLeaveInAppBrowser(), false, key);
+    assert.deepEqual(h.nav.assigned, [], key);
+    h.dropHandOffQuery();
+    assert.deepEqual(h.nav.replacedState, [], "the mark stays — it is the loop guard");
+  }
+});
+
+test("in-app: Android Naver receiving a handed-off URL is the default browser — an ordinary Android browser", () => {
+  // The hand-off lands in a new Naver tab whose sessionStorage is empty.
   const h = loadInstallState({
     userAgent: UA.naverAndroid, platform: "Linux armv8l",
+    href: "https://bible.anglican.kr/gen/1?v=3&openExternalBrowser=1",
+  });
+  assert.equal(h.detectInAppBrowser(), null);
+  assert.equal(h.install.detectPlatform(), "android");
+  assert.equal(h.maybeLeaveInAppBrowser(), false);
+  h.dropHandOffQuery();
+  assert.deepEqual(h.nav.replacedState, ["/gen/1?v=3"], "the mark goes");
+  assert.equal(h.session["bible-inapp-home"], "1", "and the tab remembers");
+});
+
+test("in-app: the Naver default-browser tab stays an ordinary browser after the mark is gone", () => {
+  const h = loadInstallState({
+    userAgent: UA.naverAndroid, platform: "Linux armv8l",
+    sessionItems: { "bible-inapp-home": "1" },
+  });
+  assert.equal(h.install.detectPlatform(), "android");
+  assert.equal(h.maybeLeaveInAppBrowser(), false, "a reload does not hand off");
+});
+
+test("in-app: Naver default-browser tab that cannot remember keeps the mark", () => {
+  const h = loadInstallState({
+    userAgent: UA.naverAndroid, platform: "Linux armv8l", sessionThrows: true,
     href: "https://bible.anglican.kr/gen/1?openExternalBrowser=1",
   });
-  assert.equal(h.handOffUrl(), null);
-  assert.equal(h.maybeLeaveInAppBrowser(), false);
-  assert.deepEqual(h.nav.assigned, []);
   h.dropHandOffQuery();
-  assert.deepEqual(h.nav.replacedState, [], "the mark stays — it is the loop guard");
+  assert.deepEqual(h.nav.replacedState, []);
+  assert.equal(h.install.detectPlatform(), "android");
+});
+
+test("in-app: Android Naver reloaded from the fallback URL (mark 0) is a failed hand-off, still in-app", () => {
+  const h = loadInstallState({
+    userAgent: UA.naverAndroid, platform: "Linux armv8l",
+    href: "https://bible.anglican.kr/gen/1?openExternalBrowser=0",
+  });
+  assert.equal(h.install.detectPlatform(), "in-app");
+  assert.equal(h.maybeLeaveInAppBrowser(), false);
+  h.dropHandOffQuery();
+  assert.deepEqual(h.nav.replacedState, []);
 });
 
 test("in-app: attempt cannot be recorded at hand-off time → stay and open the guide", () => {

@@ -48,6 +48,8 @@ const IN_APP_TOKENS = [
 ];
 
 const IN_APP_LEFT_KEY = "bible-inapp-left";
+// This tab is the Naver app acting as the device's default browser (Android).
+const IN_APP_HOME_KEY = "bible-inapp-home";
 // Line hands a URL carrying this query to the device browser. Every hand-off
 // URL carries it, as the mark of "already handed off": opened in an in-app
 // browser again (Line ignored it, the Android fallback URL reloaded the page,
@@ -90,8 +92,33 @@ function getIOSMajor() {
   return 17; // best-effort: modern iPadOS without Version/ token
 }
 
+// The value of the hand-off mark on the current address, or null.
+// "1": handed off. "0": the Android fallback URL — the hand-off failed.
+function handOffMark() {
+  try { return new URL(location.href).searchParams.get(HAND_OFF_PARAM); } catch { return null; }
+}
+
+// On Android the Naver app can be the default browser, and its menu has
+// "홈 화면에 추가". A handed-off URL (mark "1") opening in the Naver app means
+// exactly that: the default browser took it, and it is Naver. Such a tab is
+// an ordinary Android browser to us — no hand-off, no "cannot install" guide.
+// dropHandOffQuery records it for the tab session and drops the mark.
+// iOS Naver has no "Add to Home Screen", so the rule is Android only.
+/** @param {{ app: string; ios: boolean }} inApp */
+function isDefaultBrowserTab(inApp) {
+  if (inApp.app !== "naver" || inApp.ios) return false;
+  if (handOffMark() === "1") return true;
+  try { return sessionStorage.getItem(IN_APP_HOME_KEY) === "1"; } catch { return false; }
+}
+
 /** @returns {{ app: string; ios: boolean } | null} */
 function detectInAppBrowser() {
+  const inApp = _detectInAppByUA();
+  return inApp && isDefaultBrowserTab(inApp) ? null : inApp;
+}
+
+/** @returns {{ app: string; ios: boolean } | null} */
+function _detectInAppByUA() {
   const ua = navigator.userAgent;
   const ios = isIOSDevice();
   for (const [app, re] of IN_APP_TOKENS) {
@@ -135,13 +162,14 @@ function externalBrowserUrl(inApp, href) {
   // Android: an intent with no package resolves to the default browser.
   // The fragment is dropped — "#Intent" owns it. With no browser to take it,
   // the web view loads the fallback URL (this same page) instead of an error.
-  return `intent://${u.host}${u.pathname}${u.search}#Intent;scheme=${scheme};` +
-    `S.browser_fallback_url=${encodeURIComponent(u.href)};end`;
+  const intent = `intent://${u.host}${u.pathname}${u.search}#Intent;scheme=${scheme};`;
+  u.searchParams.set(HAND_OFF_PARAM, "0"); // the fallback URL says "it failed"
+  return `${intent}S.browser_fallback_url=${encodeURIComponent(u.href)};end`;
 }
 
 // True when this page was opened from a hand-off URL.
 function hasHandOffMark() {
-  try { return new URL(location.href).searchParams.has(HAND_OFF_PARAM); } catch { return false; }
+  return handOffMark() !== null;
 }
 
 // The current address without the hand-off mark — what the user should copy.
@@ -161,6 +189,12 @@ function shareableHref() {
 function dropHandOffQuery() {
   if (detectInAppBrowser() && !install.isStandalone()) return;
   if (!hasHandOffMark()) return;
+  const byUA = _detectInAppByUA();
+  if (byUA && isDefaultBrowserTab(byUA)) {
+    // Naver as the default browser: remember it before the mark goes. If it
+    // cannot be remembered the mark stays, or a reload would hand off again.
+    try { sessionStorage.setItem(IN_APP_HOME_KEY, "1"); } catch { return; }
+  }
   try {
     const u = new URL(shareableHref());
     history.replaceState(history.state, "", u.pathname + u.search + u.hash);
