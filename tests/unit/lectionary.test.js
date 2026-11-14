@@ -299,6 +299,55 @@ test("readingOptions: 「또는」 뒤가 앞 본문의 일부여도 합치지 �
     [["a", "b"], ["c", null]]);
 });
 
+test("readingOptions: 합치는 과정에서 세트가 사라지지 않는다 — 긴 세트의 괄호 세트가 뒤에 오면, 반절이 있으면, 절이 같으면(리뷰 2026-11-14)", () => {
+  const ps = (chapter, spec, label) => slot("psalm", "lps", chapter, spec, label);
+  const gos = (spec, label) => slot("gospel", "matt", 27, spec, label);
+  const ids = (sets) => ctx.readingOptions(sets, "x").map((o) => [o.group.id, o.short && o.short.id]);
+  const all = (sets) => ctx.readingOptions(sets, "x").flatMap((o) => (o.short ? [o.group.id, o.short.id] : [o.group.id])).sort();
+  const BR = { set_note: "괄호 선택 구절 포함" };
+  // L(시편 98, 복음 X), S(시편 98:1-5, 복음 X), B(시편 98, 복음 X에 절을 더함): B의 바탕은 L이라 S는 카드로 남는다
+  const L = [FOUR[0], ps(98, "all", "시편 98"), FOUR[2], gos("11-54", "마태 27:11-54")];
+  const S = [FOUR[0], ps(98, "1-5", "시편 98:1-5"), FOUR[2], gos("11-54", "마태 27:11-54")];
+  const B = [FOUR[0], ps(98, "all", "시편 98"), FOUR[2], gos("11-60", "마태 27:11-54(55-60)")];
+  const sets = [group("l", L, { set_no: 1 }), group("s", S, { set_no: 2 }), group("b", B, { set_no: 3, ...BR })];
+  same(ids(sets), [["b", "l"], ["s", null]]);
+  same(all(sets), ["b", "l", "s"]);
+  // L(27장 전체), S(27:11-54), B(27장 전체에 28:1-10을 더함): 절 범위의 괄호 밖이 L이라 L이 바탕이고 S는 카드로 남는다
+  const gl = [FOUR[0], FOUR[1], FOUR[2], gos("1-66", "마태 27:1-66")];
+  const gs = [FOUR[0], FOUR[1], FOUR[2], gos("11-54", "마태 27:11-54")];
+  const gb = [FOUR[0], FOUR[1], FOUR[2], { ...gos("1-66", "마태 27:1-66, 28:1-10"), refs: [{ chapter: 27, verseSpec: "1-66" }, { chapter: 28, verseSpec: "1-10" }] }];
+  const three = [group("l", gl, { set_no: 1 }), group("s", gs, { set_no: 2 }), group("b", gb, { set_no: 3, ...BR })];
+  same(ids(three), [["b", "l"], ["s", null]]);
+  same(all(three), ["b", "l", "s"]);
+  // 같은 바탕에 괄호 세트가 둘이면 둘 다 선택지이고 바탕은 두 선택지의 짧은 본문이다. 세트의 차례는 그대로다
+  const b1 = [FOUR[0], FOUR[1], FOUR[2], gos("11-54,55-60", "마태 27:11-54, 55-60")];
+  const b2 = [FOUR[0], FOUR[1], FOUR[2], gos("1-10,11-54", "마태 27:1-10, 11-54")];
+  const other = [FOUR[0], FOUR[1], FOUR[2], slot("gospel", "mark", 15, "1-39", "마르 15:1-39")];
+  const twoBrackets = [group("s", gs, { set_no: 1 }), group("b", b1, { set_no: 2, ...BR }), group("x", other, { set_no: 3 }), group("c", b2, { set_no: 4, ...BR })];
+  same(ids(twoBrackets), [["b", "s"], ["x", null], ["c", "s"]]);
+  // K(27:11-58), L(27장 전체), S(27:11-54), B(27:11-60, 괄호): 가장 가까운 S가 바탕이라 S는 L에 합쳐지지 않는다
+  const gk = [FOUR[0], FOUR[1], FOUR[2], gos("11-58", "마태 27:11-58")];
+  const four = [group("k", gk, { set_no: 1 }), group("l", gl, { set_no: 2 }), group("s", gs, { set_no: 3 }), group("b", b1, { set_no: 4, ...BR })];
+  same(ids(four), [["k", null], ["l", null], ["b", "s"]]);
+  // 다른 세트를 바탕으로 삼는 괄호 세트는 앞의 합치기를 막지 않는다
+  const p96 = [FOUR[0], ps(96, "1-9", "시편 96:1-9"), FOUR[2], gos("11-54", "마태 27:11-54")];
+  const p96b = [FOUR[0], ps(96, "1-9,10-13", "시편 96:1-9, 10-13"), FOUR[2], gos("11-54", "마태 27:11-54")];
+  // 절 범위 조각으로 가릴 수 없으면 절이 모두 든 가장 가까운 세트, 반절이 있으면 그 단계에서 뺀다
+  same(ctx.refPieces({ slot: "gospel", bookId: "john", label: "", refs: [{ chapter: 1, verseSpec: "1-9,10-18" }, { chapter: 2, verseSpec: "all" }] }), ["1:1-9", "1:10-18", "2:all"]);
+  const halfBase = [FOUR[0], FOUR[1], FOUR[2], gos("11-56a", "마태 27:11-56상")];
+  const plainBase = [FOUR[0], FOUR[1], FOUR[2], gos("11-50", "마태 27:11-50")];
+  const longer = [FOUR[0], FOUR[1], FOUR[2], gos("11-60", "마태 27:11-60")];
+  same(ids([group("p", plainBase, { set_no: 1 }), group("h", halfBase, { set_no: 2 }), group("q", longer, { set_no: 3, ...BR })]),
+    [["q", "p"], ["h", null]]);
+  same(ids([group("l", L, { set_no: 1 }), group("s", S, { set_no: 2 }), group("p", p96, { set_no: 3 }), group("q", p96b, { set_no: 4, ...BR })]),
+    [["l", "s"], ["q", "p"]]);
+  // 반절은 절 전체로 읽히므로 합치지 않는다. 표기만 다르고 절이 같은 세트도 짧은 본문이 아니다
+  const half = [group("a", [FOUR[0], ps(84, "1-6a", "시편 84:1-6상"), FOUR[2], FOUR[3]], { set_no: 1 }), group("b", [FOUR[0], ps(84, "6b", "시편 84:6하"), FOUR[2], FOUR[3]], { set_no: 2 })];
+  same(ids(half), [["a", null], ["b", null]]);
+  const sameVerses = [group("a", [FOUR[0], ps(84, "1-6", "시편 84:1-6"), FOUR[2], FOUR[3]], { set_no: 1 }), group("b", [FOUR[0], ps(84, "1-3,4-6", "시편 84:1-3, 4-6"), FOUR[2], FOUR[3]], { set_no: 2 })];
+  same(ids(sameVerses), [["a", null], ["b", null]]);
+});
+
 test("readingOptions: 바탕이 없는 괄호 세트(두 슬롯이 다름)는 그대로 선택지 — 제목이 갈리면 제목으로", () => {
   const twoDiff = [slot("first", "isa", 1, "1-9", "이사 1:1-9"), FOUR[1], FOUR[2], slot("gospel", "matt", 9, "9-13,18-31", "마태 9:9-13, 18-31")];
   const sets = [group("a", FOUR, { set_no: 1, set_total: 2 }), group("b", twoDiff, { set_no: 2, set_total: 2, set_note: "괄호 선택 구절 포함" })];

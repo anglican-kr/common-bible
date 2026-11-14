@@ -976,6 +976,8 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   user-select: none;
 }
 body.cites-shown .lect-bracket--chips-off { display: none; }
+/* Screen-reader text for the run's start and end — kept out of a plain browser copy, like the brackets. */
+.lect-optional-sr { user-select: none; -webkit-user-select: none; }
 .lect-optional-note { flex-basis: 100%; }
 /* 송영 — once, after the chosen collect (ADR-038 §3 「구현」). Same colour as the collect it closes
    (사용자 결정 2026-11-03 — it was --text-secondary). */
