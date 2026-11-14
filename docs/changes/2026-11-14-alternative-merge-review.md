@@ -1,4 +1,5 @@
 ---
+pr: 558
 date: 2026-11-14
 branch: fix/alternative-merge-review
 title: "fix: 「또는」 합치기의 빈틈과 선택 구절의 낭독기 안내"
