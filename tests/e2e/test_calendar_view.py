@@ -10,7 +10,7 @@
   ④ 칸의 이름 · 색 점 · 링크 이름(사용자 결정 2026-10-15 의 날짜 예 — 링크 이름은 칸에 보이는 이름 그대로)
   ⑤ 탭 복원 — 다른 탭에 다녀오면 마지막 캘린더 화면, 탭을 다시 누르면 이번 달 · 수정 키 클릭은 새 탭 몫
   ⑥ 320px 폭에서 가로 넘침 없음(1.6.0 달력의 넘침 재발 방지)
-  ⑦ 잘못된 달 · 자료 실패 · 데스크톱 헤더 입구(탭과 같은 곳으로)
+  ⑦ 잘못된 달 · 자료 실패 · 데스크톱 상단 바의 입구(탭과 같은 곳으로)
   ⑧ 달 이동 뒤 키보드 포커스가 누른 컨트롤에 남는다
 
 실데이터(data/ 서브모듈)가 필요하다 — 로컬 전용(CLAUDE.md 「테스트」).
@@ -111,7 +111,7 @@ def test_cell_opens_lectionary_and_the_tab_returns_to_the_last_month(mobile_cont
     page.wait_for_url("**/lectionary/2026-12-25")
     page.wait_for_selector(".lect-day", timeout=20_000)
     assert page.inner_text(".lect-day") == "성탄 낮"
-    assert not page.locator("#page-title .title-home-btn").is_visible()   # 집 단추는 탭 바가 없는 데스크톱에만 보인다
+    assert page.locator("#page-title .title-home-btn").count() == 0   # 성서 목록의 입구는 탭 바의 홈 탭과 데스크톱 상단 바의 「성서」 탭이다(ADR-043 §3)
     assert page.get_attribute("#page-title .lect-date time", "datetime") == "2026-12-25"
     assert page.locator("#page-title a.lect-datenav-btn[aria-label='전날']").is_visible()
     # 캘린더 탭 소속 — 독서 화면에서도 캘린더 탭이 활성
@@ -344,20 +344,21 @@ def test_preload_failure_shows_calendar_error(browser):
         ctx.close()
 
 
-def test_desktop_header_has_calendar_entry_and_home_button(desktop_context):
-    """데스크톱 — 탭 바가 없어 헤더 윗줄의 캘린더 단추가 입구, 캘린더 화면의 집 단추는 성서 목록으로."""
+def test_desktop_top_bar_has_calendar_and_bible_tabs(desktop_context):
+    """데스크톱 — 탭 바가 없어 상단 바의 「캘린더」 탭이 입구, 「성서」 탭은 성서 목록으로(ADR-043 §3)."""
     page = desktop_context.new_page()
     page.goto(BASE)
     page.wait_for_selector(".book-list", timeout=20_000)
     assert not page.locator("#tab-dock").is_visible()
     btn = page.locator("#header-calendar")
     assert btn.is_visible()
-    assert btn.get_attribute("aria-label") == "캘린더"
+    assert btn.inner_text().strip() == "캘린더"
     btn.click()
     page.wait_for_url(f"{BASE}/calendar")
     page.wait_for_selector(".cal-grid")
-    home = page.locator("#page-title .title-home-btn")
-    assert home.is_visible()
+    assert btn.get_attribute("aria-current") == "page"
+    home = page.locator("#header-home")
+    assert home.is_visible() and home.inner_text().strip() == "성서"
     home.click()
     page.wait_for_url(f"{BASE}/")
     page.wait_for_selector(".book-list")
@@ -380,8 +381,8 @@ def test_desktop_header_calendar_entry_goes_where_the_tab_goes(desktop_context):
     page.locator("#header-calendar").click()
     page.wait_for_url(f"{BASE}/calendar/2026-12")
     page.wait_for_selector(".cal-month:has-text('2026년 12월')")
-    # 집 단추로 성서 목록에 가고, 헤더 단추를 누르면 그 달로 돌아온다
-    page.locator("#page-title .title-home-btn").click()
+    # 「성서」 탭으로 성서 목록에 가고, 「캘린더」 탭을 누르면 그 달로 돌아온다
+    page.locator("#header-home").click()
     page.wait_for_url(f"{BASE}/")
     page.wait_for_selector(".book-list")
     page.locator("#header-calendar").click()
@@ -394,7 +395,7 @@ def test_desktop_header_calendar_entry_goes_where_the_tab_goes(desktop_context):
 
 
 def test_header_calendar_entry_hidden_on_mobile(mobile_context):
-    """모바일 — 헤더 윗줄이 통째로 숨어 캘린더 입구는 탭 바뿐이다."""
+    """모바일 — 상단 바의 탭이 숨어 캘린더 입구는 탭 바뿐이다."""
     page = mobile_context.new_page()
     page.goto(BASE)
     page.wait_for_selector(".book-list", timeout=20_000)
@@ -543,15 +544,16 @@ def test_lectionary_view_button_goes_to_the_month_of_the_date_shown(mobile_conte
     page.wait_for_selector(".cal-month:has-text('2026년 12월')")
 
 
-def test_desktop_head_keeps_the_book_list_button_on_both_views(desktop_context):
-    """탭 바가 없는 데스크톱은 「오늘」 앞의 집 단추가 성서 목록의 입구다. 월간과 전례독서에 모두 있고 두 칸이 겹치지 않는다."""
+def test_desktop_head_has_no_book_list_button_on_both_views(desktop_context):
+    """데스크톱의 성서 목록 입구는 상단 바의 「성서」 탭이다. 월간과 전례독서의 제목 줄에 집 단추가 없고, 「오늘」은 › 오른쪽에 있다
+    (ADR-043 §1, §3 — 그전엔 「오늘」 앞에 집 단추가 있었다)."""
     page = desktop_context.new_page()
     for path in ("calendar/2026-12", "lectionary/2026-12-30"):
         page.goto(f"{BASE}/{path}")
         page.wait_for_selector("#page-title .lect-date", timeout=20_000)
         state = _bar(page)
-        assert state["home"] and state["home"]["right"] <= state["today"]["left"], (path, state)
-    page.locator("#page-title .title-home-btn").click()
+        assert state["home"] is None and state["next"]["right"] <= state["today"]["left"] + 8, (path, state)
+    page.locator("#header-home").click()
     page.wait_for_selector(".book-list", timeout=20_000)
 
 
@@ -972,20 +974,18 @@ def test_desktop_list_holds_the_row_when_the_header_collapses(desktop_context, a
 
 
 @both_anchorings
-def test_desktop_list_puts_the_row_under_the_collapsed_bar(desktop_context, anchoring):
-    """월간에서 목록으로 가면 상단 바가 접히는데, 접힌 뒤에도 줄이 상단 바 바로 아래에 있다."""
+def test_desktop_list_puts_the_row_under_the_bar(desktop_context, anchoring):
+    """데스크톱 — 월간에서 목록으로 가면 그 달의 줄이 상단 바 바로 아래에 있다. 상단 바는 스크롤해도 높이가 같다(ADR-043 §1)."""
     page = _list_page(desktop_context, anchoring)
     _open(page, "calendar/2026-12")
-    page.wait_for_timeout(1000)   # 상단 바가 스크롤을 감지하기 시작하기를 기다린다
     page.locator("#page-title .title-view-btn").click()
     page.wait_for_selector(".cal-rows")
-    page.wait_for_function("() => document.getElementById('app-header').classList.contains('compact')")
     page.wait_for_timeout(500)
     assert abs(_month_top_under_head(page, "2026-12")) <= 2
 
 
 def test_desktop_list_leaves_the_scroll_alone_once_the_reader_scrolls(desktop_context):
-    """상단 바가 접히는 동안 독자가 스크롤을 시작하면 줄을 다시 맞추지 않는다."""
+    """목록이 열린 뒤 독자가 스크롤하면 그 자리에 둔다 — 줄을 다시 맞추지 않는다."""
     page = desktop_context.new_page()
     _open(page, "calendar/2026-12")
     page.wait_for_timeout(1000)
@@ -1001,8 +1001,8 @@ def test_desktop_list_leaves_the_scroll_alone_once_the_reader_scrolls(desktop_co
 @pytest.mark.parametrize("width, font", [(390, 16), (390, 24), (1280, 24)], ids=["phone-16", "phone-24", "desktop-24"])
 def test_list_scroll_padding_is_the_measured_bar_height(browser, width, font):
     """목록의 스크롤 여백(`scroll-padding-top`)은 잰 상단 바의 높이다(`--top-bar-h`, helpers.js `publishBarHeight`). 상단 바는 글자 크기를
-    따라 높아지고 낮아진다(글자 크기 16px에서 약 57px, 24px에서 약 70px). 데스크톱은 윗줄(검색 칸)이 펼쳐져 있으면 그만큼 더 높고, 윗줄이 접히거나
-    펼쳐지면 여백도 따라간다. 60px로 적었을 때는 그 차이만큼 스크롤 고정이 상단 바에 가려진 줄을 기준으로 삼거나 보이는 줄을 건너뛰었다."""
+    따라 높아지고 낮아진다(글자 크기 16px에서 약 57px, 24px에서 약 70px). 60px로 적었을 때는 그 차이만큼 스크롤 고정이 상단 바에 가려진
+    줄을 기준으로 삼거나 보이는 줄을 건너뛰었다."""
     ctx = browser.new_context(viewport={"width": width, "height": 800}, user_agent=IPHONE_UA if width < 769 else None)
     ctx.add_init_script(CLEAR_APP_STORAGE + f"localStorage.setItem('bible-font-size', '{font}');")
     measure = """() => ({
@@ -1015,13 +1015,6 @@ def test_list_scroll_padding_is_the_measured_bar_height(browser, width, font):
         page.wait_for_timeout(1000)
         state = page.evaluate(measure)
         assert abs(state["padding"] - state["bar"]) <= 0.5, state
-        if width >= 769:
-            # 열린 뒤 윗줄이 접혀 있는지는 스크롤 감지가 언제 시작했는지에 달려 있어, 지금과 반대로 바꿔 본다(views.js initCompactHeader가 바꾸는 클래스)
-            page.evaluate("() => document.getElementById('app-header').classList.toggle('compact')")
-            page.wait_for_timeout(500)   # 윗줄이 접히거나 펼쳐지는 전환(0.25초)을 넘긴다
-            flipped = page.evaluate(measure)
-            assert abs(flipped["bar"] - state["bar"]) > 30, (state, flipped)
-            assert abs(flipped["padding"] - flipped["bar"]) <= 0.5, (state, flipped)
     finally:
         ctx.close()
 
@@ -1135,14 +1128,13 @@ def test_desktop_list_keeps_the_address_and_month_until_the_reader_scrolls(deskt
 
 
 @both_anchorings
-def test_desktop_list_from_the_month_keeps_the_address_after_the_header_collapses(desktop_context, anchoring):
-    """월간에서 목록으로 가면 앱이 이미 스크롤 감지를 시작한 뒤라 상단 바가 곧바로 접힌다. 접히는 동안 맨 위 줄이 달라 보여도 주소는 그대로다."""
+def test_desktop_list_from_the_month_keeps_the_address(desktop_context, anchoring):
+    """데스크톱 — 월간에서 목록으로 간 뒤 가만히 두면 주소가 그 달 1일 그대로다."""
     page = _list_page(desktop_context, anchoring)
     _open(page, "calendar/2026-12")
     page.wait_for_timeout(1000)   # 앱이 스크롤 감지를 시작하기를 기다린다
     page.locator("#page-title .title-view-btn").click()
     page.wait_for_url(f"{BASE}/calendar/list/2026-12-01")
-    page.wait_for_selector("#app-header.compact")
     page.wait_for_timeout(1400)
     assert page.url == f"{BASE}/calendar/list/2026-12-01"
 
@@ -1474,15 +1466,15 @@ def test_list_keeps_focus_when_the_bar_redraws_at_the_range_end(mobile_context):
         assert page.evaluate(focused) == expected
 
 
-def test_desktop_list_keeps_focus_on_the_home_button_when_the_bar_redraws(desktop_context):
-    """데스크톱의 집 단추도 상단 바를 다시 그린 뒤 포커스를 잃지 않는다(WCAG 2.4.3)."""
+def test_desktop_list_keeps_focus_on_today_when_the_bar_redraws(desktop_context):
+    """데스크톱의 「오늘」(› 오른쪽 — ADR-043 §1)도 상단 바를 다시 그린 뒤 포커스를 잃지 않는다(WCAG 2.4.3)."""
     page = desktop_context.new_page()
     _open_list(page, "calendar/list/1583-02-15")
-    page.locator("#page-title .title-home-btn").focus()
+    page.locator("#page-title .lect-today").focus()
     page.evaluate("() => window.scrollTo({ top: 0, behavior: 'instant' })")
     page.wait_for_selector(".cal-month-full:has-text('1583년 1월')")
     assert page.locator("#page-title a[data-focus-key='prev']").count() == 0
-    assert page.evaluate("() => document.activeElement.classList.contains('title-home-btn')")
+    assert page.evaluate("() => document.activeElement.classList.contains('lect-today')")
 
 
 def test_only_the_list_loads_the_lectionary_tables(mobile_context):

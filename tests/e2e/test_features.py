@@ -61,15 +61,9 @@ def _saved_verse(page):
 
 
 def _read_up_to(page, verse, width):
-    """그 절의 첫 줄을 상단 바 아래쪽에서 5px 아래에 두고 저장을 기다린다. 데스크톱은 스크롤하면 상단 바의 윗줄이 접혀, 접힌 뒤에 둔다."""
+    """그 절의 첫 줄을 상단 바 아래쪽에서 5px 아래에 두고 저장을 기다린다. 데스크톱의 상단 바도 스크롤해도 높이가 같다(ADR-043 §1)."""
     page.goto(f"{BASE}/john/3")
     page.wait_for_selector(f".verse[data-vref='{verse}']")
-    if width >= 769:
-        page.wait_for_timeout(1000)   # 윗줄을 접는 스크롤 감지가 시작하기를 기다린다
-        page.mouse.move(640, 400)
-        page.mouse.wheel(0, 300)
-        page.wait_for_function("() => document.getElementById('app-header').classList.contains('compact')")
-        page.wait_for_timeout(500)
     page.evaluate("""n => {
         const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
         window.scrollBy({ top: document.querySelector(`.verse[data-vref="${n}"]`).getBoundingClientRect().top - bar - 5, behavior: 'instant' });
@@ -102,25 +96,23 @@ def test_reopening_puts_the_saved_verse_right_under_the_top_bar(browser, width, 
         assert _saved_verse(page) == 12
         page.goto(f"{BASE}/")   # 다시 연다 — 읽던 장으로 간다
         page.wait_for_url(f"{BASE}/john/3?resume=1")
-        page.wait_for_timeout(1500)   # 데스크톱은 윗줄이 접힌 뒤에 다시 맞추고, 저장은 스크롤이 멈추고 0.5초 뒤다
+        page.wait_for_timeout(1500)   # 저장은 스크롤이 멈추고 0.5초 뒤다
         assert abs(_gap_under_bar(page, 12)) <= 2
         assert _saved_verse(page) == 12
     finally:
         ctx.close()
 
 
-def test_resume_banner_on_desktop_puts_the_verse_under_the_collapsed_bar(browser):
-    """데스크톱에서 이어 읽기 배너를 누르면 그 절로 스크롤하면서 상단 바의 윗줄이 접힌다. 접힌 뒤에 한 번 더 맞춰 절이 접힌 상단 바 바로 아래에 오고,
-    가만히 두어도 저장된 절이 그대로다."""
+def test_resume_banner_on_desktop_puts_the_verse_under_the_bar(browser):
+    """데스크톱에서 이어 읽기 배너를 누르면 그 절이 상단 바 바로 아래에 오고, 가만히 두어도 저장된 절이 그대로다. 성서 목록의 상단 바는 배너와
+    구분 탭만큼 높고 장 화면의 상단 바는 한 줄이라, 새 화면의 높이로 맞춘다."""
     ctx, page = _reader(browser, 1280, 0, startup="home")
     try:
         _read_up_to(page, 12, 1280)
         page.goto(f"{BASE}/")
         page.wait_for_selector(".resume-banner-link")
-        page.wait_for_timeout(1000)   # 윗줄을 접는 스크롤 감지가 시작하기를 기다린다
         page.click(".resume-banner-link")
         page.wait_for_url(f"{BASE}/john/3?resume=1")
-        page.wait_for_function("() => document.getElementById('app-header').classList.contains('compact')")
         page.wait_for_timeout(1500)
         assert abs(_gap_under_bar(page, 12)) <= 2
         assert _saved_verse(page) == 12
@@ -129,7 +121,7 @@ def test_resume_banner_on_desktop_puts_the_verse_under_the_collapsed_bar(browser
 
 
 def test_resume_on_desktop_leaves_the_scroll_alone_once_the_reader_scrolls(browser):
-    """윗줄이 접히는 동안 독자가 스크롤을 시작하면 절을 다시 맞추지 않는다."""
+    """돌아온 뒤 독자가 스크롤하면 그 자리에 둔다 — 절을 다시 맞추지 않는다."""
     ctx, page = _reader(browser, 1280, 0, startup="home")
     try:
         _read_up_to(page, 12, 1280)

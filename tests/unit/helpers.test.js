@@ -1087,8 +1087,8 @@ test("restoreFocusSpot: 같은 자리가 상단 바 밑이면(가려진 링크�
 // ── scrollUnderBar ──────────────────────────────────────────────────────────
 
 /**
- * scrollUnderBar 가 쓰는 브라우저 기능 — 다음 프레임, 시간, 창의 이벤트(AbortSignal 로 떼어 낸다), 윗줄(#breadcrumb-row)의 전환 끝.
- * 상단 바는 고정(높이 106 — 데스크톱의 펼친 상단 바)이고 대상은 문서 2000.
+ * scrollUnderBar 가 쓰는 브라우저 기능 — 다음 프레임, 창의 이벤트(AbortSignal 로 떼어 낸다). 상단 바는 고정(높이 60 — 데스크톱의
+ * 한 줄 상단 바, ADR-043)이고 대상은 문서 2000. 상단 바가 접히지 않으므로 접힘을 기다리는 타이머는 없다.
  */
 function scrollEnv(h) {
   const frames = /** @type {Function[]} */ ([]);
@@ -1097,26 +1097,19 @@ function scrollEnv(h) {
   h.ctx.requestAnimationFrame = (cb) => { frames.push(cb); return frames.length; };
   h.ctx.setTimeout = (cb, ms) => { timers.push({ cb, ms }); return timers.length; };
   h.ctx.AbortController = AbortController;
-  const listen = (map, type, fn, opts) => {
-    if (!map.has(type)) map.set(type, new Set());
-    map.get(type).add(fn);
-    opts?.signal?.addEventListener("abort", () => map.get(type).delete(fn));
+  h.ctx.addEventListener = (type, fn, opts) => {
+    if (!winListeners.has(type)) winListeners.set(type, new Set());
+    winListeners.get(type).add(fn);
+    opts?.signal?.addEventListener("abort", () => winListeners.get(type).delete(fn));
   };
-  h.ctx.addEventListener = (type, fn, opts) => listen(winListeners, type, fn, opts);
-  const bar = pinnedBar(h, 106);
-  const row = h.helpers.el("div", { id: "breadcrumb-row" });
-  const rowListeners = new Map();
-  row.addEventListener = (type, fn, opts) => listen(rowListeners, type, fn, opts);
+  const bar = pinnedBar(h, 60);
   const target = h.helpers.el("span", { className: "verse" });
   target._docTop = 2000;
   target.isConnected = true;
-  const fire = (map, type, evt) => { for (const fn of [...(map.get(type) ?? [])]) fn(evt); };
   return {
-    bar, row, target, frames, timers,
-    /** 윗줄이 접혔다 — 상단 바가 60 이 되고, 스크롤 고정이 대상을 화면의 그 자리에 둔다. */
-    collapse() { bar._height = 60; fire(rowListeners, "transitionend", { target: row }); },
-    input(type) { fire(winListeners, type, { type }); },
-    rowTransitionFrom(node) { fire(rowListeners, "transitionend", { target: node }); },
+    bar, target, frames, timers,
+    input(type) { for (const fn of [...(winListeners.get(type) ?? [])]) fn({ type }); },
+    listening() { return [...winListeners].filter(([, fns]) => fns.size).map(([type]) => type).sort(); },
   };
 }
 
@@ -1124,42 +1117,43 @@ test("scrollUnderBar: 대상의 위쪽을 상단 바 바로 아래에 두고(즉
   const h = loadHelpers();
   const env = scrollEnv(h);
   h.helpers.scrollUnderBar(env.target);
-  assert.equal(env.target.getBoundingClientRect().top, 106);
-  assert.deepEqual(h.dom.view.scrolls, [{ y: 1894, behavior: "instant" }]);
+  assert.equal(env.target.getBoundingClientRect().top, 60);
+  assert.deepEqual(h.dom.view.scrolls, [{ y: 1940, behavior: "instant" }]);
   assert.equal(env.frames.length, 1);
   env.frames[0]();
-  assert.equal(env.target.getBoundingClientRect().top, 106);
-  assert.equal(env.timers[0].ms, 1000);
+  assert.equal(env.target.getBoundingClientRect().top, 60);
 });
 
-test("scrollUnderBar: 데스크톱에서 윗줄이 접히면(전환 끝) 접힌 상단 바 바로 아래로 다시 맞춘다 — 한 번만", () => {
+test("scrollUnderBar: 다음 프레임에 상단 바의 높이가 달라져 있으면(웹 글꼴, 이어 읽기 배너) 그 높이에 다시 맞춘다", () => {
   const h = loadHelpers();
   const env = scrollEnv(h);
   h.helpers.scrollUnderBar(env.target);
-  env.collapse();
-  assert.equal(env.target.getBoundingClientRect().top, 60);
-  const scrolls = h.dom.view.scrolls.length;
-  env.collapse();   // 다시 펼쳤다 접은 것은 독자의 스크롤이다
-  assert.equal(h.dom.view.scrolls.length, scrolls);
+  env.bar._height = 72;
+  env.frames[0]();
+  assert.equal(env.target.getBoundingClientRect().top, 72);
 });
 
-test("scrollUnderBar: 그사이 독자가 스크롤을 시작했거나(휠 · 터치 · 포인터 · 키) 1초가 지났으면 다시 맞추지 않는다 — 윗줄 안 검색 칸의 전환도 보지 않는다", () => {
+test("scrollUnderBar: 그사이 독자가 스크롤을 시작했으면(휠 · 터치 · 포인터 · 키) 다시 맞추지 않는다", () => {
   for (const type of ["wheel", "touchstart", "pointerdown", "keydown"]) {
     const h = loadHelpers();
     const env = scrollEnv(h);
     h.helpers.scrollUnderBar(env.target);
     env.input(type);
-    env.collapse();
-    assert.equal(env.target.getBoundingClientRect().top, 106, type);
+    env.bar._height = 72;
+    env.frames[0]();
+    assert.equal(h.dom.view.scrolls.length, 1, type);
   }
+});
+
+test("scrollUnderBar: 다음 프레임 뒤에는 기다리지 않는다 — 창의 이벤트 처리기를 떼고 타이머도 없다(상단 바가 접히지 않는다, ADR-043 §1)", () => {
   const h = loadHelpers();
   const env = scrollEnv(h);
   h.helpers.scrollUnderBar(env.target);
-  env.rowTransitionFrom(h.helpers.el("input", { id: "search-input" }));
-  assert.equal(h.dom.view.scrolls.length, 1);
-  env.timers[0].cb();
-  env.collapse();
-  assert.equal(env.target.getBoundingClientRect().top, 106);
+  assert.deepEqual(env.listening(), ["keydown", "pointerdown", "touchstart", "wheel"]);
+  env.frames[0]();
+  assert.deepEqual(env.listening(), []);
+  assert.deepEqual(env.timers, []);
+  assert.equal(env.frames.length, 1);
 });
 
 // ── 본당 표 (ADR-041 §6) ─────────────────────────────────────────────────────

@@ -1341,22 +1341,24 @@ function buildDateStep(dir, href, label) {
  * 캘린더와 전례독서의 머리(DESIGN.md §6 「날짜 이동 줄」, 사용자 결정 2026-11-07). 왼쪽 칸은 「오늘」, 가운데 칸은 ‹ 글자 ›,
  * 오른쪽 칸은 보기 전환 단추다. 화면마다 다른 것은 가운데 글자(날짜 `<time>` · 달)와 라벨, 단추가 가는 곳뿐이다. 모두 문장 안
  * 요소(`<a>` · `<span>` · `<button>`)라 머리의 `<h1>` 안에 넣을 수 있다. 「오늘」의 `data-focus-key`는 `today` — 앞뒤 단추가 자리만
- * 남는 범위 끝에서 포커스가 돌아갈 대체 자리다. 집 단추는 탭 바가 없는 데스크톱의 성서 목록 입구이고, 모바일은 CSS가 숨긴다.
+ * 남는 범위 끝에서 포커스가 돌아갈 대체 자리다. 데스크톱에서 성서 목록으로 가는 길은 상단 바의 「성서」 탭이다(ADR-043 §3).
  * @param {{ title: HTMLElement, todayHref: string,
  *   prev: { href: string | null, label: string }, next: { href: string | null, label: string },
  *   view?: { href: string, label: string, icon: string } }} o
  */
 function commitDateBar(o) {
   const start = el("span", { className: "lect-bar-start" });
-  const home = window.buildHomeBtn("/", "성서 목록으로");
-  home.setAttribute("data-focus-key", "home");   // 캘린더 목록이 스크롤 중에 이 줄을 다시 그릴 때 포커스를 돌려줄 자리(calendar.js updateMonthBar)
-  start.appendChild(home);
-  start.appendChild(el("a", { className: "lect-today", href: o.todayHref, "data-focus-key": "today" }, "오늘"));
+  const today = el("a", { className: "lect-today", href: o.todayHref, "data-focus-key": "today" }, "오늘");
+  // 데스크톱의 한 줄 상단 바에서는 「오늘」이 다음 단추(›)의 오른쪽에 온다(ADR-043 §1, 사용자 결정 2026-11-14). 오른쪽 칸의 맨 앞에
+  // 넣어 화면의 차례와 포커스의 차례가 같다. 모바일은 왼쪽 칸 그대로다(ADR-038 §1). 그린 뒤 창 폭이 기준을 넘나들면 다음에 그릴 때 맞는다.
+  const desktop = window.matchMedia("(min-width: 769px) and (pointer: fine)").matches;
+  if (!desktop) start.appendChild(today);
   const mid = el("span", { className: "lect-bar-mid" });
   mid.appendChild(buildDateStep("prev", o.prev.href, o.prev.label));
   mid.appendChild(el("span", { className: "lect-date" }, o.title));
   mid.appendChild(buildDateStep("next", o.next.href, o.next.label));
   const end = el("span", { className: "lect-bar-end" });
+  if (desktop) end.appendChild(today);
   if (o.view) {
     end.appendChild(el("a", {
       className: "title-view-btn", href: o.view.href, "aria-label": o.view.label, title: o.view.label, "data-focus-key": "view",

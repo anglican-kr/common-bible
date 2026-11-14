@@ -196,3 +196,45 @@ test("nextScrollCollapsed: 중간에서 위로 스크롤 → 유지(깜빡임 �
   // 접힌 상태에서 위로(y<lastY) 올라가도 최상단 아니면 그대로 접힘 유지.
   assert.equal(nextScrollCollapsed(300, 500, true), true);
 });
+
+// ── HEADER_NAV — 데스크톱 상단 바의 목적지 탭 표시(ADR-043 §3) ─────────────────
+
+function headerNavCtx() {
+  const link = (nav) => {
+    const attrs = new Map([["data-nav", nav]]);
+    return {
+      getAttribute: (k) => attrs.get(k) ?? null,
+      setAttribute: (k, v) => attrs.set(k, v),
+      removeAttribute: (k) => attrs.delete(k),
+    };
+  };
+  const links = [link("home"), link("calendar")];
+  const ctx = { document: { querySelectorAll: (sel) => (sel === "#header-nav [data-nav]" ? links : []) } };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("HEADER_NAV"), ctx, { filename: "tabbar-header-nav.js" });
+  const current = () => links.filter((a) => a.getAttribute("aria-current") === "page").map((a) => a.getAttribute("data-nav"));
+  return { syncHeaderNav: ctx.syncHeaderNav, current };
+}
+
+test("syncHeaderNav: 캘린더와 전례독서(탭 바의 calendar)는 「캘린더」 탭에 aria-current", () => {
+  const { syncHeaderNav, current } = headerNavCtx();
+  syncHeaderNav("calendar");
+  assert.deepEqual(current(), ["calendar"]);
+});
+
+test("syncHeaderNav: 그 밖의 화면은 「성서」 탭 — 검색 결과, 데스크톱에서 성서 목록 위에 여는 북마크와 설정도", () => {
+  for (const active of ["home", "search", "bookmarks", "settings"]) {
+    const { syncHeaderNav, current } = headerNavCtx();
+    syncHeaderNav(active);
+    assert.deepEqual(current(), ["home"], active);
+  }
+});
+
+test("syncHeaderNav: 화면을 옮기면 앞의 표시를 지운다 — 표시는 늘 하나", () => {
+  const { syncHeaderNav, current } = headerNavCtx();
+  syncHeaderNav("calendar");
+  syncHeaderNav("home");
+  assert.deepEqual(current(), ["home"]);
+  syncHeaderNav("calendar");
+  assert.deepEqual(current(), ["calendar"]);
+});

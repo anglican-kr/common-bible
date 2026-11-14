@@ -1468,7 +1468,7 @@ declare global {
   // so app.js's Phase 7 territory (Views / Routing / chapter rendering /
   // initBookmarkSheetDrag) can call them as bare globals.
   // Phase 7a — views.js: data fetching + rendering helpers +
-  // initCompactHeader. Module-load assigns these to globalThis so app.js's
+  // initScrollElevation. Module-load assigns these to globalThis so app.js's
   // Phase 7b territory (Views/Routing/Audio Player) can call them as bare
   // globals.
   function loadBooks(): Promise<BooksData>;
@@ -1483,7 +1483,6 @@ declare global {
   function effectiveDivision(book: BookEntry): string;
   // 「성서 목록으로」 destination — the book's division tab, or "/" for a book in no tab (전례시편 · 송가).
   function bookListPath(book: BookEntry): string;
-  function initCompactHeader(): void;
   function initScrollElevation(): void;
   // (Phase 7a's temporary DIVISION_LABELS / OT_SUBCATEGORY{,_ORDER,_LABELS}
   // global declares were removed in Phase 7b — all callers now live inside

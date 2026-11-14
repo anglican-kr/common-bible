@@ -138,6 +138,7 @@ initBookmarkTree({
 });
 
 // ── Bookmark UI ──
+const $headerBookmarks = document.getElementById("header-bookmarks");   // 데스크톱 상단 바의 「북마크」 탭(ADR-043 §4)
 
 const $bookmarkScrim = _$("bookmark-scrim");
 const $bookmarkDrawer = _$("bookmark-drawer");
@@ -196,10 +197,9 @@ $driveDisconnectDelete.addEventListener("click", async () => {
 // Move-to-folder modal (선택 모드 → 이동).
 // $bmMove* refs moved to bookmark-modals.js with the move picker (PR5e).
 
-// Build the home button for page-title headers. It always navigates to a fixed
-// destination (the book list / division tab), never history.back() — the
-// breadcrumb is gone, so this is the canonical way back up to the book list
-// from a chapter / prologue / chapter-list view.
+// Build the title row's "up" button. It always navigates to a fixed destination, never history.back().
+// Only the bookmark reading view uses it now (back to the bookmark list); the way up to the book list is the
+// desktop top bar's 성서 tab and the mobile tab bar's home tab (ADR-043 §3), which also carry the book focus.
 // `focusBookId`, when given, asks the book list to move focus onto the book
 // we were just reading once it renders, so keyboard users land in context.
 // The glyph comes from helpers.js headerIcon — the header icon spec lives there.
@@ -313,6 +313,7 @@ const drawerOverlay = createOverlay({
   inertSelectors: BOOKMARK_INERT_SELECTORS,
   initialFocus: () => $bookmarkDrawerClose,
   onOpen: () => {
+    $headerBookmarks?.setAttribute("aria-expanded", "true");
     if (_bookmarkDrawerCloseTimer) { clearTimeout(_bookmarkDrawerCloseTimer); _bookmarkDrawerCloseTimer = null; }
     $bookmarkDrawer.classList.remove("drawer-closing"); // cancel any in-flight close anim
     const scrollY = window.scrollY;
@@ -323,6 +324,7 @@ const drawerOverlay = createOverlay({
     document.body.dataset.scrollY = String(scrollY);
   },
   onClose: () => {
+    $headerBookmarks?.setAttribute("aria-expanded", "false");
     closeSwipedRow(null);
     $bmOverflowPanel.hidden = true;
     $bmOverflowBtn.setAttribute("aria-expanded", "false");
@@ -359,6 +361,17 @@ function openBookmarkDrawer(bookId, chapter) {
 }
 
 function closeBookmarkDrawer() { drawerOverlay.close(); }
+
+// 데스크톱 상단 바의 「북마크」 탭(ADR-043 §4) — 어느 화면에서나 패널을 연다. 「이 장 저장」과 「절 선택」은 지금 주소가 장일 때만
+// 켠다: readingContext 는 장을 떠나도 마지막 장을 그대로 두므로, 그것만 보면 캘린더에서 연 패널이 읽던 장을 저장한다.
+$headerBookmarks?.addEventListener("click", () => {
+  if (drawerOverlay.isOpen) { closeBookmarkDrawer(); return; }
+  const p = window.parsePath?.();
+  // 주소가 장이어도 그리지 못한 장(없는 장, 받지 못한 장)은 저장할 것이 없다 — 그린 장은 readingContext 와 주소가 같다.
+  const inChapter = !!p && p.view === "chapter"
+    && p.bookId === readingContext.bookId && p.chapter === readingContext.chapter;
+  openBookmarkDrawer(inChapter ? readingContext.bookId : null, inChapter ? readingContext.chapter : null);
+});
 
 
 // Save/edit + merge modals moved to bookmark-modals.js (PR5c); openSaveModal

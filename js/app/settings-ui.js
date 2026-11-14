@@ -1027,7 +1027,6 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     document.documentElement.classList.add(`os-${os}`);
 
     window.setTitle("설정");
-    $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
     window.hideAudioBar();
     clearNode($app);
 

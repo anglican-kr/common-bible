@@ -1654,26 +1654,25 @@ def _slow_chapters(page, ms):
 
 
 def test_slow_redraw_keeps_the_pressed_control_in_place_on_desktop(desktop_context):
-    """데스크톱 — 새 장을 받는 사이 스켈레톤이 스크롤을 맨 위로 누르면 머리의 검색 줄(#breadcrumb-row)이 펼쳐지고, 돌아온 뒤 다시
-    접힌다. 누른 세그먼트가 그 줄 높이(약 46px)만큼 아래로 내려앉던 것을 막는다(PR #350 리뷰 — 위의 모바일 테스트는 그 줄이 없고
-    로컬 서버는 너무 빨라 보지 못했다). 머리가 접힌 채 위로 되돌아온 자리(이력 — 60px 넘어야 접히고 10px 아래라야 펼친다)도 본다."""
+    """데스크톱 — 새 장을 받는 사이 스켈레톤이 스크롤을 맨 위로 눌러도, 돌아온 뒤 누른 세그먼트가 누를 때의 자리에 있다(PR #350 리뷰).
+    그때는 접혔다 펼쳐지는 윗줄(약 46px)만큼 내려앉았다. 상단 바는 2026-11-14부터 접히지 않는 한 줄이다(ADR-043 §1). 맨 위 가까이로
+    되돌아온 자리(스크롤 40px)에서도 본다."""
     page = desktop_context.new_page()
     for scroll_back in (None, 40):
         _open(page, "lectionary/2026-04-05")
         seg = page.locator(".lect-card >> nth=1")
         page.evaluate("""(el) => { const r = el.getBoundingClientRect();
             window.scrollTo({ top: window.scrollY + r.top - 170, behavior: 'instant' }); }""", seg.element_handle())
-        page.wait_for_timeout(400)   # 머리가 접히는 전환(0.25s)
+        page.wait_for_timeout(400)
         if scroll_back is not None:
             page.evaluate("(y) => window.scrollTo({ top: y, behavior: 'instant' })", scroll_back)
             page.wait_for_timeout(400)
-        assert page.evaluate("() => document.getElementById('app-header').classList.contains('compact')")
         before = page.evaluate("(el) => el.getBoundingClientRect().top", seg.element_handle())
         _slow_chapters(page, 400)
         seg.focus()
         page.keyboard.press("Enter")
         page.wait_for_selector(".lect-card.active:has-text('독서 2')", timeout=20_000)
-        page.wait_for_timeout(600)   # 머리가 다시 접히는 전환까지
+        page.wait_for_timeout(600)
         page.unroute("**/data/bible/**")
         assert _focused(page) == {"key": "set:2", "inView": True, "visible": True}
         after = page.evaluate("() => document.activeElement.getBoundingClientRect().top")
@@ -1837,7 +1836,7 @@ def test_title_row_is_the_date_nav_and_only_the_date_text_is_centered(mobile_con
     assert title.locator(".lect-date time").get_attribute("datetime") == "2026-12-30"
     assert title.locator(".lect-date time .sr-only").inner_text() == "2026년 12월 30일 (수)"
     assert title.locator(".title-view-btn").get_attribute("href") == "/calendar/2026-12"
-    assert not title.locator(".title-home-btn").is_visible()   # 집 단추는 탭 바가 없는 데스크톱에만 보인다
+    assert title.locator(".title-home-btn").count() == 0   # 성서 목록의 입구는 탭 바의 홈 탭과 데스크톱 상단 바의 「성서」 탭이다(ADR-043 §3)
     assert "전례독서" in page.evaluate("() => document.title")   # 「전례독서」는 문서 제목에 남는다
     # 탭 영역 44px — 줄 높이는 제목 한 줄 그대로(음수 여백)
     box = title.locator("a.lect-datenav-btn[aria-label='다음날']").bounding_box()

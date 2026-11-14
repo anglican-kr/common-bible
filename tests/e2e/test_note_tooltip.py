@@ -24,10 +24,10 @@ _PLACE_ANCHOR = f"""(dy) => {{
   window.scrollTo({{ top: window.scrollY + a.top - bar - dy, behavior: 'instant' }});
 }}"""
 
-# 스크롤 이벤트와 툴팁의 나타나기 애니메이션(2px 이동), 상단 바의 접고 펴기가 끝날 때까지 기다린다.
+# 스크롤 이벤트와 툴팁의 나타나기 애니메이션(2px 이동)이 끝날 때까지 기다린다.
 _SETTLE = """async () => {
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-  const els = [document.getElementById('note-tooltip'), document.getElementById('breadcrumb-row')].filter(Boolean);
+  const els = [document.getElementById('note-tooltip')].filter(Boolean);
   await Promise.all(els.flatMap((el) => el.getAnimations()).map((a) => a.finished));
 }"""
 

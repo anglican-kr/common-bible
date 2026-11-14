@@ -38,7 +38,7 @@ import {
   CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO,
 } from "./lectionary.js";
 
-// barBottom: 상단 바의 아래쪽(화면 위에서 잰 값). 데스크톱은 스크롤하면 윗줄이 접혀 값이 바뀐다(views.js initCompactHeader).
+// barBottom: 상단 바의 아래쪽(화면 위에서 잰 값).
 const {
   _$, el, clearNode, HEADER_ICON_PATHS, SCROLL_ANCHORING, focusSpotOf, restoreFocusSpot, barBottom, scrollUnderBar,
 } = window.appHelpers;

@@ -230,15 +230,15 @@ def test_book_list_click_then_chapter_loads(browser):
 
 
 def test_home_btn_focuses_book_just_read(browser):
-    """장(gen/1)에서 헤더 홈 버튼 클릭 → 책 목록의 창세기 항목에 포커스."""
+    """장(gen/1)에서 상단 바의 「성서」 탭 클릭 → 책 목록의 창세기 항목에 포커스(ADR-043 §3 — 그전엔 제목 줄의 집 단추)."""
     ctx = browser.new_context()
     page = ctx.new_page()
     try:
         page.goto(f"{BASE}/gen/1")
         page.wait_for_selector("article.chapter-text .verse")
 
-        # Header home button → back up to the book list (구약 division tab)
-        page.locator(".title-home-btn").click()
+        # 「성서」 tab → back up to the book list (구약 division tab)
+        page.locator("#header-home").click()
         page.wait_for_selector(".book-list", timeout=5_000)
 
         # The Genesis list item should now hold focus, in context.
@@ -252,7 +252,7 @@ def test_home_btn_focuses_book_just_read(browser):
 
 @pytest.mark.parametrize("path", ["lps/23", "cant"])
 def test_home_btn_on_book_in_no_tab_lands_on_book_list(browser, path):
-    """구분 탭이 없는 책(전례시편 장 · 송가 장 목록)에서 헤더 홈 버튼 → 성서 목록 첫 화면(/).
+    """구분 탭이 없는 책(전례시편 장 · 송가 장 목록)에서 상단 바의 「성서」 탭 → 성서 목록 첫 화면(/).
 
     그전엔 `/liturgical` 로 가서 「해당 성서를 찾을 수 없습니다.」가 떴다(PR #353 리뷰, 2026-10-17 —
     views.js bookListPath)."""
@@ -260,8 +260,8 @@ def test_home_btn_on_book_in_no_tab_lands_on_book_list(browser, path):
     page = ctx.new_page()
     try:
         page.goto(f"{BASE}/{path}")
-        page.wait_for_selector("#page-title .title-home-btn")
-        page.locator("#page-title .title-home-btn").click()
+        page.wait_for_selector("#page-title .title-picker-btn, #page-title")
+        page.locator("#header-home").click()
         page.wait_for_selector(".book-list", timeout=5_000)
         assert page.evaluate("() => location.pathname") == "/"
         assert page.locator("#app .empty-state").count() == 0
@@ -321,7 +321,7 @@ def test_missing_chapter_shows_the_book_head(browser):
         }
         assert page.get_attribute("#page-title", "aria-label") == "요한의 복음서"
         assert page.locator("#page-title .title-picker-btn").count() == 0
-        assert page.locator("#page-title .title-home-btn").count() == 1
+        assert page.locator("#page-title .title-home-btn").count() == 0   # 성서 목록으로 가는 길은 상단 바의 「성서」 탭이다(ADR-043 §3)
         assert page.evaluate(AUDIO_BAR_HIDDEN) is True
         assert page.evaluate("() => document.title") == "요한의 복음서 — 공동번역성서"
         page.wait_for_function(ANNOUNCED, arg="요한의 복음서 — 요한의 복음서에는 99장이 없습니다")
