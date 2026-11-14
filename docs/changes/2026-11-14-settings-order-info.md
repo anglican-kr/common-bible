@@ -1,4 +1,5 @@
 ---
+pr: 563
 date: 2026-11-14
 branch: feat/settings-order-info
 title: "feat: 설정에서 소속교회를 세례명 앞에, 설명 단추를 크게"
