@@ -71,10 +71,10 @@
 | `docs/decisions/023-settings-toggle-switches.md` | 50 | #529 |
 | `docs/decisions/024-book-list-tabs-and-header-nav.md` | 55 | #529 |
 | `docs/decisions/025-header-scroll-elevation.md` | 59 | #529 |
-| `docs/decisions/027-source-dsl-and-parallel-passages.md` | 128 | 대기 |
-| `docs/decisions/028-design-system.md` | 93 | 대기 |
-| `docs/decisions/029-mobile-tab-bar.md` | 89 | 대기 |
-| `docs/decisions/030-morphing-tab-bar.md` | 121 | 대기 |
+| `docs/decisions/027-source-dsl-and-parallel-passages.md` | 128 | #536 |
+| `docs/decisions/028-design-system.md` | 93 | #536 |
+| `docs/decisions/029-mobile-tab-bar.md` | 89 | #536 |
+| `docs/decisions/030-morphing-tab-bar.md` | 121 | #536 |
 | `docs/decisions/031-tab-history-restore.md` | 54 | 대기 |
 | `docs/decisions/032-component-view-layer.md` | 69 | 대기 |
 | `docs/decisions/033-search-options.md` | 77 | 대기 |
