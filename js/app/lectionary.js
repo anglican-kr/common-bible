@@ -39,6 +39,7 @@ import { loadChapter } from "./data-fetch.js";
 import {
   appendVersesWithAids, bindCopyAttribution, absentVerseNumbers,
   LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
+  applyTitleCompactness,
 } from "./views.js";
 import { specCoversVerse, parseVerseSpec, verseInstanceKeys, citationSource, formatVerseRanges, halfVerseMark } from "./verse-spec.js";
 import {
@@ -1367,6 +1368,7 @@ function commitDateBar(o) {
   $title.appendChild(mid);
   $title.appendChild(end);
   placeToday(today, start, end);
+  applyTitleCompactness();   // 데스크톱의 상단 바에 이 줄이 들어가는지 다시 잰다 — 달 이름을 줄이거나 탭과 검색창을 좁힌다(views.js fitTopBar)
 }
 
 /**
@@ -1375,11 +1377,15 @@ function commitDateBar(o) {
  * @param {Element} today @param {Element} start @param {Element} end
  */
 function placeToday(today, start, end) {
+  const focused = document.activeElement === today;
   if (isDesktopLayout()) end.insertBefore(today, end.firstChild);
   else start.appendChild(today);
+  // 요소를 떼었다 붙이면 포커스가 사라진다. 「오늘」에 포커스가 있었으면 돌려준다.
+  if (focused && today instanceof HTMLElement) today.focus({ preventScroll: true });
 }
 
-// 창 폭이 데스크톱과 모바일의 경계를 넘으면 이미 그린 줄의 「오늘」을 그 배치의 칸으로 옮긴다. 다시 그리지 않으므로 스크롤과 포커스가 그대로다.
+// 창 폭이 데스크톱과 모바일의 경계를 넘으면 이미 그린 줄의 「오늘」을 그 배치의 칸으로 옮긴다. 다시 그리지 않으므로 스크롤이 그대로이고,
+// 포커스는 placeToday 가 돌려준다.
 if (typeof window.matchMedia === "function") {
   window.matchMedia(DESKTOP_LAYOUT_QUERY).addEventListener("change", () => {
     const today = $title.querySelector(":scope .lect-today");

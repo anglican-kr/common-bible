@@ -117,19 +117,20 @@
     <header id="app-header">
       <!-- ADR-043: 데스크톱의 한 줄 상단 바 — 왼쪽 목적지 탭, 가운데 제목, 오른쪽 검색창과 설정. 모바일은 탭 바가 목적지를
            맡아 #header-nav 와 #header-actions 를 CSS 가 숨기고 제목만 남는다. 탭의 동작은 탭 바와 같다(tabbar.js 가 같은
-           클릭 처리기를 단다 — 성서는 enterHomeTab, 캘린더는 enterCalendarTab). 아이콘은 탭 바와 같은 글리프다. -->
+           클릭 처리기를 단다 — 성서는 enterHomeTab, 캘린더는 enterCalendarTab). 아이콘은 탭 바의 글리프를 가리킨다(<use> — 그림은
+           #tab-bar 에 한 벌만 있다). 글자가 숨는 좁은 폭에서는 views.js fitTopBar 가 탭에 title 을 단다. -->
       <nav id="header-nav" aria-label="주 내비게이션">
-        <a id="header-home" class="header-nav-link" href="/" data-nav="home" title="성서">
-          <svg viewBox="2.73 2.98 18.55 18.55" fill="none" stroke="currentColor" stroke-width="1.39" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6.5C10.5 5.2 8.3 4.5 4.5 4.5a1 1 0 0 0-1 1V17a1 1 0 0 0 1 1c3.8 0 6 .7 7.5 2"/><path d="M12 6.5c1.5-1.3 3.7-2 7.5-2a1 1 0 0 1 1 1V17a1 1 0 0 1-1 1c-3.8 0-6 .7-7.5 2"/><path d="M12 6.5V20"/></svg>
+        <a id="header-home" class="header-nav-link" href="/" data-nav="home">
+          <svg viewBox="2.73 2.98 18.55 18.55" fill="none" stroke="currentColor" stroke-width="1.39" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#tab-glyph-home"/></svg>
           <span class="header-nav-label">성서</span>
         </a>
-        <a id="header-calendar" class="header-nav-link" href="/calendar" data-nav="calendar" title="캘린더">
-          <svg viewBox="3.00 2.75 18.00 18.00" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 5.5h13a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1z"/><path d="M4.5 9.5h15"/><path d="M8.5 3.5v4"/><path d="M15.5 3.5v4"/></svg>
+        <a id="header-calendar" class="header-nav-link" href="/calendar" data-nav="calendar">
+          <svg viewBox="3.00 2.75 18.00 18.00" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#tab-glyph-calendar"/></svg>
           <span class="header-nav-label">캘린더</span>
         </a>
         <!-- 「북마크」는 다른 화면으로 가지 않고 본문 옆의 패널을 여닫는다(ADR-043 §4) — 그래서 링크가 아니라 단추다. bookmark.js 가 처리기를 단다. -->
-        <button id="header-bookmarks" class="header-nav-link" type="button" data-nav="bookmarks" title="북마크" aria-haspopup="dialog" aria-expanded="false" aria-controls="bookmark-drawer">
-          <svg viewBox="3.55 3.80 16.91 16.91" fill="none" stroke="currentColor" stroke-width="1.27" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 4.5h9a1 1 0 0 1 1 1V20l-5.5-3.7L6.5 20V5.5a1 1 0 0 1 1-1z"/></svg>
+        <button id="header-bookmarks" class="header-nav-link" type="button" data-nav="bookmarks" aria-haspopup="dialog" aria-expanded="false" aria-controls="bookmark-drawer">
+          <svg viewBox="3.55 3.80 16.91 16.91" fill="none" stroke="currentColor" stroke-width="1.27" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#tab-glyph-bookmarks"/></svg>
           <span class="header-nav-label">북마크</span>
         </button>
       </nav>
@@ -166,15 +167,15 @@
     <!-- 홈 탭은 성서를 읽는 탭이라 펼친 책으로 그린다(사용자 결정 2026-11-14). 광학 크기 정규화:
          글리프 바운딩박스(3.5-20.5 × 4.5-20) 중심에 22/24 비율 viewBox, 획 1.8 × 18.55/24. -->
     <a class="tab-item" href="/" data-tab="home" aria-label="홈">
-      <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="2.73 2.98 18.55 18.55" fill="none" stroke="currentColor" stroke-width="1.39" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6.5C10.5 5.2 8.3 4.5 4.5 4.5a1 1 0 0 0-1 1V17a1 1 0 0 0 1 1c3.8 0 6 .7 7.5 2"/><path d="M12 6.5c1.5-1.3 3.7-2 7.5-2a1 1 0 0 1 1 1V17a1 1 0 0 1-1 1c-3.8 0-6 .7-7.5 2"/><path d="M12 6.5V20"/></svg></span>
+      <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="2.73 2.98 18.55 18.55" fill="none" stroke="currentColor" stroke-width="1.39" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g id="tab-glyph-home"><path d="M12 6.5C10.5 5.2 8.3 4.5 4.5 4.5a1 1 0 0 0-1 1V17a1 1 0 0 0 1 1c3.8 0 6 .7 7.5 2"/><path d="M12 6.5c1.5-1.3 3.7-2 7.5-2a1 1 0 0 1 1 1V17a1 1 0 0 1-1 1c-3.8 0-6 .7-7.5 2"/><path d="M12 6.5V20"/></g></svg></span>
     </a>
     <!-- ADR-038 §1 (A2): 캘린더 탭 — 홈 다음 두 번째. 광학 크기 정규화(ADR-030 개정 2026-06-05):
          글리프 바운딩박스(4.5~19.5 × 3.5~20) 중심에 22/24 비율 viewBox, 획 1.8 × 18/24. -->
     <a class="tab-item" href="/calendar" data-tab="calendar" aria-label="캘린더">
-      <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="3.00 2.75 18.00 18.00" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 5.5h13a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1z"/><path d="M4.5 9.5h15"/><path d="M8.5 3.5v4"/><path d="M15.5 3.5v4"/></svg></span>
+      <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="3.00 2.75 18.00 18.00" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g id="tab-glyph-calendar"><path d="M5.5 5.5h13a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1z"/><path d="M4.5 9.5h15"/><path d="M8.5 3.5v4"/><path d="M15.5 3.5v4"/></g></svg></span>
     </a>
     <a class="tab-item" href="/bookmarks" data-tab="bookmarks" aria-label="북마크">
-      <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="3.55 3.80 16.91 16.91" fill="none" stroke="currentColor" stroke-width="1.27" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 4.5h9a1 1 0 0 1 1 1V20l-5.5-3.7L6.5 20V5.5a1 1 0 0 1 1-1z"/></svg></span>
+      <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="3.55 3.80 16.91 16.91" fill="none" stroke="currentColor" stroke-width="1.27" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g id="tab-glyph-bookmarks"><path d="M7.5 4.5h9a1 1 0 0 1 1 1V20l-5.5-3.7L6.5 20V5.5a1 1 0 0 1 1-1z"/></g></svg></span>
     </a>
     <!-- 노트 탭 — 기능 보류로 1.7.0 까지 hidden(바에서 제거, 탭바 폭은 콘텐츠 폭 flex:0 1 auto 라 자동 축소). -->
     <button type="button" class="tab-item" data-tab="notes" aria-label="노트 (준비 중)" aria-disabled="true" hidden>

@@ -69,6 +69,8 @@ function setTitle(text, mobileText) {
     $title.removeAttribute("aria-label");
     $title.classList.remove("compact");
     $title.appendChild(document.createTextNode(text));
+    // A plain title has no short form, but the desktop top bar is fitted around it all the same (fitTopBar).
+    applyTitleCompactness();
   }
 }
 // ── END TITLE ──
@@ -459,6 +461,11 @@ function applyTitleCompactness() {
     // Watch the bar, not the title: on desktop the title cell is as wide as its text (ADR-043), so it does not
     // change when the window does — and the side cells change with it (the tab labels at 900px, the search field).
     _titleResizeObs.observe($title.parentElement ?? $title);
+    // The cells themselves change width without the window changing: a web font arriving after the first
+    // measure, the font-size setting, a tab's weight when the destination changes.
+    for (const cell of [$title, document.getElementById("header-nav"), document.getElementById("header-actions")]) {
+      if (cell) _titleResizeObs.observe(cell);
+    }
   }
 
   // Defer the actual measurement to the next frame. Several render paths append
@@ -475,6 +482,15 @@ function applyTitleCompactness() {
 
 function measureTitleCompactness() {
   if (!$title) return;
+  // Desktop top bar (ADR-043): the title is the middle cell of a three-cell row — fitted as a whole (fitTopBar).
+  const bar = $title.parentElement ?? null;
+  const barStyle = bar && typeof getComputedStyle === "function" ? getComputedStyle(bar) : null;
+  if (bar && barStyle && barStyle.display === "grid") {
+    fitTopBar(bar, barStyle);
+    return;
+  }
+  bar?.classList.remove("tight");
+
   const full = /** @type {HTMLElement | null} */ ($title.querySelector(".title-text-full"));
   const mobile = $title.querySelector(".title-text-mobile");
   if (!full || !mobile) {
@@ -498,25 +514,6 @@ function measureTitleCompactness() {
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
   // Picker button has a ~0.4em chevron after the label — allow for it.
   const chevronAllowance = container.classList.contains("title-picker-btn") ? 0.8 * rem : 0;
-
-  // Desktop top bar (ADR-043): the title is the middle cell of a three-cell row and its width follows its
-  // content, so its own clientWidth says nothing. The room is what the row has left once both side cells take
-  // the wider one's width (they share the leftover equally, which keeps the title at the centre of the window)
-  // and the buttons that follow the title (the chapter bookmark) take theirs.
-  const bar = $title.parentElement;
-  const barStyle = bar ? getComputedStyle(bar) : null;
-  if (bar && barStyle && barStyle.display === "grid") {
-    const widthOf = (/** @type {string} */ id) => document.getElementById(id)?.getBoundingClientRect().width ?? 0;
-    const side = Math.max(widthOf("header-nav"), widthOf("header-actions"));
-    const gap = parseFloat(barStyle.columnGap) || 0;
-    let beside = 0;
-    for (const b of $title.querySelectorAll(":scope > .title-back-btn, :scope > .title-bookmark-btn")) {
-      beside += b.getBoundingClientRect().width;
-    }
-    const inner = bar.clientWidth - (parseFloat(barStyle.paddingLeft) || 0) - (parseFloat(barStyle.paddingRight) || 0);
-    if (naturalWidth + chevronAllowance + beside > inner - 2 * side - 2 * gap + 0.5) $title.classList.add("compact");
-    return;
-  }
 
   // The title text is centered (text-align: center) while the home / bookmark /
   // settings buttons are absolute-positioned at the edges. A centered string
@@ -554,6 +551,51 @@ function measureTitleCompactness() {
 
   if (naturalWidth + chevronAllowance > availableWidth + 0.5) {
     $title.classList.add("compact");
+  }
+}
+
+/**
+ * Fit the desktop top bar (ADR-043 §1, §8). The title cell is as wide as its content and both side cells take the
+ * wider one's width, which keeps the title at the centre of the window; whatever is in the title cell — a chapter
+ * title with its buttons, the date steps of the calendar and the lectionary, a search title — has the room that
+ * is left. When it does not fit, the title takes its short form (`.compact` on the title — the short book name,
+ * the month as 「2027.12」). When that is not enough the bar gets tighter (`.tight` on the bar — the tabs keep
+ * only their icons and the search field narrows), and the title goes back to its full form if the tighter bar
+ * has room for it. A title with no short form that still does not fit is cut with an ellipsis by CSS. Measured from the laid-out bar, so every button, gap and margin is counted as drawn.
+ * @param {HTMLElement} bar  #app-header @param {CSSStyleDeclaration} barStyle
+ */
+function fitTopBar(bar, barStyle) {
+  const widthOf = (/** @type {string} */ id) => document.getElementById(id)?.getBoundingClientRect().width ?? 0;
+  const gap = parseFloat(barStyle.columnGap) || 0;
+  const inner = bar.clientWidth - (parseFloat(barStyle.paddingLeft) || 0) - (parseFloat(barStyle.paddingRight) || 0);
+  // The content's own width, whether or not the cell has been squeezed below it. scrollWidth is that for a line
+  // of text; the date row is a centred flex row, which overflows to both sides while scrollWidth counts only
+  // the end side — so its width is taken from its first and last cells.
+  const contentWidth = () => {
+    const cells = Array.from($title.children).filter((c) => c.getBoundingClientRect().width > 0);
+    const span = cells.length
+      ? cells[cells.length - 1].getBoundingClientRect().right - cells[0].getBoundingClientRect().left : 0;
+    return Math.max($title.scrollWidth, span);
+  };
+  const fits = () =>
+    contentWidth() <= inner - 2 * Math.max(widthOf("header-nav"), widthOf("header-actions")) - 2 * gap + 0.5;
+  bar.classList.remove("tight");
+  $title.classList.remove("compact");
+  if (!fits()) {
+    $title.classList.add("compact");
+    if (!fits()) {
+      bar.classList.add("tight");
+      // The tighter bar may have room for the full title after all — icons for tabs lose less than a short title.
+      $title.classList.remove("compact");
+      if (!fits()) $title.classList.add("compact");
+    }
+  }
+  // A tab whose label is hidden shows its name on hover; one whose label is visible needs no second copy of it.
+  for (const tab of bar.querySelectorAll(".header-nav-link")) {
+    const label = tab.querySelector(".header-nav-label");
+    if (!label) continue;
+    if (label.getBoundingClientRect().width <= 1) tab.setAttribute("title", label.textContent ?? "");
+    else tab.removeAttribute("title");
   }
 }
 // ── END BOOK_LIST_LINK ──
@@ -2017,5 +2059,5 @@ export {
   renderBookList, renderChapterList, renderChapter, renderPrologue,
   renderLoading, renderBibleFailure,
   appendVerses, appendVersesWithAids,
-  LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
+  LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, applyTitleCompactness, renderLiturgicalFailure, renderLiturgicalLoadFailure,
 };

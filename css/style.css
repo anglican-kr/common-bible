@@ -2038,13 +2038,24 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
 }
 
 /* ── Search Bar (Desktop inline) ── */
-/* The width follows the window so the three cells of the top bar fit on a narrow desktop (ADR-043 §8). It does
-   not grow on focus: the bar's side cells share the leftover width, so a wider field would push the title. The
-   floor is in px: a rem floor grows with the font-size setting and, on a narrow window, makes the right cell so
-   much wider than the left one that the title leaves the centre. */
+/* The width follows the window so the three cells of the top bar fit on a narrow desktop (ADR-043 §8). On
+   focus the field widens to the left, over the title, with a negative margin of the same amount: its place in
+   the bar keeps the resting width, so the side cells and the centred title do not move, and there is room to
+   type a query like 「사랑 in:요한」 beside the clear and history buttons. */
 #search-bar {
+  --search-w: min(24vw, 18rem);
   position: relative;
-  width: clamp(140px, 24vw, 18rem);
+  width: var(--search-w);
+  transition: width var(--duration-base) ease, margin-inline-start var(--duration-base) ease;
+}
+#search-bar:focus-within {
+  --search-focus-w: max(var(--search-w), min(22rem, 50vw));
+  width: var(--search-focus-w);
+  margin-inline-start: calc(var(--search-w) - var(--search-focus-w));
+  z-index: 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  #search-bar { transition: none; }
 }
 
 #search-input {
@@ -2171,6 +2182,9 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
 /* Header bar becomes a flex row so tokens sit inline with the input; the
    toggle/clear/history stay position:absolute (out of flow), unaffected. */
 #search-bar { display: flex; align-items: center; }
+/* The funnel keeps its width when the top bar narrows the field (ADR-043 §8): the zone may give up its chips to
+   scrolling, but not the button that opens the book picker. The input takes the shrinking instead. */
+#search-bar .token-zone { min-width: 2.05rem; }
 #search-bar #search-input { flex: 1 1 auto; width: auto; min-width: 4rem; }
 
 /* Funnel (book picker) — leading icon button inside the field. */
@@ -5429,48 +5443,94 @@ body.tabbar-searching #search-inpage-bar { display: none; }
     padding: var(--space-2) var(--space-6);
     border-bottom: 1px solid var(--border);
   }
-  /* The hairline is the header's own border here: a generated box would be a fourth grid cell. */
+  /* The hairline is the header's own border here: a generated box would be a fourth grid cell. It is drawn on the
+     book list too, where the mobile header drops its hairline above the division tabs (ADR-024): a bar across
+     the whole window needs its edge on every screen (ADR-043 §1). */
   #app-header::after { display: none; }
   #sticky-group:has(#division-tabs-slot:not(:empty)) #app-header {
     margin-bottom: var(--space-3);
   }
   #header-nav { justify-self: start; }
   #header-actions { justify-self: end; }
+  /* The title cell: one line, centred, as wide as its content. The buttons of the title row stand in the line
+     beside the text (the bookmark reading view's way back before it; the chapter bookmark button, the bookmark
+     view's actions and its select-all button after it) — placed absolutely at the row's ends, as on mobile, they
+     would sit on top of the text now that the row is no wider than the text. */
   #page-title {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-1);
+    display: block;
     min-width: 0;
     margin: 0;
+    text-align: center;
     white-space: nowrap;
   }
-  /* The title cell is as wide as its content, so the buttons of the title row stand in the flow beside the text
-     instead of at the row's ends: the bookmark reading view's way back before the title, the chapter bookmark
-     button after it. Absolutely placed they would sit on top of the text. */
   #page-title > .title-back-btn,
-  #page-title > .title-bookmark-btn {
+  #page-title > .title-bookmark-btn,
+  #page-title > .title-actions,
+  #page-title > .bm-select-allbtn {
     position: static;
     transform: none;
-    flex: none;
+    vertical-align: middle;
+  }
+  #page-title > .title-back-btn,
+  #page-title > .title-bookmark-btn,
+  #page-title > .title-actions { display: inline-flex; }
+  #page-title > .title-back-btn { margin-inline-end: var(--space-1); }
+  #page-title > .title-bookmark-btn,
+  #page-title > .title-actions,
+  #page-title > .bm-select-allbtn { margin-inline-start: var(--space-1); }
+  /* A title that still does not fit after views.js fitTopBar has shortened what it can (a long search query, a
+     bookmark folder's name) is cut with an ellipsis instead of running over the tabs and the search field. Not
+     where the chapter picker hangs from the title (it would be clipped; those titles have a short form) and not
+     the date row (its focus rings would be clipped; fitTopBar makes room for it). The padding keeps the focus
+     rings of the buttons inside the clip. */
+  #page-title:not(:has(> .chapter-popover, > .lect-bar-mid)) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 3px var(--space-1);
+    margin-block: -3px;
   }
   /* 캘린더와 전례독서: ‹ 글자 › 오늘 [보기 전환] 이 한 덩어리로 가운데에 온다(「오늘」은 › 오른쪽, 사용자 결정 2026-11-14).
-     lectionary.js commitDateBar 가 데스크톱에서는 「오늘」을 오른쪽 칸에 넣어 왼쪽 칸이 빈다. 폭을 재는 컨테이너
-     (container-type)는 폭이 내용에 따르는 이 칸에서는 폭을 0으로 만들므로 끈다. */
+     lectionary.js placeToday 가 데스크톱에서는 「오늘」을 오른쪽 칸에 넣어 왼쪽 칸이 빈다. 폭을 재는 컨테이너
+     (container-type)는 폭이 내용에 따르는 이 칸에서는 폭을 0으로 만들므로 끈다. 그래서 달 이름을 「2027.12」로 줄이는
+     컨테이너 규칙이 여기서는 적용되지 않고, 들어가지 않을 때 views.js fitTopBar 가 붙이는 .compact 가 같은 일을 한다. */
   #page-title:has(> .lect-bar-mid) {
     display: flex;
+    justify-content: center;
     container-type: normal;
   }
+  #page-title.compact .lect-date { min-width: 5rem; }
+  #page-title.compact .cal-month-full {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+  #page-title.compact .cal-month-short { display: inline; }
   .lect-bar-start:empty { display: none; }
   .lect-bar-end {
     align-items: center;
     gap: var(--space-1);
     margin-inline-start: var(--space-2);
   }
+  /* The bar made tighter by views.js fitTopBar when the title cell does not fit: the tabs keep only their icons
+     (the label stays for screen readers; fitTopBar gives the tab a title for the hover name) and the search
+     field narrows. Below 900px the tabs are icons from the start (next block), without waiting for a measure. */
+  #app-header.tight .header-nav-link { padding: 0 var(--space-2); }
+  #app-header.tight .header-nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  #app-header.tight #search-bar { --search-w: min(24vw, 9rem); }
 }
 
-/* Narrow desktop (ADR-043 §8): the tabs keep only their icons; the label stays for screen readers and the link's
-   title attribute shows the name on hover. */
+/* Narrow desktop (ADR-043 §8): the tabs keep only their icons; the label stays for screen readers and
+   views.js fitTopBar gives the tab a title for the hover name. */
 @media (min-width: 769px) and (max-width: 899px) and (pointer: fine) {
   .header-nav-link { padding: 0 var(--space-2); }
   .header-nav-label {

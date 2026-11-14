@@ -242,6 +242,9 @@ function loadTitle() {
     Object, Array, String, Number, Boolean, JSON, console, Error,
     document, $title,
     announce: (msg) => { announceCalls.push(msg); },
+    // setTitle fits the desktop top bar around every title (views.js fitTopBar); it measures rendered geometry,
+    // which this DOM stub does not have.
+    applyTitleCompactness: () => {},
   };
   vm.createContext(ctx);
   vm.runInContext(EL_SHIM + extractBlock("TITLE"), ctx, {

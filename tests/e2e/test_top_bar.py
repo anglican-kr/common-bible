@@ -11,6 +11,7 @@
   ⑦ 모바일 — 탭과 검색창, 설정 단추는 숨고 탭 바가 맡는다
   ⑧ 「북마크」 탭 — 어느 화면에서나 패널을 열고, 장 밖에서는 「이 장 저장」과 「절 선택」이 꺼져 있다
   ⑨ 창 폭이 바뀔 때 — 넓히면 전체 제목으로 돌아오고, 「오늘」은 배치를 따라 칸을 옮긴다. 제목 줄의 단추는 글자를 덮지 않는다
+  ⑩ 가운데 칸이 들어가지 않을 때 — 탭을 아이콘으로, 달 이름을 짧게, 긴 제목은 말줄임표로. 검색창은 누르면 제목 위로 넓어진다
 
 실데이터(data/ 서브모듈)가 필요하다 — 로컬 전용(CLAUDE.md 「테스트」).
 """
@@ -160,6 +161,8 @@ def test_wide_desktop_keeps_the_full_title_and_labels(desktop_context):
     page.wait_for_timeout(300)
     assert not page.evaluate("() => document.getElementById('page-title').classList.contains('compact')")
     assert _box(page, "#header-home .header-nav-label")["width"] > 10
+    # 글자가 보이는 탭에는 같은 이름의 도움말을 한 번 더 달지 않는다
+    assert page.evaluate("() => [...document.querySelectorAll('.header-nav-link')].map((a) => a.getAttribute('title'))") == [None, None, None]
 
 
 def test_top_bar_controls_are_hidden_on_mobile(mobile_context):
@@ -285,3 +288,133 @@ def test_bookmark_tab_takes_focus_back_even_when_the_click_gave_it_none(desktop_
     page.keyboard.press("Escape")
     page.wait_for_selector("#bookmark-drawer", state="hidden")
     assert page.evaluate("() => document.activeElement.id") == "header-bookmarks"
+
+
+# ── ⑩ 가운데 칸이 들어가지 않을 때 (PR #564 리뷰 2회차) ──
+
+def _sized(browser, width, font=18):
+    ctx = browser.new_context(viewport={"width": width, "height": 700})
+    ctx.add_init_script(CLEAR_APP_STORAGE + f"localStorage.setItem('bible-font-size', '{font}');")
+    return ctx
+
+
+def _cells(page):
+    """세 칸의 자리와 가운데 칸 안에 그려진 것의 자리. 날짜 이동 줄은 가운데 맞춤이라 칸을 넘치면 양쪽으로 나온다."""
+    return page.evaluate("""() => {
+        const box = (e) => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right }; };
+        const title = document.getElementById('page-title');
+        const drawn = [...title.children].filter((c) => c.getBoundingClientRect().width > 0).map(box);
+        return { nav: box(document.getElementById('header-nav')), title: box(title),
+                 actions: box(document.getElementById('header-actions')),
+                 drawnLeft: drawn.length ? Math.min(...drawn.map((d) => d.left)) : null,
+                 drawnRight: drawn.length ? Math.max(...drawn.map((d) => d.right)) : null,
+                 width: window.innerWidth, scrollWidth: document.documentElement.scrollWidth };
+    }""")
+
+
+@pytest.mark.parametrize("width, font, path, ready", [
+    (900, 18, "calendar/2027-12", ".cal-grid"), (900, 20, "calendar/2027-12", ".cal-grid"),
+    (1024, 24, "calendar/2027-12", ".cal-grid"), (900, 20, "lectionary/2026-12-24", ".lect-day"),
+])
+def test_date_row_stays_between_the_tabs_and_the_search_field(browser, width, font, path, ready):
+    """⑩ 캘린더와 전례독서의 날짜 이동 줄이 탭과 검색창을 덮지 않고 창의 가운데에 있다. 들어가지 않으면 탭이 아이콘만 남고
+    검색창이 좁아지며, 그래도 모자라면 달 이름이 「2027.12」가 된다."""
+    ctx = _sized(browser, width, font)
+    try:
+        page = ctx.new_page()
+        page.goto(f"{BASE}/{path}")
+        page.wait_for_selector(ready, timeout=20_000)
+        page.wait_for_timeout(600)   # 웹 글꼴이 온 뒤 다시 잰다
+        c = _cells(page)
+        assert c["nav"]["right"] <= c["drawnLeft"] + 0.5 and c["drawnRight"] <= c["actions"]["left"] + 0.5, c
+        assert abs((c["drawnLeft"] + c["drawnRight"]) / 2 - width / 2) <= 1, c
+        assert c["scrollWidth"] == width, c
+    finally:
+        ctx.close()
+
+
+def test_month_name_shortens_only_when_the_tighter_bar_is_not_enough(browser):
+    """⑩ 폭 900px의 기본 글자에서는 탭을 아이콘으로 바꾸는 것으로 충분해 달 이름이 그대로다. 글자 24px에서는 「2027.12」가 된다."""
+    month = "() => getComputedStyle(document.querySelector('#page-title .cal-month-short')).display"
+    for font, short in ((18, "none"), (24, "inline")):
+        ctx = _sized(browser, 900, font)
+        try:
+            page = ctx.new_page()
+            page.goto(f"{BASE}/calendar/2027-12")
+            page.wait_for_selector(".cal-grid", timeout=20_000)
+            page.wait_for_timeout(600)
+            assert page.evaluate("() => document.getElementById('app-header').classList.contains('tight')"), font
+            assert page.evaluate(month) == short, font
+        finally:
+            ctx.close()
+
+
+def test_long_title_without_a_short_form_is_cut_instead_of_covering_the_bar(browser):
+    """⑩ 긴 검색어의 제목은 말줄임표로 자른다 — 그전에는 탭과 검색창 위로 넘쳤다."""
+    ctx = _sized(browser, 1000)
+    try:
+        page = ctx.new_page()
+        page.goto(f"{BASE}/search?q=" + "%EA%B0%80" * 40)
+        page.wait_for_function("() => document.getElementById('page-title').textContent.includes('검색')")
+        page.wait_for_timeout(600)
+        c = _cells(page)
+        assert c["nav"]["right"] <= c["title"]["left"] and c["title"]["right"] <= c["actions"]["left"], c
+        assert page.evaluate("() => { const t = document.getElementById('page-title'); return t.scrollWidth > t.clientWidth; }")
+        assert page.evaluate("() => getComputedStyle(document.getElementById('page-title')).textOverflow") == "ellipsis"
+        assert c["scrollWidth"] == 1000, c
+        # 좁아진 검색창 안에서도 책 선택 단추(깔때기)는 잘리지 않는다
+        funnel, zone = _box(page, "#search-bar .token-funnel"), _box(page, "#search-bar .token-zone")
+        assert zone["left"] <= funnel["left"] and funnel["right"] <= zone["right"] + 0.5, (funnel, zone)
+    finally:
+        ctx.close()
+
+
+def test_search_field_widens_over_the_title_without_moving_it(browser):
+    """⑩ 좁은 창에서 검색창을 누르면 왼쪽으로 넓어져 「사랑 in:요한」을 칠 자리가 생긴다. 상단 바에서 차지하는 자리는 그대로라
+    제목이 밀리지 않는다."""
+    ctx = _sized(browser, 800)
+    try:
+        page = ctx.new_page()
+        _open_chapter(page)
+        page.wait_for_timeout(400)
+        room = """() => { const i = document.getElementById('search-input'); const s = getComputedStyle(i);
+            return i.getBoundingClientRect().width - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight); }"""
+        before = _cells(page)
+        page.locator("#search-input").click()
+        page.keyboard.type("사랑 in:요한")
+        page.wait_for_timeout(500)   # 넓어지는 전환
+        after = _cells(page)
+        assert page.evaluate(room) >= 200
+        assert after["title"] == before["title"] and after["actions"] == before["actions"], (before, after)
+        assert _box(page, "#search-bar")["right"] <= 800
+    finally:
+        ctx.close()
+
+
+def test_bookmark_view_actions_stand_beside_the_title_after_widening(browser):
+    """⑩ 좁은 창에서 연 북마크 전체 화면을 넓혀도 새 폴더와 더 보기 단추가 제목 글자를 덮지 않는다."""
+    ctx = _sized(browser, 600)
+    try:
+        page = ctx.new_page()
+        page.goto(f"{BASE}/bookmarks")
+        page.wait_for_selector("#page-title .title-actions", timeout=20_000)
+        page.set_viewport_size({"width": 1100, "height": 700})
+        page.wait_for_timeout(400)
+        text_right = page.evaluate("""() => { const t = document.getElementById('page-title');
+            const n = [...t.childNodes].find((c) => c.nodeType === 3 && c.data.trim());
+            const r = document.createRange(); r.selectNodeContents(n); return r.getBoundingClientRect().right; }""")
+        assert text_right <= _box(page, "#page-title .title-actions")["left"] + 0.5
+    finally:
+        ctx.close()
+
+
+def test_today_keeps_the_focus_when_it_moves(desktop_context):
+    """⑩ 「오늘」에 포커스가 있을 때 창 폭이 경계를 넘어 칸을 옮겨도 포커스가 남는다."""
+    page = desktop_context.new_page()
+    page.goto(f"{BASE}/calendar/2026-12")
+    page.wait_for_selector(".cal-grid", timeout=20_000)
+    page.locator("#page-title .lect-today").focus()
+    for width, cell in ((600, ".lect-bar-start"), (1280, ".lect-bar-end")):
+        page.set_viewport_size({"width": width, "height": 700})
+        page.wait_for_function(f"() => document.querySelector('#page-title {cell} .lect-today')")
+        assert page.evaluate("() => document.activeElement.classList.contains('lect-today')"), width
