@@ -7,7 +7,7 @@ title: "docs: 전례독서 검색 색인의 새 구조를 ADR-037에"
 
 ## 요약
 
-전례독서 검색 색인 `lectionary/search-lectionary.json`의 새 구조를 ADR-037 §5에 확정했다. 데이터 저장소가 색인을 고치기 전에 결정을 먼저 적는다는 규칙(CLAUDE.md 「ADR 워크플로우」)에 따른 것이다. 색인은 독서 세트의 이름 목록(`names`)에서 전례일 목록(`obs`), 독서 세트(`sets`), 독서 자리를 단 구간(`cov`), 성인(`saints`), 비슷한 말 표(`synonyms`)로 바뀐다. 구현은 데이터 저장소 PR이 한다.
+전례독서 검색 색인 `lectionary/search-lectionary.json`의 새 구조를 ADR-037 §5에 확정했다. 데이터 저장소가 색인을 고치기 전에 결정을 먼저 적는다는 규칙(CLAUDE.md 「ADR 워크플로우」)에 따른 것이다. 색인은 독서 세트의 이름 목록(`names`)에서 전례일 목록(`obs`), 독서 세트(`sets`), 독서 자리를 단 구간(`cov`), 성인(`saints`), 비슷한 말 표(`synonyms`)로 바뀐다. 구현은 데이터 저장소 PR(anglican-kr/common-bible-data#80)이 한다.
 
 ## 확정 · 근거
 
