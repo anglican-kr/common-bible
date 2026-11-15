@@ -2,15 +2,18 @@
 """2027 전례독서 책자(pypdf 텍스트, extract.py 산출) → 날짜별 감사성찬례 독서 JSON.
 인자: <pdf 텍스트> <data/books.json> <출력 json> <data/lectionary/eucharist-readings.json>.
 
-2027 책자(검토용)의 형식에 맞춘 파서다 — 월별 표(감사성찬례 · 아침기도 · 저녁기도 세 칸)가 행 단위로 섞여 나오고,
-날짜 줄은 「다음에 올 날짜 + 요일 글자」로 검증한다(요일 글자만 있는 줄도). 색은 글리프(֣ 녹 · ߔ 백 · ੗ 자 · ഘ 홍),
-성탄 독서 셋은 12/26 행 뒤에 찍히며, 「또는」은 줄 끝에도 오고 「또\n는」 「요\n한」처럼 낱말이 쪼개지기도 한다.
-쪼개진 낱말은 `rejoin_splits`가 분류 전에 붙인다. 책 이름 뒤에 숫자가 와야 독서 줄이다(「사도 안드레아」 「성모 방문」은 이름). 다른 해의 책자는 형식이 다르므로 이 파서를
-그대로 쓰지 말고 START · 형식 판정을 고쳐 쓴다(2024-2026 책자는 「[백]」 같은 색 표지에 펼침면 순서가 섞인다)."""
+「2027 전례독서」 책자 최종본(64쪽, 2026-11-14 조판)의 형식에 맞춘 파서다. 감사성찬례, 아침기도, 저녁기도 세 칸이
+날마다 차례로 나온다. 날짜 줄은 「30 월 [홍] 이름」이고, 주일은 숫자만 있는 줄 다음에 「대림 1주일 [자] 첫 독서」가 온다.
+성주간 평일은 「22 성주간」 다음 줄이 「월요일 [홍]」이다. 날짜 줄은 「다음에 올 날짜 + 요일」로 검증한다(주일은 다음 줄이
+독서가 아니어야 한다). 색은 글자 표기 [녹] [백] [자] [홍]이고 「[자/백]」처럼 둘이 오기도 한다. 성탄밤은 12.24 칸에
+「[성탄밤 성찬례]」로 찍혀 12.25로 옮겨 읽는다. 성 토요일은 「[감사성찬례]」 다음 줄 「없음」이다. 「또는」은 줄 끝에도 오고
+「또\n는」 「요\n한」처럼 낱말이 쪼개지기도 한다. 쪼개진 낱말은 `rejoin_splits`가 분류 전에 붙인다. 책 이름 뒤에 숫자가 와야
+독서 줄이다(「사도 안드레아」 「성모 방문」은 이름). 2026-10-12의 검토본은 색을 글리프로 찍은 다른 형식이었다(이 파일의 git 이력).
+다른 해의 책자는 형식이 다르므로 START와 날짜 줄 판정을 고쳐 쓴다."""
 import re, json, sys, datetime as dt
 SRC, BOOKS_JSON, DST, READINGS_JSON = sys.argv[1:5]
-GLYPH = {"֣": "green", "ߔ": "white", "੗": "violet", "ഘ": "red"}
-GL = "".join(GLYPH)
+COLOR = {"녹": "green", "백": "white", "자": "violet", "홍": "red"}
+COLOR_MARK = re.compile(r"\s*\[([녹백자홍](?:/[녹백자홍])*)\]\s*")
 SUP = str.maketrans("¹²³⁴⁵⁶⁷⁸⁹⁰⁻", "1234567890-")
 books = json.load(open(BOOKS_JSON, encoding="utf8"))
 BOOKS = {b["short_name_ko"] for b in books} | {"시편", "이사야", "창조송가", "성모송가", "성모", "즈가리야"}
@@ -19,52 +22,6 @@ for e in json.load(open(READINGS_JSON, encoding="utf8"))["entries"]:
         m0 = re.match(r"^\d?[가-힣]+", sl["label"])
         if m0: BOOKS.add(m0.group(0))
 WD = "월화수목금토일"
-
-lines = [l.rstrip("\n") for l in open(SRC, encoding="utf8")]
-def skip(l):
-    return (not l) or l.startswith("===== PAGE") or re.fullmatch(r"\d{1,2}월( / \d{1,2}월)? 감사성찬례 아침기도 저녁기도", l)
-def is_footer(l):
-    return re.fullmatch(r"\d{1,2}월", l) is not None
-def day_line(l):
-    return re.fullmatch(r"(\d{1,2})\s*([<>" + GL + r"\s]*)", l)
-
-START = dt.date(2026, 11, 29)   # 책자 첫 행(대림 1주일) — 해마다 바꾼다
-expected = START
-blocks = []
-cur = None
-redirect = None
-n = len(lines)
-for i, raw in enumerate(lines):
-    l = raw.strip()
-    if skip(l):
-        continue
-    if is_footer(l):
-        if cur is not None: (redirect if redirect is not None else cur)["lines"].append("<<FOOTER>>")
-        continue
-    m = day_line(l)
-    if m and int(m.group(1)) == expected.day:
-        nxt = ""
-        for j in range(i + 1, min(i + 6, n)):
-            if not skip(lines[j].strip()) and not is_footer(lines[j].strip()):
-                nxt = lines[j].strip(); break
-        wd = expected.weekday()
-        ok = (wd == 6 and not re.match(r"^[월화수목금토]( |$)", nxt)) or (wd < 6 and re.match("^" + WD[wd] + "( |$)", nxt) is not None)
-        if ok:
-            cur = {"date": expected.isoformat(), "weekday": WD[wd], "lines": [], "glyphs": [c for c in m.group(2) if c in GLYPH]}
-            blocks.append(cur)
-            redirect = None
-            expected += dt.timedelta(days=1)
-            continue
-    if cur is not None:
-        if l.startswith("[성탄밤]") and not cur["date"].endswith("-12-25"):
-            target = next((x for x in blocks if x["date"] == cur["date"][:4] + "-12-25"), None)
-            if target is not None:
-                redirect = target
-        (redirect if redirect is not None else cur)["lines"].append(l)
-
-for b in blocks:
-    if len(b["lines"]) > 70: print("LONG BLOCK", b["date"], len(b["lines"]), b["lines"][:3], file=sys.stderr)
-print(f"blocks {len(blocks)}  first {blocks[0]['date']}  last {blocks[-1]['date']}  expected-next {expected}", file=sys.stderr)
 
 GOSPEL = re.compile(r"^(마태|마르|루가|요한)\s*\d")
 def first_token(l):
@@ -88,8 +45,95 @@ def rejoin_splits(lines):
         out.append(cur); i += 1
     return out
 
+lines = [l.rstrip("\n").strip() for l in open(SRC, encoding="utf8")]
+def skip(l):
+    """쪽 표식, 조판 파일 이름, 쪽 번호, 머리의 달 이름과 칸 제목."""
+    return ((not l) or l.startswith("===== PAGE") or "indd" in l or re.fullmatch(r"(-\s*\d+\s*-\s*)+", l) is not None
+            or re.fullmatch(r"\d{1,2}월", l) is not None or re.search(r"감사성찬례 아침기도 저녁기도$", l) is not None)
+lines = [l for l in lines if not skip(l)]
+
+def split_colors(l):
+    """색 표기를 떼어 (색 집합, 줄들)로. 「대림 1주일 [자] 이사 63:19하-64:8」처럼 색 뒤에 첫 독서가 붙은 줄은 둘로 나눈다."""
+    colors = {COLOR[c] for m in COLOR_MARK.finditer(l) for c in m.group(1).split("/")}
+    if not colors:
+        return set(), [l]
+    head, *rest = COLOR_MARK.split(l, maxsplit=1)
+    tail = rest[-1].strip() if rest else ""
+    if tail and is_book_line(tail):
+        return colors, [x for x in (head.strip(),) if x] + [tail]
+    return colors, [COLOR_MARK.sub(" ", l).strip()]
+
+START = dt.date(2026, 11, 29)   # 책자 첫 행(대림 1주일) — 해마다 바꾼다
+expected = START
+blocks, cur, redirect, held_xmas = [], None, None, []
+n = len(lines)
+i = 0
+while i < n:
+    l = lines[i]
+    nxt = lines[i + 1] if i + 1 < n else ""
+    if re.fullmatch(r"성인\s*공통", l) and expected.year > START.year + 1:
+        break   # 12.31 뒤의 「성인 공통」 부록은 날짜 칸이 아니다
+    m = re.fullmatch(r"(\d{1,2})(?:\s+(.*))?", l)
+    head = None
+    if m and int(m.group(1)) == expected.day:
+        rest = (m.group(2) or "").strip()
+        wd = expected.weekday()
+        if rest == "":
+            if wd == 6 and not is_book_line(nxt) and not re.match(r"^[(\d]", nxt):
+                head = []
+        elif rest.startswith("성주간"):
+            if wd < 6 and nxt.startswith(WD[wd] + "요일"):
+                head = [rest, nxt[3:].strip()]
+                i += 1
+        else:
+            wm = re.match(r"^([월화수목금토])(?:\s+(.*))?$", rest)
+            if wm and wd < 6 and wm.group(1) == WD[wd]:
+                head = [wm.group(2).strip()] if wm.group(2) else []
+    if head is not None:
+        cur = {"date": expected.isoformat(), "weekday": WD[expected.weekday()], "lines": [], "colors": set()}
+        blocks.append(cur)
+        redirect = None
+        expected += dt.timedelta(days=1)
+        for h in head:
+            cs, parts = split_colors(h)
+            cur["colors"] |= cs
+            cur["lines"].extend(parts)
+        i += 1
+        continue
+    if cur is not None:
+        if l == "[감사성찬례]" and nxt == "없음":
+            cur["lines"].append("감사성찬례 없음")
+            i += 2
+            continue
+        if l.startswith("[성탄밤 성찬례]"):
+            # 성탄밤은 12.24 칸에 찍히지만 12.25의 감사성찬례다 — 12.25 블록이 생기면 그 앞에 넣는다
+            redirect = held_xmas = []
+            cur.setdefault("xmas_eve", held_xmas)
+            l = "[성탄밤]"
+        cs, parts = split_colors(l)
+        target = redirect if redirect is not None else cur["lines"]
+        if redirect is None:
+            cur["colors"] |= cs
+        target.extend(parts)
+        if re.match(r"^루가\s+2:1-14", l) and redirect is not None:
+            nxt2 = lines[i + 1] if i + 1 < n else ""
+            if re.fullmatch(r"\(\d+-\d+\)", nxt2):   # 「루가 2:1-14」 다음 줄 「(15-20)」까지가 성탄밤이다
+                redirect.append(nxt2)
+                i += 1
+            redirect = None
+    i += 1
+for b in blocks:
+    eve = b.pop("xmas_eve", None)
+    if eve:
+        t = next((x for x in blocks if x["date"] == b["date"][:4] + "-12-25"), None)
+        if t is not None:
+            t["lines"] = eve + t["lines"]
+for b in blocks:
+    if len(b["lines"]) > 70: print("LONG BLOCK", b["date"], len(b["lines"]), b["lines"][:3], file=sys.stderr)
+print(f"blocks {len(blocks)}  first {blocks[0]['date']}  last {blocks[-1]['date']}  expected-next {expected}", file=sys.stderr)
+
 def process(b):
-    colors = set(GLYPH[c] for c in b["glyphs"])
+    colors = set(b["colors"])
     tokens = []      # (kind, text) — kind ∈ ref · name · note
     flags = []
     no_euch = False
@@ -98,8 +142,7 @@ def process(b):
     for l in rejoin_splits(b["lines"]):
         if l == "<<FOOTER>>":
             after_footer = True; continue
-        colors |= {GLYPH[c] for c in l if c in GLYPH}
-        l = re.sub("[<>" + GL + "]", "", l)
+        l = re.sub("[<>]", "", l)
         # 위첨자는 하위 절 번호다(에스델 그리스어 부분 「에스 4:17¹²⁻¹⁶, 17²³⁻²⁵」) — 엔진 라벨처럼 괄호에 보통 숫자로 적는다
         # (「4:17(12-16)」). 지우면 「에스 4:17, 17」 이 된다. 「ᦨ」 는 「사도 장(ᦨ) 야고보」 에 잘못 매핑된 글리프라 지운다
         l = re.sub(r"[¹²³⁴⁵⁶⁷⁸⁹⁰⁻]+", lambda m: "(" + m.group(0).translate(SUP) + ")", l)
