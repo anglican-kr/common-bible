@@ -1,4 +1,5 @@
 ---
+pr: 566
 date: 2026-11-15
 branch: claude/quirky-carson-njp7up
 title: "docs: 전례독서 검색 설계 초안"
