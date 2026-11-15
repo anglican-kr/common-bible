@@ -125,6 +125,7 @@ ADR-037의 데이터·엔진 위에 만드는 세 UI: ① 교회력 캘린더 �
 - **검색 화면 상단에 탭**: `[성서 본문 | 전례독서]`. URL `?mode=lectionary`(기본 bible) — ADR-031 탭 복원·공유 일관성을 위해 상태를 URL에 인코딩(ADR-033과 동일 원칙). `search.js renderSearchView/renderSearchResults`에 mode 분기; lectionary 모드에서는 책 픽커 대신 안내 placeholder("교회력일 이름 또는 창세 1:1").
 - **워커 확장**(`search-worker.js`): `{type:"search", mode:"lectionary", q}` — ① 장절 질의면 기존 `tryVerseRef`(보강된 별칭 포함)로 파싱 후 `search-lectionary.json`의 `cov` 스캔 → 포함하는 교회력일 목록, ② 아니면 `names` 부분 문자열 매치(별칭 포함). 결과 카드 = 교회력일 라벨 + 매치 슬롯 표시 + `/lectionary/d/<slug>` 링크.
 - 기존 성서 검색 경로(청크·RLE·`in:` 토큰)는 무변경.
+- 세부 설계 초안은 `docs/design/lectionary-search.md`에 있다(2026-11-15). 초안의 미결을 정하면 이 절과 ADR-037 §5를 그에 맞춰 고친다.
 
 ### 5. SW·캐시
 
