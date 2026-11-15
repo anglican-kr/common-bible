@@ -10,7 +10,7 @@
 | Drive 동기화, OAuth | `topics/sync.md` | `archive/audit/`(보안 감사), `archive/research/2026-10-device-clock-sync/`(기기 시계와 동기화 조사, 2026-10) |
 | 라우팅, 뷰, 탭 바, 오버레이 | `topics/routing.md` | |
 | 서비스 워커, 캐시, 릴리스 | `topics/cache-release.md` | `scripts/release.py` 머리 주석, `tools/csp/README.md`(릴리스 전 CSP 점검) |
-| 검색 | `topics/search.md` | `design/lectionary-search.md`(전례독서 검색 설계 초안, ADR-038 A4) |
+| 검색 | `topics/search.md` | `design/lectionary-search.md`(전례독서 검색 설계 초안, ADR-044) |
 | 오디오 | `topics/audio.md` | |
 | 설정, 디자인 시스템, CSS | `topics/design-system.md` | `DESIGN.md`(루트, 디자인의 권위) |
 | 본문 데이터, 마크업, 인용과 주석 | `topics/bible-text.md` | `common-bible-data` 저장소 README(서브모듈 `data/`) |
