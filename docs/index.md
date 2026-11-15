@@ -10,7 +10,7 @@
 | Drive 동기화, OAuth | `topics/sync.md` | `archive/audit/`(보안 감사), `archive/research/2026-10-device-clock-sync/`(기기 시계와 동기화 조사, 2026-10) |
 | 라우팅, 뷰, 탭 바, 오버레이 | `topics/routing.md` | |
 | 서비스 워커, 캐시, 릴리스 | `topics/cache-release.md` | `scripts/release.py` 머리 주석, `tools/csp/README.md`(릴리스 전 CSP 점검) |
-| 검색 | `topics/search.md` | |
+| 검색 | `topics/search.md` | `design/lectionary-search.md`(전례독서 검색 설계 초안, ADR-044) |
 | 오디오 | `topics/audio.md` | |
 | 설정, 디자인 시스템, CSS | `topics/design-system.md` | `DESIGN.md`(루트, 디자인의 권위) |
 | 본문 데이터, 마크업, 인용과 주석 | `topics/bible-text.md` | `common-bible-data` 저장소 README(서브모듈 `data/`) |
@@ -31,7 +31,7 @@
 - `workflow.md`: 커밋, PR, 리뷰, 릴리스의 세부와 스크립트, 도구, 훅, CI, 그리고 작업 중 함정. 작업 방식 교정(pitfalls §17, §26, §30)이 여기 있다.
 - `architecture.md`: 제약 4가지, 빌드와 런타임 모듈 지도, 영속 데이터, 보안 모델이 있다. 부록 A는 **ADR 인덱스**, 부록 B는 파일 빠른 참조다.
 - `decisions/NNN-*.md`: ADR. 상태 필드가 있고 본문은 현재 결론이다. 같은 방향 안에서 결정을 고치면 제자리를 고치고, 버린 선택지는 「검토한 대안」에 날짜, 이유, 재검토 조건과 함께 남긴다. 방향이 바뀌면 새 ADR을 쓴다. 틀과 수명은 `writing.md` 「ADR의 틀」에 있다(개정 블록은 ADR 001-035에 남은 옛 형식이다). 새 결정은 다음 번호를 쓴다.
-- `design/`: 구현 설계서(현재 교회력 엔진 2종). 교회력 설계서는 장마다 파일을 두고(`design/liturgical-engine/`), `design/liturgical-engine.md`가 목차다. 교회력 설계서는 규칙의 기준이라 여기에 두고, 검토 문서는 체크하지 않은 항목이 모두 닫히면 `archive/design/`으로 옮긴다(검토 문서 §7).
+- `design/`: 구현 설계서. 교회력 엔진 2종(설계서와 검토 문서)과 전례독서 검색 설계 초안(`design/lectionary-search.md`)이 있다. 교회력 설계서는 장마다 파일을 두고(`design/liturgical-engine/`), `design/liturgical-engine.md`가 목차다. 교회력 설계서는 규칙의 기준이라 여기에 두고, 검토 문서는 체크하지 않은 항목이 모두 닫히면 `archive/design/`으로 옮긴다(검토 문서 §7).
 - `reference/`: 기도서 등 외부 원문을 옮겨 적은 문서. 해석하지 않고 옮긴 것이라, 알고리즘을 두고 판단이 서로 다를 때 마지막 기준이 된다. 교회력 문서가 「기도서 원문 143행」처럼 적는 행 번호는 `reference/liturgical-calendar-rules.md` 파일의 줄 번호다.
 - `changes/`: 변경 원장. 변경 하나에 파일 하나이고, 2026-09-20부터 있다. PR 본문의 원본이다. 형식은 `changes/README.md`.
 - `archive/`: 완료된 기록과 특정 시점의 기록(design 변천 기록, audit 보안 감사 기록, research 조사 기록). 현행 정보가 아니다.
