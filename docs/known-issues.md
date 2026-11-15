@@ -136,9 +136,10 @@ ADR-038 §3의 렌더 기반이 복원하는 전례 표기는 계응 ◯(`.respo
 
 #354에서 `architecture.md`와 README, data 저장소 README를 현행화하며 찾았지만 그 PR의 범위 밖이라 넘긴 것이다. 고친 내용은 원장 `docs/changes/2026-10-17-sync-signout-inflight.md` 「갱신한 문서」와 data 저장소 PR #33에 있다.
 
-- §12.1 · §12.4 · §12.5 → [topics/platform.md](topics/platform.md)
+- §12.4 · §12.5 → [topics/platform.md](topics/platform.md)
 - §12.2 → [topics/bible-text.md](topics/bible-text.md)
 - §12.3 → [topics/liturgical.md](topics/liturgical.md)
+- **known-issues §12.1** ADR에 남아 있던 낡은 사실은 모두 고쳤다(해소 2026-11-15). ADR-022 머리의 주석 설정, ADR-013 상태의 테스트 건수, ADR-036의 「구현 현황」이다. ADR-036은 새 틀로 다시 쓰며 그 절을 덜어냈다.
 
 ---
 
