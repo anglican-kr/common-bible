@@ -645,13 +645,13 @@ test("buildLectionaryModel: 주일에 밀려서 기념만 하는 축일 — 이�
 });
 
 test("buildLectionaryModel: 평일에 밀려서 기념만 하는 축일 — 기본 독서의 본기도 뒤에 성인 본기도를 잇는다. 주일만 잇지 않는다(사용자 확인 2026-11-04)", () => {
-  // 12.28 이 주일이라 죄 없는 어린이들이 12.29(화)로 옮겨 오고, 그날의 토마스 베켓은 기념만 한다
-  const innocents = cand(obs("d1228-죄-없는-어린이들", "죄 없는 어린이들의 순교", { rank: "feast", precedence: 6, color: "red" }), "transferred_in", { from: "2026-12-28" });
+  // 12.28 이 주일이라 죄 없는 아기들이 12.29(화)로 옮겨 오고, 그날의 토마스 베켓은 기념만 한다
+  const innocents = cand(obs("d1228-죄-없는-아기들", "죄 없는 아기들의 순교", { rank: "feast", precedence: 6, color: "red" }), "transferred_in", { from: "2026-12-28" });
   const becket = cand(obs("d1229-토마스-베켓", "토마스 베켓", { rank: "minor_feast", precedence: 7, color: "red", sanctoral_class: "martyr" }), "commemorated");
   const grid = cand(obs("grid:christmas-x-weekday-tue", "성탄 8일 화요일", { rank: "feria", precedence: 8, color: "white" }));
   const coord = { season: "christmas", week: null, type: "weekday", weekday: "tue", year: "A" };
   const groupsOf = groupsOfFrom({ [innocents.observance.id]: [group("i", FOUR)], [grid.observance.id]: [group("g", FOUR)] });
-  const entries = [{ candidate: innocents, collects: [collect("i-c", "죄 없는 어린이들")] },
+  const entries = [{ candidate: innocents, collects: [collect("i-c", "죄 없는 아기들")] },
     { candidate: becket, collects: [collect("common:martyr-c1", "토마스 베켓을", { common: "martyr", ending: "B" })] },
     { candidate: grid, collects: [collect("g-c", "평일")] }];
   const q = { obs: null, track: null, set: null, collect: null };
@@ -1175,7 +1175,7 @@ test("dedicationFirst: 기본 독서가 주일, 대축일, 주요축일, 명절�
 });
 
 test("buildLectionaryModel: 평일의 소속교회 축성일 — 축성일이 먼저 열리고, 평일은 목록의 줄, 성인 본기도는 잇지 않으며, 제목의 교회는 축성일 줄에서 뺀다(사용자 결정 2026-11-05, 11-09)", () => {
-  const saint = cand(obs("d0421-안셀름", "안셀름(켄터베리 대주교, 1109년)", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "teacher" }));
+  const saint = cand(obs("d0421-안셀름", "안셀름(캔터베리 대주교, 1109년)", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "teacher" }));
   const grid = cand(obs("grid:easter-4-weekday-tue", "부활 4주 화요일", { rank: "feria", precedence: 8, color: "white" }));
   const r = resolvedOf("2026-04-21", [saint, grid], saint);   // 그날 색(녹색)과 달라 머리는 축성일의 백색이다
   const table = { "d0421-안셀름": [group("common:teacher-s1", FOUR, { common: "teacher" })], "grid:easter-4-weekday-tue": [group("g", FOUR)] };
@@ -1241,7 +1241,7 @@ test("buildLectionaryModel: 축성일 화면의 머리 색은 축성일의 백�
 
 test("buildLectionaryModel: 축성일이 먼저 열려도 그날의 기본 독서는 감추지 않는다 — 공통 독서뿐인 지정 전례일이 기본 독서인 날(PR #542 리뷰)", () => {
   // 평일 격자에 독서가 없어 공통 독서뿐인 성인 축일이 그날의 기본 독서다. 소속교회와 무관하면 목록에 감추는 후보가 아니다
-  const saint = cand(obs("d0421-안셀름", "안셀름(켄터베리 대주교, 1109년)", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "teacher" }));
+  const saint = cand(obs("d0421-안셀름", "안셀름(캔터베리 대주교, 1109년)", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "teacher" }));
   const grid = cand(obs("grid:easter-4-weekday-tue", "부활 4주 화요일", { rank: "feria", precedence: 8, color: "white" }));
   const r = resolvedOf("2026-04-21", [saint, grid], saint);
   const table = { "d0421-안셀름": [group("common:teacher-s1", FOUR, { common: "teacher" })] };
@@ -1255,14 +1255,14 @@ test("buildLectionaryModel: 축성일이 먼저 열려도 그날의 기본 독�
 test("buildLectionaryModel: 본기도 없이 그날 지키는 다른 전례일의 독서를 그대로 받는 후보는 이름 줄 — 빌려 준 쪽이 옮겨 갔거나 본기도가 없으면 목록에 남는다(사용자 결정 2026-11-07, PR #510 리뷰)", () => {
   const q = { obs: null, track: null, set: null, collect: null };
   const ids = (cs) => cs.map((c) => c.observance.id);
-  const mich = cand(obs("d0929-mich", "성 미가엘과 모든 천사들", { rank: "major_feast", precedence: 3, color: "white" }));
-  const mission = cand(obs("d0929-mission", "대한성공회 선교 기념일", { rank: "major_feast", precedence: 4, color: "white" }));
+  const mich = cand(obs("d0929-mich", "성 미카엘과 모든 천사들", { rank: "major_feast", precedence: 3, color: "white" }));
+  const mission = cand(obs("d0929-mission", "대한성공회 설립기념일", { rank: "major_feast", precedence: 4, color: "white" }));
   const grid = cand(obs("grid:ordinary-26-weekday-wed", "연중 26주 수요일", { rank: "feria", precedence: 8, color: "green" }));
   const shared = [group("joint", FOUR)];
   const groupsOf = groupsOfFrom({ "d0929-mich": shared, "d0929-mission": shared, "grid:ordinary-26-weekday-wed": [group("g", FOUR)] });
-  const entries = (lender) => [{ candidate: lender, collects: [collect("m-c", "미가엘")] }, { candidate: mission, collects: [] },
+  const entries = (lender) => [{ candidate: lender, collects: [collect("m-c", "미카엘")] }, { candidate: mission, collects: [] },
     { candidate: grid, collects: [collect("g-c", "연중")] }];
-  // 9.29 — 빌려 준 성 미가엘이 그날의 기본 독서이고 본기도가 있다 → 이름 줄
+  // 9.29 — 빌려 준 성 미카엘이 그날의 기본 독서이고 본기도가 있다 → 이름 줄
   const m = ctx.buildLectionaryModel(resolvedOf("2027-09-29", [mich, mission, grid], mich), q, groupsOf, entries(mich), null, [], true);
   same(ids(m.textlessDays), ["d0929-mission"]);
   assert.ok(!m.choices.some((c) => c.candidate === mission));
@@ -1281,11 +1281,11 @@ test("buildLectionaryModel: 본기도 없이 그날 지키는 다른 전례일�
 });
 
 test("buildLectionaryModel: 관구 설립일에는 「1992년 9월 29일 관구설립일」 줄을 두고, 그 본기도를 고른 전례일의 본기도 뒤에 잇는다 — 주일에도, 다른 전례일을 골라도(사용자 결정 2026-11-05, 2026-11-07)", () => {
-  const mich = cand(obs("d0929-mich", "성 미가엘과 모든 천사들", { rank: "major_feast", precedence: 3, color: "white" }));
+  const mich = cand(obs("d0929-mich", "성 미카엘과 모든 천사들", { rank: "major_feast", precedence: 3, color: "white" }));
   const grid = cand(obs("grid:ordinary-26-sunday", "연중 26주일", { rank: "sunday", precedence: 5, color: "green" }));
   const r = resolvedOf("2030-09-29", [mich, grid], mich);
   const groupsOf = groupsOfFrom({ "d0929-mich": [group("m", FOUR)], "grid:ordinary-26-sunday": [group("g", FOUR)] });
-  const entries = [{ candidate: mich, collects: [collect("m-c", "미가엘")] }, { candidate: grid, collects: [collect("g-c", "연중")] }];
+  const entries = [{ candidate: mich, collects: [collect("m-c", "미카엘")] }, { candidate: grid, collects: [collect("g-c", "연중")] }];
   const province = { level: "province", name: "대한성공회", label: "관구", date: "09.29", year: 1992,
     collect: { id: "common:anniversary-province-대한성공회", title: "설립일", collect_no: 1, collect_total: 1, text: "관구", ending: "C", common: "anniversary" } };
   const q = { obs: null, track: null, set: null, collect: null };

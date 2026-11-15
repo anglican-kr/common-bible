@@ -233,7 +233,8 @@ for d in sorted(booklet):
     moved = {}
     prev = None
     for n in b["names"]:
-        m = re.search(r"\((\d{1,2})/(\d{1,2})에서 이동\)", n)
+        # 검토본은 「(3/25에서 이동)」, 최종본은 「(…, 12월 6일에서 이동)」, 「(5월 6일에서 이동. …」으로 적었다
+        m = re.search(r"(\d{1,2})(?:/|월\s*)(\d{1,2})일?에서 이동", n)
         if m:
             key = re.sub(r"\(.*?\)", "", n).strip() or prev
             moved[key] = f"{d[:4]}-{int(m.group(1)):02d}-{int(m.group(2)):02d}"
@@ -259,7 +260,7 @@ for d in sorted(booklet):
 
 json.dump(detail, open(DET, "w", encoding="utf8"), ensure_ascii=False, indent=0)
 L = []
-L.append(f"# 2027 전례독서 책자(검토용) ↔ 엔진 대조\n")
+L.append(f"# 2027 전례독서 책자(최종본) ↔ 엔진 대조\n")
 L.append(f"범위 {min(booklet)} ~ {max(booklet)} — {len(booklet)}일. 엔진 색 어휘: {dict(engine_colors)}\n")
 no_view = sum(1 for d in booklet if engine.get(d) and not engine[d].get("error") and not engine[d].get("view"))
 if no_view:   # engine-dump.mjs 가 js/app/lectionary.js 없이 돌았다 — 집계가 뷰 대조와 크게 다르다(README)

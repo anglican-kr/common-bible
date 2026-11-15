@@ -2047,7 +2047,7 @@ def test_days_only_commemorated_are_plain_text_without_links(desktop_context):
     assert "기념만" not in page.inner_text(".lect-head")
     _open(page, "lectionary/2026-03-01")
     assert page.inner_text(".lect-day") == "사순 2주일"
-    assert _choices(page) == ["삼일절"]
+    assert _choices(page) == ["삼일절 · 대체 독서"]   # 삼일절 독서는 대체 독서다(사용자 결정 2026-11-15)
     assert "삼일절" not in name_lines(), name_lines()
     assert "기념만" not in page.inner_text(".lect-head")
     sunday_ref = page.inner_text(".lect-reading[data-slot='first'] .lect-ref")
@@ -2055,7 +2055,7 @@ def test_days_only_commemorated_are_plain_text_without_links(desktop_context):
     page.wait_for_selector(".lect-day:has-text('삼일절')")
     assert page.inner_text(".lect-reading[data-slot='first'] .lect-ref") != sunday_ref
     assert _choices(page) == ["사순 2주일"]
-    assert page.locator(".lect-day-note").count() == 0
+    assert page.inner_text(".lect-day-note") == "대체 독서"   # 2.11 병자를 위한 기도일과 같다
     _open(page, "lectionary/2027-08-15")
     assert "광복절" in _choices(page), _choices(page)
     _open(page, "lectionary/2026-12-29")

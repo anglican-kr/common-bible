@@ -210,15 +210,15 @@
       "id": "W-2024-09-29-michael-over-sunday",
       "kind": "winner",
       "group": "⑩",
-      "title": "성 미가엘(A prec 3, 주일) > 연중 26주일 — official 미가엘, 대한성공회 선교 기념일은 proper",
+      "title": "성 미카엘(A prec 3, 주일) > 연중 26주일 — official 미카엘, 대한성공회 설립기념일은 proper",
       "status": "confirmed",
       "canon": ["R-6.1-ladder", "R-6.5-year-pass"],
       "checks": ["X-12", "C-6.1-2", "C-6.1-5"],
-      "source": ["2024 책자 — 9.29 성 미가엘(연중 26주일)이 앞서고 [백] 고유 독서, 설립 기념일은 이름 줄"],
+      "source": ["2024 책자 — 9.29 성 미카엘(연중 26주일)이 앞서고 [백] 고유 독서, 설립 기념일은 이름 줄"],
       "note": "같은 고정 날짜의 두 전례일은 충돌이 아니라 동시 봉헌 — 옮기지 않고 높은 쪽 official, 낮은 쪽 proper(둘 다 본기도·독서를 만들고 독자가 고른다, 미결18).",
       "assertions": [
-        { "date": "2024-09-29", "expect": { "official": "d0929-성-미가엘과-모든-천사들", "color": "white" } },
-        { "date": "2024-09-29", "expect": { "id": "d0929-대한성공회-선교-기념일", "status": "proper" } },
+        { "date": "2024-09-29", "expect": { "official": "d0929-성-미카엘과-모든-천사들", "color": "white" } },
+        { "date": "2024-09-29", "expect": { "id": "d0929-대한성공회-설립기념일", "status": "proper" } },
         { "date": "2024-09-29", "expect": { "id": "grid:ordinary-26-sunday", "status": "proper" } }
       ]
     },
@@ -254,18 +254,17 @@
       "id": "W-2027-09-26-korean-martyrs-on-sunday",
       "kind": "winner",
       "group": "⑩",
-      "title": "모든 한국인 순교자들(B, 연중 주일) → 9.27 — 연중 주일에 양보해 다음 날로 옮긴다 (미결48)",
+      "title": "모든 한국의 순교자들(C, 연중 주일) — 연중 주일보다 앞서 그날 지킨다 (미결48)",
       "status": "provisional",
       "issue": "미결48",
       "canon": ["R-6.1-ladder", "R-6.2-destinations"],
       "checks": ["C-6.5-14"],
-      "source": ["기도서 35쪽 월별 축일 — 검정 고딕(주요축일 나), 사용자 결정 2026-10-24", "기도서 원문 주요축일 다-1 — 교회력 규정은 (다)로 적는다 — 이 케이스와 다르다"],
-      "note": "id 의 「on-sunday」는 그대로다. (다)였을 때는 연중 주일(prec 5)보다 앞서 그날 지정 전례일이었다(옛 기대값 — 미결48 이 교회력 규정 쪽으로 닫히면 돌아간다).",
+      "source": ["2027 책자 최종본 — 2027-09-26(연중 26주일)에 「모든 한국의 순교자들」 [홍]과 그 독서를 실었다, 사용자 결정 2026-11-15", "기도서 원문 주요축일 다-1 — 교회력 규정도 (다)로 적는다", "기도서 35쪽 월별 축일은 검정 고딕(주요축일 나)이다 — 2026-10-24부터 11-15까지는 이쪽을 따라 9.27로 옮겼다"],
+      "note": "id 의 「on-sunday」는 그대로다. 미결48이 「월별 축일」의 (나) 쪽으로 닫히면 옛 기대값(9.27로 옮김)으로 돌아간다.",
       "assertions": [
-        { "date": "2027-09-26", "expect": { "official": "grid:ordinary-26-sunday", "grid": { "status": "proper" } } },
-        { "date": "2027-09-26", "expect": { "id": "d0926-모든-한국인-순교자들", "status": "transferred_out", "to": "2027-09-27" } },
-        { "date": "2027-09-27", "expect": { "id": "d0926-모든-한국인-순교자들", "status": "transferred_in", "from": "2027-09-26", "displacedBy": "grid:ordinary-26-sunday" } },
-        { "date": "2027-09-27", "expect": { "official": "d0926-모든-한국인-순교자들", "color": "red" } }
+        { "date": "2027-09-26", "expect": { "official": "d0926-모든-한국의-순교자들", "color": "red", "grid": { "status": "proper" } } },
+        { "date": "2027-09-26", "expect": { "id": "d0926-모든-한국의-순교자들", "status": "proper", "notInDepartures": true } },
+        { "date": "2027-09-27", "expect": { "official": "grid:ordinary-26-weekday-mon" } }
       ]
     },
     {
@@ -445,14 +444,14 @@
       "id": "W-2025-12-29-holy-innocents-color",
       "kind": "winner",
       "group": "미결30",
-      "title": "죄 없는 어린이들(옮겨 옴) 색 — 데이터 홍(순교자), 2026 책자는 [백] — 다른 해 사례 없음",
+      "title": "죄 없는 아기들(옮겨 옴) 색 — 데이터 홍(순교자), 2026 책자는 [백] — 다른 해 사례 없음",
       "status": "provisional",
       "issue": "미결30",
       "canon": ["R-6.4-color-order"],
       "checks": ["X-10"],
       "source": ["2026 책자 — 2025-12-29 [백]; 2023·2024 의 12.28 은 평일이라 대조 사례 없음(미결30 ②)"],
       "assertions": [
-        { "date": "2025-12-29", "expect": { "official": "d1228-죄-없는-어린이들의-순교", "color": "red" } }
+        { "date": "2025-12-29", "expect": { "official": "d1228-죄-없는-아기들의-순교", "color": "red" } }
       ]
     },
     {
