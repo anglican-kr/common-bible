@@ -71,7 +71,7 @@ ADR이 정한 모델과 실제 JSON 사이에는 **엔진이 처리해야 하는
 | kasi-lunar | `{_meta, years}` |
 | commons | `{_meta, _vocab, classes}` (배열이 아니라 **맵**) |
 | local-observances | `{_meta, _vocab, dioceses, parishes}` |
-| search-lectionary | `_meta` 없이 `{names, cov, books}` (전례독서 검색 색인, ADR-037 §5) |
+| search-lectionary | `_meta` 없이 `{obs, sets, cov, books, saints, synonyms}` (전례독서 검색 색인, ADR-037 §5) |
 
 **날짜 표기가 세 가지 섞여 있다.** 이 계층에서 가장 조용히 깨지는 자리다.
 
