@@ -1,4 +1,5 @@
 ---
+pr: 572
 date: 2026-11-16
 branch: docs/lectionary-index-adr
 title: "docs: 전례독서 검색 색인의 새 구조를 ADR-037에"
