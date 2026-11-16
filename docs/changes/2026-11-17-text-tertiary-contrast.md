@@ -1,4 +1,5 @@
 ---
+pr: 578
 date: 2026-11-17
 branch: style/text-tertiary-contrast
 title: "style: 약화 글리프 색의 대비를 4.5:1 이상으로"
