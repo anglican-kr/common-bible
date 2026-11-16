@@ -45,7 +45,7 @@ import { specCoversVerse, parseVerseSpec, verseInstanceKeys, citationSource, for
 import {
   parseDate, toKey, addDays, dayOfWeek, isComputableDate, joinNames, fillCommonName,
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, findDedications, findFoundings, findSaintFeasts, fastOf, isEmber,
-  optionalDestOf, knownSlugIds, findReadingDay,
+  optionalDestOf, knownSlugIds, findReadingDay, headerColors,
 } from "./liturgical-engine.js";
 
 const {
@@ -838,33 +838,7 @@ function endingCodeOf(/** @type {CollectOption | null | undefined} */ last) {
   return e === "A" || e === "B" || e === "C" ? e : "A";
 }
 
-/** `null | 코드 | 코드 배열` 3형 → 배열. */
-function altList(/** @type {unknown} */ v) {
-  if (v === null || v === undefined) return [];
-  return (Array.isArray(v) ? v : [v]).filter((x) => typeof x === "string");
-}
-
-/**
- * 헤더 색(ADR-038 §3 · 설계서 R-6.4-color-order) — **고른 본문의 색을 따른다**(사용자 결정 2026-10-12,
- * pitfalls §21): 고른 후보가 자기 색을 가진 **비격자** 후보이고 그 색이 그날의 대표색과 다르면 그 색 하나
- * (사계재 자 · 성 토요일 저녁의 부활밤 백 · 생략된 성인). 그 밖은 그날의 `colors`(병기) + `colorAlt`
- * 그대로 — 지정 전례일이나 색이 같은 후보를 누르면 사계재 날의 [자, 백] 병기가 남는다. 격자 후보는 자기
- * 색이 아니라 절기 바탕색을 들고 있어 제외. 「재일 독서를 읽을 때만 자색, 어차피 선택 독서」(2026-09-17)의 일반화.
- * 화면이 만든 후보(소속교회의 축성일)는 엔진이 그날 색을 계산할 때 넣지 않았으므로 색이 같아도 자기 색 하나다. 그날 함께 적는 색(사계재의
- * 자색)이나 대체색(성모 축일의 청색)을 받지 않는다(ADR-041 §6, PR #542 리뷰).
- * @param {ResolvedDate} resolved @param {Candidate | null} selected
- * @returns {{ colors: string[], colorAlt: string[], ownColor: boolean }}
- */
-function headerColors(resolved, selected) {
-  const obs = selected ? selected.observance : null;
-  if (selected && obs && !isGrid(selected) && typeof obs.color === "string"
-    && (obs.color !== resolved.color || !resolved.candidates.includes(selected))) {
-    return { colors: [obs.color], colorAlt: altList(obs.color_alt), ownColor: true };
-  }
-  const colors = Array.isArray(resolved.colors) && resolved.colors.length ? resolved.colors.slice()
-    : (resolved.color ? [resolved.color] : []);
-  return { colors, colorAlt: altList(resolved.colorAlt), ownColor: false };
-}
+// 헤더 색(`headerColors`)은 검색 결과의 색 점과 함께 쓰므로 엔진에 있다(ADR-044 §1, 코드 리뷰 2026-11-16).
 
 /**
  * 전날 · 다음날 링크 — 교회력을 계산하는 날짜(엔진 `isComputableDate` — 1583~9999) 밖이면 null 이라 단추가 자리만 남는다

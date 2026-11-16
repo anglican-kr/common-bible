@@ -2250,6 +2250,17 @@ test("liturgicalYearSpan: 대림 1주일부터 다음 대림 1주일 전날까�
   same(plain(e.liturgicalYearSpan("2025-11-30")), { from: "2025-11-30", to: "2026-11-28" });
 });
 
+test("openDayIn: 이번 전례년에 그날이 두 번 있으면 아직 오지 않은 날, 둘 다 지났으면 늦은 날(ADR-044 §1, 코드 리뷰 2026-11-17)", () => {
+  const e = loadEngine(fakeFetch([]));
+  // 2028 전례년은 2027-11-28부터 2028-12-02까지라 성 안드레아 축일(11.30)이 두 번 든다
+  const andrew = [KD("2026-11-30"), KD("2027-11-30"), KD("2028-11-30"), KD("2029-11-30")];
+  const table = { from: "2025-11-30", to: "2050-12-31", byId: new Map([["a", andrew]]), byName: new Map() };
+  const open = (today) => e.openDayIn(table, ["a"], today).date;
+  same([open("2027-11-29"), open("2028-06-01"), open("2028-11-30"), open("2028-12-01")], ["2027-11-30", "2028-11-30", "2028-11-30", "2028-11-30"]);
+  // 한 번만 드는 전례년은 그대로다: 지났어도 그날
+  same([open("2027-06-01"), open("2027-11-29")], ["2026-11-30", "2027-11-30"]);
+});
+
 test("openDayIn · nextDayIn: 이번 전례년의 첫날, 없으면 오늘부터의 첫날 — 표가 아직 거기까지 세지 않았으면 undefined, 끝까지 없으면 null", () => {
   const e = loadEngine(fakeFetch([]));
   const table = {
@@ -2266,8 +2277,9 @@ test("openDayIn · nextDayIn: 이번 전례년의 첫날, 없으면 오늘부터
   assert.strictEqual(e.openDayIn(table, ["a"], today).date, "2026-03-01");
   // 이번 전례년에 없으면 오늘부터의 첫날
   assert.strictEqual(e.openDayIn(table, ["b"], today).date, "2027-03-07");
-  // 여럿이면 이번 전례년에서 가장 이른 날
-  assert.strictEqual(e.openDayIn(table, ["c", "a"], today).date, "2026-03-01");
+  // 여럿이면 이번 전례년에서 아직 오지 않은 첫날, 모두 지났으면 가장 늦은 날(2026-11-17)
+  assert.strictEqual(e.openDayIn(table, ["c", "a"], "2026-03-10").date, "2026-04-15");
+  assert.strictEqual(e.openDayIn(table, ["c", "a"], today).date, "2026-04-15");
   // 표가 2028년까지라 2029년의 날은 아직 모른다
   assert.strictEqual(e.nextDayIn(table, ["a"], today), undefined);
   assert.strictEqual(e.nextDayIn(table, ["c"], today).date, "2027-04-07");
@@ -2282,16 +2294,19 @@ test("openDayIn · nextDayIn: 이번 전례년의 첫날, 없으면 오늘부터
   assert.strictEqual(e.openDayIn(full, ["nope"], today), null);
 });
 
-test("namedDaysIn · christmasNamesIn: 화면의 이름으로 찾은 성탄 평일은 이번 전례년의 그 이름의 날과 그 이름의 다음 날(ADR-044 §3)", () => {
+test("namedDayIn · christmasNamesIn: 화면의 이름으로 찾은 성탄 평일은 이번 전례년의 그 이름의 날(ADR-044 §3)", () => {
   const e = loadEngine(fakeFetch([]));
   const wed = (date, setId) => KD(date, { obs: "grid:christmas-x-weekday-wed", setId, name: "성탄 1주 수요일" });
   const table = {
     from: "2025-11-30", to: "2050-12-31", byId: new Map(),
     byName: new Map([["성탄 1주 수요일", [wed("2025-12-31", "d1231"), wed("2026-12-30", "d1230")]]]),
   };
-  const days = plain(e.namedDaysIn(table, "성탄 1주 수요일", "2026-11-16"));
-  same([days.open.date, days.open.setId, days.next.date, days.next.setId], ["2025-12-31", "d1231", "2026-12-30", "d1230"]);
-  same(plain(e.namedDaysIn(table, "없는 이름", "2026-11-16")), { open: null, next: null });
+  const day = plain(e.namedDayIn(table, "성탄 1주 수요일", "2026-11-16"));
+  same([day.date, day.setId], ["2025-12-31", "d1231"]);
+  assert.strictEqual(e.namedDayIn(table, "없는 이름", "2026-11-16"), null);
+  // 성탄 평일은 다음 날을 보이지 않으므로, 이번 전례년만 셌으면 답한다(다음 해의 같은 이름을 찾느라 표를 늘리지 않는다)
+  assert.strictEqual(e.namedDayIn({ ...table, to: "2026-11-28" }, "성탄 1주 수요일", "2026-11-16").date, "2025-12-31");
+  assert.strictEqual(e.namedDayIn({ ...table, to: "2026-06-30" }, "성탄 1주 수요일", "2026-11-16"), undefined);
   same(plain([...e.christmasNamesIn(table, "2026-11-16")]), [["d1231", "성탄 1주 수요일"]]);
   same(plain([...e.christmasNamesIn(table, "2026-11-29")]), [["d1230", "성탄 1주 수요일"]]);
   assert.strictEqual(e.christmasNamesIn({ ...table, to: "2026-01-31" }, "2026-11-16"), null, "이번 전례년을 다 세지 않았다");
@@ -2313,13 +2328,28 @@ test("findReadingDay · findChristmasNames · readingLabel: 프리로드 뒤에 
   // 성탄 평일의 이름은 해마다 다르다: 12월 31일 독서는 2025년에 성탄 1주 수요일
   const names = await e.findChristmasNames("2026-11-16");
   assert.strictEqual(names.get("d1231-xmas-week"), "성탄 1주 수요일");
-  const named = plain(await e.findNamedDays("성탄 1주 수요일", "2026-11-16"));
-  same([named.open.date, named.open.setId], ["2025-12-31", "d1231-xmas-week"]);
+  const named = plain(await e.findNamedDay("성탄 1주 수요일", "2026-11-16"));
+  same([named.date, named.setId], ["2025-12-31", "d1231-xmas-week"]);
   // 독서 표기는 엔진이 읽은 독서 표에서 꺼낸다(날짜, 이름, 격자의 행 모두)
   assert.strictEqual(e.readingLabel("d0125-paul-s1", "gospel"), "d0125-paul-s1:gospel");
   assert.strictEqual(e.readingLabel("ordinary-3-sun-A-t1", "first"), "ordinary-3-sun-A-t1:first");
   assert.strictEqual(e.readingLabel("d0125-paul-s1", "second"), null);
   assert.strictEqual(e.readingLabel("nope", "first"), null);
+});
+
+test("findReadingDay: 화면을 떠났으면 표를 더 세지 않고, 표의 끝(2050년)보다 늦은 `from`은 세지 않고 null(코드 리뷰 2026-11-16)", async () => {
+  const e = loadEngine(fakeFetch([]));
+  await Promise.all([e.preloadCalendar(), e.preloadLectionary()]);
+  const tableTo = () => vm.runInContext("keptDayTable ? keptDayTable.to : ''", e);
+  // 없는 독서는 2050년까지 세야 없다는 것을 안다. 화면을 떠났으면 처음 센 데서 그친다
+  assert.strictEqual(await e.findReadingDay(["nope"], "2026-11-16", "2026-11-16", () => true), null);
+  const first = tableTo();
+  assert.ok(first < "2030-01-01", first);
+  assert.strictEqual(await e.findReadingDay(["d0125-paul-s1"], "2026-11-16", "2051-01-01"), null);
+  assert.strictEqual(tableTo(), first, "표 끝 뒤의 from은 세지 않는다");
+  // 떠나지 않았으면 끝까지 센다
+  assert.strictEqual(await e.findReadingDay(["nope"], "2026-11-16", "2026-11-16"), null);
+  assert.strictEqual(tableTo(), "2050-12-31");
 });
 
 test("지키는 날의 표: 전례년이 2050년 끝을 넘어도 답을 낸다 — 2050년 대림 뒤에 멈추지 않는다(코드 리뷰 2026-11-16)", { timeout: 10_000 }, async () => {
@@ -2328,13 +2358,13 @@ test("지키는 날의 표: 전례년이 2050년 끝을 넘어도 답을 낸다 
   const table = { from: "2050-11-27", to: "2050-12-31", byId: new Map([["a", [KD("2050-12-25", { setId: "a" })]]]), byName: new Map() };
   assert.strictEqual(e.openDayIn(table, ["nope"], "2050-12-01"), null);
   assert.strictEqual(e.openDayIn(table, ["a"], "2050-12-01").date, "2050-12-25");
-  same(plain(e.namedDaysIn(table, "없는 이름", "2050-12-01")), { open: null, next: null });
+  assert.strictEqual(e.namedDayIn(table, "없는 이름", "2050-12-01"), null);
   same(plain([...e.christmasNamesIn(table, "2050-12-01")]), []);
   // 프리로드를 거친 공개 함수도 끝난다. 표가 시작하는 날이 표의 끝보다 늦어도 그렇다
   await Promise.all([e.preloadCalendar(), e.preloadLectionary()]);
   assert.strictEqual(await e.findReadingDay(["d0125-paul-s1"], "2050-12-01"), null, "2051-01-25는 표 밖이다");
   assert.strictEqual(await e.findReadingDay(["d0125-paul-s1"], "2052-03-01"), null);
-  same(plain(await e.findNamedDays("성탄 1주 수요일", "2052-03-01")), { open: null, next: null });
+  assert.strictEqual(await e.findNamedDay("성탄 1주 수요일", "2052-03-01"), null);
   assert.strictEqual((await e.findChristmasNames("2052-03-01")).size, 0);
 });
 

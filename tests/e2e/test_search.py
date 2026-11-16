@@ -669,6 +669,97 @@ def test_name_row_links_the_days_of_the_other_years(page):
     assert [links.nth(i).get_attribute("href").split("?")[1] for i in range(links.count())] == ["from=2027-11-21", "from=2028-11-26"]
 
 
+
+_SWATCH_CODES = "els => els.map(e => e.className.match(/lit-swatch--(\\w+)/)[1])"
+
+
+def test_row_dot_is_the_color_of_the_header_it_opens(page):
+    """줄의 색 점은 누르면 열리는 화면 머리의 색이다. 사계재 평일은 절기 바탕색(녹색)이 아니라 그날의 색이다(ADR-044 §1, 코드 리뷰 2026-11-16)."""
+    _fix_today(page)
+    _goto_search(page, "연중24주 수요일")
+    _wait_days(page)
+    row = page.locator(".lect-rows > li").first
+    dots = row.locator(".cal-row-dot").evaluate_all(_SWATCH_CODES)
+    assert dots == ["violet", "white"]
+    row.locator("a.cal-row").click()
+    page.wait_for_function("() => location.pathname === '/lectionary/2026-09-16'", timeout=15_000)
+    page.wait_for_selector(".lect-color", timeout=15_000)
+    assert page.locator(".lect-color").evaluate_all(_SWATCH_CODES) == dots
+
+
+def test_christmas_names_are_sent_again_after_a_failed_engine_load(browser):
+    """엔진의 자료를 받지 못해 성탄 평일의 화면 이름으로 찾지 못했어도, 받을 수 있게 되면 뒤에서 다시 받아 다음 검색부터 찾는다.
+    찾기 전에 기다리지는 않는다(ADR-044 §3, 코드 리뷰 2026-11-16)."""
+    ctx = browser.new_context(service_workers="block")
+    ctx.route("**/lectionary/sanctoral.json", lambda route: route.abort())
+    page = ctx.new_page()
+    _fix_today(page)
+    _goto_search(page, "성탄 1주 수요일")
+    assert page.locator(".lect-rows a.cal-row").count() == 0
+    ctx.unroute("**/lectionary/sanctoral.json")
+
+    def search_in_app(query):
+        page.fill("#search-input", query)
+        page.press("#search-input", "Enter")
+        page.wait_for_function(
+            "q => location.search.includes(encodeURIComponent(q)) && document.querySelector('.search-count, .empty-state')",
+            arg=query, timeout=10_000)
+        page.wait_for_timeout(300)
+
+    # 전례일 결과가 없는 검색어만 친다. 전례일 결과가 있으면 그 화면이 이름을 보내 이 시험이 보려는 길을 거치지 않는다
+    for _ in range(8):
+        search_in_app("성탄 1주 수요일")
+        if page.locator(".lect-rows a.cal-row").count():
+            break
+        search_in_app("ㅋㅋㅋㅋ")
+        page.wait_for_timeout(500)
+    assert page.locator(".lect-rows .cal-row-title").all_inner_texts() == ["성탄 1주 수요일"]
+    ctx.close()
+
+
+def test_christmas_names_do_not_wait_again_after_three_seconds(browser):
+    """교회력 자료를 3초 안에 다 받지 못했으면, 그 뒤 「성탄」이 든 검색은 기다리지 않는다. 받기는 이어 가, 다 받으면 그 이름으로
+    찾는다(ADR-044 §3, 코드 리뷰 2026-11-17)."""
+    ctx = browser.new_context(service_workers="block")
+    held = []
+    ctx.route("**/lectionary/sanctoral.json", lambda route: held.append(route))
+    page = ctx.new_page()
+    _fix_today(page)
+    _goto_search(page, "성탄 1주 수요일")
+    assert page.locator(".lect-rows a.cal-row").count() == 0
+
+    def search_in_app(query):
+        start = time.monotonic()
+        page.fill("#search-input", query)
+        page.press("#search-input", "Enter")
+        page.wait_for_function(
+            "q => location.search.includes(encodeURIComponent(q)) && document.querySelector('.search-count, .empty-state')",
+            arg=query, timeout=10_000)
+        return time.monotonic() - start
+
+    search_in_app("ㅋㅋㅋㅋ")
+    assert search_in_app("성탄 1주 수요일") < 2, "3초를 넘긴 뒤에도 다시 기다렸다"
+    for route in held:
+        route.continue_()
+    for _ in range(8):
+        page.wait_for_timeout(500)
+        search_in_app("ㅋㅋㅋㅋ")
+        search_in_app("성탄 1주 수요일")
+        if page.locator(".lect-rows a.cal-row").count():
+            break
+    assert page.locator(".lect-rows .cal-row-title").all_inner_texts() == ["성탄 1주 수요일"]
+    ctx.close()
+
+
+def test_row_opens_the_coming_day_when_it_comes_twice_in_the_year(page):
+    """한 전례년에 그날이 두 번 있으면 아직 오지 않은 날을 연다. 2028 전례년(2027-11-28부터)에는 성 안드레아 축일이 두 번 든다
+    (ADR-044 §1, 코드 리뷰 2026-11-17)."""
+    page.clock.set_fixed_time(datetime.datetime(2028, 6, 1, 12))
+    _goto_search(page, "안드레아", "&group=lectionary")
+    _wait_days(page)
+    row = page.locator(".lect-rows > li").filter(has_text="사도 성 안드레아").first
+    assert "다음 2028년 11월 30일 (목)" in row.locator(".cal-row-meta").inner_text()
+
 def test_missing_chapter_is_told_and_enter_stays(page, base_url):
     """책에 없는 장은 구절 바로가기 카드 대신 알린다. Enter를 쳐도 장 화면으로 가지 않는다(ADR-044 §2)."""
     page.goto(base_url)

@@ -402,6 +402,18 @@ function keptTable() {
 }
 const TODAY = "2026-11-16";
 
+test("지키는 날의 표: 한 전례년에 두 번 드는 성 안드레아 축일은 아직 오지 않은 날을 열고, 격자 전례일은 전례일로 넣지 않는다(코드 리뷰 2026-11-17)", { skip: !haveData }, () => {
+  const { e } = realEngine();
+  const table = keptTable();
+  const andrew = ["d1130-사도-성-안드레아-t1-s1"];
+  // 2028 전례년(2027-11-28부터): 2027-11-30과 2028-11-30
+  assert.deepStrictEqual(["2027-12-15", "2028-06-01", "2028-12-01"].map((t) => e.openDayIn(table, andrew, t).date), ["2028-11-30", "2028-11-30", "2028-11-30"]);
+  assert.strictEqual(e.openDayIn(table, andrew, "2027-11-29").date, "2027-11-30");
+  // 격자 전례일은 보조 주소와 검색이 전례일로 묻지 않는다. 그날의 독서 세트로만 든다
+  assert.deepStrictEqual([...table.byId.keys()].filter((id) => id.startsWith("grid:")), []);
+  assert.ok(table.byId.get("ordinary-24-wed-II-t1-s1").some((d) => d.obs.startsWith("grid:")));
+});
+
 test("지키는 날의 표: 줄이 여는 날은 이번 전례년의 날이고, 지났으면 다음에 읽는 날을 따로 찾는다(ADR-044 §1)", { skip: !haveData }, () => {
   const { e } = realEngine();
   const table = keptTable();
@@ -430,9 +442,17 @@ test("지키는 날의 표: 이번 전례년 성탄 평일의 화면 이름은 �
     "d1229 성탄 1주 월요일", "d1230 성탄 1주 화요일", "d1231 성탄 1주 수요일", "d0102 성탄 1주 금요일", "d0103 성탄 1주 토요일",
     "d0105 성탄 2주 월요일", "d0107 성탄 2주 수요일", "d0108 성탄 2주 목요일", "d0109 성탄 2주 금요일", "d0110 성탄 2주 토요일",
   ]);
-  const { open, next } = e.namedDaysIn(table, "성탄 1주 수요일", TODAY);
-  assert.deepStrictEqual([open.date, open.setId, next.date, next.setId],
-    ["2025-12-31", "d1231-성탄주간-t1-s1", "2026-12-30", "d1230-성탄주간-t1-s1"]);
+  const open = e.namedDayIn(table, "성탄 1주 수요일", TODAY);
+  assert.deepStrictEqual([open.date, open.setId], ["2025-12-31", "d1231-성탄주간-t1-s1"]);
+});
+
+test("지키는 날의 표: 색은 그 전례일을 고른 전례독서 화면 머리의 색이다. 사계재의 평일은 절기 바탕색이 아니라 그날의 색(코드 리뷰 2026-11-16)", { skip: !haveData }, () => {
+  const table = keptTable();
+  const on = (id, date) => Array.from(table.byId.get(id).find((d) => d.date === date).colors);
+  // 2026-09-16은 추계재 수요일이고 니니안의 날이다. 연중24주 수요일(격자)을 고른 머리는 그날의 색(자색, 백색)이다
+  assert.deepStrictEqual(on("ordinary-24-wed-II-t1-s1", "2026-09-16"), ["violet", "white"]);
+  // 추계재 금요일(2026-09-18)은 자색 하나다. 고치기 전에는 둘 다 녹색이었다
+  assert.deepStrictEqual(on("ordinary-24-fri-II-t1-s1", "2026-09-18"), ["violet"]);
 });
 
 test("지키는 날의 표: 색인의 모든 독서 세트와 고유 독서가 없는 전례일은 2050년까지 여는 날이 있다", { skip: !haveData }, () => {

@@ -1410,6 +1410,27 @@ test("bookName: _bookMap이 null이어도 id 폴백(안전)", () => {
   assert.equal(scope.bookName("john"), "john");
 });
 
+// ── 전례일 줄의 값 — 전례독서 화면과 엔진에서 옮겨 둔 값 ─────────────────────
+
+test("전례일 줄의 해, 색 이름, 요일, 성탄 평일 식별자는 전례독서 화면과 엔진의 값과 같다(코드 리뷰 2026-11-16)", () => {
+  // 검색 화면은 줄을 엔진을 받기 전에도 그리고, 시험이 코드 구역을 잘라 읽어 다른 모듈의 값을 받아 쓰지 않는다. 그래서 값을 옮겨 두고
+  // 여기서 같은지 본다. 한쪽만 고치면 이 시험이 실패한다
+  const read = (rel) => fs.readFileSync(path.resolve(__dirname, "../../", rel), "utf8");
+  const lectionary = read("js/app/lectionary.js");
+  const engine = read("js/app/liturgical-engine.js");
+  /** 한 줄짜리 `const NAME = 값;`의 값. 다른 상수를 쓰면 `scope`에 넣어 준다 */
+  const valueOf = (source, name, scope = {}) => {
+    const m = source.match(new RegExp(`^const ${name} = (.+);$`, "m"));
+    assert.ok(m, name);
+    return JSON.parse(JSON.stringify(vm.runInNewContext(`(${m[1]})`, scope)));
+  };
+  assert.deepStrictEqual(valueOf(SEARCH_SOURCE, "LECT_CYCLE_LABEL"), valueOf(lectionary, "CYCLE_LABEL"));
+  assert.deepStrictEqual(valueOf(SEARCH_SOURCE, "LECT_COLOR_LABEL"), valueOf(lectionary, "COLOR_LABEL"));
+  assert.deepStrictEqual(valueOf(SEARCH_SOURCE, "LECT_WEEKDAY"), valueOf(lectionary, "WEEKDAY_KO"));
+  const GRID_PREFIX = valueOf(engine, "GRID_PREFIX");
+  assert.strictEqual(valueOf(SEARCH_SOURCE, "LECT_CHRISTMAS_WEEKDAY"), valueOf(engine, "CHRISTMAS_WEEKDAY_PREFIX", { GRID_PREFIX }));
+});
+
 // ── QUOTE_MATCH — 따옴표를 무시하는 일치(ADR-005, 2026-11-06) ────────────────
 
 function loadQuoteMatch() {
@@ -1947,8 +1968,10 @@ test("lectDaysOf: 이름으로 찾은 줄은 열리는 날 뒤에 다른 해의 
     .map(([date, setId]) => DAY(date, { setId }));
   /** @type {any[]} */
   const calls = [];
+  const stale = () => false;
   const mod = {
-    async findReadingDay(ids, today, from = null) {
+    async findReadingDay(ids, today, from = null, isStale = null) {
+      assert.strictEqual(isStale, stale, "화면을 떠났는지 엔진에 알린다(코드 리뷰 2026-11-17)");
       calls.push([Array.from(ids), from]);
       return table.find((d) => ids.includes(d.setId) && (!from || d.date >= from)) || null;
     },
@@ -1957,16 +1980,16 @@ test("lectDaysOf: 이름으로 찾은 줄은 열리는 날 뒤에 다른 해의 
   const sets = [SET("C-1", "C", 1), SET("C-2", "C", 2), SET("A-1", "A", 1), SET("A-2", "A", 2), SET("B-1", "B", 1), SET("B-2", "B", 2)];
   const item = { obs: OBS({ name: "성령강림주일" }), sets };
   const plain = (v) => JSON.parse(JSON.stringify(v));
-  const got = plain(await ctx.lectDaysOf(mod, item, "2026-11-16"));
+  const got = plain(await ctx.lectDaysOf(mod, item, "2026-11-16", stale));
   assert.deepStrictEqual([got.open.date, got.year, got.next, got.cycles.map((d) => d.date)], ["2026-05-24", "A", null, ["2027-05-16", "2028-06-04"]]);
   assert.deepStrictEqual(Array.from(got.nextIds), ["C-1", "C-2", "A-1", "A-2", "B-1", "B-2"]);
   assert.deepStrictEqual(plain(calls.slice(1)), [[["C-1", "C-2"], "2026-05-24"], [["B-1", "B-2"], "2026-05-24"]]);
   // 열리는 날이 앞날이어도 같다
-  const ahead = plain(await ctx.lectDaysOf(mod, item, "2026-01-10"));
+  const ahead = plain(await ctx.lectDaysOf(mod, item, "2026-01-10", stale));
   assert.deepStrictEqual(ahead.cycles.map((d) => d.date), ["2027-05-16", "2028-06-04"]);
   // 구절로 찾은 줄은 해를 적지 않고, 지난날이면 다음에 읽는 날 하나다
   const passage = { obs: item.obs, sets, hits: [{ slot: 3, rows: [], sets: [SET("A-1", "A", 1)] }] };
-  const p = plain(await ctx.lectDaysOf(mod, passage, "2026-11-16"));
+  const p = plain(await ctx.lectDaysOf(mod, passage, "2026-11-16", stale));
   assert.deepStrictEqual([p.year, p.cycles.length, p.next.date], [null, 0, "2029-05-20"]);
 });
 
