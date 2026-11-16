@@ -1,4 +1,5 @@
 ---
+pr: 575
 date: 2026-11-16
 branch: feat/lectionary-search-results
 title: "feat: 전례독서 검색 결과 화면"
