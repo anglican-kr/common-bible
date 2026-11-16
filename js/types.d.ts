@@ -628,6 +628,8 @@ export type CalendarRoute =
 export interface LectionaryRoute {
   view: "lectionary";
   date: string | null;
+  /** `/lectionary/d/<slug>`의 슬러그(ADR-044 §1): 독서 세트 식별자나 전례일 키를 쉼표로 이은 것. 날짜 주소면 null이다. */
+  slug?: string | null;
   obs: string | null;
   track: 1 | 2 | null;
   set: number | null;
@@ -636,7 +638,7 @@ export interface LectionaryRoute {
 
 export type Route =
   | { view: "books" }
-  | { view: "search"; query: string; page: number; filterBooks: string[] }
+  | { view: "search"; query: string; page: number; filterBooks: string[]; group: "lectionary" | null }
   | { view: "bookmark-read"; folderId: string | null }
   | { view: "bookmarks" }
   | { view: "settings" }
@@ -1514,7 +1516,7 @@ declare global {
   function updateVerseSelectBar(): void;
   function initBookmarkSheetDrag(): void;
   function initBookmarkDrawerResize(): void;
-  function renderSearchResults(query: string, page: number, autoNavigate?: boolean, opts?: { filterBooks?: string[] }): Promise<void>;
+  function renderSearchResults(query: string, page: number, autoNavigate?: boolean, opts?: { filterBooks?: string[]; group?: "lectionary" | null }): Promise<void>;
   function renderSearchView(state?: { filterBooks?: string[] }): Promise<void>;
   function isMobile(): boolean;
   function highlightTextNodes(nodes: ReadonlyArray<Text>, query: string | null): void;

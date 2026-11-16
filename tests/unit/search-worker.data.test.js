@@ -276,9 +276,10 @@ test("숫자로 끝나는 약칭(`요1`)은 혼자 치면 요한 복음의 장�
   assert.strictEqual(ctx.tryBookOnly("요일").bookId, "1john");
 });
 
-test("색인이 독서 세트를 잇는 전례일은 엔진이 그 세트를 내는 전례일과 같다(2025-2050)", { skip: !haveData }, () => {
-  // 앱은 결과 행을 누르면 엔진으로 그 독서를 읽는 날을 찾는다(설계 §7). 색인의 전례일과 엔진의 전례일이 다르면
-  // 엉뚱한 날로 가게 된다.
+/** 실데이터로 세운 교회력 엔진(브라우저의 `preloadCalendar`, `preloadLectionary`와 같은 조합). 한 번만 만든다. */
+let engineCache = null;
+function realEngine() {
+  if (engineCache) return engineCache;
   const engine = fs.readFileSync(path.join(ROOT, "js/app/liturgical-engine.js"), "utf8");
   const e = { Object, Array, Set, Map, String, Number, Boolean, Math, JSON, console, Error, parseInt, isNaN, Date, NaN };
   vm.createContext(e);
@@ -294,7 +295,13 @@ test("색인이 독서 세트를 잇는 전례일은 엔진이 그 세트를 내
   const lec = e.buildLectionaryIndex({
     readings: read("eucharist-readings.json"), collects: read("eucharist-collects.json"), commons: read("commons.json"),
   });
-  const index = read("search-lectionary.json");
+  return (engineCache = { e, cal, lec, sanctoral, temporal, index: read("search-lectionary.json") });
+}
+
+test("색인이 독서 세트를 잇는 전례일은 엔진이 그 세트를 내는 전례일과 같다(2025-2050)", { skip: !haveData }, () => {
+  // 앱은 결과 행을 누르면 엔진으로 그 독서를 읽는 날을 찾는다(설계 §7). 색인의 전례일과 엔진의 전례일이 다르면
+  // 엉뚱한 날로 가게 된다.
+  const { e, cal, lec, sanctoral, temporal, index } = realEngine();
   const obsOfSet = new Map(index.sets.map((s) => [s[1], index.obs[s[0]]]));
   const tableIds = new Set([...sanctoral.entries, ...temporal.entries].map((r) => r.id));
 
@@ -328,4 +335,86 @@ test("색인이 독서 세트를 잇는 전례일은 엔진이 그 세트를 내
     .map(([k]) => k);
   assert.deepStrictEqual(unexpected, []);
   assert.strictEqual([...differ.values()].filter(({ id }) => EMBER[id]).length, 16, "사계재의 지향별 날");
+});
+
+
+test("보조 주소의 식별자: 색인의 독서 세트와 고유 독서가 없는 전례일의 키를 모두 안다(ADR-044 §1)", { skip: !haveData }, () => {
+  const { e, cal, lec, index } = realEngine();
+  const known = e.slugTargetsIn(lec, cal);
+  const withSets = new Set(index.sets.map((s) => s[0]));
+  const noSet = index.obs.filter((_, i) => !withSets.has(i)).map((o) => o.key);
+  assert.ok(noSet.length > 100, "고유 독서가 없는 전례일");
+  assert.deepStrictEqual(index.sets.map((s) => s[1]).filter((id) => !known.has(id)), [], "모르는 독서 세트");
+  assert.deepStrictEqual(noSet.filter((key) => !known.has(key)), [], "모르는 전례일 키");
+  assert.strictEqual(known.has("nope"), false);
+});
+
+test("보조 주소: 고유 독서가 없는 전례일은 엔진이 같은 식별자로 지키는 날이 있다(2025-2050)", { skip: !haveData }, () => {
+  // 검색 결과의 줄은 고유 독서가 없는 전례일만 전례일 키를 적는다(search.js lectSlugHref). 엔진이 그 키로 지키는 날이 없으면
+  // 그 줄은 「이 독서를 읽는 날을 찾지 못했습니다」가 된다.
+  const { e, cal, index } = realEngine();
+  const withSets = new Set(index.sets.map((s) => s[0]));
+  const noSet = new Set(index.obs.filter((_, i) => !withSets.has(i)).map((o) => o.key));
+  const kept = new Set();
+  for (let y = 2025; y <= 2050; y++) {
+    const pass = e.transfersOf(cal, y);
+    for (let d = e.toKey(y, 1, 1); d.slice(0, 4) === String(y); d = e.addDays(d, 1)) {
+      for (const c of e.resolveDateIn(cal, d, pass).candidates) {
+        if (c.status === "proper" || c.status === "transferred_in") kept.add(c.observance.id);
+      }
+    }
+  }
+  assert.deepStrictEqual([...noSet].filter((key) => !kept.has(key)), []);
+});
+
+test("firstKeptDayIn: 독서 세트 여럿이면 가장 가까운 날이고, 지키는 날의 전례일과 찾은 세트, 트랙을 돌려준다", { skip: !haveData }, () => {
+  const { e, cal, lec } = realEngine();
+  const plain = (v) => JSON.parse(JSON.stringify(v));
+  // 사순2주일 가해의 복음(요한 3:1-17)은 2029년이 가해다
+  assert.deepStrictEqual(plain(e.firstKeptDayIn(lec, cal, new Set(["lent-2-sun-A-t1-s1"]), "2026-11-16", "2050-12-31")),
+    { date: "2029-02-25", obs: "grid:lent-2-sunday", setId: "lent-2-sun-A-t1-s1", track: null });
+  // 세트 둘을 함께 주면 둘 가운데 먼저 오는 날이다
+  const b = e.firstKeptDayIn(lec, cal, new Set(["advent-1-mon-B-t1-s1"]), "2026-11-16", "2050-12-31");
+  const c = e.firstKeptDayIn(lec, cal, new Set(["advent-1-mon-C-t1-s1"]), "2026-11-16", "2050-12-31");
+  const both = e.firstKeptDayIn(lec, cal, new Set(["advent-1-mon-B-t1-s1", "advent-1-mon-C-t1-s1"]), "2026-11-16", "2050-12-31");
+  assert.strictEqual(both.date, [b.date, c.date].sort()[0]);
+  // 전례일 키(고유 독서가 없는 월별 축일)는 후보의 식별자로 찾는다. 세트와 트랙은 없다
+  const school = e.firstKeptDayIn(lec, cal, new Set(["d0523-성-베드로-학교-개교"]), "2026-11-16", "2050-12-31");
+  assert.ok(school, "성 베드로 학교 개교");
+  assert.deepStrictEqual(plain({ ...school, date: school.date.slice(5) }), { date: "05-23", obs: "d0523-성-베드로-학교-개교", setId: null, track: null });
+  // 지키는 날만 센다: 사도 성 안드레아(11.30)는 2025년에 대림1주일과 겹쳐 12월 1일로 옮겨 간다
+  for (const id of ["d1130-사도-성-안드레아", "d1130-사도-성-안드레아-t1-s1"]) {
+    assert.strictEqual(e.firstKeptDayIn(lec, cal, new Set([id]), "2025-11-01", "2025-12-31").date, "2025-12-01", id);
+  }
+  // 범위 안에 없으면 null
+  assert.strictEqual(e.firstKeptDayIn(lec, cal, new Set(["lent-2-sun-A-t1-s1"]), "2026-11-16", "2028-12-31"), null);
+});
+
+
+test("검색 결과의 굵기: 이름이 「주일」로 끝나는 이동 축일은 엔진이 언제나 일요일에 지킨다(2025-2050)", { skip: !haveData }, () => {
+  // 색인에는 주일인지 적는 칸이 없어 검색 화면은 이동 축일의 이름으로 주일을 알아본다(search.js lectRowOf). 데이터의 이름이 바뀌면 이
+  // 시험이 알린다. `-sun`으로 끝나는 키도 모두 이름이 「주일」로 끝나야 한다.
+  const { e, cal, lec, index } = realEngine();
+  const sunday = (o) => o.kind === "temporal" && /주일$/.test(o.name);
+  assert.deepStrictEqual(index.obs.filter((o) => /-sun$/.test(o.key) && !sunday(o)).map((o) => o.key), []);
+  const obsOfSet = new Map(index.sets.map((s) => [s[1], index.obs[s[0]]]));
+  const notSunday = new Set();
+  let onSunday = 0;
+  for (let y = 2025; y <= 2050; y++) {
+    const pass = e.transfersOf(cal, y);
+    for (let d = e.toKey(y, 1, 1); d.slice(0, 4) === String(y); d = e.addDays(d, 1)) {
+      const resolved = e.resolveDateIn(cal, d, pass);
+      for (const c of resolved.candidates) {
+        if (c.status !== "proper" && c.status !== "transferred_in") continue;
+        for (const g of e.findReadingsIn(lec, cal, resolved, c)) {
+          const o = obsOfSet.get(g.id);
+          if (!o || !sunday(o)) continue;
+          if (e.dayOfWeek(d) === 0) onSunday++;
+          else notSunday.add(`${o.name} ${d}`);
+        }
+      }
+    }
+  }
+  assert.ok(onSunday > 26 * 50, `일요일에 지킨 주일 독서 ${onSunday}`);
+  assert.deepStrictEqual([...notSunday], []);
 });

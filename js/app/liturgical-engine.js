@@ -2293,6 +2293,54 @@ function findCollectsIn(lix, cal, resolved) {
     collects: collectsOf(lix, cal, resolved, candidate.observance),
   }));
 }
+
+/**
+ * 보조 주소(`/lectionary/d/<slug>`, ADR-044 §1)가 가리킬 수 있는 식별자: 독서 세트의 `id`와 표에 있는 전례일의 `id`.
+ * @param {LectionaryIndex} lix @param {CalendarIndex} cal
+ * @returns {Set<string>}
+ */
+function slugTargetsIn(lix, cal) {
+  /** @type {Set<string>} */
+  const ids = new Set();
+  const { byDate, byLunar, byName, byCoord, named } = lix.readings;
+  for (const map of [byDate, byLunar, byName, byCoord]) for (const rows of map.values()) for (const r of rows) ids.add(String(r.id));
+  for (const r of named) ids.add(String(r.id));
+  for (const map of [cal.sanctoralByDate, cal.sanctoralByLunar]) for (const list of map.values()) for (const o of list) ids.add(o.id);
+  for (const o of cal.temporal) ids.add(o.id);
+  return ids;
+}
+
+/**
+ * 독서 세트나 전례일(`ids`)을 `from`부터 `to`까지(둘 다 포함) 처음 지키는 날(설계서 §7). 지키는 날은 후보의 상태가 `proper`나
+ * `transferred_in`인 날이다. 다른 날로 옮겨 간 날과 선택 봉헌으로만 오는 날은 그날 읽는 독서가 아니다. 독서 세트는 그 후보가 내는
+ * 독서 그룹의 `id`로, 전례일은 후보의 `observance.id`로 견준다. 찾은 세트의 `setId`와 트랙을 함께 돌려준다. 세트의 차례(`?set=`)는
+ * 전례독서 화면이 선택지를 합치고 늘어놓은 차례라 화면이 정한다. 없으면 null.
+ * @param {LectionaryIndex} lix @param {CalendarIndex} cal
+ * @param {Set<string>} ids  @param {string} from  @param {string} to  "YYYY-MM-DD"
+ * @returns {{ date: string, obs: string, setId: string | null, track: 1 | 2 | null } | null}
+ */
+function firstKeptDayIn(lix, cal, ids, from, to) {
+  let year = 0;
+  /** @type {TransferPass | null} */
+  let pass = null;
+  for (let d = /** @type {string | null} */ (from); d && d <= to; d = addDays(d, 1)) {
+    const y = Number(d.slice(0, 4));
+    if (y !== year) {
+      pass = transfersOf(cal, y);
+      year = y;
+    }
+    const resolved = resolveDateIn(cal, d, /** @type {TransferPass} */ (pass));
+    if (!resolved) continue;
+    for (const c of resolved.candidates) {
+      if (c.status !== "proper" && c.status !== "transferred_in") continue;
+      if (ids.has(c.observance.id)) return { date: d, obs: c.observance.id, setId: null, track: null };
+      for (const g of findReadingsIn(lix, cal, resolved, c)) {
+        if (ids.has(g.id)) return { date: d, obs: c.observance.id, setId: g.id, track: g.reading_track };
+      }
+    }
+  }
+  return null;
+}
 // ── END LITURGICAL_LOOKUP ──
 
 // ── BEGIN LITURGICAL_PRELOAD ──
@@ -2466,6 +2514,33 @@ function findSaintFeasts(saintId) {
   if (!calendarIndex) throw new Error("preloadCalendar() must be awaited before findSaintFeasts()");
   return new Set((saintId && calendarIndex.saintFeasts?.get(saintId)) || []);
 }
+
+/** `slugTargetsIn`의 값. 두 색인이 새로 서면 다시 만든다. @type {{ lix: LectionaryIndex, cal: CalendarIndex, ids: Set<string> } | null} */
+let slugTargets = null;
+
+/**
+ * 보조 주소의 식별자 가운데 독서 세트나 표의 전례일인 것만(`slugTargetsIn`). 프리로드 규칙은 `findReadings`와 같다.
+ * @param {string[]} ids @returns {string[]}
+ */
+function knownSlugIds(ids) {
+  if (!lectionaryIndex) throw new Error("preloadLectionary() must be awaited before knownSlugIds()");
+  if (!calendarIndex) throw new Error("preloadCalendar() must be awaited before knownSlugIds()");
+  if (!slugTargets || slugTargets.lix !== lectionaryIndex || slugTargets.cal !== calendarIndex) {
+    slugTargets = { lix: lectionaryIndex, cal: calendarIndex, ids: slugTargetsIn(lectionaryIndex, calendarIndex) };
+  }
+  const known = slugTargets.ids;
+  return ids.filter((id) => known.has(id));
+}
+
+/**
+ * 독서 세트나 전례일을 `from`부터 `to`까지 처음 지키는 날(`firstKeptDayIn`). 프리로드 규칙은 `findReadings`와 같다.
+ * @param {string[]} ids @param {string} from @param {string} to
+ */
+function firstKeptDay(ids, from, to) {
+  if (!lectionaryIndex) throw new Error("preloadLectionary() must be awaited before firstKeptDay()");
+  if (!calendarIndex) throw new Error("preloadCalendar() must be awaited before firstKeptDay()");
+  return firstKeptDayIn(lectionaryIndex, calendarIndex, new Set(ids), from, to);
+}
 // ── END LITURGICAL_PRELOAD ──
 
 export {
@@ -2477,6 +2552,8 @@ export {
   buildOrdinalIndex, ordinalWeekOf, lunarDatesOf, spansOf, inSpan,
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, findDedications, findFoundings, findSaintFeasts, fastOf,
   setActivatedOptionals,
+  // 검색 결과의 보조 주소(`/lectionary/d/<slug>`, ADR-044 §1)가 다음에 읽는 날을 찾는다.
+  knownSlugIds, firstKeptDay,
   // 같은 유형의 성인 둘 이상을 공통 본기도 하나에 모은다(독서 뷰 — 사용자 결정 2026-11-03).
   joinNames, fillCommonName,
   // 사계재 후보인가 — 독서 뷰가 제목과 전례독서 목록에 본문의 제목을 쓴다(사용자 결정 2026-11-05).

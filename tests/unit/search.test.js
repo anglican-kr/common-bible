@@ -249,8 +249,10 @@ function loadPureHelpers() {
   const { document } = makeDom();
   const ctx = {
     document,
-    Object, Array, String, Math, JSON, console, Error,
+    Object, Array, String, Math, JSON, console, Error, Set, Number,
     encodeURIComponent, Date, isNaN,
+    // SCOPE_HELPERS의 bookName(책의 짧은 이름) — 전례일 줄의 숫자 표기가 쓴다
+    bookName: (id) => ({ john: "요한", ps: "시편", luke: "루가" })[id] || id,
   };
   vm.createContext(ctx);
   vm.runInContext(extractBlock("VERSE_SPEC", VERSE_SPEC_SOURCE), ctx, { filename: "verse-spec.js" });
@@ -267,6 +269,15 @@ function loadPureHelpers() {
     buildSearchPagination: ctx.buildSearchPagination,
     buildSearchUrl: ctx.buildSearchUrl,
     formatSearchDate: ctx.formatSearchDate,
+    hasBatchim: ctx.hasBatchim,
+    synonymNote: ctx.synonymNote,
+    fixedDateText: ctx.fixedDateText,
+    lectCyclesText: ctx.lectCyclesText,
+    lectSlugHref: ctx.lectSlugHref,
+    lectRowOf: ctx.lectRowOf,
+    lectNotation: ctx.lectNotation,
+    buildLectRow: ctx.buildLectRow,
+    buildSearchPills: ctx.buildSearchPills,
   };
 }
 
@@ -298,7 +309,7 @@ function loadWorkerBlock() {
 
   const ctx = {
     Promise, Object, Array, String, Number, JSON, console, Error,
-    Worker: StubWorker,
+    Worker: StubWorker, setTimeout, clearTimeout,
   };
   vm.createContext(ctx);
   // Prelude: DATA_DIR mirrors search.js's module-level constant. Declared
@@ -311,6 +322,7 @@ function loadWorkerBlock() {
     workerInstances,
     ensureSearchWorker: ctx.ensureSearchWorker,
     doSearch: ctx.doSearch,
+    nextLectionary: ctx.nextLectionary,
   };
 }
 
@@ -1645,4 +1657,182 @@ test("buildSnippet: 따옴표를 사이에 둔 늦은 일치에서 일치 앞을
   const mark = span.children.find((c) => c.tagName === "MARK");
   assert.ok(mark, "expected a <mark>");
   assert.strictEqual(recursiveText(mark), "빛이 생겨라!” 하시자");
+});
+
+
+// ── 전례독서 검색 결과(ADR-044 §1) ───────────────────────────────────────────
+
+test("ensureSearchWorker: init에 전례독서 색인 주소를 넘긴다(ADR-044)", () => {
+  const m = loadWorkerBlock();
+  m.ensureSearchWorker();
+  assert.strictEqual(m.workerInstances[0].posts[0].lectionaryUrl, "/data/lectionary/search-lectionary.json");
+});
+
+test("nextLectionary: 늦게 온 전례일 메시지를 기다린다", async () => {
+  const m = loadWorkerBlock();
+  m.doSearch("요한 3:16", 1, 10, null);
+  const w = m.workerInstances[0];
+  const waiting = m.nextLectionary(1, 1000);
+  w._emit({ type: "lectionary", searchId: 1, lectionary: { kind: "passage", items: [] } });
+  const msg = await waiting;
+  assert.strictEqual(msg.searchId, 1);
+  assert.strictEqual(msg.lectionary.kind, "passage");
+});
+
+test("nextLectionary: 이미 온 메시지는 바로 돌려준다", async () => {
+  const m = loadWorkerBlock();
+  m.doSearch("요한 3:16", 1, 10, null);
+  m.workerInstances[0]._emit({ type: "lectionary", searchId: 1, lectionary: null });
+  const msg = await m.nextLectionary(1, 1000);
+  assert.strictEqual(msg.searchId, 1);
+  assert.strictEqual(msg.lectionary, null);
+});
+
+test("nextLectionary: 시간이 지나면 null이다", async () => {
+  const m = loadWorkerBlock();
+  m.doSearch("요한 3:16", 1, 10, null);
+  assert.strictEqual(await m.nextLectionary(1, 5), null);
+  // 시간이 지난 뒤에 온 메시지는 다음 기다림이 받는다(늦게 온 전례일을 결과에 더한다)
+  const later = m.nextLectionary(1, Infinity);
+  m.workerInstances[0]._emit({ type: "lectionary", searchId: 1, lectionary: null });
+  assert.strictEqual((await later).searchId, 1);
+});
+
+test("nextLectionary: 새 검색이 시작되면 기다리던 것은 null이고 옛 검색의 메시지는 버린다", async () => {
+  const m = loadWorkerBlock();
+  m.doSearch("요한 3:16", 1, 10, null);
+  const waiting = m.nextLectionary(1, Infinity);
+  m.doSearch("베드로", 1, 10, null);
+  assert.strictEqual(await waiting, null);
+  m.workerInstances[0]._emit({ type: "lectionary", searchId: 1, lectionary: null });
+  assert.strictEqual(await m.nextLectionary(2, 5), null);
+  assert.strictEqual(await m.nextLectionary(1, 5), null, "끝난 검색은 기다리지 않는다");
+});
+
+test("nextLectionary: 옛 검색의 늦은 메시지는 새 검색의 기다림을 깨우지 않는다", async () => {
+  const m = loadWorkerBlock();
+  m.doSearch("요한 3:16", 1, 10, null);
+  m.doSearch("베드로", 1, 10, null);
+  const waiting = m.nextLectionary(2, 30);
+  m.workerInstances[0]._emit({ type: "lectionary", searchId: 1, lectionary: { kind: "passage", items: [] } });
+  assert.strictEqual(await waiting, null);
+});
+
+test("buildSearchUrl: 전례일 알약만 주소에 적는다", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.buildSearchUrl({ q: "베드로", group: "lectionary" }), "/search?q=%EB%B2%A0%EB%93%9C%EB%A1%9C&group=lectionary");
+  assert.strictEqual(h.buildSearchUrl({ q: "베드로", group: "bible" }), "/search?q=%EB%B2%A0%EB%93%9C%EB%A1%9C");
+  assert.strictEqual(h.buildSearchUrl({ q: "베드로" }), "/search?q=%EB%B2%A0%EB%93%9C%EB%A1%9C");
+});
+
+test("synonymNote: 받침에 따라 을과 를, 으로와 로를 고른다(ㄹ 받침은 로)", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.synonymNote([{ from: "주님 부활 대축일", to: "부활대축일" }]), "‘주님 부활 대축일’을 ‘부활대축일’로 찾았습니다.");
+  assert.strictEqual(h.synonymNote([{ from: "종려주일", to: "성지주일" }]), "‘종려주일’을 ‘성지주일’로 찾았습니다.");
+  assert.strictEqual(h.synonymNote([{ from: "바오로", to: "바울로" }]), "‘바오로’를 ‘바울로’로 찾았습니다.");
+  assert.strictEqual(h.synonymNote([{ from: "주현절", to: "공현" }]), "‘주현절’을 ‘공현’으로 찾았습니다.");
+  assert.strictEqual(h.synonymNote([{ from: "가", to: "나" }, { from: "다", to: "라" }]), "‘가’를 ‘나’로, ‘다’를 ‘라’로 찾았습니다.");
+});
+
+test("fixedDateText: 색인의 「MM.DD」를 「M월 D일」로", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.fixedDateText("12.29"), "12월 29일");
+  assert.strictEqual(h.fixedDateText("01.02"), "1월 2일");
+  assert.strictEqual(h.fixedDateText(null), null);
+  assert.strictEqual(h.fixedDateText("1229"), null);
+});
+
+test("lectCyclesText: 주기는 쉼표로, 트랙은 「와」로 잇는다(ADR-038 §3-1)", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.lectCyclesText([{ year: "A", track: null }]), "가해");
+  assert.strictEqual(h.lectCyclesText([{ year: "A", track: null }, { year: "C", track: null }]), "가해, 다해");
+  assert.strictEqual(h.lectCyclesText([{ year: "A", track: 2 }, { year: "A", track: 1 }]), "가해, 연속 독서와 복음 주제");
+  assert.strictEqual(h.lectCyclesText([{ year: null, track: null }]), "");
+});
+
+const SET = (id, year = null, track = null) => ({ id, year, track, setNo: 1, label: "" });
+
+test("lectSlugHref: 구절은 찾은 독서의 세트들, 이름은 그 전례일의 세트들, 세트가 없으면 전례일 키(ADR-044 §1)", () => {
+  const h = loadPureHelpers();
+  const passage = {
+    obs: { key: "advent-1-mon" }, sets: [SET("advent-1-mon-A-t1-s1"), SET("advent-1-mon-B-t1-s1"), SET("advent-1-mon-C-t1-s1")],
+    hits: [{ slot: 0, sets: [SET("advent-1-mon-B-t1-s1"), SET("advent-1-mon-C-t1-s1")] }, { slot: 3, sets: [SET("advent-1-mon-B-t1-s1")] }],
+  };
+  assert.strictEqual(h.lectSlugHref(passage), "/lectionary/d/advent-1-mon-B-t1-s1,advent-1-mon-C-t1-s1");
+  const name = { obs: { key: "t-성령강림대축일" }, sets: [SET("pentecost-A-t1-s1"), SET("pentecost-B-t1-s1")] };
+  assert.strictEqual(h.lectSlugHref(name), "/lectionary/d/pentecost-A-t1-s1,pentecost-B-t1-s1");
+  assert.strictEqual(h.lectSlugHref({ obs: { key: "d0523-학교" }, sets: [] }), `/lectionary/d/${encodeURIComponent("d0523-학교")}`);
+});
+
+const OBS = (o) => ({ key: "k", name: "이름", kind: "temporal", date: null, rank: null, common: null, order: 0, ...o });
+
+test("lectRowOf: 구절 결과는 찾은 독서의 자리와 독서 데이터의 표기, 주기를 적는다", () => {
+  const h = loadPureHelpers();
+  const item = {
+    obs: OBS({ key: "lent-2-sun", name: "사순2주일" }), sets: [SET("lent-2-sun-A-t1-s1", "A")],
+    hits: [{ slot: 3, rows: [["john", 3, 1, 17]], sets: [SET("lent-2-sun-A-t1-s1", "A")] }],
+  };
+  const row = h.lectRowOf(item, (id, slot) => (id === "lent-2-sun-A-t1-s1" && slot === "gospel" ? "요한 3:1-17" : null));
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(row)), {
+    title: "사순2주일", href: "/lectionary/d/lent-2-sun-A-t1-s1", bold: true,
+    found: { slot: "복음", text: "요한 3:1-17" }, meta: ["가해"], lines: [], label: "사순2주일, 복음 요한 3:1-17, 가해",
+  });
+});
+
+test("lectRowOf: 독서 데이터의 표기가 없으면 색인의 숫자로 만든다(송가 행은 뺀다)", () => {
+  const h = loadPureHelpers();
+  const item = {
+    obs: OBS({ key: "advent-2-sun", name: "대림2주일" }), sets: [],
+    hits: [{ slot: 1, rows: [["cant", 3, 1, 12], ["luke", 1, 68, 79]], sets: [SET("advent-2-sun-C-t1-s1", "C")] }],
+  };
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(h.lectRowOf(item, () => null).found)), { slot: "성시", text: "루가 1:68-79" });
+  assert.strictEqual(h.lectNotation([["john", 3, 14, 21], ["john", 3, 25, 25], ["john", 4, 1, 2]]), "요한 3:14-21, 25, 4:1-2");
+});
+
+test("lectRowOf: 이름 결과는 정해진 날짜를 적고, 고유 독서가 없으면 등급을 적는다(공통 독서만 있는 성인도)", () => {
+  const h = loadPureHelpers();
+  const same = h.lectRowOf({ obs: OBS({ key: "d1229-성탄주간", name: "성탄주간", date: "12.29" }), sets: [SET("d1229-성탄주간-t1-s1")] }, () => null);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(same.meta)), ["12월 29일"]);
+  assert.strictEqual(same.label, "성탄주간, 12월 29일");
+  assert.strictEqual(same.bold, false);
+  const common = h.lectRowOf({ obs: OBS({ kind: "sanctoral", name: "성 아무개", date: "03.01", rank: "minor_feast", common: "martyr" }), sets: [] }, () => null);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify([common.meta, common.lines])), [["3월 1일"], ["축일"]]);
+  const school = h.lectRowOf({ obs: OBS({ kind: "sanctoral", name: "학교 개교", date: "05.23", rank: "commemoration" }), sets: [] }, () => null);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(school.lines)), ["기념일"]);
+});
+
+test("lectRowOf: 축일 이상과 주일만 굵게 한다(캘린더 목록과 같다)", () => {
+  const h = loadPureHelpers();
+  const bold = (o) => h.lectRowOf({ obs: OBS(o), sets: [] }, () => null).bold;
+  assert.strictEqual(bold({ rank: "minor_feast", kind: "sanctoral" }), true);
+  assert.strictEqual(bold({ rank: "principal" }), true);
+  assert.strictEqual(bold({ key: "ordinary-7-sun", name: "연중7주일" }), true);
+  assert.strictEqual(bold({ key: "christmas-1-sun", name: "성탄1주일" }), true);
+  assert.strictEqual(bold({ key: "t-가정주일", name: "가정주일" }), true);
+  assert.strictEqual(bold({ rank: "commemoration", kind: "sanctoral", name: "어느 주일 기념" }), false, "월별 축일의 이름은 보지 않는다");
+  assert.strictEqual(bold({ key: "ordinary-7-mon", name: "연중7주 월요일" }), false);
+});
+
+test("buildLectRow: 줄 전체가 링크 하나이고 이름은 aria-label에 모은다", () => {
+  const h = loadPureHelpers();
+  const li = h.buildLectRow({
+    title: "사순2주일", href: "/lectionary/d/x", bold: true, found: { slot: "복음", text: "요한 3:1-17" }, meta: ["가해"], lines: [], label: "L",
+  });
+  const a = li.children[0];
+  assert.strictEqual(a.tagName, "A");
+  assert.strictEqual(a.className, "cal-row cal-row--major");
+  assert.strictEqual(a.getAttribute("href"), "/lectionary/d/x");
+  assert.strictEqual(a.getAttribute("aria-label"), "L");
+  assert.strictEqual(recursiveText(a), "사순2주일복음요한 3:1-17가해");
+});
+
+test("buildSearchPills: 고른 알약에 aria-current, 알약마다 주소와 포커스 키, 스크린 리더에는 「건」", () => {
+  const h = loadPureHelpers();
+  const nav = h.buildSearchPills("lectionary", 198, 3, (g) => `/search?q=x${g === "lectionary" ? "&group=lectionary" : ""}`);
+  assert.strictEqual(nav.getAttribute("aria-label"), "검색 결과 묶음");
+  const links = nav.children[0].children.map((li) => li.children[0]);
+  assert.deepStrictEqual(links.map((a) => a.getAttribute("href")), ["/search?q=x", "/search?q=x&group=lectionary"]);
+  assert.deepStrictEqual(links.map((a) => a.getAttribute("aria-current")), [null, "true"]);
+  assert.deepStrictEqual(links.map((a) => a.getAttribute("data-focus-key")), ["group:bible", "group:lectionary"]);
+  assert.deepStrictEqual(links.map((a) => recursiveText(a)), ["성서 본문 198건", "전례일 3건"]);
 });

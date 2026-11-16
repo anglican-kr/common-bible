@@ -91,10 +91,16 @@ test("parsePath: /settings → settings 뷰", () => {
 
 // ── search route ──
 
-test("parsePath: /search 빈 쿼리는 기본값(page 1, filterBooks [])", () => {
+test("parsePath: /search 빈 쿼리는 기본값(page 1, filterBooks [], group null)", () => {
   assert.deepEqual(parse("/search"), {
-    view: "search", query: "", page: 1, filterBooks: [],
+    view: "search", query: "", page: 1, filterBooks: [], group: null,
   });
+});
+
+test("parsePath: /search group은 전례일 알약만 읽고 나머지 값은 null(ADR-044 §1)", () => {
+  assert.strictEqual(parse("/search", "?q=베드로&group=lectionary").group, "lectionary");
+  assert.strictEqual(parse("/search", "?q=베드로&group=bible").group, null);
+  assert.strictEqual(parse("/search", "?q=베드로&group=").group, null);
 });
 
 test("parsePath: /search 쿼리·페이지·in 스코프 파싱", () => {
@@ -138,14 +144,14 @@ test("parsePath: /read/<id> percent-encoding 디코드", () => {
 
 test("parsePath: /lectionary → lectionary 뷰, date null(오늘), 상태 전부 null", () => {
   assert.deepEqual(parse("/lectionary"), {
-    view: "lectionary", date: null, obs: null, track: null, set: null, collect: null,
+    view: "lectionary", date: null, slug: null, obs: null, track: null, set: null, collect: null,
   });
 });
 
 test("parsePath: /lectionary/YYYY-MM-DD + 쿼리 네 키 파싱", () => {
   const r = parse("/lectionary/2026-04-05", "?obs=grid:easter-1-sunday&track=2&set=2&collect=3");
   assert.deepEqual(r, {
-    view: "lectionary", date: "2026-04-05", obs: "grid:easter-1-sunday", track: 2, set: 2, collect: 3,
+    view: "lectionary", date: "2026-04-05", slug: null, obs: "grid:easter-1-sunday", track: 2, set: 2, collect: 3,
   });
 });
 
@@ -173,9 +179,18 @@ test("parsePath: 깨진 퍼센트 이스케이프는 throw 하지 않고 원문�
   assert.equal(parse("/lectionary/2026-04-05").date, "2026-04-05");
 });
 
-test("parsePath: /lectionary/ 아래 나머지는 date 로 그대로 넘긴다(검증은 뷰) — A4 의 d/<slug> 포함", () => {
-  assert.equal(parse("/lectionary/d/advent-1-sun-A").date, "d/advent-1-sun-A");
+test("parsePath: /lectionary/ 아래 나머지는 date 로 그대로 넘긴다(검증은 뷰)", () => {
   assert.equal(parse("/lectionary/2026-13-99").date, "2026-13-99");
+  assert.equal(parse("/lectionary/2026-13-99").slug, null);
+});
+
+test("parsePath: /lectionary/d/<slug>는 slug로 읽고 date는 null이다(ADR-044 §1)", () => {
+  const r = parse("/lectionary/d/advent-1-mon-B-t1-s1,advent-1-mon-C-t1-s1");
+  assert.strictEqual(r.date, null);
+  assert.strictEqual(r.slug, "advent-1-mon-B-t1-s1,advent-1-mon-C-t1-s1");
+  // 한글 전례일 키는 퍼센트 인코딩으로 온다
+  assert.strictEqual(parse(`/lectionary/d/${encodeURIComponent("d1229-성탄주간")}`).slug, "d1229-성탄주간");
+  assert.strictEqual(parse("/lectionary/d/").slug, "");
 });
 
 test("parsePath: 'lectionary' 는 책 id 로 읽히지 않는다", () => {
