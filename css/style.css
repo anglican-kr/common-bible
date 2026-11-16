@@ -73,8 +73,9 @@
   --text: #2a2520;
   --text-secondary: #5a554d;
   /* 3차 텍스트·약화 어포던스 글리프(재정렬 핸들 ≡·disclosure·비활성 보조 아이콘). 보조
-     텍스트보다 한 단 더 연하다 — 본문 가독성이 아니라 "있되 물러난" 표식용 (DESIGN.md §2). */
-  --text-tertiary: #948e83;
+     텍스트보다 한 단 더 연하다 — 본문 가독성이 아니라 "있되 물러난" 표식용 (DESIGN.md §2). 그래도 --bg와
+     --bg-card 위에서 4.5:1 이상으로 둔다(사용자 결정 2026-11-17). */
+  --text-tertiary: #777166;
   /* chrome 강조(버튼·링크·활성·포커스) — 고정 중립 차콜. 스킴을 따르지 않는다 (ADR-028 개정). */
   --accent: #3a3a42;
   --accent-light: #56565f;
@@ -223,7 +224,7 @@
   --bg-card: #252540;
   --text: #e0dcd6;
   --text-secondary: #a0a0a0;
-  --text-tertiary: #707070;
+  --text-tertiary: #8e8e8e;
   --accent: #b8b8c2;
   --accent-light: #cecdd7;
   --border: #3a3a55;
