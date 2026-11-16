@@ -45,7 +45,7 @@ import { specCoversVerse, parseVerseSpec, verseInstanceKeys, citationSource, for
 import {
   parseDate, toKey, addDays, dayOfWeek, isComputableDate, joinNames, fillCommonName,
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, findDedications, findFoundings, findSaintFeasts, fastOf, isEmber,
-  optionalDestOf,
+  optionalDestOf, knownSlugIds, firstKeptDay,
 } from "./liturgical-engine.js";
 
 const {
@@ -2135,6 +2135,7 @@ async function renderLectionaryView(parsed) {
   const entrySeq = typeof routeSeq === "function" ? routeSeq() : null;
   const isStale = () => entrySeq !== null && typeof routeSeq === "function" && routeSeq() !== entrySeq;
 
+  if (parsed.slug != null) return openNextReading(parsed.slug, isStale);
   const date = parsed.date || todayKey(new Date());
   if (!parseDate(date)) return pickAnotherDate("잘못된 날짜입니다");
   // 교회력을 계산하는 연도(엔진 — 1583-9999) 밖이면 자료를 받기 전에 알린다. 엔진의 `resolveDate`도 범위 밖에 null을
@@ -2171,6 +2172,58 @@ async function renderLectionaryView(parsed) {
   // Google Analytics의 방문 기록(`page_title`)으로 나가므로 교회 이름과 세례명을 싣지 않는다(ADR-041 §8)
   if (model.privateSelection) return PAGE_TITLE;
   return `${shortName(model.dayName)} ${PAGE_TITLE}`;
+}
+
+/** 보조 주소가 다음에 읽는 날을 찾는 끝(설계서 §7). 2025-2050년에 한 번도 오지 않는 독서 세트는 없다(2026-11-15 실측). */
+const NEXT_READING_LAST_DAY = "2050-12-31";
+
+/**
+ * 검색 결과가 여는 보조 주소 `/lectionary/d/<slug>`(ADR-044 §1). 슬러그의 독서 세트나 전례일을 오늘부터 처음 지키는 날을 찾아,
+ * 주소를 그날의 주소로 바꿔 쓰고(`replaceState`) 그날을 그린다. 그래서 뒤로 가기와 공유는 날짜 주소를 쓴다. 한 해씩 찾고 해
+ * 사이마다 차례를 넘겨 화면이 멈추지 않게 한다. 대개 첫 해에 찾는다.
+ * @param {string} slug
+ * @param {() => boolean} isStale
+ * @returns {Promise<string>}
+ */
+async function openNextReading(slug, isStale) {
+  try {
+    await Promise.all([preloadCalendar(), preloadLectionary()]);
+  } catch (err) {
+    if (isStale()) return PAGE_TITLE;
+    console.error(err);
+    return renderLiturgicalLoadFailure("lectionary");
+  }
+  if (isStale()) return PAGE_TITLE;
+  const ids = knownSlugIds(slug.split(",").map((id) => id.trim()).filter(Boolean));
+  if (!ids.length) return pickAnotherDate("잘못된 주소입니다");
+  for (let from = todayKey(new Date()); from <= NEXT_READING_LAST_DAY; from = `${Number(from.slice(0, 4)) + 1}-01-01`) {
+    const found = firstKeptDay(ids, from, `${from.slice(0, 4)}-12-31`);
+    if (found) {
+      history.replaceState(history.state, "", nextReadingHref(found));
+      return renderLectionaryView(/** @type {LectionaryRoute} */ (window.parsePath()));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (isStale()) return PAGE_TITLE;
+  }
+  return pickAnotherDate("이 독서를 읽는 날을 찾지 못했습니다");
+}
+
+/**
+ * 보조 주소가 찾은 날의 정식 주소. 그날의 화면 모델이 만드는 주소를 쓴다. 세트의 차례(`?set=`)는 괄호 세트를 합치고 제목으로 늘어놓은
+ * 선택지의 차례라 데이터의 세트 번호와 다르고, 기본 전례일이면 `?obs=`를 적지 않는다. 찾은 세트가 든 선택지, 그 전례일의 전례독서
+ * 목록 줄, 날짜만의 주소 차례로 고른다. 화면이 감추는 전례일(공통 독서만 있는 성인)은 그날의 기본 화면이다.
+ * @param {{ date: string, obs: string, setId: string | null, track: 1 | 2 | null }} found
+ * @returns {string}
+ */
+function nextReadingHref(found) {
+  const resolved = resolveDate(found.date);
+  const model = resolved && lectionaryModelOf(resolved, { obs: found.obs, track: found.track, set: null, collect: null });
+  if (model && model.selected.observance.id === found.obs && found.setId) {
+    const i = model.options.findIndex((o) => o.group.id === found.setId || (o.short && o.short.id === found.setId));
+    if (i >= 0 && model.hrefs.options[i]) return model.hrefs.options[i];
+  }
+  const choice = model && model.selected !== model.initial ? model.choices.find((c) => c.candidate.observance.id === found.obs) : null;
+  return choice ? choice.href : `/lectionary/${found.date}`;
 }
 
 // 캘린더 탭(calendar.js — ADR-038 §2 A2)이 같은 이름 · 날짜 · 색 규칙을 쓴다(복제 금지 — 칸 · 줄의 이름이 전례독서 목록과 같아야 한다).

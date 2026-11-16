@@ -55,6 +55,12 @@ let activeSearchId = 0;
 // Overwritten by renderSearchResults for each search.
 /** @type {((partial: any) => void) | null} */
 let partialResultsCb = null;
+// The late `lectionary` message of the active search (the worker sends it once the lectionary index arrives, ADR-044
+// §1) and the callers waiting for it (`nextLectionary`). A new search drops both and wakes the waiters with null.
+/** @type {any} */
+let lateLectionary = null;
+/** @type {Array<(msg: any) => void>} */
+let lectionaryWaiters = [];
 
 function ensureSearchWorker() {
   if (searchWorker) return searchWorker;
@@ -63,6 +69,12 @@ function ensureSearchWorker() {
     const msg = ev.data;
     if (msg.type === "partial-results" && msg.searchId === activeSearchId) {
       if (partialResultsCb) partialResultsCb(msg);
+    }
+    if (msg.type === "lectionary" && msg.searchId === activeSearchId) {
+      lateLectionary = msg;
+      const waiters = lectionaryWaiters;
+      lectionaryWaiters = [];
+      for (const wake of waiters) wake(msg);
     }
     if (msg.type === "results" || msg.type === "error") {
       // Worker init/load failures may emit error without searchId in some browsers.
@@ -84,8 +96,37 @@ function ensureSearchWorker() {
       { name: "dc", url: `${DATA_DIR}/search-dc.json` },
       { name: "ot", url: `${DATA_DIR}/search-ot.json` },
     ],
+    lectionaryUrl: `${DATA_DIR}/lectionary/search-lectionary.json`,
   });
   return searchWorker;
+}
+
+/**
+ * The late `lectionary` message of search `searchId` (ADR-044 §1): at once if it already came, null once `ms` passed
+ * (`Infinity`: no limit) or a newer search started.
+ * @param {number} searchId
+ * @param {number} ms
+ * @returns {Promise<any>}
+ */
+function nextLectionary(searchId, ms) {
+  return new Promise((resolve) => {
+    if (searchId !== activeSearchId) return resolve(null);
+    if (lateLectionary && lateLectionary.searchId === searchId) return resolve(lateLectionary);
+    /** @type {ReturnType<typeof setTimeout> | null} */
+    let timer = null;
+    /** @param {any} msg */
+    const wake = (msg) => {
+      if (timer !== null) clearTimeout(timer);
+      resolve(msg);
+    };
+    lectionaryWaiters.push(wake);
+    if (Number.isFinite(ms)) {
+      timer = setTimeout(() => {
+        lectionaryWaiters = lectionaryWaiters.filter((w) => w !== wake);
+        resolve(null);
+      }, ms);
+    }
+  });
 }
 
 /**
@@ -102,6 +143,10 @@ function doSearch(query, page, pageSize, onPartial, opts) {
     activeSearchId += 1;
     pendingSearchCb = resolve;
     partialResultsCb = onPartial || null;
+    lateLectionary = null;
+    const waiters = lectionaryWaiters;
+    lectionaryWaiters = [];
+    for (const wake of waiters) wake(null);
     worker.postMessage({
       type: "search", q: query, page, pageSize, searchId: activeSearchId,
       scopeBooks: (opts && opts.scopeBooks) || [],
@@ -333,7 +378,8 @@ function verseRefTargets(ref) {
  * Build a /search URL from structured state (ADR-033). Pure — uses only
  * encodeURIComponent — so the book-picker scope (`in=`) round-trips through the
  * URL (mirrors parsePath). `page` is dropped when 1; empty params are omitted.
- * @param {{ q?: string, page?: number, filterBooks?: string[] }} state
+ * `group` is the result pill (ADR-044 §1): only 전례일 is written, 성서 본문 is the default.
+ * @param {{ q?: string, page?: number, filterBooks?: string[], group?: string | null }} state
  * @returns {string}
  */
 function buildSearchUrl(state) {
@@ -341,7 +387,184 @@ function buildSearchUrl(state) {
   if (state.q) parts.push("q=" + encodeURIComponent(state.q));
   if (state.page && state.page > 1) parts.push("page=" + state.page);
   for (const b of state.filterBooks || []) parts.push("in=" + encodeURIComponent(b));
+  if (state.group === "lectionary") parts.push("group=lectionary");
   return "/search" + (parts.length ? "?" + parts.join("&") : "");
+}
+
+// ── Lectionary results (ADR-044 §1) ──
+// 전례일 줄은 캘린더 목록의 줄(.cal-row)에서 날짜 칸을 뺀 모양이다. 2단계에는 색 점과 다음에 읽는 날이 없어, 날짜가 정해진
+// 전례일은 그 날짜를 적어 같은 이름(「성탄주간」 13개)을 구별한다(설계서 §10, 사용자 결정 2026-11-16).
+
+const LECT_SLOT_LABEL = ["제1독서", "성시", "제2독서", "복음"];
+const LECT_SLOT_KEY = ["first", "psalm", "second", "gospel"];
+/** @type {Record<string, string>} */
+const LECT_CYCLE_LABEL = { A: "가해", B: "나해", C: "다해", I: "홀수해", II: "짝수해" };
+/** @type {Record<string, string>} */
+const LECT_TRACK_LABEL = { 1: "연속 독서", 2: "복음 주제" };
+/** @type {Record<string, string>} */
+const LECT_RANK_LABEL = { principal: "대축일", major_feast: "주요축일", minor_feast: "축일", commemoration: "기념일" };
+// 캘린더 목록과 같이 축일 이상과 주일의 제목은 한 단계 굵은 500이다(DESIGN.md §3)
+const LECT_BOLD_RANKS = new Set(["principal", "privileged_sunday", "major_feast", "minor_feast", "regional_festival"]);
+
+/**
+ * 끝 글자에 받침이 있는가. 한글 음절이 아니면 없다고 본다. 엔진(liturgical-engine.js)에도 같은 계산이 있지만, 엔진은 검색 화면이
+ * 받지 않는 모듈이고 시험이 코드 구역을 잘라 읽어 공용 함수(helpers.js)를 쓰지 않는다.
+ * @param {string} word
+ */
+function hasBatchim(word) {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  return code >= 0 && code < 11172 && code % 28 !== 0;
+}
+
+/** 「으로」와 「로」 — ㄹ 받침 뒤는 「로」다. @param {string} word */
+function roOf(word) {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  return hasBatchim(word) && code % 28 !== 8 ? "으로" : "로";
+}
+
+/**
+ * 비슷한 말로 바꿔 찾았다는 한 줄(ADR-044 §3): 「‘주님 부활 대축일’을 ‘부활대축일’로 찾았습니다.」
+ * @param {Array<{ from: string, to: string }>} synonyms
+ * @returns {string}
+ */
+function synonymNote(synonyms) {
+  const parts = synonyms.map(({ from, to }) => `‘${from}’${hasBatchim(from) ? "을" : "를"} ‘${to}’${roOf(to)}`);
+  return `${parts.join(", ")} 찾았습니다.`;
+}
+
+/** 「12.29」를 「12월 29일」로. @param {string | null} date */
+function fixedDateText(date) {
+  const m = /^(\d\d)\.(\d\d)$/.exec(date || "");
+  return m ? `${Number(m[1])}월 ${Number(m[2])}일` : null;
+}
+
+/**
+ * 찾은 독서의 주기와 트랙: 「가해, 나해」, 「가해, 연속 독서와 복음 주제」(ADR-038 §3-1).
+ * @param {Array<{ year: string | null, track: number | null }>} sets
+ */
+function lectCyclesText(sets) {
+  const years = [...new Set(sets.map((s) => s.year).filter((y) => y && LECT_CYCLE_LABEL[y]))]
+    .map((y) => LECT_CYCLE_LABEL[/** @type {string} */ (y)]);
+  const tracks = [...new Set(sets.map((s) => s.track).filter((t) => t && LECT_TRACK_LABEL[t]))].sort()
+    .map((t) => LECT_TRACK_LABEL[/** @type {number} */ (t)]);
+  return [years.join(", "), tracks.join("와 ")].filter(Boolean).join(", ");
+}
+
+/**
+ * 줄을 누르면 가는 보조 주소(ADR-044 §1). 구절로 찾았으면 찾은 독서가 든 세트들, 이름으로 찾았으면 그 전례일의 세트들이다.
+ * 고유 독서가 없는 전례일만 전례일 키를 적는다. 엔진은 평일과 사계재를 색인과 다른 식별자로 내서 전례일 키로는 그날을
+ * 찾지 못하고, 세트가 없는 전례일은 모두 엔진이 같은 식별자로 내는 표의 전례일이다(search-worker.data.test.js).
+ * @param {any} item  LectItem (search-worker.js)
+ */
+function lectSlugHref(item) {
+  /** @type {any[]} */
+  const sets = item.hits ? item.hits.flatMap((/** @type {any} */ h) => h.sets) : item.sets;
+  /** @type {string[]} */
+  const ids = sets.length ? [...new Set(sets.map((s) => s.id))] : [item.obs.key];
+  return `/lectionary/d/${ids.map(encodeURIComponent).join(",")}`;
+}
+
+/**
+ * 전례일 줄 하나의 글(그리기 전의 모양). `labelOf`는 독서 데이터의 표기(「요한 3:14-21」)를 돌려주고, 모르면 null이다.
+ * @param {any} item  LectItem
+ * @param {(setId: string, slot: string) => string | null} labelOf
+ * @returns {{ title: string, href: string, bold: boolean, found: { slot: string, text: string } | null,
+ *   meta: string[], lines: string[], label: string }}
+ */
+function lectRowOf(item, labelOf) {
+  const { obs } = item;
+  // 주일은 등급이 비어 있어 이름으로 안다. 이동 축일의 이름만 본다(월별 축일에는 「주일」로 끝나는 이름이 없다)
+  const bold = LECT_BOLD_RANKS.has(obs.rank) || (obs.kind === "temporal" && /주일$/.test(obs.name));
+  /** @type {{ slot: string, text: string } | null} */
+  let found = null;
+  /** @type {string[]} */
+  const meta = [];
+  /** @type {string[]} */
+  const lines = [];
+  if (item.hits && item.hits.length) {
+    const hit = item.hits[0];
+    const text = labelOf(hit.sets[0].id, LECT_SLOT_KEY[hit.slot]) || lectNotation(hit.rows);
+    found = { slot: LECT_SLOT_LABEL[hit.slot], text };
+    const cycles = lectCyclesText(hit.sets);
+    if (cycles) meta.push(cycles);
+  } else if (!item.sets.length && LECT_RANK_LABEL[obs.rank]) {
+    // 고유 독서가 없으면 등급을 적는다. 공통 독서만 있는 성인도 그렇다. 전례독서 화면이 공통 독서만 있는 후보를 아직 보이지
+    // 않아(ADR-038 §3), 누르면 그날의 평일 독서와 성인의 이름 줄이 열리기 때문이다(사용자 결정 2026-11-16, ADR-044 §1).
+    lines.push(LECT_RANK_LABEL[obs.rank]);
+  }
+  const date = fixedDateText(obs.date);
+  if (date) meta.push(date);
+  const label = [obs.name, found ? `${found.slot} ${found.text}` : null, ...meta, ...lines].filter(Boolean).join(", ");
+  return { title: obs.name, href: lectSlugHref(item), bold, found, meta, lines, label };
+}
+
+/**
+ * 독서 데이터를 받지 못했을 때 색인의 숫자로 만든 표기. 같은 장은 쉼표로 잇는다(「요한 3:14-21」).
+ * @param {Array<[string, number, number, number]>} rows
+ */
+function lectNotation(rows) {
+  const real = rows.filter(([book]) => book !== "cant");
+  if (!real.length) return "";
+  /** @type {string[]} */
+  const parts = [];
+  /** @type {number | null} */
+  let lastChapter = null;
+  for (const [, chapter, a, b] of real) {
+    const verses = a === b ? `${a}` : `${a}-${b}`;
+    parts.push(chapter === lastChapter ? verses : `${chapter}:${verses}`);
+    lastChapter = chapter;
+  }
+  return `${bookName(real[0][0] === "lps" ? "ps" : real[0][0])} ${parts.join(", ")}`;
+}
+
+/** @param {ReturnType<typeof lectRowOf>} row */
+function buildLectRow(row) {
+  const a = el("a", { className: row.bold ? "cal-row cal-row--major" : "cal-row", href: row.href, "aria-label": row.label });
+  const body = el("span", { className: "cal-row-body" });
+  body.appendChild(el("span", { className: "cal-row-title" }, row.title));
+  if (row.found) {
+    const line = el("span", { className: "cal-row-line lect-row-found" });
+    line.appendChild(el("span", { className: "lect-row-slot" }, row.found.slot));
+    line.appendChild(document.createTextNode(row.found.text));
+    body.appendChild(line);
+  }
+  if (row.meta.length) {
+    const meta = el("span", { className: "cal-row-meta" });
+    for (const text of row.meta) meta.appendChild(el("span", {}, text));
+    body.appendChild(meta);
+  }
+  for (const text of row.lines) body.appendChild(el("span", { className: "cal-row-line" }, text));
+  a.appendChild(body);
+  const li = el("li", {});
+  li.appendChild(a);
+  return li;
+}
+
+/**
+ * 「성서 본문」과 「전례일」 알약(ADR-044 §1). 고른 알약에 `aria-current`를 달고, 누른 뒤 다시 그려도 포커스가 그 알약에
+ * 남는다(`data-focus-key`, routing.js).
+ * @param {"bible" | "lectionary"} group
+ * @param {number} bibleCount
+ * @param {number} lectCount
+ * @param {(g: "bible" | "lectionary") => string} hrefOf
+ */
+function buildSearchPills(group, bibleCount, lectCount, hrefOf) {
+  const nav = el("nav", { "aria-label": "검색 결과 묶음" });
+  const list = el("ul", { className: "search-pills", role: "list" });
+  for (const [g, name, count] of /** @type {Array<["bible" | "lectionary", string, number]>} */ ([
+    ["bible", "성서 본문", bibleCount], ["lectionary", "전례일", lectCount],
+  ])) {
+    const a = el("a", { className: "search-pill", href: hrefOf(g), "data-focus-key": `group:${g}` });
+    if (g === group) a.setAttribute("aria-current", "true");
+    a.appendChild(document.createTextNode(`${name} `));
+    a.appendChild(el("span", { className: "search-pill-count" }, String(count)));
+    a.appendChild(el("span", { className: "sr-only" }, "건"));
+    const li = el("li", {});
+    li.appendChild(a);
+    list.appendChild(li);
+  }
+  nav.appendChild(list);
+  return nav;
 }
 
 // Absolute date label for a recent-search entry (ADR-014 개정 / ADR-033). One
@@ -397,18 +620,125 @@ function buildSearchPagination(state, currentPage, totalPages) {
 
 // Render search result list into a container node (used by both page and sheet views)
 /**
+ * What the results screen needs beyond the worker's result (ADR-044 §1).
+ * @typedef SearchScreen
+ * @property {"bible" | "lectionary"} group  the chosen pill
+ * @property {(g: "bible" | "lectionary") => string} groupHref
+ * @property {(bookId: string) => number | null} chapterCount  from books.json; null when unknown
+ * @property {(setId: string, slot: string) => string | null} readingLabel  the reading's notation in eucharist-readings.json
+ * @property {boolean} scoped  a book scope is set: no lectionary days, so no lectionary example either
+ */
+
+/** @type {SearchScreen} */
+const PLAIN_SCREEN = { group: "bible", groupHref: () => "", chapterCount: () => null, readingLabel: () => null, scoped: false };
+
+/**
+ * The answer card at the top (ADR-044 §1, §2): a verse reference card per chapter, the no-chapter notice in place of a
+ * chapter the book does not have, or the first-chapter card of a book name typed alone.
+ * @param {any} result
+ * @param {SearchScreen} screen
+ * @returns {{ node: HTMLElement | null, text: string | null, missing: number, firstChapter: string | null }}
+ */
+function buildAnswer(result, screen) {
+  if (result.refMatch) {
+    const ref = result.refMatch;
+    const unit = chUnit(ref.bookId);
+    const count = screen.chapterCount(ref.bookId);
+    const targets = verseRefTargets(ref);
+    const wrap = el("div", { className: "search-answer" });
+    const list = el("ul", { className: "search-results", role: "list" });
+    // In the order typed, on screen and in the status message alike
+    /** @type {string[]} */
+    const said = [];
+    let missing = 0;
+    for (const { chapter, path, verses } of targets) {
+      let label = `${ref.bookNameKo} ${chapter}${unit}`;
+      if (verses) label += ` ${verses}`;
+      if (count !== null && chapter > count) {
+        // 장 화면이 없는 장에서 보이는 문장과 같다(views.js). 다른 장이나 절로 가는 링크는 두지 않는다(ADR-044 §2).
+        const message = `${ref.bookNameKo}에는 ${chapter}${unit}이 없습니다`;
+        const li = el("li", { className: "search-alert-item" });
+        const alert = el("div", { className: "search-alert" });
+        alert.appendChild(el("p", { className: "search-alert-title" }, `${message}.`));
+        li.appendChild(alert);
+        list.appendChild(li);
+        said.push(message);
+        missing++;
+        continue;
+      }
+      const li = el("li", { className: "search-result-item ref-match-item" });
+      const link = el("a", { href: path, className: "search-result-ref-card" });
+      link.appendChild(el("span", { className: "search-result-ref-label" }, "구절 바로가기"));
+      link.appendChild(el("span", { className: "search-result-ref-title" }, label));
+      li.appendChild(link);
+      list.appendChild(li);
+      said.push(`${label} 바로가기`);
+    }
+    wrap.appendChild(list);
+    // Every chapter there: the card count, as before this screen told lectionary days
+    return { node: wrap, text: missing ? said.join(", ") : `구절 바로가기 ${targets.length}개`, missing, firstChapter: null };
+  }
+  if (result.bookOnly) {
+    const { bookId, bookNameKo } = result.bookOnly;
+    const title = `${bookNameKo} 1${chUnit(bookId)}`;
+    const wrap = el("div", { className: "search-answer" });
+    const list = el("ul", { className: "search-results", role: "list" });
+    const li = el("li", { className: "search-result-item ref-match-item" });
+    const link = el("a", { href: `/${bookId}/1`, className: "search-result-ref-card" });
+    link.appendChild(el("span", { className: "search-result-ref-label" }, "책 바로가기"));
+    link.appendChild(el("span", { className: "search-result-ref-title" }, title));
+    li.appendChild(link);
+    list.appendChild(li);
+    wrap.appendChild(list);
+    return { node: wrap, text: `${title} 바로가기`, missing: 0, firstChapter: title };
+  }
+  return { node: null, text: null, missing: 0, firstChapter: null };
+}
+
+/**
+ * The lectionary result to show: none when a book scope hides it (the worker leaves it null) or it found nothing.
+ * @param {any} result
+ * @returns {any}
+ */
+function shownLectionary(result) {
+  return result.lectionary && result.lectionary.items && result.lectionary.items.length ? result.lectionary : null;
+}
+
+/** 전례일 묶음의 이름: 구절로 찾았으면 「이 구절을 읽는 날」(ADR-044 §1). @param {any} lect */
+function lectGroupName(lect) {
+  return lect.kind === "passage" ? "이 구절을 읽는 날" : "전례일";
+}
+
+/**
+ * 전례일 묶음: 제목, 비슷한 말의 안내, 줄 목록.
+ * @param {HTMLElement} container
+ * @param {any} lect
+ * @param {SearchScreen} screen
+ */
+function appendLectGroup(container, lect, screen) {
+  // A heading, so a screen-reader user reaches the results in one move (design §9, WCAG H42).
+  container.appendChild(el("h2", { className: "search-count" }, `${lectGroupName(lect)} ${lect.items.length}건`));
+  if (lect.kind === "name" && lect.synonyms && lect.synonyms.length) {
+    container.appendChild(el("p", { className: "search-note" }, synonymNote(lect.synonyms)));
+  }
+  const rows = el("ul", { className: "lect-rows", role: "list" });
+  for (const item of lect.items) rows.appendChild(buildLectRow(lectRowOf(item, screen.readingLabel)));
+  container.appendChild(rows);
+}
+
+/**
  * @param {HTMLElement} container
  * @param {any} result
  * @param {string} query
  * @param {number} page
  * @param {number} pageSize
  * @param {((q: string, p: number, t: number) => HTMLElement) | null} paginationBuilder
+ * @param {SearchScreen} [screen]
+ * @returns {string}  the status message for the live region (design §9): the answer card, then the counts in screen order
  */
-function renderSearchResultList(container, result, query, page, pageSize, paginationBuilder) {
+function renderSearchResultList(container, result, query, page, pageSize, paginationBuilder, screen = PLAIN_SCREEN) {
   clearNode(container);
 
-  const hasRef = !!result.refMatch;
-  const hasResults = result.results && result.results.length > 0;
   // The worker strips `in:<alias>` tokens; use the resulting keyword for
   // snippet highlighting and `?hl=` so users opening a result see their
   // search term highlighted (the raw query would never match the verse text).
@@ -417,51 +747,66 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
   // Unrecognized in:<alias> notice. Worker blocks search in this case
   // (results = 0) so the notice replaces what would otherwise be a silent
   // empty state.
-  if (result.unmatchedScopes && result.unmatchedScopes.length > 0) {
+  const unmatched = result.unmatchedScopes && result.unmatchedScopes.length > 0;
+  if (unmatched) {
     const aliasList = result.unmatchedScopes.map((/** @type {string} */ a) => `in:${a}`).join(", ");
     container.appendChild(el("p", { className: "search-notice" }, `${aliasList} — 알 수 없는 책 별칭입니다`));
   }
 
-  if (!hasRef && result.total === 0) {
-    if (!result.unmatchedScopes || result.unmatchedScopes.length === 0) {
-      container.appendChild(
-        buildSearchEmptyState("검색 결과가 없습니다", `‘${query}’에 해당하는 구절을 찾지 못했어요. 다른 낱말로 검색하거나 띄어쓰기를 바꿔 보세요.`)
-      );
-    }
-    return;
-  }
-
-  const list = el("ul", { className: "search-results", role: "list" });
-
-  // 1. Display Reference Match Cards if any — one per chapter
-  if (hasRef) {
-    const ref = result.refMatch;
-    const unit = chUnit(ref.bookId);
-    for (const { chapter, path, verses } of verseRefTargets(ref)) {
-      let label = `${ref.bookNameKo} ${chapter}${unit}`;
-      if (verses) label += ` ${verses}`;
-
-      const li = el("li", { className: "search-result-item ref-match-item" });
-      const link = el("a", { href: path, className: "search-result-ref-card" });
-      link.appendChild(el("span", { className: "search-result-ref-label" }, "구절 바로가기"));
-      link.appendChild(el("span", { className: "search-result-ref-title" }, label));
-      li.appendChild(link);
-      list.appendChild(li);
-    }
-  }
-
-  // 2. Display existing Search Results
-  const totalPages = Math.ceil(result.total / pageSize);
   const isPending = result.pendingChunks && result.pendingChunks.length > 0;
+  const lect = shownLectionary(result);
+  // By the whole count, not this page: a page past the end (a link made on a taller screen) still has results. While
+  // the bible chunks load with nothing found yet, the lectionary days alone show — no 「성서 본문 0」 pill that goes away.
+  const hasBible = result.total > 0 || (isPending && !lect);
+  const answer = buildAnswer(result, screen);
 
-  if (hasResults || isPending) {
+  if (!answer.node && !hasBible && !lect) {
+    if (!unmatched) {
+      container.appendChild(
+        buildSearchEmptyState("검색 결과가 없습니다", `‘${query}’에 해당하는 구절과 전례일을 찾지 못했어요.`)
+      );
+      container.appendChild(buildSearchExamples(true, screen.scoped));
+    }
+    return `"${query}" 검색 결과 0건`;
+  }
+
+  /** @type {string[]} */
+  const said = [];
+  if (answer.node) {
+    container.appendChild(answer.node);
+    if (answer.text) said.push(answer.text);
+  }
+  // 책 이름만 쳤고 찾은 것이 없으면 Enter로 첫 장을 연다고 알린다(ADR-044 §2). Enter를 쳤으면 이미 그 장이 열렸다.
+  if (answer.firstChapter && !hasBible && !lect) {
+    container.appendChild(el("p", { className: "search-note" },
+      `‘${query}’${hasBatchim(query) ? "이" : "가"} 들어간 구절과 전례일은 없습니다. 검색창에서 Enter를 누르면 ${answer.firstChapter}을 바로 엽니다.`));
+  }
+
+  const totalPages = Math.ceil(result.total / pageSize);
+  const group = hasBible && lect ? screen.group : lect ? "lectionary" : "bible";
+  const paged = group === "bible" && !isPending && totalPages > 1 && !!paginationBuilder;
+  if (hasBible && lect) container.appendChild(buildSearchPills(group, result.total, lect.items.length, screen.groupHref));
+  // 「2/5」 may be read as a fraction — say it in words.
+  if (hasBible) {
+    said.push(isPending ? `검색 중… 현재 ${result.total}건`
+      : `성서 본문 ${result.total}건${paged ? `, 전체 ${totalPages}쪽 중 ${page}쪽` : ""}`);
+  }
+  if (lect) said.push(`${lectGroupName(lect)} ${lect.items.length}건`);
+
+  if (group === "lectionary" && lect) {
+    appendLectGroup(container, lect, screen);
+    return `"${query}" ${said.join(", ")}`;
+  }
+
+  if (hasBible) {
     const countLabel = isPending
       ? `"${query}" 검색 중… (현재 ${result.total}건)`
-      : `총 ${result.total}건 (${page}/${totalPages}쪽)`;
+      : `성서 본문 ${result.total}건 (${page}/${totalPages}쪽)`;
     // A heading, so a screen-reader user whose focus stayed on the pressed page link (routing.js) reaches the new
     // page's results in one move — VoiceOver rotor / TalkBack headings. Looks the same as the old <p> (style.css).
     container.appendChild(el("h2", { className: "search-count" }, countLabel));
 
+    const list = el("ul", { className: "search-results", role: "list" });
     for (const r of result.results) {
       const li = el("li", { className: "search-result-item" });
       const link = el("a", { href: `/${r.b}/${r.c}/${r.v}?hl=${encodeURIComponent(highlightTerm)}` });
@@ -470,13 +815,11 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
       li.appendChild(link);
       list.appendChild(li);
     }
-  }
+    container.appendChild(list);
 
-  container.appendChild(list);
-
-  if (!isPending && totalPages > 1 && paginationBuilder) {
-    container.appendChild(paginationBuilder(query, page, totalPages));
+    if (paged && paginationBuilder) container.appendChild(paginationBuilder(query, page, totalPages));
   }
+  return `"${query}" ${said.join(", ")}`;
 }
 
 // ── In-page search input (mobile full-screen view, ADR-029 / P2) ──
@@ -568,6 +911,9 @@ function navigateSearch(patch) {
 // a later render retries; chips fall back to the raw id until names arrive.
 /** @type {{ [id: string]: string } | null} */
 let _bookMap = null;
+// Chapters per book (books.json `chapter_count`): the results screen tells a chapter the book does not have (ADR-044 §2).
+/** @type {Map<string, number>} */
+const _chapterCounts = new Map();
 async function ensureBookMap() {
   if (_bookMap) return _bookMap;
   try {
@@ -577,12 +923,44 @@ async function ensureBookMap() {
     const map = {};
     // Token chips use the Korean short name (창세, 요한) — the full name (창세기,
     // 요한의 복음서) overflows the compact in-field chip. Fall back to name_ko.
-    for (const b of books) map[b.id] = b.short_name_ko || b.name_ko;
+    for (const b of books) {
+      map[b.id] = b.short_name_ko || b.name_ko;
+      if (typeof b.chapter_count === "number") _chapterCounts.set(b.id, b.chapter_count);
+    }
     _bookMap = map;
     return _bookMap;
   } catch {
     return {}; // leave _bookMap null so a later render retries
   }
+}
+
+// The notation of each reading in eucharist-readings.json (「요한 3:14-21」, 「루가 1:68-79 (즈가리야 송가)」): a passage
+// result row shows it (ADR-044 §1). Loaded on the first passage result; a failure leaves the cache empty so a later
+// search retries, and the rows fall back to the index's numbers meanwhile (`lectNotation`).
+/** @type {Promise<Map<string, string> | null> | null} */
+let _readingLabels = null;
+/** The loaded notations, so a late redraw can use them without waiting. @type {Map<string, string> | null} */
+let _readingLabelMap = null;
+/** @returns {Promise<Map<string, string> | null>} */
+function ensureReadingLabels() {
+  return (_readingLabels ??= fetch(`${DATA_DIR}/lectionary/eucharist-readings.json`)
+    .then((res) => {
+      if (!res.ok) throw new Error(`eucharist-readings.json ${res.status}`);
+      return res.json();
+    })
+    .then((data) => {
+      /** @type {Map<string, string>} */
+      const map = new Map();
+      for (const entry of data.entries || []) {
+        for (const rd of entry.readings || []) if (rd.label) map.set(`${entry.id}|${rd.slot}`, rd.label);
+      }
+      return (_readingLabelMap = map);
+    })
+    .catch((err) => {
+      console.warn("독서 표기를 받지 못했습니다", err);
+      _readingLabels = null;
+      return null;
+    }));
 }
 // alias(소문자) → book id, for absorbing typed/example `in:<alias>` operators
 // into book-scope chips at commit time. Built from book short + full Korean
@@ -1107,7 +1485,7 @@ function renderEmptyDynamic(host) {
     host.appendChild(recents);
   } else {
     host.appendChild(buildSearchEmptyState("검색해 보세요", SEARCH_INTRO_HELP));
-    host.appendChild(buildSearchExamples());
+    host.appendChild(buildSearchExamples(false, currentSearchState().filterBooks.length > 0));
   }
 }
 
@@ -1115,24 +1493,29 @@ function renderEmptyDynamic(host) {
 // list's explanatory empty state (BOOKMARK_ADD_HELP), but instead of cramming
 // every search form into one run-on sentence it lays them out as a small
 // "검색 방법" guide (example query + what it does) that's easier to scan.
-const SEARCH_INTRO_HELP = "낱말, 책 이름, 장·절로 찾을 수 있습니다.";
+const SEARCH_INTRO_HELP = "낱말, 책 이름, 장·절, 전례일 이름으로 찾을 수 있습니다.";
 
 // Each row of the 검색 방법 guide: the example query the user can type + a short
 // plain-language description of what that form does. Mirrors the in-field
-// placeholder examples (예: 사랑, 사랑 in:요한, 창세 1:3).
+// placeholder examples (예: 사랑, 사랑 in:요한, 창세 1:3). `창세 1:3` is read on three
+// lectionary days, so Enter shows them instead of opening the chapter (ADR-044 §1). The
+// zero-result screen leaves out the book scope example (`sansScope`). With a book scope set
+// there are no lectionary days, so the lectionary example goes too (`scoped`, ADR-044 §1).
 const SEARCH_EXAMPLES = [
   { q: "사랑", desc: "성경 전체에서 낱말 찾기" },
-  { q: "사랑 in:요한", desc: "특정 책 안에서만 찾기" },
-  { q: "창세 1:3", desc: "장·절로 그 구절 바로 펼치기" },
+  { q: "사랑 in:요한", desc: "특정 책 안에서만 찾기", scope: true },
+  { q: "창세 1:3", desc: "장·절로 구절과 그 구절을 읽는 날 찾기" },
+  { q: "성령강림", desc: "전례일 이름으로 찾기", lect: true },
 ];
 
 // Build the 검색 방법 guide as a definition-style list (example → description).
 // Tapping a row fills + commits that example so users can try it without typing.
-function buildSearchExamples() {
+function buildSearchExamples(sansScope = false, scoped = false) {
   const wrap = el("div", { className: "search-examples" });
   wrap.appendChild(el("p", { className: "search-examples-heading" }, "이렇게 검색해 보세요"));
   const list = el("ul", { className: "search-examples-list", role: "list" });
-  for (const { q, desc } of SEARCH_EXAMPLES) {
+  for (const { q, desc, scope, lect } of SEARCH_EXAMPLES) {
+    if ((sansScope && scope) || (scoped && lect)) continue;
     const item = el("li", { className: "search-example" });
     const btn = el("button", { type: "button", className: "search-example-btn" });
     btn.appendChild(el("code", { className: "search-example-q" }, q));
@@ -1213,12 +1596,17 @@ async function renderSearchView(state) {
   renderEmptyDynamic(dyn);
 }
 
+// How long the results wait for the lectionary days while the worker still loads the lectionary index (ADR-044 §1).
+// A cached index arrives at once; three seconds only run out on a first download or a slow network.
+const LECTIONARY_WAIT_MS = 3000;
+
 /**
  * @param {string} query
  * @param {number} page
  * @param {boolean} [autoNavigate]
- * @param {{ filterBooks?: string[] }} [opts]
+ * @param {{ filterBooks?: string[], group?: "lectionary" | null }} [opts]
  *   filterBooks — book-picker scope (book ids), from the URL via parsePath (ADR-033).
+ *   group — the chosen result pill (ADR-044 §1); 성서 본문 when absent.
  */
 async function renderSearchResults(query, page, autoNavigate = false, opts = {}) {
   const filterBooks = opts.filterBooks || [];
@@ -1229,8 +1617,9 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   // route sequence and bail if navigation happened during the await, so a late
   // completion never clears/builds over a newer view (ADR-033, Bugbot).
   const seq = window.routeSeq?.() ?? 0;
+  const isStale = () => (window.routeSeq?.() ?? 0) !== seq;
   await ensureBookMap();
-  if ((window.routeSeq?.() ?? 0) !== seq) return;
+  if (isStale()) return;
 
   window.setTitle(`"${query}" 검색`);
   const $title = _$("page-title");
@@ -1267,12 +1656,23 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   const paginationBuilder = (/** @type {string} */ _q, /** @type {number} */ p, /** @type {number} */ t) =>
     buildSearchPagination(state, p, t);
 
+  /** @type {SearchScreen} */
+  const screen = {
+    group: opts.group === "lectionary" ? "lectionary" : "bible",
+    groupHref: (g) => buildSearchUrl({ q: query, filterBooks, group: g }),
+    chapterCount: (id) => _chapterCounts.get(id) ?? null,
+    readingLabel: () => null,
+    scoped: filterBooks.length > 0,
+  };
+  /** @param {any} res */
+  const draw = (res) => renderSearchResultList(resultsTarget, res, query, page, pageSize, paginationBuilder, screen);
+
   /** @param {any} partial */
   function onPartial(partial) {
     // Drop in-flight partials once the user navigated away — resultsTarget is
     // detached and announcing a stale query would mislead AT (ADR-033, Bugbot).
-    if ((window.routeSeq?.() ?? 0) !== seq || !resultsTarget.isConnected) return;
-    renderSearchResultList(resultsTarget, partial, query, page, pageSize, paginationBuilder);
+    if (isStale() || !resultsTarget.isConnected) return;
+    draw(partial);
     window.announce(`"${query}" 검색 중… 현재 ${partial.total}건`);
   }
 
@@ -1280,46 +1680,123 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
 
   // Bail if the user navigated away while the search was running — the captured
   // resultsTarget is stale and #app belongs to a newer view now (ADR-033, Bugbot).
-  if ((window.routeSeq?.() ?? 0) !== seq) return;
+  if (isStale()) return;
 
   if (!result) {
     window.renderError("검색에 실패했습니다.");
     return;
   }
 
-  // Verse reference match — navigate only when explicitly confirmed (Enter key).
-  // On debounce, show a clickable card so partial input (e.g. "요한 3:1" while
-  // typing "요한 3:16") doesn't cause premature navigation. A reference across
-  // chapters never navigates: the app can't tell which chapter to open first (ADR-005).
-  if (result.refMatch) {
-    const targets = verseRefTargets(result.refMatch);
-    if (autoNavigate && targets.length === 1) {
+  // The worker is still loading the lectionary index: wait for its days, and for a passage the reading data too, up to
+  // LECTIONARY_WAIT_MS in all and draw once (ADR-044 §1). Past that, draw what came: passage rows fall back to the
+  // index's numbers, and days that come later are added to the drawn results (`addLateLectionary`).
+  const deadline = Date.now() + LECTIONARY_WAIT_MS;
+  if (result.refMatch) ensureReadingLabels();   // alongside the index, not after it
+  const waitedOut = result.lectionaryPending ? !(await takeLateLectionary(result, LECTIONARY_WAIT_MS)) : false;
+  if (isStale()) return;
+  await withReadingLabels(result, screen, deadline - Date.now());
+  if (isStale()) return;
+
+  // Enter opens the chapter at once only when there is nothing to choose from (ADR-044 §1, §2): a verse reference read
+  // on no lectionary day, or a book name alone with no results at all. A reference across chapters never navigates:
+  // the app can't tell which chapter to open first (ADR-005). A chapter the book does not have is told on this screen.
+  if (autoNavigate) {
+    const target = autoNavigateTarget(result, screen);
+    if (target) {
       dismissLaunchScreen();
-      history.replaceState(null, "", targets[0].path);
+      history.replaceState(null, "", target);
       window.route();
-    } else {
-      // Show the refMatch as a clickable result, and ensure UI is visible
-      renderSearchResultList(resultsTarget, result, query, page, pageSize, paginationBuilder);
-      dismissLaunchScreen();
-      window.announce(`"${query}" 구절 바로가기 ${targets.length}개`);
+      return;
     }
-    return;
   }
 
-  renderSearchResultList(resultsTarget, result, query, page, pageSize, paginationBuilder);
+  window.announce(draw(result));
   dismissLaunchScreen();
-
-  // After a page link the focus stays on it (routing.js — user decision 2026-10-17), so the page number is spoken
-  // here, once and politely — Apple's VoiceOver criteria ask status updates to be conveyed "in a timely but
-  // non-disruptive manner", Android 16 points to live regions used sparingly. 「2/5」 may be read as a fraction —
-  // say it in words.
-  const totalPages = Math.ceil(result.total / pageSize);
-  window.announce(totalPages > 1
-    ? `"${query}" 검색 결과 ${result.total}건, 전체 ${totalPages}쪽 중 ${page}쪽`
-    : `"${query}" 검색 결과 ${result.total}건`);
   // Instant, not the root's smooth scroll: when a page link led here, the router then keeps that link where it was
   // on screen (routing.js restoreFocusSpot), and a smooth scroll still running would carry it off afterwards.
   window.scrollTo({ top: 0, behavior: "instant" });
+
+  // Not awaited: route() (routing.js) awaits this function, and its ending (page meta, page view, tab history, focus)
+  // must not wait for a late index.
+  if (waitedOut) addLateLectionary(result, query, screen, resultsTarget, isStale, draw);
+}
+
+/**
+ * 3초가 지나 온 전례일을 결과에 더하고, 찾은 것이 있을 때만 알린다(ADR-044 §1). 이미 그린 결과는 지우지 않는다. 결과를 옮겨 다니던
+ * 키보드 포커스와 읽던 자리를 지키려는 것이다(WCAG 2.4.3). 성서 결과가 있으면 그 위에 알약만 더하고(성서 본문을 고른 채다), 답 카드만
+ * 있으면 그 아래에 전례일 묶음을 단다. 결과 없음 화면이었으면 다시 그린다.
+ * @param {any} result
+ * @param {string} query
+ * @param {SearchScreen} screen
+ * @param {HTMLElement} target
+ * @param {() => boolean} isStale
+ * @param {(res: any) => string} draw
+ */
+async function addLateLectionary(result, query, screen, target, isStale, draw) {
+  if (!(await takeLateLectionary(result, Infinity)) || isStale() || !target.isConnected) return;
+  const lect = shownLectionary(result);
+  if (!lect) return;
+  await withReadingLabels(result, screen, 0);
+  if (isStale() || !target.isConnected) return;
+  const heading = target.querySelector("h2.search-count");
+  if (heading && result.total > 0) {
+    heading.before(buildSearchPills("bible", result.total, lect.items.length, screen.groupHref));
+  } else if (target.querySelector(".search-answer")) {
+    // 책 이름만 친 검색어의 「…구절과 전례일은 없습니다」는 이제 사실이 아니다
+    for (const note of target.querySelectorAll(".search-note")) note.remove();
+    appendLectGroup(target, lect, screen);
+  } else {
+    draw(result);
+  }
+  window.announce(`"${query}" ${lectGroupName(lect)} ${lect.items.length}건을 더 찾았습니다`);
+}
+
+/**
+ * Put the late `lectionary` message of `result`'s search into it. Resolves false when none came within `ms`.
+ * @param {any} result
+ * @param {number} ms
+ * @returns {Promise<boolean>}
+ */
+async function takeLateLectionary(result, ms) {
+  const msg = await nextLectionary(result.searchId, ms);
+  if (!msg) return false;
+  result.lectionary = msg.lectionary;
+  result.lectionaryPending = false;
+  return true;
+}
+
+/**
+ * Passage rows show each reading's notation from the reading data (ADR-044 §1). Waits for it at most `ms` (0: only if
+ * already loaded); without it the rows use the index's numbers, and nothing redraws when it comes later.
+ * @param {any} result
+ * @param {SearchScreen} screen
+ * @param {number} ms
+ */
+async function withReadingLabels(result, screen, ms) {
+  const lect = shownLectionary(result);
+  if (!lect || lect.kind !== "passage") return;
+  const loading = ensureReadingLabels();
+  const labels = _readingLabelMap
+    || (ms > 0 ? await Promise.race([loading, new Promise((resolve) => setTimeout(() => resolve(null), ms))]) : null);
+  if (labels) screen.readingLabel = (setId, slot) => labels.get(`${setId}|${slot}`) ?? null;
+}
+
+/**
+ * Where Enter goes without showing the results (ADR-044 §1, §2), or null to show them.
+ * @param {any} result
+ * @param {SearchScreen} screen
+ * @returns {string | null}
+ */
+function autoNavigateTarget(result, screen) {
+  if (shownLectionary(result)) return null;
+  if (result.refMatch) {
+    const targets = verseRefTargets(result.refMatch);
+    if (targets.length !== 1) return null;
+    const count = screen.chapterCount(result.refMatch.bookId);
+    return count !== null && targets[0].chapter > count ? null : targets[0].path;
+  }
+  if (result.bookOnly && result.total === 0) return `/${result.bookOnly.bookId}/1`;
+  return null;
 }
 
 // ── Search input event handlers (Desktop inline) ──

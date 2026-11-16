@@ -131,16 +131,17 @@ function parsePath() {
   /** @param {string} s */
   const decodeOrRaw = (s) => { try { return decodeURIComponent(s); } catch { return s; } };
 
-  // Search route: /search?q=...&page=...&in=<bookId> (ADR-033).
+  // Search route: /search?q=...&page=...&in=<bookId>&group=lectionary (ADR-033, ADR-044 §1).
   // `in` (book-picker scope, repeatable) lives in the URL so it survives
   // history/back-forward and tab restore (ADR-031), and so paginated/filtered
-  // links stay shareable.
+  // links stay shareable. `group` is the chosen result pill; 성서 본문 when absent.
   if (pathname === "search") {
     return {
       view: "search",
       query: query.get("q") || "",
       page: parseInt(query.get("page") ?? "", 10) || 1,
       filterBooks: query.getAll("in").filter(Boolean),
+      group: query.get("group") === "lectionary" ? "lectionary" : null,
     };
   }
 
@@ -179,10 +180,11 @@ function parsePath() {
   // screen; out-of-range values read as absent so a mangled link never throws.
   // Resolved ahead of the generic single-segment split so "lectionary" is never
   // read as a book id. The date itself is validated by the view (engine
-  // parseDate) — anything else under /lectionary/ (including the /lectionary/d/<slug>
-  // landing that A4 search will add) gets the view's invalid-date notice for now.
+  // parseDate) — anything else under /lectionary/ gets the view's invalid-date notice.
+  // /lectionary/d/<slug> is the landing of a search result (ADR-044 §1): the view finds the next day it is read on.
   if (pathname === "lectionary" || pathname.startsWith("lectionary/")) {
     const rest = pathname === "lectionary" ? "" : pathname.slice("lectionary/".length);
+    const slug = rest.startsWith("d/") ? decodeOrRaw(rest.slice(2)) : null;
     // 값 전체가 양의 정수일 때만 — parseInt 는 「2junk」 「1.5」 같은 머리만 숫자인 값도 받아 라우트 계약
     // (범위 밖 · 깨진 값은 null)을 어긴다(Copilot 리뷰 3회차).
     /** @param {string} k */
@@ -195,7 +197,8 @@ function parsePath() {
     const track = positive("track");
     return {
       view: "lectionary",
-      date: rest ? decodeOrRaw(rest) : null,
+      date: rest && slug === null ? decodeOrRaw(rest) : null,
+      slug,
       obs: query.get("obs") || null,
       track: track === 1 || track === 2 ? track : null,
       set: positive("set"),
@@ -507,14 +510,15 @@ async function route() {
         // 떠 바운스 없이 마지막 검색이 그대로 복원된다.
         window.tabHistory?.recordPath(location.pathname + location.search);
         await renderSearchResults(parsed.query, parsed.page, autoNav, {
-          filterBooks: parsed.filterBooks,
+          filterBooks: parsed.filterBooks, group: parsed.group,
         });
         // renderSearchResults 가 verse-ref auto-nav 으로 inner route() 를 호출했으면
         // _routeSeq가 올라가므로 이 검사로 알 수 있다 — inner route()가 챕터의 meta·분석을 이미
         // 처리했으니 여기서 덮어쓰지 않는다. (예전 parsePath().view 체크와 동치.)
         if (isStale()) return;
+        // 쪽 번호를 문서 제목에 넣는다(설계서 §9, GOV.UK 쪽 나누기 요소)
         updatePageMeta({
-          title: `"${parsed.query}" 검색`,
+          title: `"${parsed.query}" 검색${parsed.page > 1 && !parsed.group ? `, ${parsed.page}쪽` : ""}`,
           description: `공동번역성서에서 "${parsed.query}" 검색 결과`,
         });
       } else if (isMobile() || parsed.filterBooks.length) {

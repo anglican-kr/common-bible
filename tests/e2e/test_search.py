@@ -2,11 +2,15 @@
 
 Covers:
   - keyword search shows results
-  - verse reference auto-navigates to chapter
+  - verse reference auto-navigates to chapter when no lectionary day reads it
+  - lectionary results (ADR-044): pills, rows, Enter rules, missing chapter, book name alone, slug landing
   - worker init failure surfaces an error message
   - verse search URL on refresh auto-navigates (regression)
   - in: operator restricts to a book / supports OR / tolerates whitespace
 """
+
+import time
+from urllib.parse import quote
 
 import pytest
 
@@ -47,14 +51,15 @@ def test_page_size_counts_the_status_bar_in_the_top_bar(mobile_context):
 
 
 def test_verse_reference_navigates_to_chapter(page, base_url):
+    """전례독서에서 읽지 않는 구절은 Enter로 그 장을 연다(ADR-044 §1). 요한 7:16은 읽는 전례일이 없다."""
     page.goto(base_url)
     wait_app_ready(page)
 
-    page.fill("#search-input", "요한 3:16")
+    page.fill("#search-input", "요한 7:16")
     page.press("#search-input", "Enter")
 
-    page.wait_for_function("() => location.pathname.startsWith('/john/3')", timeout=5000)
-    assert page.evaluate("location.pathname").startswith("/john/3")
+    page.wait_for_function("() => location.pathname.startsWith('/john/7')", timeout=5000)
+    assert page.evaluate("location.pathname").startswith("/john/7")
 
 
 def _highlighted_verses(page):
@@ -69,10 +74,10 @@ def test_verse_list_opens_chapter_and_highlights_only_those_verses(page, base_ur
     page.goto(base_url)
     wait_app_ready(page)
 
-    page.fill("#search-input", "요한 3:16, 18-19")
+    page.fill("#search-input", "요한 7:16, 18-19")
     page.press("#search-input", "Enter")
 
-    page.wait_for_function("() => location.pathname === '/john/3/16,18-19'", timeout=5000)
+    page.wait_for_function("() => location.pathname === '/john/7/16,18-19'", timeout=5000)
     page.wait_for_selector("article.chapter-text .verse-highlight", timeout=5000)
     assert _highlighted_verses(page) == ["16", "18", "19"]
 
@@ -82,10 +87,10 @@ def test_verse_list_typed_out_of_order_still_highlights(page, base_url):
     page.goto(base_url)
     wait_app_ready(page)
 
-    page.fill("#search-input", "요한 3:18-19, 16")
+    page.fill("#search-input", "요한 7:18-19, 16")
     page.press("#search-input", "Enter")
 
-    page.wait_for_function("() => location.pathname === '/john/3/16,18-19'", timeout=5000)
+    page.wait_for_function("() => location.pathname === '/john/7/16,18-19'", timeout=5000)
     page.wait_for_selector("article.chapter-text .verse-highlight", timeout=5000)
     assert _highlighted_verses(page) == ["16", "18", "19"]
 
@@ -163,9 +168,9 @@ def test_verses_after_a_range_across_chapters_belong_to_its_last_chapter(page, b
 
 def test_chapter_only_opens_the_chapter(page, base_url):
     """장만 적으면 그 장을 강조 없이 연다."""
-    _commit_search(page, base_url, "시편 116")
+    _commit_search(page, base_url, "시편 83")
 
-    page.wait_for_function("() => location.pathname === '/ps/116'", timeout=5000)
+    page.wait_for_function("() => location.pathname === '/ps/83'", timeout=5000)
     page.wait_for_selector("article.chapter-text .verse", timeout=5000)
     assert _highlighted_verses(page) == []
 
@@ -178,11 +183,11 @@ def test_two_chapters_show_two_cards(page, base_url):
 
 def test_half_verse_mark_opens_the_whole_verse(page, base_url):
     """상, 하 표시는 지우고 절 전체를 강조한다."""
-    _commit_search(page, base_url, "사도 2:42-47상")
+    _commit_search(page, base_url, "사도 21:4-6상")
 
-    page.wait_for_function("() => location.pathname === '/acts/2/42-47'", timeout=5000)
+    page.wait_for_function("() => location.pathname === '/acts/21/4-6'", timeout=5000)
     page.wait_for_selector("article.chapter-text .verse-highlight", timeout=5000)
-    assert _highlighted_verses(page) == ["42", "43", "44", "45", "46", "47"]
+    assert _highlighted_verses(page) == ["4", "5", "6"]
 
 
 def test_keyword_with_comma_still_searches_text(page, base_url):
@@ -435,3 +440,278 @@ def test_search_phrase_across_cite_and_closing_quote_is_highlighted_in_chapter(p
 
     assert [m.strip() for m in _marks(page)] == ["받으리라.", "”는 복음"], found
     assert _chapter_text(page) == plain, "강조가 본문을 바꿨다(글이 빠지거나 겹쳤다)"
+
+
+
+# ── 전례독서 검색(ADR-044) ───────────────────────────────────────────────────
+
+def _goto_search(page, query, extra=""):
+    page.goto(f"{BASE_URL}/search?q={quote(query)}{extra}")
+    page.wait_for_selector(".search-count, .empty-state, .search-alert, .search-note", timeout=10_000)
+
+
+def test_verse_read_on_lectionary_days_shows_them_on_enter(page, base_url):
+    """전례일이 있는 구절은 Enter를 쳐도 장을 열지 않고 「이 구절을 읽는 날」을 보인다(ADR-044 §1)."""
+    page.goto(base_url)
+    wait_app_ready(page)
+    page.fill("#search-input", "요한 3:16")
+    page.press("#search-input", "Enter")
+    page.wait_for_selector(".lect-rows a", timeout=10_000)
+
+    assert page.evaluate("location.pathname") == "/search"
+    assert page.inner_text(".search-result-ref-title") == "요한의 복음서 3장 16절"
+    assert page.inner_text("h2.search-count") == "이 구절을 읽는 날 5건"
+    first = page.locator(".lect-rows a").first
+    # 찾은 독서의 자리와 독서 데이터의 표기, 그리고 주기
+    assert first.get_attribute("aria-label") == "사순2주일, 복음 요한 3:1-17, 가해"
+    assert first.get_attribute("href") == "/lectionary/d/lent-2-sun-A-t1-s1"
+    page.wait_for_function("() => document.getElementById('a11y-announce').textContent.includes('이 구절을 읽는 날 5건')")
+
+
+def test_canticle_row_shows_its_name_from_the_reading_data(page):
+    """송가는 독서 데이터의 표기라 송가 이름이 보인다(ADR-044 §1)."""
+    _goto_search(page, "루가 1:68")
+    labels = page.locator(".lect-rows a").evaluate_all("els => els.map(e => e.getAttribute('aria-label'))")
+    assert "대림2주일, 성시 루가 1:68-79 (즈가리야 송가), 다해" in labels
+
+
+def test_pills_choose_bible_or_lectionary_and_keep_focus(page):
+    """두 자료에 모두 결과가 있으면 알약으로 고르고, 고른 알약은 주소에 적고 포커스가 남는다(ADR-044 §1)."""
+    _goto_search(page, "베드로")
+    pills = page.locator(".search-pill")
+    assert pills.count() == 2
+    assert pills.nth(0).get_attribute("aria-current") == "true"
+    assert page.inner_text("h2.search-count").startswith("성서 본문 198건 (1/")
+    assert page.locator(".lect-rows").count() == 0
+
+    pills.nth(1).click()
+    page.wait_for_url("**group=lectionary")
+    page.wait_for_selector(".lect-rows")
+    assert page.inner_text("h2.search-count") == "전례일 3건"
+    assert page.locator(".search-results .search-result-item").count() == 0
+    page.wait_for_function("() => document.activeElement?.dataset.focusKey === 'group:lectionary'")
+
+    # 새 검색어는 다시 성서 본문부터 보인다
+    page.fill("#search-input", "바울로")
+    page.press("#search-input", "Enter")
+    page.wait_for_function("() => new URLSearchParams(location.search).get('q') === '바울로'")
+    page.wait_for_selector(".search-pill[aria-current='true']")
+    assert "group=" not in page.url
+    assert page.inner_text(".search-pill[aria-current='true']").startswith("성서 본문")
+
+
+def test_lectionary_only_results_have_no_pills(page):
+    _goto_search(page, "성령강림")
+    assert page.locator(".search-pill").count() == 0
+    assert page.inner_text("h2.search-count") == "전례일 1건"
+
+
+def test_word_without_lectionary_days_names_the_bible_group(page):
+    """성서 본문에만 결과가 있으면 알약 없이 「성서 본문 N건」이다(ADR-044 §1)."""
+    _goto_search(page, "사랑")
+    assert page.locator(".search-pill").count() == 0
+    assert page.inner_text("h2.search-count").startswith("성서 본문 ")
+
+
+def test_synonym_is_told_in_one_line(page):
+    _goto_search(page, "주님 부활 대축일")
+    assert page.inner_text(".search-note") == "‘주님 부활 대축일’을 ‘부활대축일’로 찾았습니다."
+
+
+def test_book_scope_hides_lectionary_days(page):
+    """책 고르기로 책을 골라 두었으면 전례일 결과를 보이지 않는다(ADR-044 §1)."""
+    _goto_search(page, "베드로", "&in=matt")
+    assert page.locator(".search-pill").count() == 0
+    assert page.locator(".lect-rows").count() == 0
+
+
+def test_days_of_the_same_name_show_their_date(page):
+    """2단계에는 다음에 읽는 날이 없어, 이름이 같은 「성탄주간」 13개를 정해진 날짜로 구별한다(설계서 §10)."""
+    _goto_search(page, "성탄주간")
+    metas = page.locator(".lect-rows .cal-row-meta").all_inner_texts()
+    assert len(metas) == 13
+    assert metas[0] == "12월 29일"
+    assert len(set(metas)) == 13
+
+
+def test_missing_chapter_is_told_and_enter_stays(page, base_url):
+    """책에 없는 장은 구절 바로가기 카드 대신 알린다. Enter를 쳐도 장 화면으로 가지 않는다(ADR-044 §2)."""
+    page.goto(base_url)
+    wait_app_ready(page)
+    page.fill("#search-input", "유다 3")
+    page.press("#search-input", "Enter")
+    page.wait_for_selector(".search-alert", timeout=10_000)
+    assert page.inner_text(".search-alert-title") == "유다의 편지에는 3장이 없습니다."
+    assert page.locator(".search-result-ref-card").count() == 0
+    assert page.evaluate("location.pathname") == "/search"
+
+
+def test_book_name_alone_shows_the_first_chapter_card(page, base_url):
+    """책 이름만 치면 첫 장 바로가기를 두고, 결과가 없을 때만 Enter로 첫 장을 연다(ADR-044 §2)."""
+    _goto_search(page, "창세기")
+    assert page.locator(".search-result-ref-card").get_attribute("href") == "/gen/1"
+    assert page.inner_text(".search-result-ref-title") == "창세기 1장"
+
+    page.fill("#search-input", "창세기")
+    page.press("#search-input", "Enter")
+    page.wait_for_function("() => location.pathname === '/gen/1'", timeout=8_000)
+
+    # 「요한」은 본문과 전례일에 결과가 있어 Enter를 쳐도 결과 화면이다
+    page.fill("#search-input", "요한")
+    page.press("#search-input", "Enter")
+    page.wait_for_selector(".search-pill", timeout=10_000)
+    assert page.evaluate("location.pathname") == "/search"
+    assert page.inner_text(".search-result-ref-title") == "요한의 복음서 1장"
+
+
+def test_row_opens_the_next_day_it_is_read(page):
+    """전례일 줄은 보조 주소로 가서 다음에 읽는 날의 주소로 바꿔 쓴다. 뒤로 가면 검색 결과다(ADR-044 §1)."""
+    _goto_search(page, "요한 3:16")
+    page.locator(".lect-rows a").first.click()
+    page.wait_for_function("() => /^\\/lectionary\\/\\d{4}-\\d{2}-\\d{2}$/.test(location.pathname)", timeout=15_000)
+    page.wait_for_selector(".lect-day", timeout=15_000)
+    assert "사순" in page.inner_text(".lect-day")
+    # 그날의 기본 전례일이라 화면의 정식 주소는 날짜뿐이다
+    assert "?" not in page.url
+
+    page.go_back()
+    page.wait_for_selector(".lect-rows", timeout=10_000)
+    assert page.evaluate("location.pathname") == "/search"
+
+
+def test_unknown_slug_is_told(page):
+    page.goto(f"{BASE_URL}/lectionary/d/nope")
+    page.wait_for_selector("text=잘못된 주소입니다", timeout=10_000)
+
+
+def _held_lectionary_index(browser):
+    """전례독서 색인 요청을 붙잡아 두는 앱. 시험이 `held[0].continue_()`로 보낸다. 서비스 워커를 막아 요청이 언제나 이 경로를 지난다."""
+    ctx = browser.new_context(service_workers="block")
+    held = []
+    ctx.route("**/lectionary/search-lectionary.json", lambda route: held.append(route))
+    return ctx, held
+
+
+def test_enter_waits_for_a_slow_lectionary_index(browser):
+    """색인이 3초 안에 오면 기다렸다가 전례일이 있는 구절의 결과 화면을 보인다(ADR-044 §1)."""
+    ctx, held = _held_lectionary_index(browser)
+    page = ctx.new_page()
+    page.goto(BASE_URL)
+    wait_app_ready(page)
+    page.fill("#search-input", "요한 3:16")
+    page.press("#search-input", "Enter")
+    page.wait_for_function("() => !!document.querySelector('#app .loading')")
+    page.wait_for_timeout(1_000)
+    assert held, "색인 요청"
+    held[0].continue_()
+    page.wait_for_selector(".lect-rows a", timeout=10_000)
+    assert page.evaluate("location.pathname") == "/search"
+    ctx.close()
+
+
+def test_enter_opens_the_chapter_when_the_index_is_too_slow(browser):
+    """색인이 3초 안에 오지 않으면 전례일이 없는 것으로 보고 장을 연다(ADR-044 §1)."""
+    ctx, held = _held_lectionary_index(browser)
+    page = ctx.new_page()
+    page.goto(BASE_URL)
+    wait_app_ready(page)
+    page.fill("#search-input", "요한 3:16")
+    page.press("#search-input", "Enter")
+    page.wait_for_function("() => location.pathname === '/john/3/16'", timeout=10_000)
+    for route in held:
+        route.continue_()
+    ctx.close()
+
+
+def test_late_lectionary_days_are_added_and_told(browser):
+    """3초가 지나 온 전례일은 결과에 더하고 「더 찾았습니다」를 알린다(ADR-044 §1)."""
+    ctx, held = _held_lectionary_index(browser)
+    page = ctx.new_page()
+    page.goto(f"{BASE_URL}/search?q={quote('요한 3:16')}")
+    page.wait_for_selector(".search-result-ref-card", timeout=10_000)
+    assert page.locator(".lect-rows").count() == 0
+    held[0].continue_()
+    page.wait_for_selector(".lect-rows a", timeout=10_000)
+    page.wait_for_function(
+        "() => document.getElementById('a11y-announce').textContent === '\"요한 3:16\" 이 구절을 읽는 날 5건을 더 찾았습니다'",
+        timeout=5_000,
+    )
+    ctx.close()
+
+
+
+def test_missing_and_present_chapters_keep_the_typed_order(page):
+    """있는 장과 없는 장을 함께 치면 친 차례대로 카드와 알림을 두고, 알림도 같은 차례다(ADR-044 §2)."""
+    _goto_search(page, "요한 21, 22")
+    classes = page.locator(".search-answer li").evaluate_all("els => els.map(e => e.className)")
+    assert classes == ["search-result-item ref-match-item", "search-alert-item"]
+    page.wait_for_function(
+        "() => document.getElementById('a11y-announce').textContent"
+        ".startsWith('\"요한 21, 22\" 요한의 복음서 21장 바로가기, 요한의 복음서에는 22장이 없습니다')"
+    )
+
+
+def test_page_past_the_end_still_shows_the_count(page):
+    """쪽 번호가 끝을 넘은 주소(더 긴 화면에서 만든 링크)도 「결과 없음」이 아니라 결과 수와 쪽 이동을 보인다."""
+    page.goto(f"{BASE_URL}/search?q={quote('사랑')}&page=999")
+    page.wait_for_selector("h2.search-count", timeout=10_000)
+    assert page.inner_text("h2.search-count").startswith("성서 본문 ")
+    assert page.locator(".empty-state").count() == 0
+    assert page.locator(".search-pagination").count() == 1
+
+
+def test_book_scope_leaves_out_the_lectionary_example(page):
+    """책을 골라 두면 전례일을 찾지 않으므로 결과 없음 화면의 예시에서 「성령강림」을 뺀다(ADR-044 §1)."""
+    page.goto(f"{BASE_URL}/search?q={quote('부활절 달걀')}&in=john")
+    page.wait_for_selector(".search-examples", timeout=10_000)
+    assert "성령강림" not in page.locator(".search-example-q").all_inner_texts()
+    page.goto(f"{BASE_URL}/search?q={quote('부활절 달걀')}")
+    page.wait_for_selector(".search-examples", timeout=10_000)
+    assert "성령강림" in page.locator(".search-example-q").all_inner_texts()
+
+
+def test_saint_with_common_readings_only_shows_its_rank_and_opens_the_day(page):
+    """공통 독서만 있는 성인의 줄은 등급을 적고, 누르면 그날을 기본 화면으로 연다(ADR-044 §1)."""
+    _goto_search(page, "레오나드")
+    row = page.locator(".lect-rows a").first
+    assert row.locator(".cal-row-title").inner_text().startswith("레오나드")
+    assert row.locator(".cal-row-line").all_inner_texts() == ["축일"]
+    row.click()
+    page.wait_for_function("() => /^\\/lectionary\\/\\d{4}-11-06$/.test(location.pathname)", timeout=15_000)
+    assert "obs=" not in page.url
+
+
+def test_slug_lands_on_the_address_the_view_makes(page):
+    """보조 주소는 그날 화면이 만드는 정식 주소로 바뀐다. 세트의 차례는 화면의 선택지 차례다(ADR-044 §1)."""
+    # 대림4주일 다해의 괄호 세트(s2)는 s1과 한 선택지라 `set=`이 없고, 기본 전례일이라 `obs=`도 없다
+    page.goto(f"{BASE_URL}/lectionary/d/advent-4-sun-C-t1-s2")
+    page.wait_for_function("() => /^\\/lectionary\\/\\d{4}-12-\\d{2}$/.test(location.pathname)", timeout=15_000)
+    page.wait_for_selector(".lect-day", timeout=15_000)
+    assert "set=" not in page.url and "obs=" not in page.url
+
+    # 성지주일 나해의 s3은 s2의 괄호 세트라 두 번째 선택지다. 주소가 고른 독서 카드의 주소와 같다
+    page.goto(f"{BASE_URL}/lectionary/d/{quote('temporal-lent-성지주일-B-t1-s3')}")
+    page.wait_for_function("() => /^\\/lectionary\\/\\d{4}-\\d{2}-\\d{2}$/.test(location.pathname)", timeout=15_000)
+    page.wait_for_selector(".lect-card[aria-current='page']", timeout=15_000)
+    assert "set=2" in page.url
+    here = page.evaluate("location.pathname + location.search")
+    assert page.locator(".lect-card[aria-current='page']").get_attribute("href") == here
+
+
+def test_late_days_keep_focus_and_let_the_route_finish(browser):
+    """3초 뒤 전례일이 와도 결과를 다시 그리지 않아 포커스가 남고, 화면 전환의 마무리(문서 제목)는 색인을 기다리지 않는다(ADR-044 §1)."""
+    ctx, held = _held_lectionary_index(browser)
+    page = ctx.new_page()
+    page.goto(f"{BASE_URL}/search?q={quote('베드로')}")
+    page.wait_for_function(
+        "() => document.querySelector('h2.search-count')?.textContent.startsWith('성서 본문')", timeout=20_000)
+    page.wait_for_function("() => document.title.startsWith('\"베드로\" 검색')", timeout=5_000)
+    assert page.locator(".search-pill").count() == 0
+    link = page.locator(".search-results .search-result-item a").nth(2)
+    link.focus()
+    href = link.get_attribute("href")
+    held[0].continue_()
+    page.wait_for_selector(".search-pill", timeout=10_000)
+    assert page.evaluate("document.activeElement.getAttribute('href')") == href
+    assert page.locator(".search-pill[aria-current='true']").inner_text().startswith("성서 본문")
+    ctx.close()

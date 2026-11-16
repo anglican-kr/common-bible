@@ -795,11 +795,11 @@ def test_list_shows_every_day_with_the_lectionary_head_text(mobile_context):
 
 
 def test_row_marks_sunday_weight_year_start_and_keeps_alternate_colours_out(mobile_context):
-    """주일과 주요축일은 제목이 굵고 평일은 보통이다. 전례년 첫날은 「나해 시작」이고, 대체색은 줄에 없다."""
+    """주일과 주요축일은 제목이 한 단계 굵고(500) 평일은 보통이다. 전례년 첫날은 「나해 시작」이고, 대체색은 줄에 없다."""
     page = mobile_context.new_page()
     _open_list(page, "calendar/list/2026-11-29")
     weight = lambda date: page.evaluate("""d => getComputedStyle(document.querySelector(`li[data-date="${d}"] .cal-row-title`)).fontWeight""", date)
-    assert weight("2026-11-08") == "700"
+    assert weight("2026-11-08") == "500"
     assert weight("2026-11-12") == "400"
     assert _row(page, "2026-11-29").locator(".cal-mark").inner_text() == "나해 시작"
     _open_list(page, "calendar/list/2026-12-13")
