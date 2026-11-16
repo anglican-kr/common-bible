@@ -1915,25 +1915,23 @@ test("lectRowOf: 날짜가 정해진 줄은 계산한 날짜가 그 날짜를 �
   assert.strictEqual(h.lectRowOf(lent, () => null, { open: DAY("2026-03-01"), next: null, nextIds: [], year: null, cycles: [] }, "2026-11-16").title, "사순2주일");
 });
 
-test("lectRowOf: 해마다 같은 독서는 다음 링크를 두지 않고, 날짜가 바뀌는 날만 다음 해의 날을 덧붙인다(ADR-044 §1)", () => {
+test("lectRowOf: 해마다 같은 독서는 엔진이 다가오는 날을 열어, 링크도 다음 해의 날도 두지 않는다(ADR-044 §1, 2026-11-17)", () => {
   const h = loadPureHelpers();
   const hit = (id) => [{ slot: 3, rows: [["john", 3, 16, 21]], sets: [SET(id)] }];
+  const days = (open, o = {}) => ({ open: DAY(open, o), next: null, nextIds: ["x"], year: null, cycles: [] });
   // 부활2주 수요일: 해 구분이 없고 날짜가 해마다 바뀐다
   const moving = { obs: OBS({ key: "easter-2-wed", name: "부활2주 수요일" }), sets: [SET("easter-2-wed-t1-s1")], hits: hit("easter-2-wed-t1-s1") };
-  const days = (open, next, o = {}) => ({ open: DAY(open, o), next: DAY(next, o), nextIds: ["x"], year: null, cycles: [] });
-  const row = h.lectRowOf(moving, () => null, days("2026-04-15", "2027-04-07", { colors: ["white"] }), "2026-11-16");
+  const row = h.lectRowOf(moving, () => null, days("2027-04-07", { colors: ["white"] }), "2026-11-17");
   assert.strictEqual(row.nexts.length, 0);
-  assert.deepStrictEqual(JSON.parse(JSON.stringify(row.meta)), ["지난 2026년 4월 15일 (수)", "2027년에는 4월 7일 (수)"]);
-  assert.ok(row.label.endsWith("지난 2026년 4월 15일 수요일, 2027년에는 4월 7일 수요일"), row.label);
-  // 성 십자가의 날: 해 구분이 없고 날짜가 정해져 있다
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(row.meta)), ["다음 2027년 4월 7일 (수)"]);
+  // 성 십자가의 날: 날짜가 정해져 있다
   const fixed = { obs: OBS({ key: "d0914-cross", name: "성 십자가의 날", kind: "sanctoral", date: "09.14", rank: "major_feast" }), sets: [SET("d0914-cross-t1-s1")], hits: hit("d0914-cross-t1-s1") };
-  const fixedRow = h.lectRowOf(fixed, () => null, days("2026-09-14", "2027-09-14", { colors: ["white"] }), "2026-11-16");
-  assert.strictEqual(fixedRow.nexts.length, 0);
-  assert.deepStrictEqual(JSON.parse(JSON.stringify(fixedRow.meta)), ["지난 2026년 9월 14일 (월)"]);
-  // 고유 독서가 없는 성인(공통 독서)도 날짜가 정해져 있다
+  const fixedRow = h.lectRowOf(fixed, () => null, days("2027-09-14", { colors: ["white"] }), "2026-11-17");
+  assert.deepStrictEqual(JSON.parse(JSON.stringify([fixedRow.nexts, fixedRow.meta])), [[], ["다음 2027년 9월 14일 (화)"]]);
+  // 고유 독서가 없는 성인(공통 독서)
   const saint = { obs: OBS({ key: "d0720-마가렛", name: "마가렛", kind: "sanctoral", date: "07.20", rank: "minor_feast", common: "martyr" }), sets: [] };
-  const saintRow = h.lectRowOf(saint, () => null, days("2026-07-20", "2027-07-20", { colors: ["red"] }), "2026-11-16");
-  assert.deepStrictEqual(JSON.parse(JSON.stringify([saintRow.nexts, saintRow.meta])), [[], ["지난 2026년 7월 20일 (월)"]]);
+  const saintRow = h.lectRowOf(saint, () => null, days("2027-07-20", { colors: ["red"] }), "2026-11-17");
+  assert.deepStrictEqual(JSON.parse(JSON.stringify([saintRow.nexts, saintRow.meta])), [[], ["다음 2027년 7월 20일 (화)"]]);
 });
 
 test("lectRowOf: 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 열리는 날의 해를 적고, 다른 해의 날마다 링크를 둔다(ADR-044 §1)", () => {

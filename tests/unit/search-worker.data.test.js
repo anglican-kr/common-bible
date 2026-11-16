@@ -434,16 +434,17 @@ test("지키는 날의 표: 줄이 여는 날은 이번 전례년의 날이고, 
   assert.strictEqual(open(["ordinary-7-sun-A-t1-s1"]).date, "2035-05-20");
 });
 
-test("지키는 날의 표: 이번 전례년 성탄 평일의 화면 이름은 평일 열 개뿐이고, 화면의 이름의 다음 날은 같은 이름의 날이다(ADR-044 §3)", { skip: !haveData }, () => {
+test("지키는 날의 표: 성탄 평일의 화면 이름은 오늘부터 한 해 안에 오는 평일 아홉이고, 그 이름은 다가오는 그날을 연다(ADR-044 §3, 2026-11-17)", { skip: !haveData }, () => {
   const { e } = realEngine();
   const table = keptTable();
-  const names = [...e.christmasNamesIn(table, TODAY)].map(([id, name]) => `${id.slice(0, 5)} ${name}`);
+  // 2026년 성탄은 금요일이다. 12.26-28은 축일과 성탄 1주일, 1.1은 주님의 이름, 1.3은 성탄 2주일, 1.6은 주님 공현, 1.10은 주님 세례다
+  const names = [...e.christmasNamesIn(table, TODAY)].map(([id, name]) => `${id.slice(0, 5)} ${name}`).sort();
   assert.deepStrictEqual(names, [
-    "d1229 성탄 1주 월요일", "d1230 성탄 1주 화요일", "d1231 성탄 1주 수요일", "d0102 성탄 1주 금요일", "d0103 성탄 1주 토요일",
-    "d0105 성탄 2주 월요일", "d0107 성탄 2주 수요일", "d0108 성탄 2주 목요일", "d0109 성탄 2주 금요일", "d0110 성탄 2주 토요일",
+    "d0102 성탄 1주 토요일", "d0104 성탄 2주 월요일", "d0105 성탄 2주 화요일", "d0107 성탄 2주 목요일", "d0108 성탄 2주 금요일",
+    "d0109 성탄 2주 토요일", "d1229 성탄 1주 화요일", "d1230 성탄 1주 수요일", "d1231 성탄 1주 목요일",
   ]);
   const open = e.namedDayIn(table, "성탄 1주 수요일", TODAY);
-  assert.deepStrictEqual([open.date, open.setId], ["2025-12-31", "d1231-성탄주간-t1-s1"]);
+  assert.deepStrictEqual([open.date, open.setId], ["2026-12-30", "d1230-성탄주간-t1-s1"]);
 });
 
 test("지키는 날의 표: 색은 그 전례일을 고른 전례독서 화면 머리의 색이다. 사계재의 평일은 절기 바탕색이 아니라 그날의 색(코드 리뷰 2026-11-16)", { skip: !haveData }, () => {
