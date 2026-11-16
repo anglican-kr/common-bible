@@ -1,4 +1,5 @@
 ---
+pr: 576
 date: 2026-11-16
 branch: feat/lectionary-search-next-day
 title: "feat: 전례독서 검색 결과의 날짜와 색"
@@ -46,7 +47,7 @@ title: "feat: 전례독서 검색 결과의 날짜와 색"
 - `docs/topics/liturgical.md`: 「전례독서 화면: 주소와 모델」의 보조 주소
 - `docs/architecture.md`: 검색 워커의 전례독서 색인과 `lect-names`, 엔진을 부르는 곳
 - `DESIGN.md`: §6 전례일 줄(색 점, 날짜, 다음 링크)
-- 디자인 시스템 아티팩트: `SearchLectionary`의 설명과 미리보기
+- 디자인 시스템 아티팩트: `SearchLectionary`의 설명과 미리보기, `bundle.css`의 다음 링크 규칙, 변경 기록(21판, `1794833882-7e5d`)
 
 ## 리뷰 반영
 
