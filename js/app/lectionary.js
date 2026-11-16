@@ -45,7 +45,7 @@ import { specCoversVerse, parseVerseSpec, verseInstanceKeys, citationSource, for
 import {
   parseDate, toKey, addDays, dayOfWeek, isComputableDate, joinNames, fillCommonName,
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, findDedications, findFoundings, findSaintFeasts, fastOf, isEmber,
-  optionalDestOf, knownSlugIds, firstKeptDay,
+  optionalDestOf, knownSlugIds, findReadingDay,
 } from "./liturgical-engine.js";
 
 const {
@@ -2135,7 +2135,7 @@ async function renderLectionaryView(parsed) {
   const entrySeq = typeof routeSeq === "function" ? routeSeq() : null;
   const isStale = () => entrySeq !== null && typeof routeSeq === "function" && routeSeq() !== entrySeq;
 
-  if (parsed.slug != null) return openNextReading(parsed.slug, isStale);
+  if (parsed.slug != null) return openNextReading(parsed.slug, isStale, parsed.from ?? null);
   const date = parsed.date || todayKey(new Date());
   if (!parseDate(date)) return pickAnotherDate("잘못된 날짜입니다");
   // 교회력을 계산하는 연도(엔진 — 1583-9999) 밖이면 자료를 받기 전에 알린다. 엔진의 `resolveDate`도 범위 밖에 null을
@@ -2174,18 +2174,17 @@ async function renderLectionaryView(parsed) {
   return `${shortName(model.dayName)} ${PAGE_TITLE}`;
 }
 
-/** 보조 주소가 다음에 읽는 날을 찾는 끝(설계서 §7). 2025-2050년에 한 번도 오지 않는 독서 세트는 없다(2026-11-15 실측). */
-const NEXT_READING_LAST_DAY = "2050-12-31";
-
 /**
- * 검색 결과가 여는 보조 주소 `/lectionary/d/<slug>`(ADR-044 §1). 슬러그의 독서 세트나 전례일을 오늘부터 처음 지키는 날을 찾아,
- * 주소를 그날의 주소로 바꿔 쓰고(`replaceState`) 그날을 그린다. 그래서 뒤로 가기와 공유는 날짜 주소를 쓴다. 한 해씩 찾고 해
- * 사이마다 차례를 넘겨 화면이 멈추지 않게 한다. 대개 첫 해에 찾는다.
+ * 검색 결과가 여는 보조 주소 `/lectionary/d/<slug>`(ADR-044 §1). 슬러그의 독서 세트나 전례일을 이번 전례년에 지키는 날을 찾고, 없으면
+ * 오늘부터 처음 지키는 날을 찾는다. `?from=`이 있으면 그날부터 처음 지키는 날이다(검색 결과의 「다음」 링크). 주소를 그날의 주소로
+ * 바꿔 쓰고(`replaceState`) 그날을 그린다. 그래서 뒤로 가기와 공유는 날짜 주소를 쓴다. 날짜는 엔진의 지키는 날의 표로 찾는다
+ * (`findReadingDay`). 표는 검색 결과의 줄과 함께 쓰고, 한 해씩 더 세며 해 사이마다 차례를 넘겨 화면이 멈추지 않는다.
  * @param {string} slug
  * @param {() => boolean} isStale
+ * @param {string | null} [from]  "YYYY-MM-DD"
  * @returns {Promise<string>}
  */
-async function openNextReading(slug, isStale) {
+async function openNextReading(slug, isStale, from = null) {
   try {
     await Promise.all([preloadCalendar(), preloadLectionary()]);
   } catch (err) {
@@ -2195,17 +2194,12 @@ async function openNextReading(slug, isStale) {
   }
   if (isStale()) return PAGE_TITLE;
   const ids = knownSlugIds(slug.split(",").map((id) => id.trim()).filter(Boolean));
-  if (!ids.length) return pickAnotherDate("잘못된 주소입니다");
-  for (let from = todayKey(new Date()); from <= NEXT_READING_LAST_DAY; from = `${Number(from.slice(0, 4)) + 1}-01-01`) {
-    const found = firstKeptDay(ids, from, `${from.slice(0, 4)}-12-31`);
-    if (found) {
-      history.replaceState(history.state, "", nextReadingHref(found));
-      return renderLectionaryView(/** @type {LectionaryRoute} */ (window.parsePath()));
-    }
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    if (isStale()) return PAGE_TITLE;
-  }
-  return pickAnotherDate("이 독서를 읽는 날을 찾지 못했습니다");
+  if (!ids.length || (from && !isComputableDate(from))) return pickAnotherDate("잘못된 주소입니다");
+  const found = await findReadingDay(ids, todayKey(new Date()), from, isStale);
+  if (isStale()) return PAGE_TITLE;
+  if (!found) return pickAnotherDate("이 독서를 읽는 날을 찾지 못했습니다");
+  history.replaceState(history.state, "", nextReadingHref(found));
+  return renderLectionaryView(/** @type {LectionaryRoute} */ (window.parsePath()));
 }
 
 /**

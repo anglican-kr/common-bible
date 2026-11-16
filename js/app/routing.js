@@ -181,7 +181,8 @@ function parsePath() {
   // Resolved ahead of the generic single-segment split so "lectionary" is never
   // read as a book id. The date itself is validated by the view (engine
   // parseDate) — anything else under /lectionary/ gets the view's invalid-date notice.
-  // /lectionary/d/<slug> is the landing of a search result (ADR-044 §1): the view finds the next day it is read on.
+  // /lectionary/d/<slug> is the landing of a search result (ADR-044 §1): the view opens the day of this liturgical year it is
+  // read on, past or not, else the next one. ?from=YYYY-MM-DD (the row's link to the next day) opens the first day from that date.
   if (pathname === "lectionary" || pathname.startsWith("lectionary/")) {
     const rest = pathname === "lectionary" ? "" : pathname.slice("lectionary/".length);
     const slug = rest.startsWith("d/") ? decodeOrRaw(rest.slice(2)) : null;
@@ -195,10 +196,13 @@ function parsePath() {
       return Number.isSafeInteger(n) ? n : null;   // 자릿수가 넘쳐 Infinity · 근사값이 되는 것도 계약 밖(Copilot 리뷰 10회차)
     };
     const track = positive("track");
+    // 보조 주소의 시작 날짜(ADR-044 §1). 날짜의 모양만 보고, 없는 날짜(2026-02-31)는 화면이 엔진으로 거른다
+    const from = query.get("from") ?? "";
     return {
       view: "lectionary",
       date: rest && slug === null ? decodeOrRaw(rest) : null,
       slug,
+      from: slug !== null && /^\d{4}-\d{2}-\d{2}$/.test(from) ? from : null,
       obs: query.get("obs") || null,
       track: track === 1 || track === 2 ? track : null,
       set: positive("set"),

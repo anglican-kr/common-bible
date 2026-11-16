@@ -391,6 +391,84 @@ test("firstKeptDayIn: 독서 세트 여럿이면 가장 가까운 날이고, 지
 });
 
 
+/** 2026-11-16 기준 지키는 날의 표(2050년까지). 시험 여럿이 함께 쓴다. */
+let keptTableCache = null;
+function keptTable() {
+  if (keptTableCache) return keptTableCache;
+  const { e, cal, lec } = realEngine();
+  const table = { from: e.liturgicalYearSpan(TODAY).from, to: "", byId: new Map(), byName: new Map() };
+  e.extendKeptDaysIn(lec, cal, table, "2050-12-31");
+  return (keptTableCache = table);
+}
+const TODAY = "2026-11-16";
+
+test("지키는 날의 표: 줄이 여는 날은 이번 전례년의 날이고, 지났으면 다음에 읽는 날을 따로 찾는다(ADR-044 §1)", { skip: !haveData }, () => {
+  const { e } = realEngine();
+  const table = keptTable();
+  const open = (ids) => e.openDayIn(table, ids, TODAY);
+  const next = (ids) => e.nextDayIn(table, ids, TODAY);
+  // 사순2주일 가해의 복음(요한 3:1-17): 이번 전례년(가해)에 읽었고, 다음은 2029년
+  assert.deepStrictEqual([open(["lent-2-sun-A-t1-s1"]).date, next(["lent-2-sun-A-t1-s1"]).date], ["2026-03-01", "2029-02-25"]);
+  assert.deepStrictEqual(Array.from(open(["lent-2-sun-A-t1-s1"]).colors), ["violet"]);
+  // 사순4주일 나해는 이번 전례년에 읽지 않아 다음 날을 연다
+  assert.strictEqual(open(["lent-4-sun-B-t1-s1"]).date, "2027-03-07");
+  // 고유 독서가 없는 월별 축일은 전례일 키로 찾는다. 오늘이다
+  assert.strictEqual(open(["d1116-마가렛"]).date, TODAY);
+  // 성탄 평일은 열리는 날의 이름이 해마다 다르다
+  const xmas = open(["d1230-성탄주간-t1-s1"]);
+  assert.deepStrictEqual([xmas.date, xmas.obs, xmas.name], ["2025-12-30", "grid:christmas-x-weekday-tue", "성탄 1주 화요일"]);
+  assert.strictEqual(next(["d1230-성탄주간-t1-s1"]).name, "성탄 1주 수요일");
+  // 연중7주일은 2026, 2027 전례년에 오지 않는다(사순절이 일찍 시작한다)
+  assert.strictEqual(open(["ordinary-7-sun-A-t1-s1"]).date, "2035-05-20");
+});
+
+test("지키는 날의 표: 이번 전례년 성탄 평일의 화면 이름은 평일 열 개뿐이고, 화면의 이름의 다음 날은 같은 이름의 날이다(ADR-044 §3)", { skip: !haveData }, () => {
+  const { e } = realEngine();
+  const table = keptTable();
+  const names = [...e.christmasNamesIn(table, TODAY)].map(([id, name]) => `${id.slice(0, 5)} ${name}`);
+  assert.deepStrictEqual(names, [
+    "d1229 성탄 1주 월요일", "d1230 성탄 1주 화요일", "d1231 성탄 1주 수요일", "d0102 성탄 1주 금요일", "d0103 성탄 1주 토요일",
+    "d0105 성탄 2주 월요일", "d0107 성탄 2주 수요일", "d0108 성탄 2주 목요일", "d0109 성탄 2주 금요일", "d0110 성탄 2주 토요일",
+  ]);
+  const { open, next } = e.namedDaysIn(table, "성탄 1주 수요일", TODAY);
+  assert.deepStrictEqual([open.date, open.setId, next.date, next.setId],
+    ["2025-12-31", "d1231-성탄주간-t1-s1", "2026-12-30", "d1230-성탄주간-t1-s1"]);
+});
+
+test("지키는 날의 표: 색인의 모든 독서 세트와 고유 독서가 없는 전례일은 2050년까지 여는 날이 있다", { skip: !haveData }, () => {
+  const { e, index } = realEngine();
+  const table = keptTable();
+  const withSets = new Set(index.sets.map((s) => s[0]));
+  const ids = [...index.sets.map((s) => s[1]), ...index.obs.filter((_, i) => !withSets.has(i)).map((o) => o.key)];
+  assert.deepStrictEqual(ids.filter((id) => !e.openDayIn(table, [id], TODAY)), []);
+});
+
+test("독서 표기: 색인이 찾는 독서 세트의 독서 자리는 모두 엔진의 독서 표에 표기가 있다(ADR-044 §1)", { skip: !haveData }, () => {
+  // 검색 결과의 줄은 찾은 독서의 표기를 엔진의 독서 표에서 꺼낸다(엔진 `readingLabel`). 없으면 색인의 숫자 표기로 그린다.
+  const { e, lec, index } = realEngine();
+  const labels = e.readingLabelsIn(lec);
+  const SLOT_KEY = ["first", "psalm", "second", "gospel"];
+  const missing = new Set();
+  for (const row of index.cov) {
+    const setId = index.sets[row[0]][1];
+    if (!labels.has(`${setId}|${SLOT_KEY[row[5]]}`)) missing.add(`${setId}|${SLOT_KEY[row[5]]}`);
+  }
+  assert.deepStrictEqual([...missing], []);
+});
+
+test("지키는 날의 표: 표로 찾은 다음 날은 날마다 찾는 firstKeptDayIn과 같다", { skip: !haveData }, () => {
+  const { e, cal, lec, index } = realEngine();
+  const table = keptTable();
+  // 모두 견주면 오래 걸려 스물다섯째마다 하나와 3년보다 먼 세트를 견준다
+  const far = ["ordinary-7-sun-A-t1-s1", "ordinary-9-sun-C-t2-s1", "advent-3-fri-t1-s1", "d0111-성탄주간-t1-s1"];
+  const ids = [...index.sets.map((s) => s[1]).filter((_, i) => i % 25 === 0), ...far, "d0523-성-베드로-학교-개교"];
+  for (const id of ids) {
+    const want = e.firstKeptDayIn(lec, cal, new Set([id]), TODAY, "2050-12-31");
+    const got = e.nextDayIn(table, [id], TODAY);
+    assert.deepStrictEqual(got && [got.date, got.obs, got.setId], want && [want.date, want.obs, want.setId], id);
+  }
+});
+
 test("검색 결과의 굵기: 이름이 「주일」로 끝나는 이동 축일은 엔진이 언제나 일요일에 지킨다(2025-2050)", { skip: !haveData }, () => {
   // 색인에는 주일인지 적는 칸이 없어 검색 화면은 이동 축일의 이름으로 주일을 알아본다(search.js lectRowOf). 데이터의 이름이 바뀌면 이
   // 시험이 알린다. `-sun`으로 끝나는 키도 모두 이름이 「주일」로 끝나야 한다.

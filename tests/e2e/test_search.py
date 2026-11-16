@@ -9,6 +9,7 @@ Covers:
   - in: operator restricts to a book / supports OR / tolerates whitespace
 """
 
+import datetime
 import time
 from urllib.parse import quote
 
@@ -450,8 +451,23 @@ def _goto_search(page, query, extra=""):
     page.wait_for_selector(".search-count, .empty-state, .search-alert, .search-note", timeout=10_000)
 
 
+# 줄이 여는 날은 오늘에 따라 바뀐다(ADR-044 §1). 날짜를 보는 시험은 시안과 같은 날로 시계를 고정한다. 2026 전례년(가해)의 끝이다
+TODAY = datetime.datetime(2026, 11, 16, 12)
+
+
+def _fix_today(page):
+    page.clock.set_fixed_time(TODAY)
+
+
+def _wait_days(page):
+    """줄에 날짜가 들어갈 때까지 기다린다."""
+    page.wait_for_function("() => [...document.querySelectorAll('.lect-rows .cal-row-meta')].some((m) => /지난|다음|오늘/.test(m.textContent))",
+                           timeout=15_000)
+
+
 def test_verse_read_on_lectionary_days_shows_them_on_enter(page, base_url):
     """전례일이 있는 구절은 Enter를 쳐도 장을 열지 않고 「이 구절을 읽는 날」을 보인다(ADR-044 §1)."""
+    _fix_today(page)
     page.goto(base_url)
     wait_app_ready(page)
     page.fill("#search-input", "요한 3:16")
@@ -462,8 +478,8 @@ def test_verse_read_on_lectionary_days_shows_them_on_enter(page, base_url):
     assert page.inner_text(".search-result-ref-title") == "요한의 복음서 3장 16절"
     assert page.inner_text("h2.search-count") == "이 구절을 읽는 날 5건"
     first = page.locator(".lect-rows a").first
-    # 찾은 독서의 자리와 독서 데이터의 표기, 그리고 주기
-    assert first.get_attribute("aria-label") == "사순2주일, 복음 요한 3:1-17, 가해"
+    # 찾은 독서의 자리와 독서 데이터의 표기, 색과 주기, 그리고 여는 날(이번 전례년의 날, 지났어도 그날)
+    assert first.get_attribute("aria-label") == "사순2주일, 복음 요한 3:1-17, 자색, 가해, 지난 2026년 3월 1일 일요일"
     assert first.get_attribute("href") == "/lectionary/d/lent-2-sun-A-t1-s1"
     page.wait_for_function("() => document.getElementById('a11y-announce').textContent.includes('이 구절을 읽는 날 5건')")
 
@@ -471,8 +487,8 @@ def test_verse_read_on_lectionary_days_shows_them_on_enter(page, base_url):
 def test_canticle_row_shows_its_name_from_the_reading_data(page):
     """송가는 독서 데이터의 표기라 송가 이름이 보인다(ADR-044 §1)."""
     _goto_search(page, "루가 1:68")
-    labels = page.locator(".lect-rows a").evaluate_all("els => els.map(e => e.getAttribute('aria-label'))")
-    assert "대림2주일, 성시 루가 1:68-79 (즈가리야 송가), 다해" in labels
+    labels = page.locator(".lect-rows a.cal-row").evaluate_all("els => els.map(e => e.getAttribute('aria-label'))")
+    assert any(label.startswith("대림2주일, 성시 루가 1:68-79 (즈가리야 송가), ") for label in labels), labels
 
 
 def test_pills_choose_bible_or_lectionary_and_keep_focus(page):
@@ -525,13 +541,91 @@ def test_book_scope_hides_lectionary_days(page):
     assert page.locator(".lect-rows").count() == 0
 
 
-def test_days_of_the_same_name_show_their_date(page):
-    """2단계에는 다음에 읽는 날이 없어, 이름이 같은 「성탄주간」 13개를 정해진 날짜로 구별한다(설계서 §10)."""
+def test_christmas_weekdays_show_the_name_of_the_day_they_open(page):
+    """날짜로 독서가 정해진 성탄 평일은 색인의 이름(「성탄주간」)이 아니라 열리는 날의 이름을 적는다(ADR-044 §3)."""
+    _fix_today(page)
     _goto_search(page, "성탄주간")
-    metas = page.locator(".lect-rows .cal-row-meta").all_inner_texts()
-    assert len(metas) == 13
-    assert metas[0] == "12월 29일"
-    assert len(set(metas)) == 13
+    _wait_days(page)
+    titles = page.locator(".lect-rows .cal-row-title").all_inner_texts()
+    assert len(titles) == 13
+    assert titles[:3] == ["성탄 1주 월요일", "성탄 1주 화요일", "성탄 1주 수요일"]
+    assert "성탄주간" not in titles
+    assert "지난 2025년 12월 29일 (월)" in page.locator(".lect-rows .cal-row-meta").first.inner_text()
+
+
+def test_christmas_weekday_is_found_by_its_name_on_screen(page):
+    """화면의 이름(「성탄 1주 수요일」)으로도 찾는다. 앱을 연 뒤 처음 찾아도 나온다. 다음은 같은 이름의 다음 날이다(ADR-044 §3)."""
+    _fix_today(page)
+    _goto_search(page, "성탄 1주 수요일")
+    _wait_days(page)
+    assert page.locator(".lect-rows .cal-row-title").all_inner_texts() == ["성탄 1주 수요일"]
+    assert "지난 2025년 12월 31일 (수)" in page.inner_text(".lect-rows .cal-row-meta")
+    nxt = page.locator(".lect-rows .lect-row-next")
+    assert nxt.get_attribute("href") == f"/lectionary/d/{quote('d1230-성탄주간-t1-s1')}?from=2026-12-30"
+    assert nxt.inner_text().startswith("다음 2026년 12월 30일 (수)")
+
+
+def test_row_shows_the_day_it_opens_and_a_link_to_the_next(page):
+    """줄에는 여는 날과 그날의 색을 적고, 지난날을 여는 줄에만 다음에 읽는 날의 링크를 따로 둔다(ADR-044 §1)."""
+    _fix_today(page)
+    _goto_search(page, "요한 3:16")
+    _wait_days(page)
+    rows = page.locator(".lect-rows > li")
+    first, second = rows.nth(0), rows.nth(1)
+    assert first.locator(".cal-row-color").inner_text() == "자색"
+    assert "지난 2026년 3월 1일 (일)" in first.locator(".cal-row-meta").inner_text()
+    nxt = first.locator(".lect-row-next")
+    assert nxt.get_attribute("href") == "/lectionary/d/lent-2-sun-A-t1-s1?from=2029-02-25"
+    assert nxt.get_attribute("aria-label") == "사순2주일, 다음 2029년 2월 25일 일요일"
+    # 이번 전례년에 읽지 않는 나해의 독서는 다음 날을 열고, 따로 둘 링크가 없다
+    assert "다음 2027년 3월 7일 (일)" in second.locator(".cal-row-meta").inner_text()
+    assert second.locator(".lect-row-next").count() == 0
+
+    nxt.click()
+    page.wait_for_function("() => location.pathname === '/lectionary/2029-02-25'", timeout=15_000)
+    page.wait_for_selector(".lect-day", timeout=15_000)
+    assert "사순" in page.inner_text(".lect-day")
+
+
+def test_bible_results_do_not_wait_for_the_engine(browser):
+    """「성서 본문」 묶음만 보이면 전례일 줄의 날짜를 기다리지 않는다. 엔진의 자료가 오지 않아도 3초 전에 그린다(코드 리뷰 2026-11-16)."""
+    ctx = browser.new_context(service_workers="block")
+    held = []
+    ctx.route("**/lectionary/eucharist-readings.json", lambda route: held.append(route))
+    page = ctx.new_page()
+    page.goto(BASE_URL)
+    wait_app_ready(page)
+    start = time.monotonic()
+    page.goto(f"{BASE_URL}/search?q={quote('베드로')}")
+    page.wait_for_function(
+        "() => document.querySelector('h2.search-count')?.textContent.startsWith('성서 본문 198건')", timeout=10_000)
+    assert time.monotonic() - start < 2.8, "날짜를 기다리느라 늦게 그렸다"
+    assert page.locator(".search-pill").count() == 2
+    for route in held:
+        route.continue_()
+    ctx.close()
+
+
+def test_late_engine_puts_the_days_in_place_and_keeps_focus(browser):
+    """교회력 엔진의 자료가 3초 안에 오지 않으면 날짜 없이 그리고, 나중에 줄의 글만 바꿔 넣는다. 포커스가 남는다(ADR-044 §1)."""
+    ctx = browser.new_context(service_workers="block")
+    held = []
+    ctx.route("**/lectionary/eucharist-readings.json", lambda route: held.append(route))
+    page = ctx.new_page()
+    _fix_today(page)
+    page.goto(f"{BASE_URL}/search?q={quote('성령강림')}")
+    page.wait_for_selector(".lect-rows a.cal-row", timeout=20_000)
+    assert not page.locator(".lect-rows .cal-row-meta").count() or "다음" not in page.inner_text(".lect-rows")
+    page.locator(".lect-rows a.cal-row").first.focus()
+    page.evaluate("document.activeElement.dataset.mark = 'focused'")
+    for route in held:
+        route.continue_()
+    _wait_days(page)
+    assert "지난 2026년 5월 24일 (일)" in page.inner_text(".lect-rows .cal-row-meta")
+    # 같은 링크에 포커스가 남았다(줄을 새로 만들지 않고 글만 바꿨다)
+    assert page.evaluate("document.activeElement?.dataset.mark") == "focused"
+    assert page.locator(".lect-rows .lect-row-next").get_attribute("href").endswith("?from=2027-05-16")
+    ctx.close()
 
 
 def test_missing_chapter_is_told_and_enter_stays(page, base_url):
@@ -564,11 +658,12 @@ def test_book_name_alone_shows_the_first_chapter_card(page, base_url):
     assert page.inner_text(".search-result-ref-title") == "요한의 복음서 1장"
 
 
-def test_row_opens_the_next_day_it_is_read(page):
-    """전례일 줄은 보조 주소로 가서 다음에 읽는 날의 주소로 바꿔 쓴다. 뒤로 가면 검색 결과다(ADR-044 §1)."""
+def test_row_opens_the_day_of_this_liturgical_year(page):
+    """전례일 줄은 보조 주소로 가서 이번 전례년의 그날 주소로 바꿔 쓴다. 지났어도 그날이다. 뒤로 가면 검색 결과다(ADR-044 §1)."""
+    _fix_today(page)
     _goto_search(page, "요한 3:16")
     page.locator(".lect-rows a").first.click()
-    page.wait_for_function("() => /^\\/lectionary\\/\\d{4}-\\d{2}-\\d{2}$/.test(location.pathname)", timeout=15_000)
+    page.wait_for_function("() => location.pathname === '/lectionary/2026-03-01'", timeout=15_000)
     page.wait_for_selector(".lect-day", timeout=15_000)
     assert "사순" in page.inner_text(".lect-day")
     # 그날의 기본 전례일이라 화면의 정식 주소는 날짜뿐이다
@@ -582,6 +677,19 @@ def test_row_opens_the_next_day_it_is_read(page):
 def test_unknown_slug_is_told(page):
     page.goto(f"{BASE_URL}/lectionary/d/nope")
     page.wait_for_selector("text=잘못된 주소입니다", timeout=10_000)
+    page.goto(f"{BASE_URL}/lectionary/d/lent-2-sun-A-t1-s1?from=2026-02-31")
+    page.wait_for_selector("text=잘못된 주소입니다", timeout=10_000)
+
+
+def test_slug_from_opens_the_first_day_from_that_date(page):
+    """보조 주소의 `?from=`은 그날부터 처음 지키는 날을 연다(다음에 읽는 날의 링크, ADR-044 §1)."""
+    _fix_today(page)
+    page.goto(f"{BASE_URL}/lectionary/d/lent-2-sun-A-t1-s1?from=2026-11-16")
+    page.wait_for_function("() => location.pathname === '/lectionary/2029-02-25'", timeout=15_000)
+    page.goto(f"{BASE_URL}/lectionary/d/{quote('d1231-성탄주간-t1-s1')}?from=2026-12-30")
+    page.wait_for_function("() => location.pathname === '/lectionary/2026-12-31'", timeout=15_000)
+    page.wait_for_selector(".lect-day", timeout=15_000)
+    assert page.inner_text(".lect-day") == "성탄 1주 목요일"
 
 
 def _held_lectionary_index(browser):

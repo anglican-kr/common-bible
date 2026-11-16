@@ -3381,6 +3381,31 @@ mark.search-highlight {
   color: var(--text);
 }
 .lect-row-slot { margin-right: var(--space-1); font-weight: 500; }
+/* 지난날을 여는 줄은 그 아래에 다음에 읽는 날의 링크를 따로 둔다(ADR-044 §1). 줄의 링크(.cal-row)와 겹치지 않는 형제 링크이고,
+   누르는 영역은 --touch-target 높이다. 날짜만 강조색과 밑줄로 링크임을 보인다. */
+.lect-row-pair > .cal-row { padding-bottom: var(--space-1); }
+.lect-row-next {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--touch-target);
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  line-height: var(--leading-snug);
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.lect-row-next:hover,
+.lect-row-next:focus-visible { background: var(--bg-card); }
+.lect-row-next-date {
+  color: var(--accent);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.lect-row-next-arrow { color: var(--text-tertiary); font-size: var(--font-md); }
 
 /* 구절 바로가기 카드 자리의 알림(없는 장) */
 .search-alert {

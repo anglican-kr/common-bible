@@ -526,6 +526,19 @@ test("searchLectionaryNames: 이름이 같은 단계로 맞으면 별칭은 적�
   assert.deepStrictEqual([easter.obs.name, easter.tier, easter.matched], ["부활대축일", 1, undefined]);
 });
 
+test("searchLectionaryNames: 앱이 보낸 이름(성탄 평일의 화면 이름)을 별칭처럼 찾고 그 이름을 적는다(ADR-044 §3)", () => {
+  // 독서 세트로 그 전례일을 찾는다. 모르는 세트는 버린다
+  const extra = [["advent-1-mon-t1-s1", "성탄 1주 화요일"], ["nope-t1-s1", "성탄 1주 수요일"]];
+  const items = plain(ctx.searchLectionaryNames(LECT, "성탄 1주 화요일", extra).items);
+  assert.deepStrictEqual(items.map((it) => [it.obs.name, it.tier, it.matched]), [["대림1주 월요일", 1, "성탄 1주 화요일"]]);
+  assert.deepStrictEqual(plain(ctx.searchLectionaryNames(LECT, "성탄 1주", extra).items).map((it) => [it.obs.name, it.tier]),
+    [["대림1주 월요일", 2]]);
+  assert.deepStrictEqual(plain(ctx.searchLectionaryNames(LECT, "성탄 1주 수요일", extra).items), []);
+  // 색인의 이름으로 찾으면 앱이 보낸 이름을 적지 않는다
+  const own = plain(ctx.searchLectionaryNames(LECT, "대림1주 월요일", extra).items);
+  assert.deepStrictEqual(own.map((it) => [it.obs.name, it.matched]), [["대림1주 월요일", undefined]]);
+});
+
 test("searchLectionaryNames: 성인의 이름과 칭호로 그 성인의 축일을 찾는다", () => {
   const [hit] = plain(ctx.searchLectionaryNames(LECT, "어거스틴").items);
   assert.equal(hit.obs.key, "s-어거스틴");
@@ -783,6 +796,22 @@ test("메시지: 색인을 받아 두었으면 구절과 이름으로 찾은 전
   assert.deepEqual(byBook.bookOnly, { bookId: "isa", bookNameKo: "이사야" });
   assert.deepEqual(byBook.lectionary.items, []);
   assert.deepEqual(w.lects(), [], "따로 보낼 것이 없다");
+});
+
+test("메시지: `lect-names`로 받은 이름은 다음 검색부터 찾는다(ADR-044 §3)", async () => {
+  const w = startWorker(WORKER_FILES);
+  await w.send(INIT);
+  await flush();
+  await w.send(search("성탄 1주 화요일"));
+  assert.deepEqual(w.results()[0].lectionary.items, [], "받기 전");
+  await w.send({ type: "lect-names", names: [["advent-1-mon-t1-s1", "성탄 1주 화요일"]] });
+  await w.send(search("성탄 1주 화요일"));
+  assert.deepEqual(w.results()[1].lectionary.items.map((it) => [it.obs.name, it.matched]), [["대림1주 월요일", "성탄 1주 화요일"]]);
+  // 새로 받으면 바꾼다
+  await w.send({ type: "lect-names", names: [] });
+  await w.send(search("성탄 1주 화요일"));
+  assert.deepEqual(w.results()[2].lectionary.items, []);
+  assert.equal(w.posted.filter((m) => m.type === "error").length, 0);
 });
 
 test("메시지: 색인 주소가 없으면 받지 않고 전례독서는 `null`이다(지금의 앱)", async () => {

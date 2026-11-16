@@ -144,14 +144,14 @@ test("parsePath: /read/<id> percent-encoding 디코드", () => {
 
 test("parsePath: /lectionary → lectionary 뷰, date null(오늘), 상태 전부 null", () => {
   assert.deepEqual(parse("/lectionary"), {
-    view: "lectionary", date: null, slug: null, obs: null, track: null, set: null, collect: null,
+    view: "lectionary", date: null, slug: null, from: null, obs: null, track: null, set: null, collect: null,
   });
 });
 
 test("parsePath: /lectionary/YYYY-MM-DD + 쿼리 네 키 파싱", () => {
   const r = parse("/lectionary/2026-04-05", "?obs=grid:easter-1-sunday&track=2&set=2&collect=3");
   assert.deepEqual(r, {
-    view: "lectionary", date: "2026-04-05", slug: null, obs: "grid:easter-1-sunday", track: 2, set: 2, collect: 3,
+    view: "lectionary", date: "2026-04-05", slug: null, from: null, obs: "grid:easter-1-sunday", track: 2, set: 2, collect: 3,
   });
 });
 
@@ -191,6 +191,14 @@ test("parsePath: /lectionary/d/<slug>는 slug로 읽고 date는 null이다(ADR-0
   // 한글 전례일 키는 퍼센트 인코딩으로 온다
   assert.strictEqual(parse(`/lectionary/d/${encodeURIComponent("d1229-성탄주간")}`).slug, "d1229-성탄주간");
   assert.strictEqual(parse("/lectionary/d/").slug, "");
+  assert.strictEqual(r.from, null);
+});
+
+test("parsePath: 보조 주소의 ?from=은 날짜 모양일 때만 읽고, 날짜 주소에서는 읽지 않는다(ADR-044 §1)", () => {
+  assert.strictEqual(parse("/lectionary/d/lent-2-sun-A-t1-s1", "?from=2029-02-25").from, "2029-02-25");
+  assert.strictEqual(parse("/lectionary/d/lent-2-sun-A-t1-s1", "?from=2029-2-25").from, null);
+  assert.strictEqual(parse("/lectionary/d/lent-2-sun-A-t1-s1", "?from=tomorrow").from, null);
+  assert.strictEqual(parse("/lectionary/2026-03-01", "?from=2029-02-25").from, null);
 });
 
 test("parsePath: 'lectionary' 는 책 id 로 읽히지 않는다", () => {

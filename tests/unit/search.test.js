@@ -277,6 +277,8 @@ function loadPureHelpers() {
     lectRowOf: ctx.lectRowOf,
     lectNotation: ctx.lectNotation,
     buildLectRow: ctx.buildLectRow,
+    fillLectRow: ctx.fillLectRow,
+    lectDayText: ctx.lectDayText,
     buildSearchPills: ctx.buildSearchPills,
   };
 }
@@ -1775,7 +1777,8 @@ test("lectRowOf: 구절 결과는 찾은 독서의 자리와 독서 데이터의
   const row = h.lectRowOf(item, (id, slot) => (id === "lent-2-sun-A-t1-s1" && slot === "gospel" ? "요한 3:1-17" : null));
   assert.deepStrictEqual(JSON.parse(JSON.stringify(row)), {
     title: "사순2주일", href: "/lectionary/d/lent-2-sun-A-t1-s1", bold: true,
-    found: { slot: "복음", text: "요한 3:1-17" }, meta: ["가해"], lines: [], label: "사순2주일, 복음 요한 3:1-17, 가해",
+    found: { slot: "복음", text: "요한 3:1-17" }, colors: [], meta: ["가해"], lines: [], label: "사순2주일, 복음 요한 3:1-17, 가해",
+    next: null,
   });
 });
 
@@ -1816,14 +1819,87 @@ test("lectRowOf: 축일 이상과 주일만 굵게 한다(캘린더 목록과 �
 test("buildLectRow: 줄 전체가 링크 하나이고 이름은 aria-label에 모은다", () => {
   const h = loadPureHelpers();
   const li = h.buildLectRow({
-    title: "사순2주일", href: "/lectionary/d/x", bold: true, found: { slot: "복음", text: "요한 3:1-17" }, meta: ["가해"], lines: [], label: "L",
+    title: "사순2주일", href: "/lectionary/d/x", bold: true, found: { slot: "복음", text: "요한 3:1-17" }, colors: [], meta: ["가해"], lines: [],
+    label: "L", next: null,
   });
+  assert.strictEqual(li.children.length, 1);
   const a = li.children[0];
   assert.strictEqual(a.tagName, "A");
   assert.strictEqual(a.className, "cal-row cal-row--major");
   assert.strictEqual(a.getAttribute("href"), "/lectionary/d/x");
   assert.strictEqual(a.getAttribute("aria-label"), "L");
   assert.strictEqual(recursiveText(a), "사순2주일복음요한 3:1-17가해");
+});
+
+const DAY = (date, o = {}) => ({ date, obs: "grid:lent-2-sunday", setId: "lent-2-sun-A-t1-s1", track: null, name: "사순 2주일", colors: ["violet"], ...o });
+
+test("lectDayText: 지난날은 「지난」, 앞날은 「다음」, 오늘은 「오늘」이고 해를 늘 적는다(ADR-044 §1)", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.lectDayText("2026-03-01", "2026-11-16"), "지난 2026년 3월 1일 (일)");
+  assert.strictEqual(h.lectDayText("2029-02-25", "2026-11-16"), "다음 2029년 2월 25일 (일)");
+  assert.strictEqual(h.lectDayText("2026-11-16", "2026-11-16"), "오늘");
+  assert.strictEqual(h.lectDayText("2026-12-30", "2026-11-16", true), "다음 2026년 12월 30일 수요일");
+});
+
+test("lectRowOf: 날짜를 계산했으면 열리는 날의 색과 날짜를 적고, 지난날이면 다음에 읽는 날의 링크를 둔다(ADR-044 §1)", () => {
+  const h = loadPureHelpers();
+  const item = {
+    obs: OBS({ key: "lent-2-sun", name: "사순2주일" }), sets: [SET("lent-2-sun-A-t1-s1", "A")],
+    hits: [{ slot: 3, rows: [["john", 3, 1, 17]], sets: [SET("lent-2-sun-A-t1-s1", "A")] }],
+  };
+  const days = { open: DAY("2026-03-01"), next: DAY("2029-02-25"), nextIds: ["lent-2-sun-A-t1-s1"] };
+  const row = JSON.parse(JSON.stringify(h.lectRowOf(item, () => "요한 3:1-17", days, "2026-11-16")));
+  assert.deepStrictEqual(row.colors, [{ code: "violet", name: "자색" }]);
+  assert.deepStrictEqual(row.meta, ["가해", "지난 2026년 3월 1일 (일)"]);
+  assert.strictEqual(row.label, "사순2주일, 복음 요한 3:1-17, 자색, 가해, 지난 2026년 3월 1일 일요일");
+  assert.strictEqual(row.href, "/lectionary/d/lent-2-sun-A-t1-s1");
+  assert.deepStrictEqual(row.next, {
+    href: "/lectionary/d/lent-2-sun-A-t1-s1?from=2029-02-25", label: "사순2주일, 다음 2029년 2월 25일 일요일",
+    prefix: "다음", date: "2029년 2월 25일 (일)",
+  });
+  // 앞날이나 오늘을 열면 다음 링크가 없다
+  const ahead = h.lectRowOf(item, () => null, { open: DAY("2027-03-07"), next: null, nextIds: [] }, "2026-11-16");
+  assert.strictEqual(ahead.next, null);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(ahead.meta)), ["가해", "다음 2027년 3월 7일 (일)"]);
+});
+
+test("lectRowOf: 날짜가 정해진 줄은 계산한 날짜가 그 날짜를 대신하고, 성탄 평일은 열리는 날의 이름이 제목이다(ADR-044 §3)", () => {
+  const h = loadPureHelpers();
+  const item = { obs: OBS({ key: "d1230-성탄주간", name: "성탄주간", date: "12.30" }), sets: [SET("d1230-성탄주간-t1-s1")] };
+  const open = DAY("2025-12-30", { obs: "grid:christmas-x-weekday-tue", setId: "d1230-성탄주간-t1-s1", name: "성탄 1주 화요일", colors: ["white"] });
+  const next = DAY("2026-12-30", { obs: "grid:christmas-x-weekday-wed", setId: "d1230-성탄주간-t1-s1", name: "성탄 1주 수요일", colors: ["white"] });
+  const row = h.lectRowOf(item, () => null, { open, next, nextIds: ["d1230-성탄주간-t1-s1"] }, "2026-11-16");
+  assert.strictEqual(row.title, "성탄 1주 화요일");
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(row.meta)), ["지난 2025년 12월 30일 (화)"]);
+  // 다음 링크는 다음 날의 이름으로 읽는다. 그날은 성탄 1주 수요일이다
+  assert.strictEqual(row.next.label, "성탄 1주 수요일, 다음 2026년 12월 30일 수요일");
+  // 아직 계산하지 못했으면 색인의 이름과 정해진 날짜다
+  const before = h.lectRowOf(item, () => null, null, "");
+  assert.strictEqual(before.title, "성탄주간");
+  assert.deepStrictEqual(JSON.parse(JSON.stringify([before.meta, before.colors, before.next])), [["12월 30일"], [], null]);
+  // 성탄 평일이 아닌 줄은 열리는 날의 이름이 달라도(「사순 2주일」) 색인의 이름이다
+  const lent = { obs: OBS({ key: "lent-2-sun", name: "사순2주일" }), sets: [SET("lent-2-sun-A-t1-s1", "A")] };
+  assert.strictEqual(h.lectRowOf(lent, () => null, { open: DAY("2026-03-01"), next: null, nextIds: [] }, "2026-11-16").title, "사순2주일");
+});
+
+test("fillLectRow: 다음 링크를 더하고 빼며, 줄의 링크는 그대로 두고 글만 바꾼다(포커스가 남는다)", () => {
+  const h = loadPureHelpers();
+  const row = (next) => ({
+    title: "사순2주일", href: "/lectionary/d/x", bold: true, found: null, colors: [{ code: "violet", name: "자색" }], meta: ["지난 2026년 3월 1일 (일)"],
+    lines: [], label: "L", next,
+  });
+  const li = h.buildLectRow(row(null));
+  const a = li.children[0];
+  assert.strictEqual(recursiveText(a), "사순2주일자색지난 2026년 3월 1일 (일)");
+  h.fillLectRow(li, row({ href: "/lectionary/d/x?from=2029-02-25", label: "N", prefix: "다음", date: "2029년 2월 25일 (일)" }));
+  assert.strictEqual(li.children[0], a, "같은 링크");
+  assert.strictEqual(li.className, "lect-row-pair");
+  const next = li.children[1];
+  assert.deepStrictEqual([next.className, next.getAttribute("href"), next.getAttribute("aria-label")], ["lect-row-next", "/lectionary/d/x?from=2029-02-25", "N"]);
+  assert.strictEqual(recursiveText(next), "다음 2029년 2월 25일 (일)›");
+  h.fillLectRow(li, row(null));
+  assert.strictEqual(li.children.length, 1);
+  assert.strictEqual(li.className, "");
 });
 
 test("buildSearchPills: 고른 알약에 aria-current, 알약마다 주소와 포커스 키, 스크린 리더에는 「건」", () => {

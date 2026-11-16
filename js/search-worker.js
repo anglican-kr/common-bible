@@ -15,6 +15,10 @@
  *       scopeBooks: ["john", ...] }
  *       — scopeBooks: structured book filter (book ids) from the book picker,
  *         merged with any typed `in:<alias>` tokens (ADR-033).
+ *     { type: "lect-names", names: [[setId, name], ...] }
+ *       — this liturgical year's names of the Christmas weekdays (「성탄 1주 수요일」),
+ *         which change every year and so are not in the index. The name search finds
+ *         them like aliases from the next search on (ADR-044 §3).
  *
  *   Worker → Main:
  *     { type: "ready" }
@@ -102,7 +106,11 @@
  * @property {number} searchId
  * @property {string[]} [scopeBooks]
  *
- * @typedef {InitMessage | SearchMessage} IncomingMessage
+ * @typedef LectNamesMessage  이번 전례년 성탄 평일의 화면 이름(ADR-044 §3). 해마다 바뀌어 색인에 없으므로 앱이 교회력 엔진으로 계산해 보낸다.
+ * @property {"lect-names"} type
+ * @property {Array<[string, string]>} names  [독서 세트 id, 이름(「성탄 1주 수요일」)]
+ *
+ * @typedef {InitMessage | SearchMessage | LectNamesMessage} IncomingMessage
  */
 
 /**
@@ -152,6 +160,7 @@
  * @property {Array<{ title: string, keys: string[], obs: number[] }>} saints  keys: name and title, normalized
  * @property {LectSynonym[]} synonyms  longest `fromKey` first
  * @property {number[][]} setsOfObs
+ * @property {Map<string, number>} obsOfSet  set id → obs
  * @property {Map<string, number[]>} covOfBook  book id → cov rows
  * @property {Map<number, number[]>} covOfReading  set * 4 + slot → cov rows
  *
@@ -218,6 +227,9 @@ let lectionaryPromise = null;
 
 /** @type {LectionaryIndex | null} */
 let lectionary = null;
+
+/** 이번 전례년 성탄 평일의 화면 이름(`lect-names` 메시지). 이름 검색이 별칭처럼 함께 찾는다(ADR-044 §3). @type {Array<[string, string]>} */
+let lectExtraNames = [];
 
 /** performance.now() before which a failed lectionary index is not fetched again: elapsed time, so changing the
  * device clock does not stretch the wait. */
@@ -773,6 +785,7 @@ function buildLectionarySearchIndex(raw) {
       .filter((s) => s.fromKey)
       .sort((a, b) => b.fromKey.length - a.fromKey.length),
     setsOfObs,
+    obsOfSet: new Map(raw.sets.map((s) => [s[1], s[0]])),
     covOfBook,
     covOfReading,
   };
@@ -827,16 +840,22 @@ function swapSynonyms(index, typed) {
  * 이름으로 전례일을 찾는다(설계 §4, ADR-044 §3). 전례일의 이름과 별칭, 성인의 이름과 칭호에서 찾는다.
  * 검색어 전체가 든 이름을 찾고, 비슷한 말 표의 낱말이 있으면 앱의 이름으로 바꾼 검색어로도 찾는다. 그래도 없고
  * 검색어에 낱말이 여럿이면 낱말이 모두 든 이름을 찾는다. 결과는 이름 전체가 같은 것, 이름이 검색어로 시작하는 것,
- * 이름 안에 든 것의 차례이고, 같은 단계 안에서는 전례년 순서다.
+ * 이름 안에 든 것의 차례이고, 같은 단계 안에서는 전례년 순서다. `extra`는 해마다 바뀌어 색인에 없는 이름(이번 전례년 성탄 평일의
+ * 화면 이름, ADR-044 §3)이고, 그 독서 세트의 전례일을 별칭처럼 찾는다.
  * @param {LectionaryIndex} index
  * @param {string} query
+ * @param {Array<[string, string]>} [extra]  [독서 세트 id, 이름]
  * @returns {LectResult}
  */
-function searchLectionaryNames(index, query) {
+function searchLectionaryNames(index, query, extra = []) {
   /** @type {LectResult} */
   const result = { kind: "name", items: [], synonyms: [] };
   const typed = normalizeLectName(query);
   if (!typed) return result;
+  const extraKeys = extra.flatMap(([setId, name]) => {
+    const i = index.obsOfSet.get(setId);
+    return i === undefined ? [] : [{ i, name, key: normalizeLectName(name) }];
+  });
 
   /** @type {Map<number, { tier: number, matched: string }>} */
   const best = new Map();
@@ -862,6 +881,10 @@ function searchLectionaryNames(index, query) {
     for (const saint of index.saints) {
       const tiers = saint.keys.map(tierOf).filter((t) => t > 0);
       if (tiers.length) for (const i of saint.obs) keep(i, Math.min(...tiers), saint.title);
+    }
+    for (const { i, name, key } of extraKeys) {
+      const tier = tierOf(key);
+      if (tier) keep(i, tier, name);
     }
     return found;
   };
@@ -1048,6 +1071,11 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
     return;
   }
 
+  if (msg.type === "lect-names") {
+    lectExtraNames = msg.names || [];
+    return;
+  }
+
   if (msg.type === "search") {
     const { q, page, pageSize, searchId } = msg;
     const scopeBooks = msg.scopeBooks || [];
@@ -1109,7 +1137,7 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       const findNames = (index) => {
         if (index !== namesIndex || !names) {
           namesIndex = index;
-          names = searchLectionaryNames(index, keyword);
+          names = searchLectionaryNames(index, keyword, lectExtraNames);
         }
         return names;
       };
