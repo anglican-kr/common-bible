@@ -289,7 +289,7 @@ function loadLectDays() {
   const ctx = { document, Object, Array, String, Math, JSON, console, Error, Set, Number, Map, Promise, encodeURIComponent, Date, isNaN, bookName: (id) => id };
   vm.createContext(ctx);
   vm.runInContext(extractBlock("VERSE_SPEC", VERSE_SPEC_SOURCE), ctx, { filename: "verse-spec.js" });
-  vm.runInContext(`${EL_SHIM}${extractBlock("PURE HELPERS")}\nlet _christmasNames = null;\n${extractBlock("LECT_DAYS")}\nthis.lectDaysOf = lectDaysOf;`, ctx, {
+  vm.runInContext(`${EL_SHIM}${extractBlock("PURE HELPERS")}\n${extractBlock("LECT_DAYS")}\nthis.lectDaysOf = lectDaysOf;`, ctx, {
     filename: "search-lect-days.js",
   });
   return ctx;

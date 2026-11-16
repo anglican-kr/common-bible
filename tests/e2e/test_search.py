@@ -767,8 +767,8 @@ def test_fixed_feast_row_opens_the_coming_day(page):
 
 
 def test_row_opens_the_coming_day_when_it_comes_twice_in_the_year(page):
-    """한 전례년에 두 번 드는 날(2028 전례년의 성 안드레아 축일, 2027-11-30과 2028-11-30)도 다가오는 날을 연다(ADR-044 §1,
-    코드 리뷰 2026-11-17). 해마다 같은 독서라 오늘부터 처음 오는 날이다."""
+    """한 전례년(2027-11-28부터 2028-12-02까지)의 처음과 끝에 한 번씩 있는 성 안드레아 축일도 다가오는 날을 연다. 해마다
+    같은 독서라 오늘부터 처음 오는 날이다(ADR-044 §1, 2026-11-17)."""
     page.clock.set_fixed_time(datetime.datetime(2028, 6, 1, 12))
     _goto_search(page, "안드레아", "&group=lectionary")
     _wait_days(page)
