@@ -516,6 +516,27 @@ function lectSetsOf(item) {
 }
 
 /**
+ * 해에 따라 다른 독서를 읽는 줄인가(ADR-044 §1). 줄의 세트에 해(가해, 홀수해 등)가 있으면 그렇다. 다만 구절로 찾은 줄은 찾은 독서가
+ * 그 전례일의 모든 해의 세트에 있으면 해마다 같은 독서다(평일 복음은 홀수해와 짝수해에 같은 경우가 많다, 사용자 결정 2026-11-17).
+ * @param {any} item
+ */
+function lectCyclic(item) {
+  const yearsOf = (/** @type {Array<{ year: string | null }>} */ sets) => new Set(sets.map((x) => x.year).filter(Boolean));
+  const found = yearsOf(lectSetsOf(item));
+  if (!found.size) return false;
+  return !item.hits || [...yearsOf(item.sets || [])].some((y) => !found.has(y));
+}
+
+/**
+ * 해에 따라 다른 독서처럼 해 표시가 있는 세트를 넘기지만 해마다 같은 독서인 줄(구절로 찾은 평일 복음 등). 보조 주소만으로는 엔진이
+ * 이름으로 찾은 줄과 가를 수 없어, 이 줄의 주소에는 여는 날을 붙인다(`?from=`, ADR-044 §1).
+ * @param {any} item
+ */
+function lectYearlyWithYears(item) {
+  return !lectCyclic(item) && lectSetsOf(item).some((x) => x.year);
+}
+
+/**
  * 그날 읽는 독서 세트의 해(`A`, `I` 등). 줄의 세트에 없거나 해가 없으면 빈 문자열.
  * @param {any} item @param {KeptDay} day
  */
@@ -594,7 +615,7 @@ function lectRowOf(item, labelOf, days = null, today = "") {
   // 다른 날로 가는 링크: 해에 따라 다른 독서(가해, 나해, 다해, 홀수해, 짝수해)를 읽는 줄만 둔다. 이름으로 찾은 줄은 다른 해의 날을
   // 해마다 하나씩(세 해 주기는 둘), 구절로 찾은 줄은 지났을 때 다음에 읽는 날 하나다. 해마다 같은 독서는 엔진이 오늘부터 처음 오는
   // 날을 열어 덧붙일 것이 없다(ADR-044 §1, 사용자 결정 2026-11-17)
-  const cyclic = lectSetsOf(item).some((s) => s.year);
+  const cyclic = lectCyclic(item);
   /** @type {LectNext[]} */
   const nexts = [];
   if (days && days.cycles.length) {
@@ -618,7 +639,8 @@ function lectRowOf(item, labelOf, days = null, today = "") {
   }
   const label = [title, found ? `${found.slot} ${found.text}` : null, ...colors.map((c) => c.name), ...said, ...lines]
     .filter(Boolean).join(", ");
-  return { title, href: lectSlugHref(item), bold, found, colors, meta, lines, label, nexts };
+  const href = open && lectYearlyWithYears(item) ? lectHrefOf(lectSlugIds(item), open.date) : lectSlugHref(item);
+  return { title, href, bold, found, colors, meta, lines, label, nexts };
 }
 
 /**
@@ -1178,6 +1200,8 @@ function christmasNamesFresh() {
 async function sendChristmasNames(mod, today) {
   if (_christmasNamesDay === today) return;
   const names = await mod.findChristmasNames(today);
+  // 날이 바뀌는 무렵에 어제의 계산이 늦게 끝나면 오늘 보낸 이름을 덮지 않는다
+  if (_christmasNamesDay && _christmasNamesDay > today) return;
   ensureSearchWorker().postMessage({ type: "lect-names", names: [...names] });
   _christmasNamesDay = today;
 }
@@ -1194,7 +1218,8 @@ async function sendChristmasNames(mod, today) {
  */
 async function lectDaysOf(mod, item, today, isStale = () => false) {
   const ids = lectSlugIds(item);
-  const open = await mod.findReadingDay(ids, today, null, isStale);
+  // 해마다 같은 독서인데 해 표시가 있는 세트를 넘기는 줄은 엔진이 해에 따라 다른 독서로 보므로, 오늘부터 찾게 한다(ADR-044 §1)
+  const open = await mod.findReadingDay(ids, today, lectYearlyWithYears(item) ? today : null, isStale);
   if (!open) return null;
   const year = item.hits ? "" : lectYearOf(item, open);
   if (year) {

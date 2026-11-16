@@ -766,6 +766,20 @@ def test_fixed_feast_row_opens_the_coming_day(page):
     page.wait_for_function("() => location.pathname === '/lectionary/2027-09-14'", timeout=15_000)
 
 
+
+def test_weekday_gospel_read_every_year_opens_the_coming_day(page):
+    """구절로 찾은 독서가 그 전례일의 모든 해의 세트에 있으면 해마다 같은 독서다. 연중1주 월요일의 복음 마르 1:14-20은 홀수해와
+    짝수해에 같아, 지난 2026년 1월 12일이 아니라 다가오는 2027년 1월 11일을 연다(ADR-044 §1, 2026-11-17)."""
+    _fix_today(page)
+    _goto_search(page, "마르 1:14", "&group=lectionary")
+    _wait_days(page)
+    row = page.locator(".lect-rows > li").filter(has_text="연중1주 월요일").first
+    assert "다음 2027년 1월 11일 (월)" in row.locator(".cal-row-meta").inner_text()
+    assert row.locator(".lect-row-next").count() == 0
+    assert row.locator("a.cal-row").get_attribute("href").endswith("?from=2027-01-11")
+    row.locator("a.cal-row").click()
+    page.wait_for_function("() => location.pathname === '/lectionary/2027-01-11'", timeout=15_000)
+
 def test_row_opens_the_coming_day_when_it_comes_twice_in_the_year(page):
     """한 전례년(2027-11-28부터 2028-12-02까지)의 처음과 끝에 한 번씩 있는 성 안드레아 축일도 다가오는 날을 연다. 해마다
     같은 독서라 오늘부터 처음 오는 날이다(ADR-044 §1, 2026-11-17)."""

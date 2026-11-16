@@ -2485,11 +2485,19 @@ function earliestIn(table, ids, from, to) {
 }
 
 /**
+ * 표가 셀 수 있는 날로 자른다. `KEPT_DAYS_LAST`보다 늦으면 그날이다.
+ * @param {string} date @returns {string}
+ */
+function capToLast(date) {
+  return date < KEPT_DAYS_LAST ? date : KEPT_DAYS_LAST;
+}
+
+/**
  * 이번 전례년 가운데 표가 셀 수 있는 끝. 전례년이 `KEPT_DAYS_LAST`를 넘으면(2050년 대림 뒤) 그날에서 자른다.
  * @param {{ from: string, to: string }} ly @returns {string}
  */
 function lyEndOf(ly) {
-  return ly.to < KEPT_DAYS_LAST ? ly.to : KEPT_DAYS_LAST;
+  return capToLast(ly.to);
 }
 
 /**
@@ -2518,8 +2526,7 @@ function openDayIn(table, ids, today) {
  * @param {string} today @returns {string}
  */
 function christmasUntil(today) {
-  const until = addDays(today, 364) || KEPT_DAYS_LAST;
-  return until < KEPT_DAYS_LAST ? until : KEPT_DAYS_LAST;
+  return capToLast(addDays(today, 364) || KEPT_DAYS_LAST);
 }
 
 /**
@@ -2789,7 +2796,7 @@ function keptDaysThrough(today, to) {
       keptDayTable = { lix, cal, from, to: "", byId: new Map(), byName: new Map() };
     }
     const table = keptDayTable;
-    const end = to < KEPT_DAYS_LAST ? to : KEPT_DAYS_LAST;
+    const end = capToLast(to);
     while (table.to < end) {
       const yearEnd = `${table.to ? Number(table.to.slice(0, 4)) + 1 : Number(table.from.slice(0, 4))}-12-31`;
       extendKeptDaysIn(lix, cal, table, yearEnd < end ? yearEnd : end);
@@ -2821,11 +2828,10 @@ async function askKeptDays(today, firstTo, ask, none, isStale = () => false) {
 }
 
 /**
- * 검색 결과의 줄과 보조 주소가 여는 날(ADR-044 §1). 주소의 독서 세트 가운데 해에 따라 다른 독서가 있으면 이번 전례년의 날(`openDayIn`)이고, 없으면(해마다 같은
- * 독서, 고유 독서가 없는 전례일) 오늘부터 처음 지키는 날이다(사용자 결정 2026-11-17). `from`을 주면 그날부터 처음 지키는 날이다
- * (`/lectionary/d/<slug>?from=`). 표가
- * 시작하는 날(이번 전례년의 첫날)보다 이른 `from`은 표 없이 한 해씩 찾는다. 어느 쪽이든 해 사이마다 `isStale`이 참이면(화면을
- * 떠났으면) 그친다. `KEPT_DAYS_LAST`까지 없거나, `from`이 그보다 늦거나, 그쳤으면 null.
+ * 검색 결과의 줄과 보조 주소가 여는 날(ADR-044 §1). 주소의 독서 세트 가운데 해에 따라 다른 독서가 있으면 이번 전례년의 날
+ * (`openDayIn`)이고, 없으면(해마다 같은 독서, 고유 독서가 없는 전례일) 오늘부터 처음 지키는 날이다(사용자 결정 2026-11-17). `from`을
+ * 주면 그날부터 처음 지키는 날이다(`/lectionary/d/<slug>?from=`). 표가 시작하는 날(이번 전례년의 첫날)보다 이른 `from`은 표 없이 한
+ * 해씩 찾는다. 어느 쪽이든 해 사이마다 `isStale`이 참이면(화면을 떠났으면) 그친다. `KEPT_DAYS_LAST`까지 없거나, `from`이 그보다 늦거나, 그쳤으면 null.
  * @param {string[]} ids @param {string} today @param {string | null} [from] @param {() => boolean} [isStale]
  * @returns {Promise<KeptDay | null>}
  */
