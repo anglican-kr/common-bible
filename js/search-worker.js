@@ -7,7 +7,10 @@
  * Protocol:
  *   Main → Worker:
  *     { type: "init", metaUrl: "data/search-meta.json",
- *       chunks: [{ name, url }, ...] }
+ *       chunks: [{ name, url }, ...],
+ *       lectionaryUrl: "data/lectionary/search-lectionary.json" }
+ *       — lectionaryUrl is optional: without it the worker never loads the
+ *         lectionary index and `lectionary` stays null (ADR-044).
  *     { type: "search", q: "keyword", page: 1, pageSize: 50, searchId: N,
  *       scopeBooks: ["john", ...] }
  *       — scopeBooks: structured book filter (book ids) from the book picker,
@@ -16,9 +19,21 @@
  *   Worker → Main:
  *     { type: "ready" }
  *     { type: "partial-results", searchId, q, results, total, page, pageSize,
- *       loadedChunks: [...names], pendingChunks: [...names] }
- *     { type: "results", searchId, q, refMatch, results, total, page, pageSize }
+ *       loadedChunks: [...names], pendingChunks: [...names],
+ *       bookOnly, lectionary }
+ *     { type: "results", searchId, q, refMatch, results, total, page, pageSize,
+ *       bookOnly, lectionary, lectionaryPending }
+ *     { type: "lectionary", searchId, q, lectionary }
  *     { type: "error", message }
+ *       — bookOnly: the query is a book name alone ({ bookId, bookNameKo }) or null,
+ *         book scope or not. A verse reference comes first: `요1` alone is John 1,
+ *         not 1 John (ADR-044 §2).
+ *       — lectionary: the lectionary days found (LectResult) or null — no index, a
+ *         book scope is set (ADR-044 §1), nothing to search for, or searching the
+ *         index failed. A search never waits for the index: while it is still
+ *         loading, "results" carries lectionaryPending: true and a "lectionary"
+ *         message with the same searchId follows once it arrives (lectionary null
+ *         if loading failed or timed out). A newer search drops it.
  */
 
 /**
@@ -77,6 +92,7 @@
  * @property {"init"} type
  * @property {string} metaUrl
  * @property {ChunkConfig[]} chunks
+ * @property {string} [lectionaryUrl]
  *
  * @typedef SearchMessage
  * @property {"search"} type
@@ -87,6 +103,92 @@
  * @property {string[]} [scopeBooks]
  *
  * @typedef {InitMessage | SearchMessage} IncomingMessage
+ */
+
+/**
+ * 전례독서 검색 색인 `lectionary/search-lectionary.json`(ADR-037 §5). 데이터 저장소의
+ * `liturgical/build_lectionary_search.py`가 만든다.
+ *
+ * @typedef LectObsRaw  전례일 하나
+ * @property {string} key
+ * @property {string} name
+ * @property {string[]} aliases
+ * @property {string} kind  "temporal" | "sanctoral"
+ * @property {string | null} date  월별 축일의 날짜("01.25")
+ * @property {string | null} rank
+ * @property {number} order  전례년 순서
+ * @property {string | null} common  고유 독서 없이 쓰는 공통 독서의 분류
+ *
+ * @typedef {[number, string, string | null, number | null, number, string]} LectSetRaw
+ *   [obs, set id, year, track, set no, label]
+ * @typedef {[number, number, number, number, number, number]} LectCovRaw
+ *   [set, book, chapter, first verse, last verse, slot] — slot 0 first reading, 1 psalm, 2 second reading, 3 gospel
+ *
+ * @typedef LectSaintRaw
+ * @property {string} name
+ * @property {string} title
+ * @property {number[]} obs
+ *
+ * @typedef LectionaryRaw
+ * @property {LectObsRaw[]} obs
+ * @property {LectSetRaw[]} sets
+ * @property {LectCovRaw[]} cov
+ * @property {string[]} books
+ * @property {LectSaintRaw[]} saints
+ * @property {{ [other: string]: string }} synonyms  키는 다른 교회의 이름, 값은 앱의 이름
+ *
+ * @typedef LectSynonym
+ * @property {string} from
+ * @property {string} to
+ * @property {string} fromKey  normalizeLectName(from)
+ * @property {string} toKey  normalizeLectName(to)
+ *
+ * @typedef LectionaryIndex  the raw index regrouped for searching (buildLectionarySearchIndex)
+ * @property {LectObsRaw[]} obs
+ * @property {LectSetRaw[]} sets
+ * @property {LectCovRaw[]} cov
+ * @property {string[]} books
+ * @property {string[][]} obsKeys  per obs: its name, then its aliases, normalized
+ * @property {Array<{ title: string, keys: string[], obs: number[] }>} saints  keys: name and title, normalized
+ * @property {LectSynonym[]} synonyms  longest `fromKey` first
+ * @property {number[][]} setsOfObs
+ * @property {Map<string, number[]>} covOfBook  book id → cov rows
+ * @property {Map<number, number[]>} covOfReading  set * 4 + slot → cov rows
+ *
+ * @typedef LectSetInfo
+ * @property {string} id
+ * @property {string | null} year  "A" | "B" | "C" (주일 주기), "I" | "II" (평일 주기), null
+ * @property {number | null} track
+ * @property {number} setNo
+ * @property {string} label
+ *
+ * @typedef LectObsInfo
+ * @property {string} key
+ * @property {string} name
+ * @property {string} kind
+ * @property {string | null} date
+ * @property {string | null} rank
+ * @property {string | null} common
+ * @property {number} order
+ *
+ * @typedef LectReadingHit  찾은 독서 하나. 같은 독서를 읽는 주기와 트랙은 `sets`에 함께 둔다(설계 §5.3).
+ * @property {number} slot  0 first reading, 1 psalm, 2 second reading, 3 gospel
+ * @property {Array<[string, number, number, number]>} rows  the whole reading: [book id, chapter, first verse, last verse]
+ * @property {LectSetInfo[]} sets
+ * @property {boolean} full  the reading holds every verse of the query
+ * @property {number} overlap  how many verses of the query it holds
+ *
+ * @typedef LectItem  결과 행 하나는 전례일 하나다(설계 §4.2).
+ * @property {LectObsInfo} obs
+ * @property {LectSetInfo[]} sets  all its reading sets; none when it has no readings of its own
+ * @property {LectReadingHit[]} [hits]  passage search: the readings that matched, best first
+ * @property {number} [tier]  name search: 1 the whole name, 2 its start, 3 inside it (설계 §4.3)
+ * @property {string} [matched]  name search: the alias or saint title that matched, when the name itself did not
+ *
+ * @typedef LectResult
+ * @property {"name" | "passage"} kind
+ * @property {LectItem[]} items
+ * @property {Array<{ from: string, to: string }>} synonyms  name search: the replacements that found something
  */
 
 /** @type {SearchMeta | null} */
@@ -104,6 +206,28 @@ let loadingPromises = {};
 let chunkConfig = [];
 
 let currentSearchId = 0;
+
+/** @type {string | null} */
+let lectionaryUrl = null;
+
+/** Bumped by each `init` that changes lectionaryUrl, so a request for an older address leaves the state alone. */
+let lectionaryGen = 0;
+
+/** @type {Promise<LectionaryIndex | null> | null} */
+let lectionaryPromise = null;
+
+/** @type {LectionaryIndex | null} */
+let lectionary = null;
+
+/** performance.now() before which a failed lectionary index is not fetched again: elapsed time, so changing the
+ * device clock does not stretch the wait. */
+let lectionaryRetryAt = 0;
+
+/** 전례독서 색인을 받지 못했을 때 다시 받아 보기까지의 시간. 검색마다 다시 받지 않게 하려는 것이다. */
+const LECTIONARY_RETRY_MS = 60000;
+
+/** 전례독서 색인을 기다리는 가장 긴 시간. 요청이 끝나지 않고 멈추면 이 시간 뒤에 받지 못한 것으로 본다. */
+const LECTIONARY_TIMEOUT_MS = 30000;
 
 /**
  * @param {string} type
@@ -164,6 +288,105 @@ function loadChunk(name, url) {
       };
     });
   return loadingPromises[name];
+}
+
+// ── Lectionary index loading ──
+
+/**
+ * 전례독서 색인을 받는다(ADR-044). 받지 못하면 `null`이다. 그때는 성서 검색만 하고 전례독서 결과는 비운다
+ * (설계 `docs/design/lectionary-search.md` §3). 실패와 `LECTIONARY_TIMEOUT_MS` 안에 끝나지 않은 요청은 콘솔에
+ * 남기고, `LECTIONARY_RETRY_MS`가 지난 뒤의 검색에서 다시 받아 본다. 받는 사이에 `init`이 주소를 바꿨으면 옛 요청은
+ * 지금 상태를 고치지 않는다(`lectionaryGen`).
+ * @returns {Promise<LectionaryIndex | null>}
+ */
+function loadLectionary() {
+  if (lectionary) return Promise.resolve(lectionary);
+  if (lectionaryPromise) return lectionaryPromise;
+  if (!lectionaryUrl || performance.now() < lectionaryRetryAt) return Promise.resolve(null);
+  const gen = lectionaryGen;
+  // The signal also stops a body that stalls after the headers came.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LECTIONARY_TIMEOUT_MS);
+  lectionaryPromise = fetch(lectionaryUrl, { signal: controller.signal })
+    .then((r) => {
+      if (!r.ok) throw new Error(`전례독서 색인 로드 실패: ${r.status}`);
+      return r.json();
+    })
+    .then((/** @type {LectionaryRaw} */ raw) => {
+      const index = buildLectionarySearchIndex(raw);
+      if (gen === lectionaryGen) {
+        lectionary = index;
+        lectionaryPromise = null;
+      }
+      return index;
+    })
+    .catch((err) => {
+      console.warn("전례독서 색인을 받지 못했습니다", err);
+      if (gen === lectionaryGen) {
+        lectionaryRetryAt = performance.now() + LECTIONARY_RETRY_MS;
+        lectionaryPromise = null;
+      }
+      return null;
+    })
+    .finally(() => clearTimeout(timer));
+  return lectionaryPromise;
+}
+
+/**
+ * 전례독서를 찾지 않는 결과의 칸. 책을 골라 두었거나(책 칩은 성서 본문을 찾을 범위다, ADR-044 §1) 찾을 검색어가
+ * 없을 때다.
+ */
+const NO_LECTIONARY = { lectionary: null, lectionaryPending: false };
+
+/**
+ * 찾다가 오류가 나면 전례독서만 비우고 콘솔에 남긴다. 성서 결과와 구절 바로가기는 그대로 보낸다. 배포 직후에는 옛
+ * 워커 파일이 새 형식의 색인을 읽을 수 있다. 서비스 워커가 워커 파일과 데이터를 다른 캐시에 두기 때문이다.
+ * @param {(index: LectionaryIndex) => LectResult} find
+ * @param {LectionaryIndex} index
+ * @returns {LectResult | null}
+ */
+function findLectionary(find, index) {
+  try {
+    return find(index);
+  } catch (err) {
+    console.warn("전례독서 색인으로 찾지 못했습니다", err);
+    return null;
+  }
+}
+
+/**
+ * 결과 메시지의 전례독서 칸. 검색은 색인을 기다리지 않는다. 색인이 있으면 바로 찾는다. 받는 중이면 비워 둔 채
+ * `lectionaryPending`을 달고, 색인이 오면 전례독서를 따로 보낸다(`sendLectionaryLater`). 그래서 성서 결과와 구절
+ * 바로가기가 색인 때문에 늦지 않는다.
+ * @param {number} searchId
+ * @param {string} q
+ * @param {(index: LectionaryIndex) => LectResult} find
+ * @returns {{ lectionary: LectResult | null, lectionaryPending: boolean }}
+ */
+function lectionaryFields(searchId, q, find) {
+  if (lectionary) return { lectionary: findLectionary(find, lectionary), lectionaryPending: false };
+  if (!lectionaryUrl || performance.now() < lectionaryRetryAt) return NO_LECTIONARY;
+  sendLectionaryLater(searchId, q, find);
+  return { lectionary: null, lectionaryPending: true };
+}
+
+/**
+ * 색인이 오면 그 검색의 전례독서를 같은 `searchId`의 `lectionary` 메시지로 보낸다. 그사이 새 검색이 시작됐으면
+ * 보내지 않는다. 그사이 `init`이 색인 주소를 바꿨으면 새 주소의 색인을 기다린다.
+ * @param {number} searchId
+ * @param {string} q
+ * @param {(index: LectionaryIndex) => LectResult} find
+ */
+function sendLectionaryLater(searchId, q, find) {
+  const gen = lectionaryGen;
+  loadLectionary().then((index) => {
+    if (searchId !== currentSearchId) return;
+    if (gen !== lectionaryGen) {
+      sendLectionaryLater(searchId, q, find);
+      return;
+    }
+    post("lectionary", { searchId, q, lectionary: index && findLectionary(find, index) });
+  });
 }
 
 // ── Search helpers ──
@@ -284,10 +507,10 @@ function parseQuery(raw) {
   const restrictBooks = new Set();
   /** @type {string[]} */
   const unmatched = [];
-  // parseQuery is only called after loadMeta() resolves, so meta is non-null.
-  const m = /** @type {SearchMeta} */ (meta);
+  // parseQuery is only called after loadMeta() resolves, so meta is non-null. lookupBook reads own keys only:
+  // `in:constructor` is an unknown alias, not a book.
   const stripped = raw.replace(IN_RE, (_, alias) => {
-    const id = m.aliases[alias] || m.aliases[alias.toLowerCase()];
+    const id = lookupBook(alias);
     if (id) restrictBooks.add(id);
     else unmatched.push(alias);
     return " ";
@@ -359,22 +582,47 @@ function tryVerseRef(query) {
   const match = query.match(REF_RE);
   if (!match) return null;
 
-  const bookQuery = match[1].trim();
-
-  const m = /** @type {SearchMeta} */ (meta);
-
-  // Case-insensitive lookup for English ids (e.g. "Gen", "GEN" → "gen").
-  // toLowerCase() is a no-op on Hangul, so Korean aliases remain unaffected.
-  let bookId = m.aliases[bookQuery] || m.aliases[bookQuery.toLowerCase()];
-  if (!bookId) {
-    for (const [id, info] of Object.entries(m.books)) {
-      if (info.ko === bookQuery) { bookId = id; break; }
-    }
-  }
-  if (!bookId || !m.books[bookId]) return null;
+  const bookId = lookupBook(match[1]);
+  if (!bookId) return null;
 
   const parts = refParts(match[2]);
+  const m = /** @type {SearchMeta} */ (meta);
   return parts && { bookId, bookNameKo: m.books[bookId].ko, parts };
+}
+
+/**
+ * The book id a name stands for: an alias, the alias lowercased (English ids, "GEN" → "gen" — a no-op on Hangul), or
+ * a full Korean name. Runs of spaces count as one (`요한  1서`). Own keys only, so `constructor` is not a book.
+ * 구절 표기(`tryVerseRef`), 책 이름만 친 검색어(`tryBookOnly`), `in:` 별칭(`parseQuery`)이 같은 규칙으로 책을 찾는다.
+ * @param {string} name
+ * @returns {string | null}
+ */
+function lookupBook(name) {
+  const key = name.trim().replace(/\s+/g, " ");
+  const m = /** @type {SearchMeta} */ (meta);
+  /** @param {string} k */
+  const alias = (k) => (Object.hasOwn(m.aliases, k) ? m.aliases[k] : undefined);
+  let bookId = alias(key) || alias(key.toLowerCase());
+  if (!bookId) {
+    for (const [id, info] of Object.entries(m.books)) {
+      if (info.ko === key) { bookId = id; break; }
+    }
+  }
+  return bookId && Object.hasOwn(m.books, bookId) ? bookId : null;
+}
+
+/**
+ * 검색어 전체가 책 이름 하나인가(`창세기`, `요한`, `요한 1서`). 앱은 결과 맨 위에 그 책의 첫 장 바로가기를 둔다
+ * (ADR-044 §2). 한 글자 약칭(`말`, `신`, `나`)은 책 이름으로 읽지 않는다. 낱말로 더 자주 쓰이기 때문이다. 워커는
+ * 구절 표기를 먼저 판별하므로, 숫자로 끝나는 약칭(`요1`)을 혼자 치면 여기까지 오지 않고 요한 복음 1장이 된다.
+ * @param {string} query  the keyword, `in:<alias>` tokens already stripped
+ * @returns {{ bookId: string, bookNameKo: string } | null}
+ */
+function tryBookOnly(query) {
+  if (Array.from(query.trim().replace(/\s+/g, " ")).length < 2) return null;
+  const bookId = lookupBook(query);
+  const m = /** @type {SearchMeta} */ (meta);
+  return bookId ? { bookId, bookNameKo: m.books[bookId].ko } : null;
 }
 
 /**
@@ -434,6 +682,338 @@ function paginate(allMatched, page, pageSize) {
 }
 // ── END SEARCH_PURE ──
 
+// ── BEGIN LECTIONARY_PURE ──
+// 전례독서 검색(ADR-044, 설계 docs/design/lectionary-search.md §4와 §5). Pure: every function takes the built
+// index (and, for a passage, the VerseRef from tryVerseRef), so tests/unit/search-worker.test.js runs this block
+// with SEARCH_PURE on a small index and search-worker.data.test.js on the real one.
+
+// 이름은 띄어쓰기, 가운뎃점, 따옴표를 빼고 비교한다. 주의 번호는 `7주일`, `제7주`, `제7주간`, `7주간`을 모두 `7주`로
+// 맞춘다(설계 §4.1). 데이터의 이름은 그대로 두고 비교할 때만 바꾼다. `제N주간`은 천주교가 평일 이름에 쓰는 표기다.
+// 따옴표는 성서 검색과 같은 목록(`QUOTE_CHARS_RE`)을 쓴다.
+const LECT_IGNORED_RE = new RegExp(`${QUOTE_CHARS_RE.source}|[·ㆍ・\\s]`, "g");
+const LECT_WEEK_RE = /제?(\d+)주(?:일|간)?/g;
+const LECT_DIGIT_RE = /\d/;
+
+/**
+ * @param {string} s
+ * @returns {string}
+ */
+function normalizeLectName(s) {
+  return s.toLowerCase().replace(LECT_IGNORED_RE, "").replace(LECT_WEEK_RE, "$1주");
+}
+
+/**
+ * Where `needle` occurs in `hay` with its numbers whole: a needle that starts (ends) with a digit is not found where
+ * a digit comes just before (after) it. 그래서 `연중7주`는 `연중17주` 안에 없고, `연중1`은 `연중10주` 안에 없다.
+ * @param {string} hay
+ * @param {string} needle
+ * @returns {number}  the index of the first such occurrence, or -1
+ */
+function findWhole(hay, needle) {
+  const head = LECT_DIGIT_RE.test(needle[0]);
+  const tail = LECT_DIGIT_RE.test(needle[needle.length - 1]);
+  for (let at = hay.indexOf(needle); at !== -1; at = hay.indexOf(needle, at + 1)) {
+    if (head && at > 0 && LECT_DIGIT_RE.test(hay[at - 1])) continue;
+    if (tail && at + needle.length < hay.length && LECT_DIGIT_RE.test(hay[at + needle.length])) continue;
+    return at;
+  }
+  return -1;
+}
+
+/**
+ * 1 the whole name, 2 its start, 3 inside it, 0 not found (설계 §4.3).
+ * @param {string} key  a normalized name
+ * @param {string} q  a normalized query
+ * @returns {number}
+ */
+function lectTier(key, q) {
+  const at = findWhole(key, q);
+  if (at === -1) return 0;
+  if (at > 0) return 3;
+  return key.length === q.length ? 1 : 2;
+}
+
+/**
+ * @template K
+ * @param {Map<K, number[]>} map
+ * @param {K} key
+ * @param {number} value
+ */
+function pushIndex(map, key, value) {
+  const list = map.get(key);
+  if (list) list.push(value);
+  else map.set(key, [value]);
+}
+
+/**
+ * @param {LectionaryRaw} raw
+ * @returns {LectionaryIndex}
+ */
+function buildLectionarySearchIndex(raw) {
+  /** @type {number[][]} */
+  const setsOfObs = raw.obs.map(() => []);
+  raw.sets.forEach((s, i) => setsOfObs[s[0]].push(i));
+  /** @type {Map<string, number[]>} */
+  const covOfBook = new Map();
+  /** @type {Map<number, number[]>} */
+  const covOfReading = new Map();
+  raw.cov.forEach((row, i) => {
+    pushIndex(covOfBook, raw.books[row[1]], i);
+    pushIndex(covOfReading, row[0] * 4 + row[5], i);
+  });
+  return {
+    obs: raw.obs,
+    sets: raw.sets,
+    cov: raw.cov,
+    books: raw.books,
+    obsKeys: raw.obs.map((o) => [o.name, ...(o.aliases || [])].map(normalizeLectName)),
+    saints: (raw.saints || []).map((s) => ({ title: s.title, keys: [s.name, s.title].map(normalizeLectName), obs: s.obs })),
+    synonyms: Object.entries(raw.synonyms || {})
+      .map(([from, to]) => ({ from, to, fromKey: normalizeLectName(from), toKey: normalizeLectName(to) }))
+      .filter((s) => s.fromKey)
+      .sort((a, b) => b.fromKey.length - a.fromKey.length),
+    setsOfObs,
+    covOfBook,
+    covOfReading,
+  };
+}
+
+/**
+ * @param {LectionaryIndex} index
+ * @param {number} i
+ * @returns {LectObsInfo}
+ */
+function lectObsInfo(index, i) {
+  const { key, name, kind, date, rank, common, order } = index.obs[i];
+  return { key, name, kind, date, rank, common, order };
+}
+
+/**
+ * @param {LectionaryIndex} index
+ * @param {number} i
+ * @returns {LectSetInfo}
+ */
+function lectSetInfo(index, i) {
+  const [, id, year, track, setNo, label] = index.sets[i];
+  return { id, year, track, setNo, label };
+}
+
+/**
+ * 비슷한 말 표의 낱말을 앱의 이름으로 바꾼다(설계 §4.1 2). 왼쪽부터 한 번만 훑으며 자리마다 긴 낱말부터 맞춘다.
+ * 그래서 짧은 낱말이 긴 낱말의 일부여도 긴 낱말이 통째로 바뀌고, 바꾼 말을 다시 바꾸지 않는다.
+ * @param {LectionaryIndex} index
+ * @param {string} typed  a normalized query
+ * @returns {{ swapped: string, used: Array<{ from: string, to: string }> }}
+ */
+function swapSynonyms(index, typed) {
+  let swapped = "";
+  /** @type {Array<{ from: string, to: string }>} */
+  const used = [];
+  for (let at = 0; at < typed.length; ) {
+    const s = index.synonyms.find((x) => typed.startsWith(x.fromKey, at));
+    if (!s) {
+      swapped += typed[at];
+      at += 1;
+      continue;
+    }
+    swapped += s.toKey;
+    at += s.fromKey.length;
+    if (!used.some((u) => u.from === s.from)) used.push({ from: s.from, to: s.to });
+  }
+  return { swapped, used };
+}
+
+/**
+ * 이름으로 전례일을 찾는다(설계 §4, ADR-044 §3). 전례일의 이름과 별칭, 성인의 이름과 칭호에서 찾는다.
+ * 검색어 전체가 든 이름을 찾고, 비슷한 말 표의 낱말이 있으면 앱의 이름으로 바꾼 검색어로도 찾는다. 그래도 없고
+ * 검색어에 낱말이 여럿이면 낱말이 모두 든 이름을 찾는다. 결과는 이름 전체가 같은 것, 이름이 검색어로 시작하는 것,
+ * 이름 안에 든 것의 차례이고, 같은 단계 안에서는 전례년 순서다.
+ * @param {LectionaryIndex} index
+ * @param {string} query
+ * @returns {LectResult}
+ */
+function searchLectionaryNames(index, query) {
+  /** @type {LectResult} */
+  const result = { kind: "name", items: [], synonyms: [] };
+  const typed = normalizeLectName(query);
+  if (!typed) return result;
+
+  /** @type {Map<number, { tier: number, matched: string }>} */
+  const best = new Map();
+  /**
+   * Keep each lectionary day's best match. On a tie its own name wins over an alias or a saint.
+   * @param {(key: string) => number} tierOf
+   * @returns {boolean}  whether it found anything
+   */
+  const scan = (tierOf) => {
+    let found = false;
+    /** @param {number} i @param {number} tier @param {string} matched */
+    const keep = (i, tier, matched) => {
+      found = true;
+      const cur = best.get(i);
+      if (!cur || tier < cur.tier || (tier === cur.tier && cur.matched && !matched)) best.set(i, { tier, matched });
+    };
+    index.obsKeys.forEach((keys, i) => {
+      keys.forEach((key, k) => {
+        const tier = tierOf(key);
+        if (tier) keep(i, tier, k === 0 ? "" : index.obs[i].aliases[k - 1]);
+      });
+    });
+    for (const saint of index.saints) {
+      const tiers = saint.keys.map(tierOf).filter((t) => t > 0);
+      if (tiers.length) for (const i of saint.obs) keep(i, Math.min(...tiers), saint.title);
+    }
+    return found;
+  };
+
+  scan((key) => lectTier(key, typed));
+  const { swapped, used } = swapSynonyms(index, typed);
+  if (swapped !== typed && scan((key) => lectTier(key, swapped))) result.synonyms = used;
+  if (best.size === 0) {
+    const words = query.trim().split(/\s+/).map(normalizeLectName).filter(Boolean);
+    if (words.length > 1) {
+      // 같은 낱말은 한 번만 비교한다. 같은 낱말을 길게 되풀이한 검색어(공유 링크)로 워커가 멈추지 않게 하려는 것이다.
+      const unique = [...new Set(words)];
+      // 낱말마다 비슷한 말로 바꾼 것도 받는다(`바오로 사도`의 `바오로`). 낱말 여럿에 걸친 비슷한 말은 위에서 검색어
+      // 전체로 이미 바꿔 보았다.
+      const swaps = unique.map((w) => swapSynonyms(index, w));
+      const found = scan((key) => (unique.every((w, i) =>
+        findWhole(key, w) !== -1 || (swaps[i].swapped !== w && findWhole(key, swaps[i].swapped) !== -1)) ? 3 : 0));
+      if (found) {
+        for (const u of swaps.flatMap((s) => s.used)) {
+          if (!result.synonyms.some((x) => x.from === u.from)) result.synonyms.push(u);
+        }
+      }
+    }
+  }
+
+  result.items = [...best]
+    .sort(([a, x], [b, y]) => x.tier - y.tier || index.obs[a].order - index.obs[b].order)
+    .map(([i, { tier, matched }]) => {
+      /** @type {LectItem} */
+      const item = { obs: lectObsInfo(index, i), sets: index.setsOfObs[i].map((s) => lectSetInfo(index, s)), tier };
+      if (matched) item.matched = matched;
+      return item;
+    });
+  return result;
+}
+
+/**
+ * Merge overlapping or touching [from, to] verse ranges.
+ * @param {Array<[number, number]>} ranges
+ * @returns {Array<[number, number]>}
+ */
+function mergeRanges(ranges) {
+  /** @type {Array<[number, number]>} */
+  const out = [];
+  for (const [from, to] of ranges.slice().sort((x, y) => x[0] - y[0])) {
+    const last = out[out.length - 1];
+    if (last && from <= last[1] + 1) last[1] = Math.max(last[1], to);
+    else out.push([from, to]);
+  }
+  return out;
+}
+
+/**
+ * 검색어의 한 장에 든 절 구간. 구절 바로가기 카드(`js/app/verse-spec.js`의 `verseNumberSpec`)와 같게 읽는다. 거꾸로
+ * 쓴 구간(`21-14`)은 작은 절부터로 고치고, 0절은 빼고, 남는 절이 없으면 장 전체다(`요한 3:0`).
+ * @param {string} verses  VerseRefPart.verses
+ * @returns {Array<[number, number]>}
+ */
+function passageRanges(verses) {
+  /** @type {Array<[number, number]>} */
+  const ranges = [];
+  for (const segment of verses.split(",")) {
+    const [from, to = from] = segment.split("-").map(Number);
+    if (from > 0) ranges.push([Math.min(from, to), Math.max(from, to)]);
+  }
+  return ranges.length ? mergeRanges(ranges) : [[1, REF_CHAPTER_END]];
+}
+
+/**
+ * 구절로 그 구절을 읽는 전례일을 찾는다(설계 §5). 한 절이라도 겹치는 독서를 찾는다. 검색어의 절을 모두 담은 독서를
+ * 먼저 두고, 다음은 겹친 절이 많은 독서, 그다음은 전례년 순서다. 장 끝까지 이어지는 구간(장만 친 검색어 등)이 있으면
+ * 장의 마지막 절을 몰라 「모두 담은」 단계를 쓰지 않는다. 시편은 전례시편(`lps`)에서 찾고, 송가는 색인이 성구로 둔
+ * 행(`루가 1:68-79`)으로 찾아진다. 공통 독서는 색인에 없다(ADR-044 §2).
+ * @param {LectionaryIndex} index
+ * @param {VerseRef} ref
+ * @returns {LectResult}
+ */
+function searchLectionaryPassage(index, ref) {
+  /** @type {LectResult} */
+  const result = { kind: "passage", items: [], synonyms: [] };
+  const rows = index.covOfBook.get(ref.bookId === "ps" ? "lps" : ref.bookId);
+  if (!rows) return result;
+
+  /** @type {Map<number, Array<[number, number]>>} the query's verses per chapter */
+  const wanted = new Map();
+  let size = 0;
+  let open = false;
+  for (const { chapter, verses } of ref.parts) {
+    const ranges = passageRanges(verses);
+    wanted.set(chapter, ranges);
+    for (const [from, to] of ranges) {
+      if (to >= REF_CHAPTER_END) open = true;
+      size += to - from + 1;
+    }
+  }
+
+  /** @type {Map<number, Map<number, Array<[number, number]>>>} the query's verses each reading holds: set * 4 + slot → chapter → ranges */
+  const held = new Map();
+  for (const r of rows) {
+    const [set, , chapter, first, last, slot] = index.cov[r];
+    const ranges = wanted.get(chapter);
+    if (!ranges) continue;
+    for (const [from, to] of ranges) {
+      const lo = Math.max(from, first);
+      const hi = Math.min(to, last);
+      if (lo > hi) continue;
+      const reading = set * 4 + slot;
+      let chapters = held.get(reading);
+      if (!chapters) held.set(reading, (chapters = new Map()));
+      const list = chapters.get(chapter);
+      if (list) list.push([lo, hi]);
+      else chapters.set(chapter, [[lo, hi]]);
+    }
+  }
+
+  /** @type {Map<number, Map<string, { hit: LectReadingHit, sets: number[] }>>} per lectionary day, per distinct reading */
+  const days = new Map();
+  for (const [reading, chapters] of held) {
+    let overlap = 0;
+    for (const list of chapters.values()) for (const [from, to] of mergeRanges(list)) overlap += to - from + 1;
+    const set = Math.floor(reading / 4);
+    const slot = reading % 4;
+    const readingRows = (index.covOfReading.get(reading) || []).map((i) => {
+      const [, book, chapter, first, last] = index.cov[i];
+      return /** @type {[string, number, number, number]} */ ([index.books[book], chapter, first, last]);
+    });
+    const obs = index.sets[set][0];
+    let readings = days.get(obs);
+    if (!readings) days.set(obs, (readings = new Map()));
+    const sig = `${slot}:${readingRows.join(";")}`;
+    const same = readings.get(sig);
+    if (same) same.sets.push(set);
+    else readings.set(sig, { hit: { slot, rows: readingRows, sets: [], full: !open && overlap === size, overlap }, sets: [set] });
+  }
+
+  /** @param {LectReadingHit} a @param {LectReadingHit} b */
+  const better = (a, b) => Number(b.full) - Number(a.full) || b.overlap - a.overlap;
+  result.items = [...days]
+    .map(([obs, readings]) => {
+      const hits = [...readings.values()]
+        .map(({ hit, sets }) => {
+          hit.sets = sets.sort((a, b) => a - b).map((s) => lectSetInfo(index, s));
+          return hit;
+        })
+        .sort((a, b) => better(a, b) || a.slot - b.slot);
+      return { obs: lectObsInfo(index, obs), sets: index.setsOfObs[obs].map((s) => lectSetInfo(index, s)), hits };
+    })
+    .sort((a, b) => better(a.hits[0], b.hits[0]) || a.obs.order - b.obs.order);
+  return result;
+}
+// ── END LECTIONARY_PURE ──
+
 // ── Message handler ──
 
 onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
@@ -442,6 +1022,15 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
   if (msg.type === "init") {
     metaUrl = msg.metaUrl;
     chunkConfig = msg.chunks;
+    // A new lectionary address drops what the old one loaded or was loading.
+    const nextLectionaryUrl = msg.lectionaryUrl || null;
+    if (nextLectionaryUrl !== lectionaryUrl) {
+      lectionaryGen++;
+      lectionaryUrl = nextLectionaryUrl;
+      lectionary = null;
+      lectionaryPromise = null;
+      lectionaryRetryAt = 0;
+    }
 
     try {
       await loadMeta();
@@ -449,6 +1038,8 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       for (const { name, url } of chunkConfig) {
         loadChunk(name, url);
       }
+      // The lectionary index after the bible chunks; a failure only leaves `lectionary` null.
+      loadLectionary();
       post("ready", {});
     } catch (err) {
       // The init path has no searchId — drop it from the error payload.
@@ -466,7 +1057,7 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       const trimmed = (q || "").trim();
 
       if (!trimmed) {
-        post("results", { searchId, q: trimmed, refMatch: null,
+        post("results", { searchId, q: trimmed, refMatch: null, bookOnly: null, ...NO_LECTIONARY,
           results: [], total: 0, page, pageSize });
         return;
       }
@@ -475,7 +1066,10 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
 
       const refMatch = tryVerseRef(trimmed);
       if (refMatch) {
-        post("results", { searchId, q: trimmed, refMatch,
+        // 그 구절을 읽는 전례일(ADR-044 §1). 색인이 없으면 `null`이라, 앱은 지금처럼 장을 연다.
+        const lect = scopeBooks.length > 0 ? NO_LECTIONARY
+          : lectionaryFields(searchId, trimmed, (index) => searchLectionaryPassage(index, refMatch));
+        post("results", { searchId, q: trimmed, refMatch, bookOnly: null, ...lect,
           results: [], total: 0, page, pageSize });
         return;
       }
@@ -489,17 +1083,36 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       // Block search when any in: alias is unrecognized — the user gets the
       // notice instead of misleading "all-books" results that ignore their filter.
       if (unmatched.length > 0) {
-        post("results", { searchId, q: trimmed, refMatch: null,
+        post("results", { searchId, q: trimmed, refMatch: null, bookOnly: null, ...NO_LECTIONARY,
           results: [], total: 0, page, pageSize, unmatchedScopes: unmatched });
         return;
       }
 
       // No keyword left after stripping in: tokens — nothing to search.
       if (!keyword) {
-        post("results", { searchId, q: trimmed, refMatch: null,
+        post("results", { searchId, q: trimmed, refMatch: null, bookOnly: null, ...NO_LECTIONARY,
           results: [], total: 0, page, pageSize, unmatchedScopes: [] });
         return;
       }
+
+      // 책 이름만 친 검색어(ADR-044 §2)는 책을 골라 두었어도 알아본다. 구절 바로가기와 같다. 이름으로 찾는
+      // 전례일(§3)은 책을 골라 두었으면 찾지 않는다(§1).
+      const scoped = restrictBooks.size > 0;
+      const bookOnly = tryBookOnly(keyword);
+      // The name search depends on the keyword and the index only: computed once per index and shared by the partial
+      // results, the results and a later "lectionary" message. A new index (`init`) computes it again.
+      /** @type {LectionaryIndex | null} */
+      let namesIndex = null;
+      /** @type {LectResult | null} */
+      let names = null;
+      /** @param {LectionaryIndex} index @returns {LectResult} */
+      const findNames = (index) => {
+        if (index !== namesIndex || !names) {
+          namesIndex = index;
+          names = searchLectionaryNames(index, keyword);
+        }
+        return names;
+      };
 
       // Wait for first chunk (NT) if nothing is loaded yet
       const firstChunk = chunkConfig[0];
@@ -521,6 +1134,8 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
           searchId, q: trimmed, keyword, results, total, page, pageSize,
           loadedChunks: loadedNames, pendingChunks: pendingNames,
           unmatchedScopes: unmatched,
+          // Only what is loaded already — a partial result never waits for the lectionary index.
+          bookOnly, lectionary: !scoped && lectionary ? findLectionary(findNames, lectionary) : null,
         });
 
         // Wait for remaining chunks
@@ -534,7 +1149,8 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       // `keyword` is the query stripped of in:<alias> tokens — used by the UI
       // for snippet highlighting and the ?hl= chapter-view param.
       post("results", { searchId, q: trimmed, keyword, refMatch: null,
-        results, total, page, pageSize, unmatchedScopes: unmatched });
+        results, total, page, pageSize, unmatchedScopes: unmatched,
+        bookOnly, ...(scoped ? NO_LECTIONARY : lectionaryFields(searchId, trimmed, findNames)) });
 
     } catch (err) {
       post("error", { message: err instanceof Error ? err.message : String(err) });

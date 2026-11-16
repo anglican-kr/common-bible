@@ -1,12 +1,10 @@
 "use strict";
 
-// Unit tests for js/search-worker.js — the pure SEARCH_PURE block: query
-// parsing (parseQuery, the `in:<book>` operator), verse-reference detection
-// (tryVerseRef), substring gathering (gatherResults), and pagination
-// (paginate). These depend only on module state (meta / loadedChunks), which
-// the loader declares in the prelude and lets each test swap via setters — no
-// worker globals (postMessage / onmessage / fetch) are pulled in. Harness
-// mirrors tests/unit/views.test.js.
+// Unit tests for js/search-worker.js. Most run the pure blocks alone: SEARCH_PURE (query parsing with the
+// `in:<book>` operator, verse references, book names, substring gathering, pagination) and LECTIONARY_PURE (the
+// lectionary search on a small index). They depend only on module state (meta / loadedChunks), which the loader
+// declares in the prelude and lets each test swap via setters. The message section at the end runs the whole worker
+// file with a fake fetch, clock and timers (startWorker). Harness mirrors tests/unit/views.test.js.
 
 const test = require("node:test");
 const assert = require("node:assert");
@@ -34,7 +32,7 @@ function extractBlock(name, source, file) {
 
 function loadSearchPure() {
   const ctx = {
-    Object, Array, Set, Map, JSON, console, Error, Math, parseInt, RegExp, String,
+    Object, Array, Set, Map, JSON, console, Error, Math, Number, parseInt, RegExp, String,
   };
   vm.createContext(ctx);
   const prelude = `
@@ -43,8 +41,10 @@ function loadSearchPure() {
     function _setMeta(m) { meta = m; }
     function _setChunks(c) { loadedChunks = c; }
   `;
+  // LECTIONARY_PURE uses REF_CHAPTER_END from SEARCH_PURE, so both run as one script.
   vm.runInContext(
-    prelude + extractBlock("SEARCH_PURE", WORKER_SOURCE, "search-worker.js"),
+    prelude + extractBlock("SEARCH_PURE", WORKER_SOURCE, "search-worker.js") + "\n"
+      + extractBlock("LECTIONARY_PURE", WORKER_SOURCE, "search-worker.js"),
     ctx,
     { filename: "search-worker.js" },
   );
@@ -107,6 +107,11 @@ test("parseQuery: 알 수 없는 별칭은 unmatched로, 범위는 비움", () =
   const r = ctx.parseQuery("사랑 in:없는책");
   assert.deepEqual(asArray(r.restrictBooks), []);
   assert.deepEqual(r.unmatched, ["없는책"]);
+});
+
+test("parseQuery: 객체가 물려받은 이름(`constructor`)은 책 별칭이 아니다", () => {
+  const r = ctx.parseQuery("사랑 in:constructor");
+  assert.deepStrictEqual([asArray(r.restrictBooks), asArray(r.unmatched)], [[], ["constructor"]]);
 });
 
 test("parseQuery: 중복 공백은 단일 공백으로 정리", () => {
@@ -349,4 +354,669 @@ test("paginate: 범위 밖 페이지는 빈 결과(total은 유지)", () => {
   const r = ctx.paginate(MATCHED, 99, 10);
   assert.deepEqual(r.results, []);
   assert.equal(r.total, 25);
+});
+
+// ── tryBookOnly: 책 이름만 친 검색어(ADR-044 §2) ──
+
+const BOOK_META = {
+  aliases: { "창세기": "genesis", "창세": "genesis", "창": "genesis", "요한": "john", "요한 1서": "1john", "1john": "1john" },
+  books: { genesis: { ko: "창세기" }, john: { ko: "요한의 복음서" }, "1john": { ko: "요한의 첫째 편지" } },
+};
+
+test("tryBookOnly: 책 이름이나 약칭 하나면 그 책이다", () => {
+  ctx._setMeta(BOOK_META);
+  try {
+    assert.deepEqual(ctx.tryBookOnly("창세기"), { bookId: "genesis", bookNameKo: "창세기" });
+    assert.deepEqual(ctx.tryBookOnly("요한"), { bookId: "john", bookNameKo: "요한의 복음서" });
+    assert.deepEqual(ctx.tryBookOnly("요한의 복음서"), { bookId: "john", bookNameKo: "요한의 복음서" });
+    assert.deepEqual(ctx.tryBookOnly("1JOHN"), { bookId: "1john", bookNameKo: "요한의 첫째 편지" });
+  } finally {
+    ctx._setMeta(META);
+  }
+});
+
+test("tryBookOnly: 띄어 쓴 책 이름은 공백을 한 칸으로 맞춰 통째로 찾는다(「요한」이 먼저 맞지 않는다)", () => {
+  ctx._setMeta(BOOK_META);
+  try {
+    assert.equal(ctx.tryBookOnly("요한 1서").bookId, "1john");
+    assert.equal(ctx.tryBookOnly("  요한   1서 ").bookId, "1john");
+  } finally {
+    ctx._setMeta(META);
+  }
+});
+
+test("tryBookOnly: 한 글자 약칭, 낱말, 객체의 내장 이름은 책이 아니다", () => {
+  ctx._setMeta(BOOK_META);
+  try {
+    assert.equal(ctx.tryBookOnly("창"), null);
+    assert.equal(ctx.tryBookOnly("사랑"), null);
+    assert.equal(ctx.tryBookOnly("요한 3:16"), null);
+    assert.equal(ctx.tryBookOnly("constructor"), null);
+    assert.equal(ctx.tryBookOnly("toString"), null);
+  } finally {
+    ctx._setMeta(META);
+  }
+});
+
+test("lookupBook: 구절 표기와 책 이름만 친 검색어가 같은 규칙으로 책을 찾는다", () => {
+  ctx._setMeta(BOOK_META);
+  try {
+    assert.equal(ctx.tryVerseRef("요한  1서 3:16").bookId, "1john", "공백이 여럿이어도 띄어 쓴 책 이름");
+    assert.equal(ctx.tryVerseRef("1JOHN 3:16").bookId, "1john");
+    assert.equal(ctx.tryVerseRef("constructor 3:16"), null);
+    const cases = [["창세기", "genesis"], ["요한", "john"], ["요한 1서", "1john"], ["요한의 복음서", "john"], ["1JOHN", "1john"]];
+    for (const [name, id] of cases) {
+      assert.equal(ctx.lookupBook(name), id, name);
+      assert.equal(ctx.tryVerseRef(`${name} 1:1`).bookId, id, `${name} 1:1`);
+      assert.equal(ctx.tryBookOnly(name).bookId, id, name);
+    }
+  } finally {
+    ctx._setMeta(META);
+  }
+});
+
+// ── 전례독서 색인(ADR-037 §5): 작은 색인으로 이름 검색과 구절 검색을 본다 ──
+
+const plain = (x) => JSON.parse(JSON.stringify(x));
+
+const obs = (key, name, order, extra = {}) => ({
+  key, name, aliases: [], kind: "temporal", date: null, rank: null, order, common: null, ...extra,
+});
+const LECT_RAW = {
+  obs: [
+    obs("t-대림1주일", "대림1주일", 0),                                                  // 0
+    obs("advent-1-mon", "대림1주 월요일", 1),                                             // 1
+    obs("ordinary-7-sun", "연중7주일", 10),                                               // 2
+    obs("ordinary-17-sun", "연중17주일", 20),                                             // 3
+    obs("ordinary-7-wed", "연중7주 수요일", 11),                                          // 4
+    obs("t-성지주일", "성지주일", 5, { aliases: ["고난주일"] }),                           // 5
+    obs("t-부활대축일", "부활대축일", 6),                                                  // 6
+    obs("s-바울로회심", "사도 성 바울로의 회심", 30, { kind: "sanctoral", date: "01.25" }),  // 7
+    obs("s-요셉", "성 요셉(성모 마리아의 남편)", 31,
+      { kind: "sanctoral", date: "03.19", aliases: ["성 요셉"] }),                         // 8
+    obs("s-어거스틴", "어거스틴(히포의 주교, 430년)", 32,
+      { kind: "sanctoral", date: "08.28", common: "teacher" }),                            // 9
+    obs("s-공현", "공현대축일", 2, { kind: "sanctoral", date: "01.06" }),                    // 10
+    obs("t-왕", "왕이신 그리스도 주일", 25, { aliases: ["왕이신 그리스도"] }),              // 11
+  ],
+  sets: [
+    [0, "advent-1-sun-A-t1-s1", "A", null, 1, "대림1주일 (가해)"],   // 0
+    [0, "advent-1-sun-B-t1-s1", "B", null, 1, "대림1주일 (나해)"],   // 1
+    [1, "advent-1-mon-t1-s1", null, null, 1, "대림1주 월요일"],      // 2
+    [2, "ordinary-7-sun-A-t1-s1", "A", null, 1, "연중7주일 (가해)"], // 3
+    [6, "easter-day-t1-s1", null, null, 1, "부활대축일"],            // 4
+    [10, "epiphany-t1-s1", null, null, 1, "공현대축일"],             // 5
+    [5, "palm-t1-s1", null, null, 1, "성지주일"],                    // 6
+  ],
+  books: ["isa", "lps", "matt", "john", "cant", "luke"],
+  cov: [
+    [0, 0, 2, 1, 5, 0], [0, 1, 122, 1, 9, 1], [0, 2, 24, 36, 44, 3],
+    [1, 0, 2, 1, 5, 0], [1, 1, 122, 1, 9, 1], [1, 2, 24, 37, 44, 3],
+    [2, 0, 2, 1, 3, 0], [2, 1, 122, 1, 9, 1], [2, 2, 8, 5, 11, 3],
+    [3, 1, 23, 1, 6, 1], [3, 3, 3, 14, 21, 3],
+    [4, 3, 20, 1, 18, 3],
+    [5, 0, 60, 1, 6, 0], [5, 4, 11, 1, 11, 1], [5, 5, 1, 68, 79, 1],
+    [6, 0, 50, 4, 9, 0], [6, 2, 26, 14, 75, 3], [6, 2, 27, 1, 66, 3],
+  ],
+  saints: [{ name: "어거스틴", title: "히포의 어거스틴(주교, 430년)", obs: [9] }],
+  synonyms: {
+    "주님 부활 대축일": "부활대축일",
+    "그리스도왕": "왕이신 그리스도",
+    "그리스도왕 대축일": "왕이신 그리스도 주일",
+  },
+};
+const LECT = ctx.buildLectionarySearchIndex(LECT_RAW);
+
+const names = (q) => plain(ctx.searchLectionaryNames(LECT, q).items.map((it) => [it.obs.name, it.tier]));
+
+test("normalizeLectName: 띄어쓰기, 가운뎃점, 따옴표를 빼고 주의 번호를 「N주」로 맞춘다", () => {
+  assert.equal(ctx.normalizeLectName("대림 1주일"), "대림1주");
+  assert.equal(ctx.normalizeLectName("연중 제34주간 토요일"), "연중34주토요일");
+  assert.equal(ctx.normalizeLectName("연중 7주간"), "연중7주");
+  assert.equal(ctx.normalizeLectName("제7주"), "7주");
+  assert.equal(ctx.normalizeLectName("성 바울로·바나바 ‘사도’"), "성바울로바나바사도");
+  assert.equal(ctx.normalizeLectName("성지주일"), "성지주일", "번호 없는 「주일」은 그대로");
+});
+
+test("findWhole: 숫자는 통째로만 찾는다", () => {
+  assert.equal(ctx.findWhole("연중17주", "연중7주"), -1);
+  assert.equal(ctx.findWhole("연중17주", "7주"), -1);
+  assert.equal(ctx.findWhole("연중10주", "연중1"), -1);
+  assert.equal(ctx.findWhole("연중7주수요일", "연중7주"), 0);
+  assert.equal(ctx.findWhole("연중17주와연중7주", "7주"), 8);
+});
+
+test("searchLectionaryNames: 이름 전체가 같은 것, 이름이 검색어로 시작하는 것의 차례", () => {
+  assert.deepEqual(names("대림1주일"), [["대림1주일", 1], ["대림1주 월요일", 2]]);
+  assert.deepEqual(names("대림 1주일"), [["대림1주일", 1], ["대림1주 월요일", 2]]);
+  assert.deepEqual(names("대림1주"), [["대림1주일", 1], ["대림1주 월요일", 2]]);
+});
+
+test("searchLectionaryNames: 같은 단계 안에서는 전례년 순서다", () => {
+  assert.deepEqual(names("대림"), [["대림1주일", 2], ["대림1주 월요일", 2]]);
+  // 색인의 차례(부활대축일 6번, 공현대축일 10번)가 아니라 전례년 순서(order 6, 2)다.
+  assert.deepEqual(names("축일"), [["공현대축일", 3], ["부활대축일", 3]]);
+});
+
+test("searchLectionaryNames: 「연중 7주」로 「연중17주일」은 찾지 않는다", () => {
+  assert.deepEqual(names("연중 7주"), [["연중7주일", 1], ["연중7주 수요일", 2]]);
+  assert.deepEqual(names("연중 제7주간"), [["연중7주일", 1], ["연중7주 수요일", 2]]);
+});
+
+test("searchLectionaryNames: 별칭으로 찾으면 그 별칭을 적는다", () => {
+  const [hit] = plain(ctx.searchLectionaryNames(LECT, "고난주일").items);
+  assert.equal(hit.obs.name, "성지주일");
+  assert.equal(hit.tier, 1);
+  assert.equal(hit.matched, "고난주일");
+  assert.deepEqual(hit.sets.map((s) => s.id), ["palm-t1-s1"]);
+});
+
+test("searchLectionaryNames: 이름이 같은 단계로 맞으면 별칭은 적지 않는다", () => {
+  const [hit] = plain(ctx.searchLectionaryNames(LECT, "성지주일").items);
+  assert.equal(hit.tier, 1);
+  assert.equal(hit.matched, undefined);
+  // 이름과 별칭(`왕이신 그리스도`)이 모두 이름 안에 든 단계로 맞는다.
+  assert.deepStrictEqual(plain(ctx.searchLectionaryNames(LECT, "그리스도").items).map((it) => [it.obs.name, it.tier, it.matched]),
+    [["왕이신 그리스도 주일", 3, undefined]]);
+  // 별칭이 먼저 맞고(검색어 그대로) 이름이 뒤에 같은 단계로 맞아도(비슷한 말로 바꾼 검색어) 이름을 적는다.
+  const index = ctx.buildLectionarySearchIndex({
+    ...LECT_RAW, obs: LECT_RAW.obs.map((o) => (o.name === "부활대축일" ? { ...o, aliases: ["주님 부활 대축일"] } : o)),
+  });
+  const [easter] = plain(ctx.searchLectionaryNames(index, "주님 부활 대축일").items);
+  assert.deepStrictEqual([easter.obs.name, easter.tier, easter.matched], ["부활대축일", 1, undefined]);
+});
+
+test("searchLectionaryNames: 성인의 이름과 칭호로 그 성인의 축일을 찾는다", () => {
+  const [hit] = plain(ctx.searchLectionaryNames(LECT, "어거스틴").items);
+  assert.equal(hit.obs.key, "s-어거스틴");
+  assert.equal(hit.tier, 1, "성인 이름 전체가 같다");
+  assert.equal(hit.matched, "히포의 어거스틴(주교, 430년)");
+  assert.deepEqual(hit.sets, [], "독서 세트가 없는 날도 찾는다");
+  assert.equal(hit.obs.common, "teacher");
+  assert.deepEqual(names("히포의 어거스틴"), [["어거스틴(히포의 주교, 430년)", 2]]);
+});
+
+test("searchLectionaryNames: 독서가 없는 월별 축일도 별칭으로 찾는다", () => {
+  const items = plain(ctx.searchLectionaryNames(LECT, "성 요셉").items);
+  assert.deepEqual(items.map((it) => [it.obs.date, it.tier, it.matched]), [["03.19", 1, "성 요셉"]]);
+});
+
+test("searchLectionaryNames: 비슷한 말로 바꿔 찾으면 바꾼 말을 알린다", () => {
+  const r = plain(ctx.searchLectionaryNames(LECT, "주님 부활 대축일"));
+  assert.deepEqual(r.items.map((it) => it.obs.name), ["부활대축일"]);
+  assert.deepEqual(r.synonyms, [{ from: "주님 부활 대축일", to: "부활대축일" }]);
+  assert.deepEqual(plain(ctx.searchLectionaryNames(LECT, "부활대축일").synonyms), [], "바꾸지 않았으면 비운다");
+});
+
+test("searchLectionaryNames: 비슷한 말은 긴 낱말부터 바꾼다", () => {
+  const r = plain(ctx.searchLectionaryNames(LECT, "그리스도왕 대축일"));
+  assert.deepEqual(r.items.map((it) => [it.obs.name, it.tier]), [["왕이신 그리스도 주일", 1]]);
+  assert.deepEqual(r.synonyms, [{ from: "그리스도왕 대축일", to: "왕이신 그리스도 주일" }]);
+});
+
+test("swapSynonyms: 바꾼 말을 다시 바꾸지 않는다", () => {
+  const index = ctx.buildLectionarySearchIndex({ ...LECT_RAW, synonyms: { "가": "나", "나": "다" } });
+  assert.deepEqual(plain(ctx.swapSynonyms(index, "가나")), {
+    swapped: "나다", used: [{ from: "가", to: "나" }, { from: "나", to: "다" }],
+  });
+});
+
+test("searchLectionaryNames: 검색어 전체로 없으면 낱말이 모두 든 이름을 찾는다", () => {
+  assert.deepEqual(names("바울로 회심"), [["사도 성 바울로의 회심", 3]]);
+  assert.deepEqual(names("7주 연중"), [["연중7주일", 3], ["연중7주 수요일", 3]], "숫자는 통째로");
+  assert.deepEqual(names("바울로회심"), [], "낱말을 나누지 않은 검색어는 그대로 찾는다");
+});
+
+test("searchLectionaryNames: 낱말마다 나눠 찾을 때도 비슷한 말을 바꿔 본다", () => {
+  const r = plain(ctx.searchLectionaryNames(LECT, "주일 그리스도왕"));
+  assert.deepEqual(r.items.map((it) => [it.obs.name, it.tier]), [["왕이신 그리스도 주일", 3]]);
+  assert.deepEqual(r.synonyms, [{ from: "그리스도왕", to: "왕이신 그리스도" }]);
+});
+
+test("searchLectionaryNames: 비슷한 말로 바꿔도 찾은 것이 없으면 바꾼 말을 알리지 않는다", () => {
+  // 검색어 전체로도, 낱말마다 나눠서도 바꿔 보지만 `수요일`이 든 이름에는 `왕이신 그리스도`가 없다.
+  assert.deepStrictEqual(plain(ctx.searchLectionaryNames(LECT, "그리스도왕 수요일")), { kind: "name", items: [], synonyms: [] });
+});
+
+test("searchLectionaryNames: 겹친 낱말은 한 번 쓴 것과 같다", () => {
+  assert.deepStrictEqual(names("7주 7주 연중 7주"), names("7주 연중"));
+  assert.deepStrictEqual(names(Array(500).fill("주").join(" ")), names("주 주"));
+});
+
+test("searchLectionaryNames: 빈 검색어와 없는 이름은 결과가 없다", () => {
+  assert.deepEqual(names("  "), []);
+  assert.deepEqual(names("없는 이름"), []);
+});
+
+// 구절 검색은 `tryVerseRef`가 돌려주는 모양을 직접 만들어 넘긴다.
+const ref = (bookId, ...parts) => ({ bookId, bookNameKo: bookId, parts: parts.map(([chapter, verses]) => ({ chapter, verses })) });
+const passage = (r) => plain(ctx.searchLectionaryPassage(LECT, r).items);
+
+test("searchLectionaryPassage: 검색어의 절을 모두 담은 독서가 먼저, 다음은 겹친 절이 많은 독서", () => {
+  const items = passage(ref("isa", [2, "1-5"]));
+  assert.deepEqual(items.map((it) => [it.obs.name, it.hits[0].full, it.hits[0].overlap]), [
+    ["대림1주일", true, 5], ["대림1주 월요일", false, 3],
+  ]);
+});
+
+test("searchLectionaryPassage: 같은 전례일에서 같은 독서를 읽는 주기는 한 독서로 묶는다", () => {
+  const [day] = passage(ref("isa", [2, "4"]));
+  assert.equal(day.hits.length, 1);
+  assert.deepEqual(day.hits[0], {
+    slot: 0, rows: [["isa", 2, 1, 5]], full: true, overlap: 1,
+    sets: [
+      { id: "advent-1-sun-A-t1-s1", year: "A", track: null, setNo: 1, label: "대림1주일 (가해)" },
+      { id: "advent-1-sun-B-t1-s1", year: "B", track: null, setNo: 1, label: "대림1주일 (나해)" },
+    ],
+  });
+  assert.deepEqual(day.sets.map((s) => s.id), ["advent-1-sun-A-t1-s1", "advent-1-sun-B-t1-s1"]);
+});
+
+test("searchLectionaryPassage: 다른 독서는 따로 두고, 주기마다 다르면 나눈다", () => {
+  const [day] = passage(ref("matt", [24, "37"]));
+  assert.deepEqual(day.hits.map((h) => [h.rows, h.sets.map((s) => s.year)]), [
+    [[["matt", 24, 36, 44]], ["A"]], [[["matt", 24, 37, 44]], ["B"]],
+  ]);
+});
+
+test("searchLectionaryPassage: 시편은 전례시편에서 찾고, 장만 친 검색어는 「모두 담은」 단계를 쓰지 않는다", () => {
+  const items = passage(ref("ps", [122, "1-999"]));
+  assert.deepEqual(items.map((it) => [it.obs.name, it.hits[0].slot, it.hits[0].full, it.hits[0].overlap]), [
+    ["대림1주일", 1, false, 9], ["대림1주 월요일", 1, false, 9],
+  ]);
+});
+
+test("searchLectionaryPassage: 송가는 성구로 찾고, 독서 자리는 시편이다", () => {
+  const [day] = passage(ref("luke", [1, "68"]));
+  assert.equal(day.obs.name, "공현대축일");
+  assert.deepEqual([day.hits[0].slot, day.hits[0].rows], [1, [["cant", 11, 1, 11], ["luke", 1, 68, 79]]]);
+});
+
+test("searchLectionaryPassage: 장을 넘는 검색어와 독서", () => {
+  const [day] = passage(ref("matt", [26, "14-999"], [27, "1-66"]));
+  assert.equal(day.obs.name, "성지주일");
+  assert.deepEqual(day.hits.map((h) => [h.slot, h.rows, h.full, h.overlap]), [
+    [3, [["matt", 26, 14, 75], ["matt", 27, 1, 66]], false, 128],
+  ]);
+  const [one] = passage(ref("matt", [27, "1-3"]));
+  assert.deepEqual([one.hits[0].full, one.hits[0].overlap], [true, 3], "독서의 한 장만 친 검색어");
+});
+
+test("searchLectionaryPassage: 절 목록은 겹친 절만 센다", () => {
+  const [day] = passage(ref("john", [3, "16,20-23,16"]));
+  assert.deepEqual([day.obs.name, day.hits[0].full, day.hits[0].overlap], ["연중7주일", false, 3]);
+});
+
+test("searchLectionaryPassage: 거꾸로 쓴 구간과 0절은 구절 바로가기 카드와 같게 읽는다", () => {
+  const hit = (...parts) => passage(ref("john", ...parts)).map((it) => [it.obs.name, it.hits[0].full, it.hits[0].overlap]);
+  assert.deepStrictEqual(hit([3, "21-14"]), hit([3, "14-21"]));
+  assert.deepStrictEqual(hit([3, "21-14"]), [["연중7주일", true, 8]]);
+  assert.deepStrictEqual(hit([3, "0"]), hit([3, "1-999"]), "0절만 있으면 장 전체");
+  assert.deepStrictEqual(hit([3, "0,16"]), [["연중7주일", true, 1]], "0절은 뺀다");
+});
+
+test("searchLectionaryPassage: 모두 담은 독서가 먼저이고, 겹친 절의 수가 전례년 순서보다 앞선다", () => {
+  // 전례년 순서로는 가, 나, 다이지만 다가 검색어의 절을 모두 담았고 나가 가보다 많이 겹친다.
+  const index = ctx.buildLectionarySearchIndex({
+    obs: [obs("a", "가", 0), obs("b", "나", 1), obs("c", "다", 2)],
+    sets: [[0, "a-s1", null, null, 1, "가"], [1, "b-s1", null, null, 1, "나"], [2, "c-s1", null, null, 1, "다"]],
+    books: ["isa"],
+    cov: [[0, 0, 9, 1, 2, 0], [1, 0, 9, 1, 4, 0], [2, 0, 9, 1, 7, 0]],
+    saints: [],
+    synonyms: {},
+  });
+  const items = plain(ctx.searchLectionaryPassage(index, ref("isa", [9, "1-6"])).items);
+  assert.deepStrictEqual(items.map((it) => [it.obs.name, it.hits[0].full, it.hits[0].overlap]),
+    [["다", true, 6], ["나", false, 4], ["가", false, 2]]);
+});
+
+test("searchLectionaryPassage: 색인에 없는 책과 읽지 않는 장은 결과가 없다", () => {
+  assert.deepEqual(passage(ref("genesis", [1, "1"])), []);
+  assert.deepEqual(passage(ref("isa", [3, "1"])), []);
+  assert.deepEqual(passage(ref("isa", [2, "6-9"])), []);
+});
+
+// ── 메시지 처리: 워커 파일 전체를 가짜 `fetch`와 시계로 실행한다 ──
+
+const WORKER_FILES = {
+  meta: { aliases: { "이사": "isa", "이사야": "isa" }, books: { isa: { ko: "이사야" } } },
+  nt: { books: ["isa"], b: [[0, 2]], c: [2, 2], v: [1, 4], t: ["마지막 날에", "칼을 쳐서 보습을 만들고"] },
+  lect: LECT_RAW,
+};
+
+/** 테스트가 정한 때에 끝나는 응답. */
+const deferred = () => {
+  let resolve;
+  const promise = new Promise((r) => { resolve = r; });
+  return { promise, resolve };
+};
+
+const OT_CHUNK = { books: ["isa"], b: [[0, 1]], c: [9], v: [1], t: ["어둠 속을 헤매는 백성이"] };
+
+/**
+ * The response for a body: a promise answers when the test settles it (with a body or "fail"), "fail" is a 500, and
+ * "hang" never answers until the worker's signal aborts the request.
+ * @param {object | Promise<object | "fail"> | "fail" | "hang"} body
+ * @param {AbortSignal} [signal]
+ */
+function respond(body, signal) {
+  if (body === "hang") {
+    return new Promise((_, reject) => signal.addEventListener("abort", () => reject(new Error("aborted"))));
+  }
+  if (body && typeof body.then === "function") return body.then((b) => respond(b, signal));
+  if (body === "fail" || !body) return Promise.resolve({ ok: false, status: 500 });
+  return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
+}
+
+/**
+ * Runs the whole worker file with a fake `fetch`, clock and timers — no real timer is left behind.
+ * @param {{ [url: string]: object | Promise<object | "fail"> | "fail" | "hang" | (() => any) }} files  a function
+ *   gives the body for each request in turn
+ * @param {{ now: number }} [clock]  performance.now; `advance(ms)` moves it and runs the timers that are due
+ */
+function startWorker(files, clock = { now: 0 }) {
+  const posted = [];
+  const fetched = [];
+  const warned = [];
+  const timers = [];
+  const ctx = {
+    onmessage: null,
+    console: { ...console, warn: (...args) => warned.push(args.map(String).join(" ")) },
+    postMessage: (m) => posted.push(JSON.parse(JSON.stringify(m))),
+    AbortController,
+    performance: { now: () => clock.now },
+    setTimeout: (fn, ms) => timers.push({ fn, at: clock.now + ms }),
+    clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].fn = null; },
+    fetch: (url, init = {}) => {
+      fetched.push(url);
+      const body = typeof files[url] === "function" ? files[url]() : files[url];
+      return respond(body, init.signal);
+    },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(WORKER_SOURCE, ctx, { filename: "search-worker.js" });
+  const send = (data) => ctx.onmessage({ data });
+  const of = (type) => () => posted.filter((m) => m.type === type);
+  const advance = (ms) => {
+    clock.now += ms;
+    for (const t of timers) {
+      if (t.fn && t.at <= clock.now) {
+        const fn = t.fn;
+        t.fn = null;
+        fn();
+      }
+    }
+  };
+  return { posted, fetched, warned, send, advance, results: of("results"), lects: of("lectionary"), partials: of("partial-results") };
+}
+
+const flush = async () => {
+  for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
+};
+const INIT = { type: "init", metaUrl: "meta", chunks: [{ name: "nt", url: "nt" }], lectionaryUrl: "lect" };
+let searchNo = 0;
+const search = (q, scopeBooks = []) => ({ type: "search", q, page: 1, pageSize: 10, searchId: ++searchNo, scopeBooks });
+const lectNames = (m) => m.lectionary.items.map((it) => it.obs.name);
+
+test("메시지: 색인을 받아 두었으면 구절과 이름으로 찾은 전례일을 결과에 바로 넣는다", async () => {
+  const w = startWorker(WORKER_FILES);
+  await w.send(INIT);
+  await flush();
+  assert.deepEqual(w.fetched.slice().sort(), ["lect", "meta", "nt"]);
+
+  await w.send(search("이사 2:4"));
+  const [byRef] = w.results();
+  assert.equal(byRef.refMatch.bookId, "isa");
+  assert.equal(byRef.bookOnly, null);
+  assert.equal(byRef.lectionaryPending, false);
+  assert.equal(byRef.lectionary.kind, "passage");
+  assert.deepEqual(lectNames(byRef), ["대림1주일"]);
+
+  await w.send(search("고난주일"));
+  const byName = w.results()[1];
+  assert.equal(byName.total, 0, "성서 본문에는 없다");
+  assert.equal(byName.bookOnly, null);
+  assert.deepEqual(byName.lectionary.items.map((it) => [it.obs.name, it.matched]), [["성지주일", "고난주일"]]);
+
+  await w.send(search("이사야"));
+  const byBook = w.results()[2];
+  assert.deepEqual(byBook.bookOnly, { bookId: "isa", bookNameKo: "이사야" });
+  assert.deepEqual(byBook.lectionary.items, []);
+  assert.deepEqual(w.lects(), [], "따로 보낼 것이 없다");
+});
+
+test("메시지: 색인 주소가 없으면 받지 않고 전례독서는 `null`이다(지금의 앱)", async () => {
+  const w = startWorker(WORKER_FILES);
+  await w.send({ ...INIT, lectionaryUrl: undefined });
+  await flush();
+  await w.send(search("이사 2:4"));
+  await w.send(search("보습"));
+  await flush();
+  assert.deepEqual(w.fetched.slice().sort(), ["meta", "nt"]);
+  const [byRef, byWord] = w.results();
+  assert.deepStrictEqual([byRef.lectionary, byRef.lectionaryPending], [null, false]);
+  assert.deepStrictEqual([byWord.lectionary, byWord.lectionaryPending], [null, false]);
+  assert.equal(byWord.total, 1);
+  assert.deepEqual(w.lects(), []);
+});
+
+test("메시지: 색인을 받는 중이면 성서 결과를 기다리게 하지 않고, 색인이 오면 전례독서를 따로 보낸다", async () => {
+  const lect = deferred();
+  const w = startWorker({ ...WORKER_FILES, lect: lect.promise });
+  await w.send(INIT);
+  await flush();
+
+  await w.send(search("이사 2:4"));
+  const [byRef] = w.results();
+  assert.equal(byRef.refMatch.bookId, "isa", "구절 바로가기는 바로 나간다");
+  assert.deepStrictEqual([byRef.lectionary, byRef.lectionaryPending], [null, true]);
+
+  lect.resolve(LECT_RAW);
+  await flush();
+  const [late] = w.lects();
+  assert.equal(late.searchId, byRef.searchId);
+  assert.equal(late.q, "이사 2:4");
+  assert.deepEqual(lectNames(late), ["대림1주일"]);
+  assert.equal(w.fetched.filter((u) => u === "lect").length, 1, "받는 중인 요청 하나를 같이 기다린다");
+});
+
+test("메시지: 색인이 오기 전에 새 검색이 시작되면 옛 검색의 전례독서는 보내지 않는다", async () => {
+  const lect = deferred();
+  const w = startWorker({ ...WORKER_FILES, lect: lect.promise });
+  await w.send(INIT);
+  await flush();
+  await w.send(search("이사 2:4"));
+  await w.send(search("고난주일"));
+  const [, byName] = w.results();
+  assert.equal(byName.lectionaryPending, true);
+
+  lect.resolve(LECT_RAW);
+  await flush();
+  assert.deepEqual(w.lects().map((m) => [m.searchId, lectNames(m)]), [[byName.searchId, ["성지주일"]]]);
+});
+
+test("메시지: 색인을 받지 못하면 남기고 전례독서는 비우며, 정한 시간이 지나기 전에는 다시 받지 않는다", async () => {
+  const clock = { now: 1000 };
+  const w = startWorker({ ...WORKER_FILES, lect: "fail" }, clock);
+  await w.send(INIT);
+  await flush();
+  assert.equal(w.warned.length, 1, "실패를 콘솔에 남긴다");
+
+  await w.send(search("보습"));
+  await flush();
+  const [first] = w.results();
+  assert.deepStrictEqual([first.lectionary, first.lectionaryPending, first.total], [null, false, 1]);
+  assert.equal(w.fetched.filter((u) => u === "lect").length, 1, "검색마다 다시 받지 않는다");
+
+  clock.now += 60000;
+  await w.send(search("보습"));
+  await flush();
+  const second = w.results()[1];
+  assert.equal(second.lectionaryPending, true, "시간이 지나면 다시 받아 본다");
+  assert.equal(w.fetched.filter((u) => u === "lect").length, 2);
+  assert.deepStrictEqual(w.lects().map((m) => [m.searchId, m.lectionary]), [[second.searchId, null]], "또 실패하면 비운 전례독서를 보낸다");
+});
+
+test("메시지: 색인 요청이 멈추면 정한 시간 뒤에 받지 못한 것으로 보고, 다시 받기까지 기다린다", async () => {
+  const w = startWorker({ ...WORKER_FILES, lect: "hang" });
+  await w.send(INIT);
+  await flush();
+  await w.send(search("보습"));
+  await flush();
+  assert.equal(w.results()[0].lectionaryPending, true);
+
+  w.advance(29999);
+  await flush();
+  assert.deepStrictEqual(w.lects(), [], "정한 시간이 되기 전에는 기다린다");
+  w.advance(1);
+  await flush();
+  assert.deepStrictEqual(w.lects().map((m) => m.lectionary), [null], "시간이 되면 비운 전례독서를 보낸다");
+  assert.equal(w.warned.length, 1, "받지 못한 것을 콘솔에 남긴다");
+
+  await w.send(search("보습"));
+  assert.equal(w.results()[1].lectionaryPending, false, "곧바로 다시 받지 않는다");
+  w.advance(60000);
+  await w.send(search("보습"));
+  assert.equal(w.results()[2].lectionaryPending, true, "다시 받을 시간이 지나면 받는다");
+  assert.equal(w.fetched.filter((u) => u === "lect").length, 2);
+});
+
+test("메시지: 색인으로 찾다가 오류가 나도 성서 결과와 구절 바로가기는 보내고 전례독서만 비운다", async () => {
+  // 옛 워커 파일이 새 형식의 색인을 읽는 경우: 없는 전례일(99)을 가리키는 성인과 독서 세트.
+  const broken = { ...LECT_RAW, saints: [{ name: "보습", title: "보습의 성인", obs: [99] }], cov: [...LECT_RAW.cov, [99, 0, 2, 1, 5, 0]] };
+  const w = startWorker({ ...WORKER_FILES, lect: broken });
+  await w.send(INIT);
+  await flush();
+  await w.send(search("이사 2:4"));
+  await w.send(search("보습"));
+  await flush();
+  assert.deepStrictEqual(w.posted.filter((m) => m.type === "error"), []);
+  const [byRef, byWord] = w.results();
+  assert.equal(byRef.refMatch.bookId, "isa");
+  assert.equal(byWord.total, 1, "성서 결과는 그대로다");
+  assert.deepStrictEqual([byRef.lectionary, byWord.lectionary], [null, null]);
+  assert.equal(w.warned.length, 2, "오류를 콘솔에 남긴다");
+
+  const lect = deferred();
+  const later = startWorker({ ...WORKER_FILES, lect: lect.promise });
+  await later.send(INIT);
+  await flush();
+  await later.send(search("이사 2:4"));
+  lect.resolve(broken);
+  await flush();
+  assert.deepStrictEqual(later.lects().map((m) => m.lectionary), [null], "받는 중이었으면 비운 전례독서를 따로 보낸다");
+});
+
+test("메시지: 일찍 끝나는 결과에도 책 이름과 전례독서 칸이 있다", async () => {
+  const w = startWorker(WORKER_FILES);
+  await w.send(INIT);
+  await flush();
+  for (const q of ["", "사랑 in:없는책", "in:이사"]) await w.send(search(q));
+  assert.deepStrictEqual(w.results().map((m) => [m.bookOnly, m.lectionary, m.lectionaryPending]),
+    [[null, null, false], [null, null, false], [null, null, false]]);
+});
+
+test("메시지: 책을 골라 두었으면 전례일은 찾지 않고, 책 이름만 친 검색어는 알아본다(ADR-044 §1, §2)", async () => {
+  const w = startWorker(WORKER_FILES);
+  await w.send(INIT);
+  await flush();
+  await w.send(search("고난주일", ["isa"]));
+  await w.send(search("이사야", ["isa"]));
+  await w.send(search("고난주일 in:이사"));
+  await w.send(search("이사 2:4", ["isa"]));
+  await flush();
+  const got = w.results().map((m) => [m.bookOnly && m.bookOnly.bookId, m.lectionary, m.lectionaryPending]);
+  assert.deepStrictEqual(got, [[null, null, false], ["isa", null, false], [null, null, false], [null, null, false]]);
+});
+
+test("메시지: 성서 청크를 받는 중에도 중간 결과에 책 이름과 받아 둔 색인의 전례일을 넣는다", async () => {
+  const ot = deferred();
+  const w = startWorker({ ...WORKER_FILES, ot: ot.promise });
+  await w.send({ ...INIT, chunks: [{ name: "nt", url: "nt" }, { name: "ot", url: "ot" }] });
+  await flush();
+  w.send(search("고난주일"));
+  await flush();
+  w.send(search("이사야", ["isa"]));
+  await flush();
+  const [byName, scoped] = w.partials();
+  assert.deepStrictEqual([byName.bookOnly, byName.lectionary.items.map((it) => it.obs.name)], [null, ["성지주일"]]);
+  assert.deepStrictEqual([scoped.bookOnly, scoped.lectionary], [{ bookId: "isa", bookNameKo: "이사야" }, null]);
+
+  ot.resolve(OT_CHUNK);
+  await flush();
+  const [last] = w.results();
+  assert.equal(last.searchId, scoped.searchId, "앞의 검색은 새 검색에 밀려 마지막 결과를 보내지 않는다");
+  assert.deepStrictEqual([last.bookOnly, last.lectionary, last.lectionaryPending], [{ bookId: "isa", bookNameKo: "이사야" }, null, false]);
+});
+
+test("메시지: init을 다시 받아 색인 주소가 바뀌면 옛 색인을 버린다", async () => {
+  const w = startWorker({ ...WORKER_FILES, lect2: { ...LECT_RAW, synonyms: {} } });
+  await w.send(INIT);
+  await flush();
+  await w.send({ ...INIT, lectionaryUrl: undefined });
+  await flush();
+  await w.send(search("고난주일"));
+  await flush();
+  assert.deepStrictEqual([w.results()[0].lectionary, w.results()[0].lectionaryPending], [null, false], "주소가 없어지면 받아 둔 색인도 쓰지 않는다");
+
+  await w.send({ ...INIT, lectionaryUrl: "lect2" });
+  await flush();
+  assert.equal(w.fetched.filter((u) => u === "lect2").length, 1);
+  await w.send(search("주님 부활 대축일"));
+  assert.deepEqual(w.results()[1].lectionary.synonyms, [], "새 색인(비슷한 말 표가 빈 것)으로 찾는다");
+});
+
+// 비슷한 말 표가 빈 색인: `주님 부활 대축일`로는 아무것도 찾지 못한다(LECT_RAW로는 `부활대축일`을 찾는다).
+const LECT_NO_SYNONYMS = { ...LECT_RAW, synonyms: {} };
+
+test("메시지: 색인을 받는 중에 init이 주소를 바꾸면, 기다리던 검색은 새 주소의 색인으로 찾아 보낸다", async () => {
+  const old = deferred();
+  const w = startWorker({ ...WORKER_FILES, lect: old.promise, lect2: LECT_NO_SYNONYMS });
+  await w.send(INIT);
+  await flush();
+  await w.send(search("주님 부활 대축일"));
+  assert.equal(w.results()[0].lectionaryPending, true);
+
+  await w.send({ ...INIT, lectionaryUrl: "lect2" });
+  await flush();
+  old.resolve(LECT_RAW);
+  await flush();
+  assert.deepStrictEqual(w.lects().map((m) => lectNames(m)), [[]], "옛 색인의 결과도 빈 결과도 아니라 새 색인의 결과 하나");
+});
+
+test("메시지: 옛 주소의 요청이 늦게 실패해도 지금 받는 요청을 지우지 않는다", async () => {
+  const first = deferred();
+  const second = deferred();
+  const answers = [first.promise, second.promise];
+  const w = startWorker({ ...WORKER_FILES, lect: () => answers.shift() });
+  await w.send(INIT);
+  await w.send({ ...INIT, lectionaryUrl: undefined });
+  await w.send(INIT);
+  await flush();
+  first.resolve("fail");
+  await flush();
+  await w.send(search("고난주일"));
+  assert.equal(w.results()[0].lectionaryPending, true, "다시 받기를 미루지 않고 지금 요청을 기다린다");
+
+  second.resolve(LECT_RAW);
+  await flush();
+  assert.deepStrictEqual(w.lects().map((m) => lectNames(m)), [["성지주일"]]);
+  assert.equal(w.fetched.filter((u) => u === "lect").length, 2);
+});
+
+test("메시지: 검색 도중 init이 색인을 바꾸면 마지막 결과는 새 색인으로 다시 찾는다", async () => {
+  const ot = deferred();
+  const w = startWorker({ ...WORKER_FILES, ot: ot.promise, lect2: LECT_NO_SYNONYMS });
+  const init = { ...INIT, chunks: [{ name: "nt", url: "nt" }, { name: "ot", url: "ot" }] };
+  await w.send(init);
+  await flush();
+  w.send(search("주님 부활 대축일"));
+  await flush();
+  assert.deepStrictEqual(lectNames(w.partials()[0]), ["부활대축일"], "중간 결과는 받아 둔 색인으로 찾는다");
+
+  await w.send({ ...init, lectionaryUrl: "lect2" });
+  await flush();
+  ot.resolve(OT_CHUNK);
+  await flush();
+  assert.deepStrictEqual(lectNames(w.results()[0]), [], "마지막 결과는 새 색인으로 찾는다");
 });
