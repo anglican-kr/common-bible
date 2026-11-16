@@ -22,11 +22,18 @@
  *       loadedChunks: [...names], pendingChunks: [...names],
  *       bookOnly, lectionary }
  *     { type: "results", searchId, q, refMatch, results, total, page, pageSize,
- *       bookOnly, lectionary }
+ *       bookOnly, lectionary, lectionaryPending }
+ *     { type: "lectionary", searchId, q, lectionary }
  *     { type: "error", message }
- *       — bookOnly: the query is a book name alone ({ bookId, bookNameKo }) or null.
- *       — lectionary: the lectionary days found (LectResult) or null when the
- *         index is not loaded. A partial result carries it only once loaded.
+ *       — bookOnly: the query is a book name alone ({ bookId, bookNameKo }) or null,
+ *         book scope or not. A verse reference comes first: `요1` alone is John 1,
+ *         not 1 John (ADR-044 §2).
+ *       — lectionary: the lectionary days found (LectResult) or null — no index, a
+ *         book scope is set (ADR-044 §1), nothing to search for, or searching the
+ *         index failed. A search never waits for the index: while it is still
+ *         loading, "results" carries lectionaryPending: true and a "lectionary"
+ *         message with the same searchId follows once it arrives (lectionary null
+ *         if loading failed or timed out). A newer search drops it.
  */
 
 /**
@@ -203,11 +210,24 @@ let currentSearchId = 0;
 /** @type {string | null} */
 let lectionaryUrl = null;
 
+/** Bumped by each `init` that changes lectionaryUrl, so a request for an older address leaves the state alone. */
+let lectionaryGen = 0;
+
 /** @type {Promise<LectionaryIndex | null> | null} */
 let lectionaryPromise = null;
 
 /** @type {LectionaryIndex | null} */
 let lectionary = null;
+
+/** performance.now() before which a failed lectionary index is not fetched again: elapsed time, so changing the
+ * device clock does not stretch the wait. */
+let lectionaryRetryAt = 0;
+
+/** 전례독서 색인을 받지 못했을 때 다시 받아 보기까지의 시간. 검색마다 다시 받지 않게 하려는 것이다. */
+const LECTIONARY_RETRY_MS = 60000;
+
+/** 전례독서 색인을 기다리는 가장 긴 시간. 요청이 끝나지 않고 멈추면 이 시간 뒤에 받지 못한 것으로 본다. */
+const LECTIONARY_TIMEOUT_MS = 30000;
 
 /**
  * @param {string} type
@@ -274,39 +294,99 @@ function loadChunk(name, url) {
 
 /**
  * 전례독서 색인을 받는다(ADR-044). 받지 못하면 `null`이다. 그때는 성서 검색만 하고 전례독서 결과는 비운다
- * (설계 `docs/design/lectionary-search.md` §3). 다음 검색에서 다시 받아 본다.
+ * (설계 `docs/design/lectionary-search.md` §3). 실패와 `LECTIONARY_TIMEOUT_MS` 안에 끝나지 않은 요청은 콘솔에
+ * 남기고, `LECTIONARY_RETRY_MS`가 지난 뒤의 검색에서 다시 받아 본다. 받는 사이에 `init`이 주소를 바꿨으면 옛 요청은
+ * 지금 상태를 고치지 않는다(`lectionaryGen`).
  * @returns {Promise<LectionaryIndex | null>}
  */
 function loadLectionary() {
-  if (!lectionaryUrl) return Promise.resolve(null);
-  if (!lectionaryPromise) {
-    lectionaryPromise = fetch(lectionaryUrl)
-      .then((r) => {
-        if (!r.ok) throw new Error(`전례독서 색인 로드 실패: ${r.status}`);
-        return r.json();
-      })
-      .then((/** @type {LectionaryRaw} */ raw) => (lectionary = buildLectionarySearchIndex(raw)))
-      .catch(() => {
+  if (lectionary) return Promise.resolve(lectionary);
+  if (lectionaryPromise) return lectionaryPromise;
+  if (!lectionaryUrl || performance.now() < lectionaryRetryAt) return Promise.resolve(null);
+  const gen = lectionaryGen;
+  // The signal also stops a body that stalls after the headers came.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LECTIONARY_TIMEOUT_MS);
+  lectionaryPromise = fetch(lectionaryUrl, { signal: controller.signal })
+    .then((r) => {
+      if (!r.ok) throw new Error(`전례독서 색인 로드 실패: ${r.status}`);
+      return r.json();
+    })
+    .then((/** @type {LectionaryRaw} */ raw) => {
+      const index = buildLectionarySearchIndex(raw);
+      if (gen === lectionaryGen) {
+        lectionary = index;
         lectionaryPromise = null;
-        return null;
-      });
-  }
+      }
+      return index;
+    })
+    .catch((err) => {
+      console.warn("전례독서 색인을 받지 못했습니다", err);
+      if (gen === lectionaryGen) {
+        lectionaryRetryAt = performance.now() + LECTIONARY_RETRY_MS;
+        lectionaryPromise = null;
+      }
+      return null;
+    })
+    .finally(() => clearTimeout(timer));
   return lectionaryPromise;
 }
 
-/** 검색이 전례독서 색인을 기다리는 시간. 넘으면 전례독서 없이 답한다. */
-const LECTIONARY_WAIT_MS = 3000;
+/**
+ * 전례독서를 찾지 않는 결과의 칸. 책을 골라 두었거나(책 칩은 성서 본문을 찾을 범위다, ADR-044 §1) 찾을 검색어가
+ * 없을 때다.
+ */
+const NO_LECTIONARY = { lectionary: null, lectionaryPending: false };
 
 /**
- * 검색 하나가 쓸 전례독서 색인. 아직 받는 중이면 LECTIONARY_WAIT_MS까지만 기다린다. 받는 요청이 멈춰도 성서
- * 결과가 나오게 하려는 것이다. 색인은 계속 받아 다음 검색에 쓴다.
- * @returns {Promise<LectionaryIndex | null>}
+ * 찾다가 오류가 나면 전례독서만 비우고 콘솔에 남긴다. 성서 결과와 구절 바로가기는 그대로 보낸다. 배포 직후에는 옛
+ * 워커 파일이 새 형식의 색인을 읽을 수 있다. 서비스 워커가 워커 파일과 데이터를 다른 캐시에 두기 때문이다.
+ * @param {(index: LectionaryIndex) => LectResult} find
+ * @param {LectionaryIndex} index
+ * @returns {LectResult | null}
  */
-function lectionaryForSearch() {
-  if (lectionary || !lectionaryUrl) return Promise.resolve(lectionary);
-  /** @type {Promise<null>} */
-  const timeout = new Promise((resolve) => setTimeout(() => resolve(null), LECTIONARY_WAIT_MS));
-  return Promise.race([loadLectionary(), timeout]);
+function findLectionary(find, index) {
+  try {
+    return find(index);
+  } catch (err) {
+    console.warn("전례독서 색인으로 찾지 못했습니다", err);
+    return null;
+  }
+}
+
+/**
+ * 결과 메시지의 전례독서 칸. 검색은 색인을 기다리지 않는다. 색인이 있으면 바로 찾는다. 받는 중이면 비워 둔 채
+ * `lectionaryPending`을 달고, 색인이 오면 전례독서를 따로 보낸다(`sendLectionaryLater`). 그래서 성서 결과와 구절
+ * 바로가기가 색인 때문에 늦지 않는다.
+ * @param {number} searchId
+ * @param {string} q
+ * @param {(index: LectionaryIndex) => LectResult} find
+ * @returns {{ lectionary: LectResult | null, lectionaryPending: boolean }}
+ */
+function lectionaryFields(searchId, q, find) {
+  if (lectionary) return { lectionary: findLectionary(find, lectionary), lectionaryPending: false };
+  if (!lectionaryUrl || performance.now() < lectionaryRetryAt) return NO_LECTIONARY;
+  sendLectionaryLater(searchId, q, find);
+  return { lectionary: null, lectionaryPending: true };
+}
+
+/**
+ * 색인이 오면 그 검색의 전례독서를 같은 `searchId`의 `lectionary` 메시지로 보낸다. 그사이 새 검색이 시작됐으면
+ * 보내지 않는다. 그사이 `init`이 색인 주소를 바꿨으면 새 주소의 색인을 기다린다.
+ * @param {number} searchId
+ * @param {string} q
+ * @param {(index: LectionaryIndex) => LectResult} find
+ */
+function sendLectionaryLater(searchId, q, find) {
+  const gen = lectionaryGen;
+  loadLectionary().then((index) => {
+    if (searchId !== currentSearchId) return;
+    if (gen !== lectionaryGen) {
+      sendLectionaryLater(searchId, q, find);
+      return;
+    }
+    post("lectionary", { searchId, q, lectionary: index && findLectionary(find, index) });
+  });
 }
 
 // ── Search helpers ──
@@ -427,10 +507,10 @@ function parseQuery(raw) {
   const restrictBooks = new Set();
   /** @type {string[]} */
   const unmatched = [];
-  // parseQuery is only called after loadMeta() resolves, so meta is non-null.
-  const m = /** @type {SearchMeta} */ (meta);
+  // parseQuery is only called after loadMeta() resolves, so meta is non-null. lookupBook reads own keys only:
+  // `in:constructor` is an unknown alias, not a book.
   const stripped = raw.replace(IN_RE, (_, alias) => {
-    const id = m.aliases[alias] || m.aliases[alias.toLowerCase()];
+    const id = lookupBook(alias);
     if (id) restrictBooks.add(id);
     else unmatched.push(alias);
     return " ";
@@ -502,44 +582,47 @@ function tryVerseRef(query) {
   const match = query.match(REF_RE);
   if (!match) return null;
 
-  const bookQuery = match[1].trim();
-
-  const m = /** @type {SearchMeta} */ (meta);
-
-  // Case-insensitive lookup for English ids (e.g. "Gen", "GEN" → "gen").
-  // toLowerCase() is a no-op on Hangul, so Korean aliases remain unaffected.
-  let bookId = m.aliases[bookQuery] || m.aliases[bookQuery.toLowerCase()];
-  if (!bookId) {
-    for (const [id, info] of Object.entries(m.books)) {
-      if (info.ko === bookQuery) { bookId = id; break; }
-    }
-  }
-  if (!bookId || !m.books[bookId]) return null;
+  const bookId = lookupBook(match[1]);
+  if (!bookId) return null;
 
   const parts = refParts(match[2]);
+  const m = /** @type {SearchMeta} */ (meta);
   return parts && { bookId, bookNameKo: m.books[bookId].ko, parts };
 }
 
 /**
+ * The book id a name stands for: an alias, the alias lowercased (English ids, "GEN" → "gen" — a no-op on Hangul), or
+ * a full Korean name. Runs of spaces count as one (`요한  1서`). Own keys only, so `constructor` is not a book.
+ * 구절 표기(`tryVerseRef`), 책 이름만 친 검색어(`tryBookOnly`), `in:` 별칭(`parseQuery`)이 같은 규칙으로 책을 찾는다.
+ * @param {string} name
+ * @returns {string | null}
+ */
+function lookupBook(name) {
+  const key = name.trim().replace(/\s+/g, " ");
+  const m = /** @type {SearchMeta} */ (meta);
+  /** @param {string} k */
+  const alias = (k) => (Object.hasOwn(m.aliases, k) ? m.aliases[k] : undefined);
+  let bookId = alias(key) || alias(key.toLowerCase());
+  if (!bookId) {
+    for (const [id, info] of Object.entries(m.books)) {
+      if (info.ko === key) { bookId = id; break; }
+    }
+  }
+  return bookId && Object.hasOwn(m.books, bookId) ? bookId : null;
+}
+
+/**
  * 검색어 전체가 책 이름 하나인가(`창세기`, `요한`, `요한 1서`). 앱은 결과 맨 위에 그 책의 첫 장 바로가기를 둔다
- * (ADR-044 §2). 한 글자 약칭(`말`, `신`, `나`)은 책 이름으로 읽지 않는다. 낱말로 더 자주 쓰이기 때문이다.
+ * (ADR-044 §2). 한 글자 약칭(`말`, `신`, `나`)은 책 이름으로 읽지 않는다. 낱말로 더 자주 쓰이기 때문이다. 워커는
+ * 구절 표기를 먼저 판별하므로, 숫자로 끝나는 약칭(`요1`)을 혼자 치면 여기까지 오지 않고 요한 복음 1장이 된다.
  * @param {string} query  the keyword, `in:<alias>` tokens already stripped
  * @returns {{ bookId: string, bookNameKo: string } | null}
  */
 function tryBookOnly(query) {
-  const name = query.trim().replace(/\s+/g, " ");
-  if (Array.from(name).length < 2) return null;
+  if (Array.from(query.trim().replace(/\s+/g, " ")).length < 2) return null;
+  const bookId = lookupBook(query);
   const m = /** @type {SearchMeta} */ (meta);
-  /** @param {string} key */
-  const alias = (key) => (Object.hasOwn(m.aliases, key) ? m.aliases[key] : undefined);
-  let bookId = alias(name) || alias(name.toLowerCase());
-  if (!bookId) {
-    for (const [id, info] of Object.entries(m.books)) {
-      if (info.ko === name) { bookId = id; break; }
-    }
-  }
-  if (!bookId || !Object.hasOwn(m.books, bookId)) return null;
-  return { bookId, bookNameKo: m.books[bookId].ko };
+  return bookId ? { bookId, bookNameKo: m.books[bookId].ko } : null;
 }
 
 /**
@@ -606,7 +689,8 @@ function paginate(allMatched, page, pageSize) {
 
 // 이름은 띄어쓰기, 가운뎃점, 따옴표를 빼고 비교한다. 주의 번호는 `7주일`, `제7주`, `제7주간`, `7주간`을 모두 `7주`로
 // 맞춘다(설계 §4.1). 데이터의 이름은 그대로 두고 비교할 때만 바꾼다. `제N주간`은 천주교가 평일 이름에 쓰는 표기다.
-const LECT_IGNORED_RE = /["'“”‘’·ㆍ・\s]/g;
+// 따옴표는 성서 검색과 같은 목록(`QUOTE_CHARS_RE`)을 쓴다.
+const LECT_IGNORED_RE = new RegExp(`${QUOTE_CHARS_RE.source}|[·ㆍ・\\s]`, "g");
 const LECT_WEEK_RE = /제?(\d+)주(?:일|간)?/g;
 const LECT_DIGIT_RE = /\d/;
 
@@ -787,7 +871,20 @@ function searchLectionaryNames(index, query) {
   if (swapped !== typed && scan((key) => lectTier(key, swapped))) result.synonyms = used;
   if (best.size === 0) {
     const words = query.trim().split(/\s+/).map(normalizeLectName).filter(Boolean);
-    if (words.length > 1) scan((key) => (words.every((w) => findWhole(key, w) !== -1) ? 3 : 0));
+    if (words.length > 1) {
+      // 같은 낱말은 한 번만 비교한다. 같은 낱말을 길게 되풀이한 검색어(공유 링크)로 워커가 멈추지 않게 하려는 것이다.
+      const unique = [...new Set(words)];
+      // 낱말마다 비슷한 말로 바꾼 것도 받는다(`바오로 사도`의 `바오로`). 낱말 여럿에 걸친 비슷한 말은 위에서 검색어
+      // 전체로 이미 바꿔 보았다.
+      const swaps = unique.map((w) => swapSynonyms(index, w));
+      const found = scan((key) => (unique.every((w, i) =>
+        findWhole(key, w) !== -1 || (swaps[i].swapped !== w && findWhole(key, swaps[i].swapped) !== -1)) ? 3 : 0));
+      if (found) {
+        for (const u of swaps.flatMap((s) => s.used)) {
+          if (!result.synonyms.some((x) => x.from === u.from)) result.synonyms.push(u);
+        }
+      }
+    }
   }
 
   result.items = [...best]
@@ -818,6 +915,22 @@ function mergeRanges(ranges) {
 }
 
 /**
+ * 검색어의 한 장에 든 절 구간. 구절 바로가기 카드(`js/app/verse-spec.js`의 `verseNumberSpec`)와 같게 읽는다. 거꾸로
+ * 쓴 구간(`21-14`)은 작은 절부터로 고치고, 0절은 빼고, 남는 절이 없으면 장 전체다(`요한 3:0`).
+ * @param {string} verses  VerseRefPart.verses
+ * @returns {Array<[number, number]>}
+ */
+function passageRanges(verses) {
+  /** @type {Array<[number, number]>} */
+  const ranges = [];
+  for (const segment of verses.split(",")) {
+    const [from, to = from] = segment.split("-").map(Number);
+    if (from > 0) ranges.push([Math.min(from, to), Math.max(from, to)]);
+  }
+  return ranges.length ? mergeRanges(ranges) : [[1, REF_CHAPTER_END]];
+}
+
+/**
  * 구절로 그 구절을 읽는 전례일을 찾는다(설계 §5). 한 절이라도 겹치는 독서를 찾는다. 검색어의 절을 모두 담은 독서를
  * 먼저 두고, 다음은 겹친 절이 많은 독서, 그다음은 전례년 순서다. 장 끝까지 이어지는 구간(장만 친 검색어 등)이 있으면
  * 장의 마지막 절을 몰라 「모두 담은」 단계를 쓰지 않는다. 시편은 전례시편(`lps`)에서 찾고, 송가는 색인이 성구로 둔
@@ -837,10 +950,7 @@ function searchLectionaryPassage(index, ref) {
   let size = 0;
   let open = false;
   for (const { chapter, verses } of ref.parts) {
-    const ranges = mergeRanges(verses.split(",").map((segment) => {
-      const [from, to = from] = segment.split("-").map(Number);
-      return /** @type {[number, number]} */ ([from, to]);
-    }));
+    const ranges = passageRanges(verses);
     wanted.set(chapter, ranges);
     for (const [from, to] of ranges) {
       if (to >= REF_CHAPTER_END) open = true;
@@ -912,7 +1022,15 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
   if (msg.type === "init") {
     metaUrl = msg.metaUrl;
     chunkConfig = msg.chunks;
-    lectionaryUrl = msg.lectionaryUrl || null;
+    // A new lectionary address drops what the old one loaded or was loading.
+    const nextLectionaryUrl = msg.lectionaryUrl || null;
+    if (nextLectionaryUrl !== lectionaryUrl) {
+      lectionaryGen++;
+      lectionaryUrl = nextLectionaryUrl;
+      lectionary = null;
+      lectionaryPromise = null;
+      lectionaryRetryAt = 0;
+    }
 
     try {
       await loadMeta();
@@ -939,7 +1057,7 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       const trimmed = (q || "").trim();
 
       if (!trimmed) {
-        post("results", { searchId, q: trimmed, refMatch: null,
+        post("results", { searchId, q: trimmed, refMatch: null, bookOnly: null, ...NO_LECTIONARY,
           results: [], total: 0, page, pageSize });
         return;
       }
@@ -949,10 +1067,9 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       const refMatch = tryVerseRef(trimmed);
       if (refMatch) {
         // 그 구절을 읽는 전례일(ADR-044 §1). 색인이 없으면 `null`이라, 앱은 지금처럼 장을 연다.
-        const lect = await lectionaryForSearch();
-        if (searchId !== currentSearchId) return;
-        post("results", { searchId, q: trimmed, refMatch, bookOnly: null,
-          lectionary: lect && searchLectionaryPassage(lect, refMatch),
+        const lect = scopeBooks.length > 0 ? NO_LECTIONARY
+          : lectionaryFields(searchId, trimmed, (index) => searchLectionaryPassage(index, refMatch));
+        post("results", { searchId, q: trimmed, refMatch, bookOnly: null, ...lect,
           results: [], total: 0, page, pageSize });
         return;
       }
@@ -966,22 +1083,36 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       // Block search when any in: alias is unrecognized — the user gets the
       // notice instead of misleading "all-books" results that ignore their filter.
       if (unmatched.length > 0) {
-        post("results", { searchId, q: trimmed, refMatch: null,
+        post("results", { searchId, q: trimmed, refMatch: null, bookOnly: null, ...NO_LECTIONARY,
           results: [], total: 0, page, pageSize, unmatchedScopes: unmatched });
         return;
       }
 
       // No keyword left after stripping in: tokens — nothing to search.
       if (!keyword) {
-        post("results", { searchId, q: trimmed, refMatch: null,
+        post("results", { searchId, q: trimmed, refMatch: null, bookOnly: null, ...NO_LECTIONARY,
           results: [], total: 0, page, pageSize, unmatchedScopes: [] });
         return;
       }
 
-      // 책 이름만 친 검색어와 이름으로 찾은 전례일(ADR-044 §2, §3). 전례일은 색인이 있을 때만 찾는다.
+      // 책 이름만 친 검색어(ADR-044 §2)는 책을 골라 두었어도 알아본다. 구절 바로가기와 같다. 이름으로 찾는
+      // 전례일(§3)은 책을 골라 두었으면 찾지 않는다(§1).
+      const scoped = restrictBooks.size > 0;
       const bookOnly = tryBookOnly(keyword);
-      /** @param {LectionaryIndex | null} lect */
-      const lectionaryOf = (lect) => (lect ? searchLectionaryNames(lect, keyword) : null);
+      // The name search depends on the keyword and the index only: computed once per index and shared by the partial
+      // results, the results and a later "lectionary" message. A new index (`init`) computes it again.
+      /** @type {LectionaryIndex | null} */
+      let namesIndex = null;
+      /** @type {LectResult | null} */
+      let names = null;
+      /** @param {LectionaryIndex} index @returns {LectResult} */
+      const findNames = (index) => {
+        if (index !== namesIndex || !names) {
+          namesIndex = index;
+          names = searchLectionaryNames(index, keyword);
+        }
+        return names;
+      };
 
       // Wait for first chunk (NT) if nothing is loaded yet
       const firstChunk = chunkConfig[0];
@@ -1004,16 +1135,13 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
           loadedChunks: loadedNames, pendingChunks: pendingNames,
           unmatchedScopes: unmatched,
           // Only what is loaded already — a partial result never waits for the lectionary index.
-          bookOnly, lectionary: lectionaryOf(lectionary),
+          bookOnly, lectionary: !scoped && lectionary ? findLectionary(findNames, lectionary) : null,
         });
 
         // Wait for remaining chunks
         await Promise.all(pendingNames.map((n) => loadingPromises[n]));
         if (searchId !== currentSearchId) return;
       }
-
-      const lect = await lectionaryForSearch();
-      if (searchId !== currentSearchId) return;
 
       // Full search across all chunks
       const allMatched = gatherResults(keyword, chunkConfig.map((c) => c.name), restrictBooks);
@@ -1022,7 +1150,7 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       // for snippet highlighting and the ?hl= chapter-view param.
       post("results", { searchId, q: trimmed, keyword, refMatch: null,
         results, total, page, pageSize, unmatchedScopes: unmatched,
-        bookOnly, lectionary: lectionaryOf(lect) });
+        bookOnly, ...(scoped ? NO_LECTIONARY : lectionaryFields(searchId, trimmed, findNames)) });
 
     } catch (err) {
       post("error", { message: err instanceof Error ? err.message : String(err) });

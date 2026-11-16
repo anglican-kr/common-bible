@@ -223,7 +223,7 @@ test("비슷한 말 표의 이름을 치면 앱의 이름으로 바꿔 찾고, �
   assert.deepStrictEqual(problems, []);
 });
 
-test("전례일 이름과 성인의 이름은 구절이나 책 이름으로 읽히지 않는다", { skip: !haveData }, () => {
+test("전례일 이름과 성인의 이름은 구절로 읽히지 않고, 책 이름으로는 짧은 이름만 읽힌다", { skip: !haveData }, () => {
   // 구절과 책 이름을 먼저 판별하므로, 이름이 그렇게 읽히면 이름 검색이 가려진다(설계 §3).
   const { ctx, raw } = loadLectionarySearch();
   const names = [
@@ -242,6 +242,8 @@ test("책 이름 목록의 이름은 책 이름만 친 검색어로 읽고, 한 
   const meta = readJson(path.join(DATA, "search-meta.json"));
   const wrong = [];
   for (const [alias, id] of Object.entries(meta.aliases)) {
+    // 워커는 구절 표기를 먼저 판별하므로, 구절로도 읽히는 약칭은 책 이름만 친 검색어가 되지 않는다(아래 시험).
+    if (ctx.tryVerseRef(alias)) continue;
     const got = ctx.tryBookOnly(alias);
     if (Array.from(alias).length < 2) {
       if (got) wrong.push(`${alias}: 한 글자 약칭인데 ${got.bookId}로 읽는다`);
@@ -254,6 +256,24 @@ test("책 이름 목록의 이름은 책 이름만 친 검색어로 읽고, 한 
   assert.strictEqual(ctx.tryBookOnly("코린토 1서").bookId, "1cor");
   assert.strictEqual(ctx.tryVerseRef("코린토 1서 13:4").bookId, "1cor");
   assert.strictEqual(ctx.tryVerseRef("요한 1서 3:16").bookId, "1john");
+});
+
+test("숫자로 끝나는 약칭(`요1`)은 혼자 치면 요한 복음의 장이고, 장절을 띄어 쓰면 요한의 편지다", { skip: !haveData }, () => {
+  // 구절 표기가 책 이름만 친 검색어보다 먼저다(ADR-044 §2). `창1`처럼 책과 장을 붙여 친 것으로 읽는다.
+  // 요한의 편지는 `요일`, `1요한`, `요한1서`로 찾아진다.
+  const { ctx } = loadLectionarySearch();
+  const meta = readJson(path.join(DATA, "search-meta.json"));
+  const asRef = Object.keys(meta.aliases).filter((alias) => ctx.tryVerseRef(alias)).sort();
+  const read = (q) => {
+    const r = ctx.tryVerseRef(q);
+    return r && `${r.bookId} ${r.parts.map((p) => `${p.chapter}:${p.verses}`).join(", ")}`;
+  };
+  assert.deepStrictEqual(asRef.map((alias) => [alias, read(alias)]), [
+    ["요1", "john 1:1-999"], ["요2", "john 2:1-999"], ["요3", "john 3:1-999"],
+  ]);
+  assert.strictEqual(read("요1 3:16"), "1john 3:16");
+  assert.strictEqual(read("요3:16"), "john 3:16");
+  assert.strictEqual(ctx.tryBookOnly("요일").bookId, "1john");
 });
 
 test("색인이 독서 세트를 잇는 전례일은 엔진이 그 세트를 내는 전례일과 같다(2025-2050)", { skip: !haveData }, () => {
