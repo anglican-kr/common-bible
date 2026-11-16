@@ -630,6 +630,8 @@ export interface LectionaryRoute {
   date: string | null;
   /** `/lectionary/d/<slug>`의 슬러그(ADR-044 §1): 독서 세트 식별자나 전례일 키를 쉼표로 이은 것. 날짜 주소면 null이다. */
   slug?: string | null;
+  /** 보조 주소의 `?from=YYYY-MM-DD`(ADR-044 §1): 그날부터 처음 지키는 날을 연다. 형식이 맞지 않거나 날짜 주소면 null이다. */
+  from?: string | null;
   obs: string | null;
   track: 1 | 2 | null;
   set: number | null;

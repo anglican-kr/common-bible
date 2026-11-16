@@ -12,6 +12,8 @@
 
 /** @typedef {import("../types.js").SearchHistoryList} SearchHistoryList */
 /** @typedef {import("../types.js").BooksData} BooksData */
+/** @typedef {import("./liturgical-engine.js").KeptDay} KeptDay */
+/** @typedef {typeof import("./liturgical-engine.js")} Engine */
 
 import { verseNumberSpec } from "./verse-spec.js";
 
@@ -392,8 +394,9 @@ function buildSearchUrl(state) {
 }
 
 // ── Lectionary results (ADR-044 §1) ──
-// 전례일 줄은 캘린더 목록의 줄(.cal-row)에서 날짜 칸을 뺀 모양이다. 2단계에는 색 점과 다음에 읽는 날이 없어, 날짜가 정해진
-// 전례일은 그 날짜를 적어 같은 이름(「성탄주간」 13개)을 구별한다(설계서 §10, 사용자 결정 2026-11-16).
+// 전례일 줄은 캘린더 목록의 줄(.cal-row)에서 날짜 칸을 뺀 모양이다. 줄에는 누르면 열리는 날(이번 전례년의 날, 없으면 다음에 읽는 날)과
+// 그날의 색을 적고, 지난날을 여는 줄에는 다음에 읽는 날로 가는 링크를 따로 둔다(ADR-044 §1). 날짜는 교회력 엔진으로 계산한다
+// (`lectDaysOf`). 아직 계산하지 못했으면 날짜가 정해진 전례일만 그 날짜(「12월 29일」)를 적어 같은 이름을 구별한다.
 
 const LECT_SLOT_LABEL = ["제1독서", "성시", "제2독서", "복음"];
 const LECT_SLOT_KEY = ["first", "psalm", "second", "gospel"];
@@ -406,10 +409,30 @@ const LECT_RANK_LABEL = { principal: "대축일", major_feast: "주요축일", m
 // 캘린더 목록과 같이 축일 이상과 주일의 제목은 한 단계 굵은 500이다(DESIGN.md §3). 캘린더 목록의 규칙은 calendar.js `rowLevelOf`에
 // 있다. 그쪽은 그날의 계산 결과를, 이쪽은 색인을 읽어 함수를 함께 쓰지 못하므로, 한쪽을 고치면 다른 쪽도 고친다.
 const LECT_BOLD_RANKS = new Set(["principal", "privileged_sunday", "major_feast", "minor_feast", "regional_festival"]);
+// 해(`LECT_CYCLE_LABEL`), 전례색의 이름, 요일은 전례독서 화면(lectionary.js `CYCLE_LABEL`, `COLOR_LABEL`, `WEEKDAY_KO`)과 같고, 성탄
+// 평일의 식별자는 엔진의 값과 같다. 검색 화면은 교회력 자료를 내려받기 전에도 줄을 그리고 그 모듈들을 불러오지 않아 따로 둔다. 같은지는
+// search.test.js가 본다(코드 리뷰 2026-11-16).
+/** @type {Record<string, string>} */
+const LECT_COLOR_LABEL = { white: "백색", red: "적색", green: "녹색", violet: "자색", rose: "장미색", blue: "청색" };
+const LECT_WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
+// 성탄 평일의 격자 전례일(엔진 `CHRISTMAS_WEEKDAY_PREFIX`). 독서는 날짜로 정해져 있고 이름은 주일을 기준으로 해마다 바뀌어, 줄 제목에는
+// 열리는 날의 이름(「성탄 1주 수요일」)을 적는다(ADR-044 §3).
+const LECT_CHRISTMAS_WEEKDAY = "grid:christmas-x-weekday-";
+
+/**
+ * 줄이 여는 날(`open`)과, 그날이 지났을 때 다음에 읽는 날(`next`). `nextIds`는 다음 링크의 슬러그다(엔진 `findReadingDay`,
+ * `findNamedDay`). 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 `year`는 열리는 날의 해(`A`, `I` 등)이고, `cycles`는 그 뒤에
+ * 다른 해의 독서를 읽는 첫날을 해마다 하나씩 날짜 차례로 담는다(ADR-044 §1). 그 밖의 줄은 `year`가 null, `cycles`가 비었다.
+ * @typedef {{ open: KeptDay, next: KeptDay | null, nextIds: string[], year: string | null, cycles: KeptDay[] }} LectDays
+ */
+/**
+ * 줄 아래의 링크 하나. `prefix`는 날짜 앞의 글(「다음」, 「나해」)이다.
+ * @typedef {{ href: string, label: string, prefix: string, date: string }} LectNext
+ */
 
 /**
  * 끝 글자에 받침이 있는가. 한글 음절이 아니면 없다고 본다. 엔진(liturgical-engine.js)에도 같은 계산이 있지만, 엔진은 검색 화면이
- * 받지 않는 모듈이고 시험이 코드 구역을 잘라 읽어 공용 함수(helpers.js)를 쓰지 않는다.
+ * 처음에 받지 않는 모듈이고 시험이 코드 구역을 잘라 읽어 공용 함수(helpers.js)를 쓰지 않는다.
  * @param {string} word
  */
 function hasBatchim(word) {
@@ -440,6 +463,35 @@ function fixedDateText(date) {
 }
 
 /**
+ * 「2027-03-07」을 「2027년 3월 7일 (일)」로. `full`이면 요일을 「일요일」로 쓴다(스크린 리더가 읽는 링크 이름).
+ * @param {string} date @param {boolean} [full]
+ */
+function lectDateText(date, full = false) {
+  const [y, m, d] = date.split("-").map(Number);
+  const wd = LECT_WEEKDAY[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return `${y}년 ${m}월 ${d}일 ${full ? `${wd}요일` : `(${wd})`}`;
+}
+
+/**
+ * 해마다 같은 독서로 날짜가 바뀌는 날의 다음 해(ADR-044 §1): 「2027년에는 4월 7일 (수)」. `full`이면 요일을 「수요일」로 쓴다.
+ * @param {string} date @param {boolean} [full]
+ */
+function lectYearText(date, full = false) {
+  const [y] = date.split("-");
+  return lectDateText(date, full).replace(`${y}년 `, `${y}년에는 `);
+}
+
+/**
+ * 줄에 적는 날짜(ADR-044 §1): 지난날은 「지난 2026년 3월 1일 (일)」, 앞날은 「다음 2027년 3월 7일 (일)」, 오늘은 「오늘」이다.
+ * 「올해」라고 적지 않는다. 이번 전례년은 대림 무렵에 달력의 해와 어긋난다.
+ * @param {string} date @param {string} today @param {boolean} [full]
+ */
+function lectDayText(date, today, full = false) {
+  if (date === today) return "오늘";
+  return `${date < today ? "지난" : "다음"} ${lectDateText(date, full)}`;
+}
+
+/**
  * 찾은 독서의 주기와 트랙: 「가해, 나해」, 「가해, 연속 독서와 복음 주제」(ADR-038 §3-1).
  * @param {Array<{ year: string | null, track: number | null }>} sets
  */
@@ -452,30 +504,65 @@ function lectCyclesText(sets) {
 }
 
 /**
- * 줄을 누르면 가는 보조 주소(ADR-044 §1). 구절로 찾았으면 찾은 독서가 든 세트들, 이름으로 찾았으면 그 전례일의 세트들이다.
+ * 줄의 보조 주소가 가리키는 것(ADR-044 §1). 구절로 찾았으면 찾은 독서가 든 세트들, 이름으로 찾았으면 그 전례일의 세트들이다.
  * 고유 독서가 없는 전례일만 전례일 키를 적는다. 엔진은 평일과 사계재를 색인과 다른 식별자로 내서 전례일 키로는 그날을
  * 찾지 못하고, 세트가 없는 전례일은 모두 엔진이 같은 식별자로 내는 표의 전례일이다(search-worker.data.test.js).
  * @param {any} item  LectItem (search-worker.js)
+ * @returns {string[]}
  */
-function lectSlugHref(item) {
-  /** @type {any[]} */
-  const sets = item.hits ? item.hits.flatMap((/** @type {any} */ h) => h.sets) : item.sets;
-  /** @type {string[]} */
-  const ids = sets.length ? [...new Set(sets.map((s) => s.id))] : [item.obs.key];
-  return `/lectionary/d/${ids.map(encodeURIComponent).join(",")}`;
+function lectSlugIds(item) {
+  const sets = lectSetsOf(item);
+  return sets.length ? [...new Set(sets.map((s) => String(s.id)))] : [item.obs.key];
 }
 
 /**
- * 전례일 줄 하나의 글(그리기 전의 모양). `labelOf`는 독서 데이터의 표기(「요한 3:14-21」)를 돌려주고, 모르면 null이다.
+ * 줄이 가리키는 독서 세트: 구절로 찾았으면 찾은 독서가 든 세트들, 이름으로 찾았으면 그 전례일의 세트들이다.
+ * @param {any} item  LectItem
+ * @returns {Array<{ id: string, year: string | null }>}
+ */
+function lectSetsOf(item) {
+  return item.hits ? item.hits.flatMap((/** @type {any} */ h) => h.sets) : item.sets;
+}
+
+/**
+ * 그날 읽는 독서 세트의 해(`A`, `I` 등). 줄의 세트에 없거나 해가 없으면 빈 문자열.
+ * @param {any} item @param {KeptDay} day
+ */
+function lectYearOf(item, day) {
+  const set = lectSetsOf(item).find((s) => String(s.id) === day.setId);
+  return set && set.year ? String(set.year) : "";
+}
+
+/**
+ * 보조 주소. `from`이 있으면 그날부터 처음 지키는 날을 연다(다른 날로 가는 링크).
+ * @param {string[]} ids @param {string | null} [from]
+ */
+function lectHrefOf(ids, from = null) {
+  return `/lectionary/d/${ids.map(encodeURIComponent).join(",")}${from ? `?from=${from}` : ""}`;
+}
+
+/** 줄을 누르면 가는 보조 주소. @param {any} item  LectItem */
+function lectSlugHref(item) {
+  return lectHrefOf(lectSlugIds(item));
+}
+
+/**
+ * 전례일 줄 하나의 글(그리기 전의 모양). `labelOf`는 독서 데이터의 표기(「요한 3:14-21」)를 돌려주고, 모르면 null이다. `days`는 줄이
+ * 여는 날이고, 아직 모르면 null이다.
  * @param {any} item  LectItem
  * @param {(setId: string, slot: string) => string | null} labelOf
+ * @param {LectDays | null} [days]
+ * @param {string} [today]  "YYYY-MM-DD"
  * @returns {{ title: string, href: string, bold: boolean, found: { slot: string, text: string } | null,
- *   meta: string[], lines: string[], label: string }}
+ *   colors: Array<{ code: string, name: string }>, meta: string[], lines: string[], label: string,
+ *   nexts: LectNext[] }}
  */
-function lectRowOf(item, labelOf) {
+function lectRowOf(item, labelOf, days = null, today = "") {
   const { obs } = item;
   // 주일은 등급이 비어 있어 이름으로 안다. 이동 축일의 이름만 본다(월별 축일에는 「주일」로 끝나는 이름이 없다)
   const bold = LECT_BOLD_RANKS.has(obs.rank) || (obs.kind === "temporal" && /주일$/.test(obs.name));
+  const open = days ? days.open : null;
+  const title = open && open.obs.startsWith(LECT_CHRISTMAS_WEEKDAY) ? open.name : obs.name;
   /** @type {{ slot: string, text: string } | null} */
   let found = null;
   /** @type {string[]} */
@@ -493,10 +580,57 @@ function lectRowOf(item, labelOf) {
     // 않아(ADR-038 §3), 누르면 그날의 평일 독서와 성인의 이름 줄이 열리기 때문이다(사용자 결정 2026-11-16, ADR-044 §1).
     lines.push(LECT_RANK_LABEL[obs.rank]);
   }
-  const date = fixedDateText(obs.date);
-  if (date) meta.push(date);
-  const label = [obs.name, found ? `${found.slot} ${found.text}` : null, ...meta, ...lines].filter(Boolean).join(", ");
-  return { title: obs.name, href: lectSlugHref(item), bold, found, meta, lines, label };
+  // 색 점은 줄을 누르면 열리는 화면의 머리 색이다(ADR-044 §1)
+  const colors = open ? open.colors.map((code) => ({ code, name: LECT_COLOR_LABEL[code] || code })) : [];
+  /** 링크 이름에 싣는 meta. 날짜는 요일을 다 쓴다 @type {string[]} */
+  const said = [...meta];
+  // 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 열리는 날의 해를 날짜 앞에 적는다. 링크마다 해를 적으므로 줄에도 있어야 견주어 본다
+  const year = days && days.year ? LECT_CYCLE_LABEL[days.year] || "" : "";
+  if (year) {
+    meta.push(year);
+    said.push(year);
+  }
+  if (open) {
+    meta.push(lectDayText(open.date, today));
+    said.push(lectDayText(open.date, today, true));
+  } else {
+    const date = fixedDateText(obs.date);
+    if (date) {
+      meta.push(date);
+      said.push(date);
+    }
+  }
+  // 다른 날로 가는 링크: 해에 따라 다른 독서(가해, 나해, 다해, 홀수해, 짝수해)를 읽는 줄만 둔다. 이름으로 찾은 줄은 다른 해의 날을
+  // 해마다 하나씩(세 해 주기는 둘), 구절로 찾은 줄은 지났을 때 다음에 읽는 날 하나다. 해마다 같은 독서는 다음 해에도 같은 내용이라
+  // 링크를 두지 않고, 날짜가 바뀌는 날만 다음 해의 날을 덧붙인다. 날짜가 정해진 날은 요일만 바뀌어 덧붙이지 않는다(ADR-044 §1)
+  const cyclic = lectSetsOf(item).some((s) => s.year);
+  /** @type {LectNext[]} */
+  const nexts = [];
+  if (days && days.cycles.length) {
+    for (const day of days.cycles) {
+      const cycle = LECT_CYCLE_LABEL[lectYearOf(item, day)] || "다음";
+      nexts.push({
+        href: lectHrefOf(days.nextIds, day.date),
+        label: `${title}, ${cycle} ${lectDateText(day.date, true)}`,
+        prefix: cycle,
+        date: lectDateText(day.date),
+      });
+    }
+  } else if (days && days.next && cyclic) {
+    const later = days.next;
+    nexts.push({
+      href: lectHrefOf(days.nextIds, later.date),
+      label: `${title}, ${lectDayText(later.date, today, true)}`,
+      prefix: later.date > today ? "다음" : "",
+      date: later.date > today ? lectDateText(later.date) : lectDayText(later.date, today),
+    });
+  } else if (days && days.next && !obs.date) {
+    meta.push(lectYearText(days.next.date));
+    said.push(lectYearText(days.next.date, true));
+  }
+  const label = [title, found ? `${found.slot} ${found.text}` : null, ...colors.map((c) => c.name), ...said, ...lines]
+    .filter(Boolean).join(", ");
+  return { title, href: lectSlugHref(item), bold, found, colors, meta, lines, label, nexts };
 }
 
 /**
@@ -520,7 +654,27 @@ function lectNotation(rows) {
 
 /** @param {ReturnType<typeof lectRowOf>} row */
 function buildLectRow(row) {
-  const a = el("a", { className: row.bold ? "cal-row cal-row--major" : "cal-row", href: row.href, "aria-label": row.label });
+  const li = el("li", {});
+  fillLectRow(li, row);
+  return li;
+}
+
+/**
+ * 줄 하나를 그리거나, 날짜를 나중에 넣을 때 다시 그린다(ADR-044 §1). 이미 있는 링크는 그대로 두고 안의 글만 바꾸므로, 그 링크에 있던
+ * 키보드 포커스가 남는다(WCAG 2.4.3). 지난날을 여는 줄은 아래에 다음에 읽는 날의 링크를 따로 둔다. 이 줄만 링크가 둘이다.
+ * @param {HTMLElement} li
+ * @param {ReturnType<typeof lectRowOf>} row
+ */
+function fillLectRow(li, row) {
+  let a = /** @type {HTMLElement | undefined} */ (li.children[0]);
+  if (!a) {
+    a = el("a", {});
+    li.appendChild(a);
+  }
+  while (a.firstChild) a.removeChild(a.firstChild);
+  a.className = row.bold ? "cal-row cal-row--major" : "cal-row";
+  a.setAttribute("href", row.href);
+  a.setAttribute("aria-label", row.label);
   const body = el("span", { className: "cal-row-body" });
   body.appendChild(el("span", { className: "cal-row-title" }, row.title));
   if (row.found) {
@@ -529,16 +683,38 @@ function buildLectRow(row) {
     line.appendChild(document.createTextNode(row.found.text));
     body.appendChild(line);
   }
-  if (row.meta.length) {
+  if (row.colors.length || row.meta.length) {
     const meta = el("span", { className: "cal-row-meta" });
+    for (const color of row.colors) {
+      const item = el("span", { className: "cal-row-color" });
+      item.appendChild(el("span", { className: `cal-row-dot lit-swatch lit-swatch--${color.code}`, "aria-hidden": "true" }));
+      item.appendChild(document.createTextNode(color.name));
+      meta.appendChild(item);
+    }
     for (const text of row.meta) meta.appendChild(el("span", {}, text));
     body.appendChild(meta);
   }
   for (const text of row.lines) body.appendChild(el("span", { className: "cal-row-line" }, text));
   a.appendChild(body);
-  const li = el("li", {});
-  li.appendChild(a);
-  return li;
+
+  // 링크는 한 줄에 하나다(ADR-044 §1). 날짜를 나중에 넣을 때도 있던 링크를 그대로 쓰고 글만 바꿔, 링크에 있던 초점을 지킨다
+  while (li.children.length > row.nexts.length + 1) li.removeChild(li.children[li.children.length - 1]);
+  row.nexts.forEach((link, i) => {
+    let next = /** @type {HTMLElement | undefined} */ (li.children[i + 1]);
+    if (!next) {
+      next = el("a", { className: "lect-row-next" });
+      li.appendChild(next);
+    }
+    while (next.firstChild) next.removeChild(next.firstChild);
+    next.setAttribute("href", link.href);
+    next.setAttribute("aria-label", link.label);
+    const text = el("span", {});
+    if (link.prefix) text.appendChild(document.createTextNode(`${link.prefix} `));
+    text.appendChild(el("span", { className: "lect-row-next-date" }, link.date));
+    next.appendChild(text);
+    next.appendChild(el("span", { className: "lect-row-next-arrow", "aria-hidden": "true" }, "›"));
+  });
+  li.className = row.nexts.length ? "lect-row-pair" : "";
 }
 
 /**
@@ -628,10 +804,14 @@ function buildSearchPagination(state, currentPage, totalPages) {
  * @property {(bookId: string) => number | null} chapterCount  from books.json; null when unknown
  * @property {(setId: string, slot: string) => string | null} readingLabel  the reading's notation in eucharist-readings.json
  * @property {boolean} scoped  a book scope is set: no lectionary days, so no lectionary example either
+ * @property {Map<any, LectDays | null> | null} days  the day each lectionary row opens, once the engine computed it
+ * @property {string} today  "YYYY-MM-DD", the day `days` counts from
  */
 
 /** @type {SearchScreen} */
-const PLAIN_SCREEN = { group: "bible", groupHref: () => "", chapterCount: () => null, readingLabel: () => null, scoped: false };
+const PLAIN_SCREEN = {
+  group: "bible", groupHref: () => "", chapterCount: () => null, readingLabel: () => null, scoped: false, days: null, today: "",
+};
 
 /**
  * The answer card at the top (ADR-044 §1, §2): a verse reference card per chapter, the no-chapter notice in place of a
@@ -723,8 +903,26 @@ function appendLectGroup(container, lect, screen) {
     container.appendChild(el("p", { className: "search-note" }, synonymNote(lect.synonyms)));
   }
   const rows = el("ul", { className: "lect-rows", role: "list" });
-  for (const item of lect.items) rows.appendChild(buildLectRow(lectRowOf(item, screen.readingLabel)));
+  for (const item of lect.items) rows.appendChild(buildLectRow(lectRowOf(item, screen.readingLabel, screen.days?.get(item) ?? null, screen.today)));
   container.appendChild(rows);
+}
+
+/**
+ * 결과 화면에 무엇을 그리는가(ADR-044 §1). `lect`는 그릴 수 있는 전례일 결과이고, `group`은 목록으로 보이는 묶음이다. 성서 본문과
+ * 전례일에 모두 결과가 있으면 고른 알약의 묶음이다.
+ * @param {any} result
+ * @param {SearchScreen} screen
+ * @returns {{ isPending: boolean, lect: any, hasBible: boolean, group: "bible" | "lectionary" }}
+ */
+function resultGroups(result, screen) {
+  const isPending = !!(result.pendingChunks && result.pendingChunks.length > 0);
+  // While the bible chunks load with nothing found yet, the lectionary days wait for the whole result: bible results
+  // still to come would take the screen back to 성서 본문, the first pill (ADR-044 §1). 「검색 중…」 shows meanwhile.
+  const lect = isPending && result.total === 0 ? null : shownLectionary(result);
+  // By the whole count, not this page: a page past the end (a link made on a taller screen) still has results.
+  const hasBible = result.total > 0 || isPending;
+  const group = hasBible && lect ? screen.group : lect ? "lectionary" : "bible";
+  return { isPending, lect, hasBible, group };
 }
 
 /**
@@ -754,12 +952,7 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
     container.appendChild(el("p", { className: "search-notice" }, `${aliasList} — 알 수 없는 책 별칭입니다`));
   }
 
-  const isPending = result.pendingChunks && result.pendingChunks.length > 0;
-  // While the bible chunks load with nothing found yet, the lectionary days wait for the whole result: bible results
-  // still to come would take the screen back to 성서 본문, the first pill (ADR-044 §1). 「검색 중…」 shows meanwhile.
-  const lect = isPending && result.total === 0 ? null : shownLectionary(result);
-  // By the whole count, not this page: a page past the end (a link made on a taller screen) still has results.
-  const hasBible = result.total > 0 || isPending;
+  const { isPending, lect, hasBible, group } = resultGroups(result, screen);
   const answer = buildAnswer(result, screen);
 
   if (!answer.node && !hasBible && !lect) {
@@ -786,7 +979,6 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
   }
 
   const totalPages = Math.ceil(result.total / pageSize);
-  const group = hasBible && lect ? screen.group : lect ? "lectionary" : "bible";
   const paged = group === "bible" && !isPending && totalPages > 1 && !!paginationBuilder;
   if (hasBible && lect) container.appendChild(buildSearchPills(group, result.total, lect.items.length, screen.groupHref));
   // 「2/5」 may be read as a fraction — say it in words.
@@ -937,34 +1129,155 @@ async function ensureBookMap() {
   }
 }
 
-// The notation of each reading in eucharist-readings.json (「요한 3:14-21」, 「루가 1:68-79 (즈가리야 송가)」): a passage
-// result row shows it (ADR-044 §1). Loaded on the first passage result; a failure leaves the cache empty so a later
-// search retries, and the rows fall back to the index's numbers meanwhile (`lectNotation`).
-/** @type {Promise<Map<string, string> | null> | null} */
-let _readingLabels = null;
-/** The loaded notations, so a late redraw can use them without waiting. @type {Map<string, string> | null} */
-let _readingLabelMap = null;
-/** @returns {Promise<Map<string, string> | null>} */
-function ensureReadingLabels() {
-  return (_readingLabels ??= fetch(`${DATA_DIR}/lectionary/eucharist-readings.json`)
-    .then((res) => {
-      if (!res.ok) throw new Error(`eucharist-readings.json ${res.status}`);
-      return res.json();
-    })
-    .then((data) => {
-      /** @type {Map<string, string>} */
-      const map = new Map();
-      for (const entry of data.entries || []) {
-        for (const rd of entry.readings || []) if (rd.label) map.set(`${entry.id}|${rd.slot}`, rd.label);
-      }
-      return (_readingLabelMap = map);
+// ── 교회력 엔진: 줄이 여는 날, 독서 표기, 성탄 평일의 이름(ADR-044 §1, §3) ──
+// 엔진(liturgical-engine.js)을 불러오고 교회력 자료(교회력 표와 독서 표 등)를 내려받는 일은 전례일 결과가 처음 나올 때 한다. 독서 표기도
+// 엔진이 읽은 독서 표에서 꺼내므로 독서 데이터를 따로 받지 않는다. 내려받지 못하면 다음 검색에서 다시 받고, 그동안 줄은 날짜 없이,
+// 독서는 색인의 숫자 표기(`lectNotation`)로 그린다.
+/** @type {Promise<Engine | null> | null} */
+let _engine = null;
+/** The loaded engine, so a later search uses it without waiting. @type {Engine | null} */
+let _engineMod = null;
+/** @returns {Promise<Engine | null>} */
+function ensureEngine() {
+  return (_engine ??= import("./liturgical-engine.js")
+    .then(async (mod) => {
+      await Promise.all([mod.preloadCalendar(), mod.preloadLectionary()]);
+      return (_engineMod = mod);
     })
     .catch((err) => {
-      console.warn("독서 표기를 받지 못했습니다", err);
-      _readingLabels = null;
+      console.warn("교회력 자료를 내려받지 못했습니다", err);
+      _engine = null;
       return null;
     }));
 }
+
+/**
+ * `promise`를 `ms`까지만 기다린다. 넘으면 null이다(`promise`는 그대로 이어진다).
+ * @template T
+ * @param {Promise<T>} promise @param {number} ms
+ * @returns {Promise<T | null>}
+ */
+function withinMs(promise, ms) {
+  if (ms <= 0) return Promise.resolve(null);
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let timer;
+  return Promise.race([promise, new Promise((resolve) => { timer = setTimeout(() => resolve(null), ms); })])
+    .finally(() => clearTimeout(timer));
+}
+
+/** 기기의 오늘 「YYYY-MM-DD」. @param {Engine} mod */
+function todayOf(mod) {
+  const now = new Date();
+  return mod.toKey(now.getFullYear(), now.getMonth() + 1, now.getDate());
+}
+
+/** 워커에 보낸 성탄 평일의 화면 이름과 그 전례년(ADR-044 §3). 화면의 이름으로 찾은 줄을 알아보는 데도 쓴다. @type {{ ly: number, names: Set<string> } | null} */
+let _christmasNames = null;
+/** 찾기 전에 이름을 기다렸다가 받지 못했다(3초 안에 다 받지 못한 것도 든다). 그 뒤로는 기다리지 않는다(받기는 뒤에서 이어 가고, 이름은 교회력 자료를 다 받는 대로 보낸다). */
+let _christmasNamesFailed = false;
+
+/** 워커가 이번 전례년의 성탄 평일 이름을 알고 있는가. 교회력 자료를 받기 전에는 보낸 적이 있는지만 본다. */
+function christmasNamesFresh() {
+  if (!_christmasNames) return false;
+  return !_engineMod || _christmasNames.ly === _engineMod.liturgicalYearOf(todayOf(_engineMod));
+}
+
+/**
+ * 이번 전례년 성탄 평일의 화면 이름(「성탄 1주 수요일」)을 워커에 보낸다. 해마다 바뀌어 색인에 없으므로 엔진으로 계산한다. 전례년마다
+ * 한 번 보내고, 워커는 다음 검색부터 별칭처럼 찾는다.
+ * @param {Engine} mod @param {string} today
+ */
+async function sendChristmasNames(mod, today) {
+  const ly = mod.liturgicalYearOf(today);
+  if (_christmasNames && _christmasNames.ly === ly) return;
+  const names = await mod.findChristmasNames(today);
+  ensureSearchWorker().postMessage({ type: "lect-names", names: [...names] });
+  _christmasNames = { ly, names: new Set(names.values()) };
+}
+
+// ── BEGIN LECT_DAYS ──
+/**
+ * 줄 하나가 여는 날과 다른 날(ADR-044 §1). 화면의 이름으로 찾은 성탄 평일(워커가 `matched`에 그 이름을 적는다)은 이번 전례년의
+ * 그 이름의 날을 연다(§3). 날짜가 정해진 같은 독서라 다른 날은 찾지 않는다. 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 다른
+ * 해의 날을 해마다 하나씩 찾는다. 그 밖의 줄은 여는 날이 지났을 때만 다음에 읽는 날을 찾는다. `isStale`이 참이면(화면을 떠났으면)
+ * 엔진이 표를 더 세지 않는다(코드 리뷰 2026-11-17).
+ * @param {Engine} mod @param {any} item @param {string} today @param {() => boolean} [isStale]
+ * @returns {Promise<LectDays | null>}
+ */
+async function lectDaysOf(mod, item, today, isStale = () => false) {
+  if (item.matched && _christmasNames && _christmasNames.names.has(item.matched)) {
+    const open = await mod.findNamedDay(item.matched, today);
+    return open ? { open, next: null, nextIds: [], year: null, cycles: [] } : null;
+  }
+  const ids = lectSlugIds(item);
+  const open = await mod.findReadingDay(ids, today, null, isStale);
+  if (!open) return null;
+  const year = item.hits ? "" : lectYearOf(item, open);
+  if (year) {
+    // 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면, 열리는 날 뒤에 다른 해의 독서를 읽는 첫날을 해마다 찾는다. 열리는 날은 그
+    // 해의 독서라 그날부터 찾아도 그날은 나오지 않는다. 엔진의 표를 한 번에 하나씩 늘리도록 차례로 묻는다
+    /** @type {Map<string, string[]>} */
+    const groups = new Map();
+    for (const set of item.sets) {
+      if (set.year && set.year !== year) groups.set(set.year, [...(groups.get(set.year) || []), String(set.id)]);
+    }
+    /** @type {KeptDay[]} */
+    const cycles = [];
+    for (const group of groups.values()) {
+      const day = await mod.findReadingDay(group, today, open.date, isStale);
+      if (day) cycles.push(day);
+    }
+    cycles.sort((a, b) => (a.date < b.date ? -1 : 1));
+    return { open, next: null, nextIds: ids, year, cycles };
+  }
+  const next = open.date < today ? await mod.findReadingDay(ids, today, today, isStale) : null;
+  return { open, next: next && next.date !== open.date ? next : null, nextIds: ids, year: null, cycles: [] };
+}
+// ── END LECT_DAYS ──
+
+/**
+ * 전례일 줄마다 여는 날을 계산해 `screen.days`에 둔다(ADR-044 §1). `deadline`까지만 기다린다(전례일을 기다리는 같은 3초). 그 안에 끝나지
+ * 않으면 계속 계산하는 약속을 `{ later }`에 싸서 돌려주고(그대로 돌려주면 이 함수의 약속이 그것을 기다린다), 부른 쪽이 그린 뒤에 줄의
+ * 글만 바꿔 날짜를 넣는다(`patchLectDays`). 끝났거나 계산할 줄이 없으면 null. 화면을 떠났으면(`isStale`) 계산을 그친다.
+ * @param {any} result @param {SearchScreen} screen @param {number} deadline  Date.now() 기준 @param {() => boolean} isStale
+ * @returns {Promise<{ later: Promise<void> } | null>}
+ */
+async function withLectDays(result, screen, deadline, isStale) {
+  const lect = shownLectionary(result);
+  if (!lect) return null;
+  const days = new Map();
+  screen.days = days;
+  const work = (async () => {
+    const mod = await ensureEngine();
+    if (!mod) return;
+    const today = todayOf(mod);
+    // 화면의 이름으로 찾을 수 있게, 교회력 자료를 처음 받은 뒤 이번 전례년의 이름을 보내 둔다
+    sendChristmasNames(mod, today).catch(() => {});
+    const found = await Promise.all(lect.items.map((/** @type {any} */ item) => lectDaysOf(mod, item, today, isStale).catch(() => null)));
+    if (screen.days !== days) return;
+    screen.today = today;
+    lect.items.forEach((/** @type {any} */ item, /** @type {number} */ i) => days.set(item, found[i]));
+  })();
+  let done = false;
+  const finished = work.then(() => { done = true; });
+  await withinMs(finished, deadline - Date.now());
+  return done ? null : { later: finished };
+}
+
+/**
+ * 3초가 지나 계산이 끝난 날짜를 그린 줄에 넣는다(ADR-044 §1). 줄의 글만 바꾸므로 포커스와 읽던 자리가 남는다. 독서 표기는 처음 그린
+ * 것(`labelOf`)을 그대로 쓴다. 나중에 받아도 다시 그리지 않기로 했다(ADR-044 §1).
+ * @param {HTMLElement} target @param {any} lect @param {SearchScreen} screen
+ * @param {(setId: string, slot: string) => string | null} labelOf
+ */
+function patchLectDays(target, lect, screen, labelOf) {
+  const rows = target.querySelectorAll("ul.lect-rows > li");
+  lect.items.forEach((/** @type {any} */ item, /** @type {number} */ i) => {
+    const li = /** @type {HTMLElement | undefined} */ (rows[i]);
+    if (li) fillLectRow(li, lectRowOf(item, labelOf, screen.days?.get(item) ?? null, screen.today));
+  });
+}
+
 // alias(소문자) → book id, for absorbing typed/example `in:<alias>` operators
 // into book-scope chips at commit time. Built from book short + full Korean
 // names (covers the common cases); the worker still resolves any alias we miss
@@ -1666,6 +1979,8 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
     chapterCount: (id) => _chapterCounts.get(id) ?? null,
     readingLabel: () => null,
     scoped: filterBooks.length > 0,
+    days: null,
+    today: "",
   };
   /** @param {any} res */
   const draw = (res) => renderSearchResultList(resultsTarget, res, query, page, pageSize, paginationBuilder, screen);
@@ -1679,6 +1994,32 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
     window.announce(`"${query}" 검색 중… 현재 ${partial.total}건`);
   }
 
+  // 성탄 평일의 화면 이름(「성탄 1주 수요일」)은 해마다 바뀌어 색인에 없다. 이런 검색어를 받았는데 워커가 이번 전례년의 이름을 모르면
+  // 엔진으로 계산해 보낸 뒤 찾는다(ADR-044 §3). 전례일을 기다리는 같은 3초 안에서 기다리고(여기서 쓴 시간을 그 3초에서 뺀다), 교회력
+  // 자료를 내려받지 못했거나 3초 안에 다 받지 못했으면 그 뒤로는 기다리지 않는다. 기다리지 않을 때도 받기는 다시 시작하거나 이어 가,
+  // 다 받으면 다음 검색부터 그 이름으로 찾는다(코드 리뷰 2026-11-16, 11-17). 내려받지 못한 교회력 자료는 다음 호출에 다시 받는다
+  // (`ensureEngine`, 엔진 `preloadCalendar`).
+  let namesWaited = 0;
+  if (!filterBooks.length && query.includes("성탄") && !christmasNamesFresh()) {
+    const sending = ensureEngine()
+      .then(async (mod) => {
+        if (!mod) return false;
+        await sendChristmasNames(mod, todayOf(mod));
+        return true;
+      })
+      .catch((err) => {
+        console.warn("성탄 평일의 이름을 계산하지 못했습니다", err);
+        return false;
+      });
+    if (!_christmasNamesFailed) {
+      const start = Date.now();
+      const sent = await withinMs(sending, LECTIONARY_WAIT_MS);
+      if (sent !== true) _christmasNamesFailed = true;
+      namesWaited = Date.now() - start;
+      if (isStale()) return;
+    }
+  }
+
   const result = await doSearch(query, page, pageSize, onPartial, { scopeBooks: filterBooks });
 
   // Bail if the user navigated away while the search was running — the captured
@@ -1690,14 +2031,15 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
     return;
   }
 
-  // The worker is still loading the lectionary index: wait for its days, and for a passage the reading data too, up to
-  // LECTIONARY_WAIT_MS in all and draw once (ADR-044 §1). Past that, draw what came: passage rows fall back to the
-  // index's numbers, and days that come later are added to the drawn results (`addLateLectionary`).
-  const deadline = Date.now() + LECTIONARY_WAIT_MS;
-  // Alongside the index, not after it. Not when no lectionary days can come (a book scope, no index): the reading data
-  // is about 1.2 MB and only passage rows use it.
-  if (result.refMatch && (result.lectionaryPending || shownLectionary(result))) ensureReadingLabels();
-  const waitedOut = result.lectionaryPending ? !(await takeLateLectionary(result, LECTIONARY_WAIT_MS)) : false;
+  // The worker is still loading the lectionary index: wait for its days, the reading notations and the day each row
+  // opens, up to LECTIONARY_WAIT_MS in all and draw once (ADR-044 §1). Past that, draw what came: passage rows fall back
+  // to the index's numbers, rows get their day later (`patchLectDays`), and days that come later are added to the
+  // drawn results (`addLateLectionary`).
+  const deadline = Date.now() + LECTIONARY_WAIT_MS - namesWaited;
+  // The liturgical engine holds the reading notations. Alongside the index, not after it, for a passage. Not when no
+  // lectionary days can come (a book scope, no index): the engine's data is about 1.5 MB.
+  if (result.refMatch && (result.lectionaryPending || shownLectionary(result))) ensureEngine();
+  const waitedOut = result.lectionaryPending ? !(await takeLateLectionary(result, Math.max(0, deadline - Date.now()))) : false;
   if (isStale()) return;
   await withReadingLabels(result, screen, deadline - Date.now());
   if (isStale()) return;
@@ -1715,6 +2057,10 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
     }
   }
 
+  // 전례일 줄을 그릴 때만 날짜를 기다린다. 「성서 본문」 묶음만 보이면 기다리지 않고 계산만 시작해, 「전례일」 알약을 누르면 곧 나온다
+  const lateDays = await withLectDays(result, screen, resultGroups(result, screen).group === "lectionary" ? deadline : Date.now(), isStale);
+  if (isStale()) return;
+
   window.announce(draw(result));
   dismissLaunchScreen();
   // Instant, not the root's smooth scroll: when a page link led here, the router then keeps that link where it was
@@ -1722,7 +2068,14 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   window.scrollTo({ top: 0, behavior: "instant" });
 
   // Not awaited: route() (routing.js) awaits this function, and its ending (page meta, page view, tab history, focus)
-  // must not wait for a late index.
+  // must not wait for the late days or a late index.
+  if (lateDays) {
+    const labelOf = screen.readingLabel;
+    lateDays.later.then(() => {
+      const lect = shownLectionary(result);
+      if (lect && !isStale() && resultsTarget.isConnected) patchLectDays(resultsTarget, lect, screen, labelOf);
+    }).catch((err) => console.warn("전례일 줄에 날짜를 넣지 못했습니다", err));
+  }
   if (waitedOut) addLateLectionary(result, query, screen, resultsTarget, isStale, draw);
 }
 
@@ -1743,6 +2096,12 @@ async function addLateLectionary(result, query, screen, target, isStale, draw) {
   if (!lect) return;
   await withReadingLabels(result, screen, 0);
   if (isStale() || !target.isConnected) return;
+  // 날짜는 이미 계산한 표가 있으면 곧 나온다. 기다리지 않고 그린 뒤 넣는다
+  const lateDays = await withLectDays(result, screen, Date.now(), () => isStale() || !target.isConnected);
+  const labelOf = screen.readingLabel;
+  lateDays?.later.then(() => {
+    if (!isStale() && target.isConnected) patchLectDays(target, lect, screen, labelOf);
+  }).catch((err) => console.warn("전례일 줄에 날짜를 넣지 못했습니다", err));
   const heading = target.querySelector("h2.search-count");
   if (heading && result.total > 0) {
     heading.before(buildSearchPills("bible", result.total, lect.items.length, screen.groupHref));
@@ -1771,8 +2130,9 @@ async function takeLateLectionary(result, ms) {
 }
 
 /**
- * Passage rows show each reading's notation from the reading data (ADR-044 §1). Waits for it at most `ms` (0: only if
- * already loaded); without it the rows use the index's numbers, and nothing redraws when it comes later.
+ * Passage rows show each reading's notation from the reading data, which the liturgical engine holds (ADR-044 §1). Waits
+ * for the engine at most `ms` (0: only if already loaded); without it the rows use the index's numbers, and nothing
+ * redraws when it comes later.
  * @param {any} result
  * @param {SearchScreen} screen
  * @param {number} ms
@@ -1780,14 +2140,8 @@ async function takeLateLectionary(result, ms) {
 async function withReadingLabels(result, screen, ms) {
   const lect = shownLectionary(result);
   if (!lect || lect.kind !== "passage") return;
-  const loading = ensureReadingLabels();
-  /** @type {ReturnType<typeof setTimeout> | undefined} */
-  let timer;
-  const labels = _readingLabelMap || (ms > 0
-    ? await Promise.race([loading, new Promise((resolve) => { timer = setTimeout(() => resolve(null), ms); })])
-    : null);
-  clearTimeout(timer);
-  if (labels) screen.readingLabel = (setId, slot) => labels.get(`${setId}|${slot}`) ?? null;
+  const mod = _engineMod || (await withinMs(ensureEngine(), ms));
+  if (mod) screen.readingLabel = (setId, slot) => mod.readingLabel(setId, slot);
 }
 
 /**
