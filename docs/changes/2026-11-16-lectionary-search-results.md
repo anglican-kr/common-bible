@@ -40,6 +40,7 @@ title: "feat: 전례독서 검색 결과 화면"
 - `docs/topics/search.md`: 「지금 동작」의 「전례독서 검색 결과」와 구절 표기, 「결정」, 「남은 일」
 - `docs/topics/liturgical.md`: 「전례독서 화면: 주소와 모델」의 보조 주소
 - `DESIGN.md`: §3 굵기, §6 검색 결과의 부품 다섯과 캘린더 목록의 굵기, §10 검색의 알림
+- 디자인 시스템 아티팩트: `SearchResults`의 설명과 미리보기, 새 부품 `SearchLectionary`, `CalendarList`의 굵기, 브랜드 설명의 굵기와 다시 그리는 링크, `bundle.css`, 변경 기록(20판, `1794813747-08ca`)
 
 ## 리뷰 반영
 
