@@ -394,8 +394,8 @@ function buildSearchUrl(state) {
 }
 
 // ── Lectionary results (ADR-044 §1) ──
-// 전례일 줄은 캘린더 목록의 줄(.cal-row)에서 날짜 칸을 뺀 모양이다. 줄에는 누르면 열리는 날(이번 전례년의 날, 없으면 다음에 읽는 날)과
-// 그날의 색을 적고, 지난날을 여는 줄에는 다음에 읽는 날로 가는 링크를 따로 둔다(ADR-044 §1). 날짜는 교회력 엔진으로 계산한다
+// 전례일 줄은 캘린더 목록의 줄(.cal-row)에서 날짜 칸을 뺀 모양이다. 줄에는 누르면 열리는 날(해에 따라 다른 독서는 이번 전례년의 날, 해마다 같은 독서는 다가오는 날)과
+// 그날의 색을 적고, 해에 따라 다른 독서를 읽는 줄에는 다른 날로 가는 링크를 따로 둔다(ADR-044 §1). 날짜는 교회력 엔진으로 계산한다
 // (`lectDaysOf`). 아직 계산하지 못했으면 날짜가 정해진 전례일만 그 날짜(「12월 29일」)를 적어 같은 이름을 구별한다.
 
 const LECT_SLOT_LABEL = ["제1독서", "성시", "제2독서", "복음"];
@@ -420,8 +420,8 @@ const LECT_WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
 const LECT_CHRISTMAS_WEEKDAY = "grid:christmas-x-weekday-";
 
 /**
- * 줄이 여는 날(`open`)과, 그날이 지났을 때 다음에 읽는 날(`next`). `nextIds`는 다음 링크의 슬러그다(엔진 `findReadingDay`,
- * `findNamedDay`). 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 `year`는 열리는 날의 해(`A`, `I` 등)이고, `cycles`는 그 뒤에
+ * 줄이 여는 날(`open`)과, 그날이 지났을 때 다음에 읽는 날(`next`). `nextIds`는 다음 링크의 슬러그다(엔진 `findReadingDay`).
+ * 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 `year`는 열리는 날의 해(`A`, `I` 등)이고, `cycles`는 그 뒤에
  * 다른 해의 독서를 읽는 첫날을 해마다 하나씩 날짜 차례로 담는다(ADR-044 §1). 그 밖의 줄은 `year`가 null, `cycles`가 비었다.
  * @typedef {{ open: KeptDay, next: KeptDay | null, nextIds: string[], year: string | null, cycles: KeptDay[] }} LectDays
  */
@@ -473,15 +473,6 @@ function lectDateText(date, full = false) {
 }
 
 /**
- * 해마다 같은 독서로 날짜가 바뀌는 날의 다음 해(ADR-044 §1): 「2027년에는 4월 7일 (수)」. `full`이면 요일을 「수요일」로 쓴다.
- * @param {string} date @param {boolean} [full]
- */
-function lectYearText(date, full = false) {
-  const [y] = date.split("-");
-  return lectDateText(date, full).replace(`${y}년 `, `${y}년에는 `);
-}
-
-/**
  * 줄에 적는 날짜(ADR-044 §1): 지난날은 「지난 2026년 3월 1일 (일)」, 앞날은 「다음 2027년 3월 7일 (일)」, 오늘은 「오늘」이다.
  * 「올해」라고 적지 않는다. 이번 전례년은 대림 무렵에 달력의 해와 어긋난다.
  * @param {string} date @param {string} today @param {boolean} [full]
@@ -522,6 +513,27 @@ function lectSlugIds(item) {
  */
 function lectSetsOf(item) {
   return item.hits ? item.hits.flatMap((/** @type {any} */ h) => h.sets) : item.sets;
+}
+
+/**
+ * 해에 따라 다른 독서를 읽는 줄인가(ADR-044 §1). 줄의 세트에 해(가해, 홀수해 등)가 있으면 그렇다. 다만 구절로 찾은 줄은 찾은 독서가
+ * 그 전례일의 모든 해의 세트에 있으면 해마다 같은 독서다(평일 복음은 홀수해와 짝수해에 같은 경우가 많다, 사용자 결정 2026-11-17).
+ * @param {any} item
+ */
+function lectCyclic(item) {
+  const yearsOf = (/** @type {Array<{ year: string | null }>} */ sets) => new Set(sets.map((x) => x.year).filter(Boolean));
+  const found = yearsOf(lectSetsOf(item));
+  if (!found.size) return false;
+  return !item.hits || [...yearsOf(item.sets || [])].some((y) => !found.has(y));
+}
+
+/**
+ * 해에 따라 다른 독서처럼 해 표시가 있는 세트를 넘기지만 해마다 같은 독서인 줄(구절로 찾은 평일 복음 등). 보조 주소만으로는 엔진이
+ * 이름으로 찾은 줄과 가를 수 없어, 이 줄의 주소에는 여는 날을 붙인다(`?from=`, ADR-044 §1).
+ * @param {any} item
+ */
+function lectYearlyWithYears(item) {
+  return !lectCyclic(item) && lectSetsOf(item).some((x) => x.year);
 }
 
 /**
@@ -601,9 +613,9 @@ function lectRowOf(item, labelOf, days = null, today = "") {
     }
   }
   // 다른 날로 가는 링크: 해에 따라 다른 독서(가해, 나해, 다해, 홀수해, 짝수해)를 읽는 줄만 둔다. 이름으로 찾은 줄은 다른 해의 날을
-  // 해마다 하나씩(세 해 주기는 둘), 구절로 찾은 줄은 지났을 때 다음에 읽는 날 하나다. 해마다 같은 독서는 다음 해에도 같은 내용이라
-  // 링크를 두지 않고, 날짜가 바뀌는 날만 다음 해의 날을 덧붙인다. 날짜가 정해진 날은 요일만 바뀌어 덧붙이지 않는다(ADR-044 §1)
-  const cyclic = lectSetsOf(item).some((s) => s.year);
+  // 해마다 하나씩(세 해 주기는 둘), 구절로 찾은 줄은 지났을 때 다음에 읽는 날 하나다. 해마다 같은 독서는 엔진이 오늘부터 처음 오는
+  // 날을 열어 덧붙일 것이 없다(ADR-044 §1, 사용자 결정 2026-11-17)
+  const cyclic = lectCyclic(item);
   /** @type {LectNext[]} */
   const nexts = [];
   if (days && days.cycles.length) {
@@ -624,13 +636,11 @@ function lectRowOf(item, labelOf, days = null, today = "") {
       prefix: later.date > today ? "다음" : "",
       date: later.date > today ? lectDateText(later.date) : lectDayText(later.date, today),
     });
-  } else if (days && days.next && !obs.date) {
-    meta.push(lectYearText(days.next.date));
-    said.push(lectYearText(days.next.date, true));
   }
   const label = [title, found ? `${found.slot} ${found.text}` : null, ...colors.map((c) => c.name), ...said, ...lines]
     .filter(Boolean).join(", ");
-  return { title, href: lectSlugHref(item), bold, found, colors, meta, lines, label, nexts };
+  const href = open && lectYearlyWithYears(item) ? lectHrefOf(lectSlugIds(item), open.date) : lectSlugHref(item);
+  return { title, href, bold, found, colors, meta, lines, label, nexts };
 }
 
 /**
@@ -1171,46 +1181,45 @@ function todayOf(mod) {
   return mod.toKey(now.getFullYear(), now.getMonth() + 1, now.getDate());
 }
 
-/** 워커에 보낸 성탄 평일의 화면 이름과 그 전례년(ADR-044 §3). 화면의 이름으로 찾은 줄을 알아보는 데도 쓴다. @type {{ ly: number, names: Set<string> } | null} */
-let _christmasNames = null;
+/** 워커에 보낸 성탄 평일의 화면 이름을 계산한 날(ADR-044 §3). 보낸 적이 없으면 null. @type {string | null} */
+let _christmasNamesDay = null;
 /** 찾기 전에 이름을 기다렸다가 받지 못했다(3초 안에 다 받지 못한 것도 든다). 그 뒤로는 기다리지 않는다(받기는 뒤에서 이어 가고, 이름은 교회력 자료를 다 받는 대로 보낸다). */
 let _christmasNamesFailed = false;
 
-/** 워커가 이번 전례년의 성탄 평일 이름을 알고 있는가. 교회력 자료를 받기 전에는 보낸 적이 있는지만 본다. */
+/** 워커가 오늘 계산한 성탄 평일 이름을 알고 있는가. 교회력 자료를 받기 전에는 보낸 적이 있는지만 본다. */
 function christmasNamesFresh() {
-  if (!_christmasNames) return false;
-  return !_engineMod || _christmasNames.ly === _engineMod.liturgicalYearOf(todayOf(_engineMod));
+  if (!_christmasNamesDay) return false;
+  return !_engineMod || _christmasNamesDay === todayOf(_engineMod);
 }
 
 /**
- * 이번 전례년 성탄 평일의 화면 이름(「성탄 1주 수요일」)을 워커에 보낸다. 해마다 바뀌어 색인에 없으므로 엔진으로 계산한다. 전례년마다
- * 한 번 보내고, 워커는 다음 검색부터 별칭처럼 찾는다.
+ * 오늘부터 한 해 안에 오는 성탄 평일의 화면 이름(「성탄 1주 수요일」)을 워커에 보낸다. 해마다 바뀌어 색인에 없으므로 엔진으로 계산한다.
+ * 그 성탄 평일이 지나면 다음 해의 이름으로 바뀌므로 날마다 한 번 보내고, 워커는 다음 검색부터 별칭처럼 찾는다.
  * @param {Engine} mod @param {string} today
  */
 async function sendChristmasNames(mod, today) {
-  const ly = mod.liturgicalYearOf(today);
-  if (_christmasNames && _christmasNames.ly === ly) return;
+  if (_christmasNamesDay === today) return;
   const names = await mod.findChristmasNames(today);
+  // 날이 바뀌는 무렵에 어제의 계산이 늦게 끝나면 오늘 보낸 이름을 덮지 않는다
+  if (_christmasNamesDay && _christmasNamesDay > today) return;
   ensureSearchWorker().postMessage({ type: "lect-names", names: [...names] });
-  _christmasNames = { ly, names: new Set(names.values()) };
+  _christmasNamesDay = today;
 }
 
 // ── BEGIN LECT_DAYS ──
 /**
- * 줄 하나가 여는 날과 다른 날(ADR-044 §1). 화면의 이름으로 찾은 성탄 평일(워커가 `matched`에 그 이름을 적는다)은 이번 전례년의
- * 그 이름의 날을 연다(§3). 날짜가 정해진 같은 독서라 다른 날은 찾지 않는다. 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 다른
- * 해의 날을 해마다 하나씩 찾는다. 그 밖의 줄은 여는 날이 지났을 때만 다음에 읽는 날을 찾는다. `isStale`이 참이면(화면을 떠났으면)
- * 엔진이 표를 더 세지 않는다(코드 리뷰 2026-11-17).
+ * 줄 하나가 여는 날과 다른 날(ADR-044 §1). 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 다른 해의 날을 해마다 하나씩 찾는다. 그 밖의
+ * 줄은 여는 날이 지났을 때만 다음에 읽는 날을 찾는다. 화면의 이름으로 찾은 성탄 평일(§3)도 그 줄의 세트로 찾는다. 해마다 같은 독서라
+ * 엔진이 오늘부터 처음 오는 날을 열고, 그날이 그 이름의 날이다. 이름으로 찾으면 오늘부터 한 해 안에 같은 이름의 날이 두 번 있을 때(1월 5일에
+ * 본 1월 5일과 이듬해 1월 4일의 「성탄 2주 화요일」)에 두 줄이 같은 날을 적고 한 줄은 다른 날을 열었다(코드 리뷰 2026-11-17).
+ * `isStale`이 참이면(화면을 떠났으면) 엔진이 표를 더 세지 않는다(코드 리뷰 2026-11-17).
  * @param {Engine} mod @param {any} item @param {string} today @param {() => boolean} [isStale]
  * @returns {Promise<LectDays | null>}
  */
 async function lectDaysOf(mod, item, today, isStale = () => false) {
-  if (item.matched && _christmasNames && _christmasNames.names.has(item.matched)) {
-    const open = await mod.findNamedDay(item.matched, today);
-    return open ? { open, next: null, nextIds: [], year: null, cycles: [] } : null;
-  }
   const ids = lectSlugIds(item);
-  const open = await mod.findReadingDay(ids, today, null, isStale);
+  // 해마다 같은 독서인데 해 표시가 있는 세트를 넘기는 줄은 엔진이 해에 따라 다른 독서로 보므로, 오늘부터 찾게 한다(ADR-044 §1)
+  const open = await mod.findReadingDay(ids, today, lectYearlyWithYears(item) ? today : null, isStale);
   if (!open) return null;
   const year = item.hits ? "" : lectYearOf(item, open);
   if (year) {
@@ -1251,7 +1260,7 @@ async function withLectDays(result, screen, deadline, isStale) {
     const mod = await ensureEngine();
     if (!mod) return;
     const today = todayOf(mod);
-    // 화면의 이름으로 찾을 수 있게, 교회력 자료를 처음 받은 뒤 이번 전례년의 이름을 보내 둔다
+    // 화면의 이름으로 찾을 수 있게, 교회력 자료를 처음 받은 뒤 오늘부터 한 해 안에 오는 성탄 평일의 이름을 보내 둔다
     sendChristmasNames(mod, today).catch(() => {});
     const found = await Promise.all(lect.items.map((/** @type {any} */ item) => lectDaysOf(mod, item, today, isStale).catch(() => null)));
     if (screen.days !== days) return;
@@ -1994,7 +2003,7 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
     window.announce(`"${query}" 검색 중… 현재 ${partial.total}건`);
   }
 
-  // 성탄 평일의 화면 이름(「성탄 1주 수요일」)은 해마다 바뀌어 색인에 없다. 이런 검색어를 받았는데 워커가 이번 전례년의 이름을 모르면
+  // 성탄 평일의 화면 이름(「성탄 1주 수요일」)은 해마다 바뀌어 색인에 없다. 이런 검색어를 받았는데 워커가 오늘 계산한 이름을 모르면
   // 엔진으로 계산해 보낸 뒤 찾는다(ADR-044 §3). 전례일을 기다리는 같은 3초 안에서 기다리고(여기서 쓴 시간을 그 3초에서 뺀다), 교회력
   // 자료를 내려받지 못했거나 3초 안에 다 받지 못했으면 그 뒤로는 기다리지 않는다. 기다리지 않을 때도 받기는 다시 시작하거나 이어 가,
   // 다 받으면 다음 검색부터 그 이름으로 찾는다(코드 리뷰 2026-11-16, 11-17). 내려받지 못한 교회력 자료는 다음 호출에 다시 받는다

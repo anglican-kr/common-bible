@@ -548,9 +548,10 @@ def test_christmas_weekdays_show_the_name_of_the_day_they_open(page):
     _wait_days(page)
     titles = page.locator(".lect-rows .cal-row-title").all_inner_texts()
     assert len(titles) == 13
-    assert titles[:3] == ["성탄 1주 월요일", "성탄 1주 화요일", "성탄 1주 수요일"]
+    # 해마다 같은 독서라 다가오는 2026년 성탄 평일의 이름이다(ADR-044 §1, 2026-11-17)
+    assert titles[:3] == ["성탄 1주 화요일", "성탄 1주 수요일", "성탄 1주 목요일"]
     assert "성탄주간" not in titles
-    assert "지난 2025년 12월 29일 (월)" in page.locator(".lect-rows .cal-row-meta").first.inner_text()
+    assert "다음 2026년 12월 29일 (화)" in page.locator(".lect-rows .cal-row-meta").first.inner_text()
 
 
 def test_christmas_weekday_is_found_by_its_name_on_screen(page):
@@ -559,7 +560,7 @@ def test_christmas_weekday_is_found_by_its_name_on_screen(page):
     _goto_search(page, "성탄 1주 수요일")
     _wait_days(page)
     assert page.locator(".lect-rows .cal-row-title").all_inner_texts() == ["성탄 1주 수요일"]
-    assert "지난 2025년 12월 31일 (수)" in page.inner_text(".lect-rows .cal-row-meta")
+    assert "다음 2026년 12월 30일 (수)" in page.inner_text(".lect-rows .cal-row-meta")
     # 성탄 평일은 해마다 같은 날짜의 같은 독서라 다음 링크가 없다(ADR-044 §1)
     assert page.locator(".lect-rows .lect-row-next").count() == 0
 
@@ -579,12 +580,13 @@ def test_row_shows_the_day_it_opens_and_a_link_to_the_next(page):
     # 이번 전례년에 읽지 않는 나해의 독서는 다음 날을 열고, 따로 둘 링크가 없다
     assert "다음 2027년 3월 7일 (일)" in second.locator(".cal-row-meta").inner_text()
     assert second.locator(".lect-row-next").count() == 0
-    # 해마다 같은 독서는 링크가 없고, 날짜가 바뀌는 날(부활2주 수요일)만 다음 해의 날을 덧붙인다
+    # 해마다 같은 독서는 다가오는 날을 열고, 링크도 다음 해의 날도 없다(2026-11-17)
     third, fifth = rows.nth(2), rows.nth(4)
     assert third.locator(".lect-row-next").count() == 0
-    assert "2027년에는 4월 7일 (수)" in third.locator(".cal-row-meta").inner_text()
-    assert fifth.locator(".lect-row-next").count() == 0, "성 십자가의 날은 날짜가 정해져 있다"
-    assert "년에는" not in fifth.locator(".cal-row-meta").inner_text()
+    assert "다음 2027년 4월 7일 (수)" in third.locator(".cal-row-meta").inner_text()
+    assert fifth.locator(".lect-row-next").count() == 0
+    assert "다음 2027년 9월 14일 (화)" in fifth.locator(".cal-row-meta").inner_text()
+    assert "년에는" not in page.inner_text(".lect-rows")
 
     nxt.click()
     page.wait_for_function("() => location.pathname === '/lectionary/2029-02-25'", timeout=15_000)
@@ -751,9 +753,36 @@ def test_christmas_names_do_not_wait_again_after_three_seconds(browser):
     ctx.close()
 
 
+def test_fixed_feast_row_opens_the_coming_day(page):
+    """해마다 같은 독서를 읽는 줄은 오늘부터 처음 오는 날을 연다. 줄을 누르면 가는 보조 주소도 같은 날을 연다(ADR-044 §1, 2026-11-17).
+    지난 2026년 9월 14일이 아니라 2027년 9월 14일이다."""
+    _fix_today(page)
+    _goto_search(page, "성 십자가의 날")
+    _wait_days(page)
+    row = page.locator(".lect-rows > li").first
+    assert "다음 2027년 9월 14일 (화)" in row.locator(".cal-row-meta").inner_text()
+    assert row.locator(".lect-row-next").count() == 0
+    row.locator("a.cal-row").click()
+    page.wait_for_function("() => location.pathname === '/lectionary/2027-09-14'", timeout=15_000)
+
+
+
+def test_weekday_gospel_read_every_year_opens_the_coming_day(page):
+    """구절로 찾은 독서가 그 전례일의 모든 해의 세트에 있으면 해마다 같은 독서다. 연중1주 월요일의 복음 마르 1:14-20은 홀수해와
+    짝수해에 같아, 지난 2026년 1월 12일이 아니라 다가오는 2027년 1월 11일을 연다(ADR-044 §1, 2026-11-17)."""
+    _fix_today(page)
+    _goto_search(page, "마르 1:14", "&group=lectionary")
+    _wait_days(page)
+    row = page.locator(".lect-rows > li").filter(has_text="연중1주 월요일").first
+    assert "다음 2027년 1월 11일 (월)" in row.locator(".cal-row-meta").inner_text()
+    assert row.locator(".lect-row-next").count() == 0
+    assert row.locator("a.cal-row").get_attribute("href").endswith("?from=2027-01-11")
+    row.locator("a.cal-row").click()
+    page.wait_for_function("() => location.pathname === '/lectionary/2027-01-11'", timeout=15_000)
+
 def test_row_opens_the_coming_day_when_it_comes_twice_in_the_year(page):
-    """한 전례년에 그날이 두 번 있으면 아직 오지 않은 날을 연다. 2028 전례년(2027-11-28부터)에는 성 안드레아 축일이 두 번 든다
-    (ADR-044 §1, 코드 리뷰 2026-11-17)."""
+    """한 전례년(2027-11-28부터 2028-12-02까지)의 처음과 끝에 한 번씩 있는 성 안드레아 축일도 다가오는 날을 연다. 해마다
+    같은 독서라 오늘부터 처음 오는 날이다(ADR-044 §1, 2026-11-17)."""
     page.clock.set_fixed_time(datetime.datetime(2028, 6, 1, 12))
     _goto_search(page, "안드레아", "&group=lectionary")
     _wait_days(page)

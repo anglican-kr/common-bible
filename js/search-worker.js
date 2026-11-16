@@ -106,7 +106,7 @@
  * @property {number} searchId
  * @property {string[]} [scopeBooks]
  *
- * @typedef LectNamesMessage  이번 전례년 성탄 평일의 화면 이름(ADR-044 §3). 해마다 바뀌어 색인에 없으므로 앱이 교회력 엔진으로 계산해 보낸다.
+ * @typedef LectNamesMessage  오늘부터 한 해 안에 오는 성탄 평일의 화면 이름(ADR-044 §3). 해마다 바뀌어 색인에 없으므로 앱이 교회력 엔진으로 계산해 보낸다.
  * @property {"lect-names"} type
  * @property {Array<[string, string]>} names  [독서 세트 id, 이름(「성탄 1주 수요일」)]
  *
@@ -228,7 +228,7 @@ let lectionaryPromise = null;
 /** @type {LectionaryIndex | null} */
 let lectionary = null;
 
-/** 이번 전례년 성탄 평일의 화면 이름(`lect-names` 메시지). 이름 검색이 별칭처럼 함께 찾는다(ADR-044 §3). @type {Array<[string, string]>} */
+/** 오늘부터 한 해 안에 오는 성탄 평일의 화면 이름(`lect-names` 메시지). 이름 검색이 별칭처럼 함께 찾는다(ADR-044 §3). @type {Array<[string, string]>} */
 let lectExtraNames = [];
 
 /** performance.now() before which a failed lectionary index is not fetched again: elapsed time, so changing the
@@ -840,8 +840,8 @@ function swapSynonyms(index, typed) {
  * 이름으로 전례일을 찾는다(설계 §4, ADR-044 §3). 전례일의 이름과 별칭, 성인의 이름과 칭호에서 찾는다.
  * 검색어 전체가 든 이름을 찾고, 비슷한 말 표의 낱말이 있으면 앱의 이름으로 바꾼 검색어로도 찾는다. 그래도 없고
  * 검색어에 낱말이 여럿이면 낱말이 모두 든 이름을 찾는다. 결과는 이름 전체가 같은 것, 이름이 검색어로 시작하는 것,
- * 이름 안에 든 것의 차례이고, 같은 단계 안에서는 전례년 순서다. `extra`는 해마다 바뀌어 색인에 없는 이름(이번 전례년 성탄 평일의
- * 화면 이름, ADR-044 §3)이고, 그 독서 세트의 전례일을 별칭처럼 찾는다.
+ * 이름 안에 든 것의 차례이고, 같은 단계 안에서는 전례년 순서다. `extra`는 해마다 바뀌어 색인에 없는 이름(오늘부터 한 해 안에 오는 성탄
+ * 평일의 화면 이름, ADR-044 §3)이고, 그 독서 세트의 전례일을 별칭처럼 찾는다.
  * @param {LectionaryIndex} index
  * @param {string} query
  * @param {Array<[string, string]>} [extra]  [독서 세트 id, 이름]
