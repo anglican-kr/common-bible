@@ -1,4 +1,5 @@
 ---
+pr: 574
 date: 2026-11-16
 branch: feat/lectionary-search-app
 title: "feat: 검색 워커의 전례독서 검색"
