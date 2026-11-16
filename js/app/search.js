@@ -420,8 +420,13 @@ const LECT_CHRISTMAS_WEEKDAY = "grid:christmas-x-weekday-";
 
 /**
  * 줄이 여는 날(`open`)과, 그날이 지났을 때 다음에 읽는 날(`next`). `nextIds`는 다음 링크의 슬러그다(엔진 `findReadingDay`,
- * `findNamedDays`).
- * @typedef {{ open: KeptDay, next: KeptDay | null, nextIds: string[] }} LectDays
+ * `findNamedDays`). 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 `year`는 열리는 날의 해(`A`, `I` 등)이고, `cycles`는 그 뒤에
+ * 다른 해의 독서를 읽는 첫날을 해마다 하나씩 날짜 차례로 담는다(ADR-044 §1). 그 밖의 줄은 `year`가 null, `cycles`가 비었다.
+ * @typedef {{ open: KeptDay, next: KeptDay | null, nextIds: string[], year: string | null, cycles: KeptDay[] }} LectDays
+ */
+/**
+ * 줄 아래의 링크 하나. `prefix`는 날짜 앞의 글(「다음」, 「나해」)이다.
+ * @typedef {{ href: string, label: string, prefix: string, date: string }} LectNext
  */
 
 /**
@@ -467,6 +472,15 @@ function lectDateText(date, full = false) {
 }
 
 /**
+ * 해마다 같은 독서로 날짜가 바뀌는 날의 다음 해(ADR-044 §1): 「2027년에는 4월 7일 (수)」. `full`이면 요일을 「수요일」로 쓴다.
+ * @param {string} date @param {boolean} [full]
+ */
+function lectYearText(date, full = false) {
+  const [y] = date.split("-");
+  return lectDateText(date, full).replace(`${y}년 `, `${y}년에는 `);
+}
+
+/**
  * 줄에 적는 날짜(ADR-044 §1): 지난날은 「지난 2026년 3월 1일 (일)」, 앞날은 「다음 2027년 3월 7일 (일)」, 오늘은 「오늘」이다.
  * 「올해」라고 적지 않는다. 이번 전례년은 대림 무렵에 달력의 해와 어긋난다.
  * @param {string} date @param {string} today @param {boolean} [full]
@@ -496,13 +510,30 @@ function lectCyclesText(sets) {
  * @returns {string[]}
  */
 function lectSlugIds(item) {
-  /** @type {any[]} */
-  const sets = item.hits ? item.hits.flatMap((/** @type {any} */ h) => h.sets) : item.sets;
+  const sets = lectSetsOf(item);
   return sets.length ? [...new Set(sets.map((s) => String(s.id)))] : [item.obs.key];
 }
 
 /**
- * 보조 주소. `from`이 있으면 그날부터 처음 지키는 날을 연다(다음에 읽는 날의 링크).
+ * 줄이 가리키는 독서 세트: 구절로 찾았으면 찾은 독서가 든 세트들, 이름으로 찾았으면 그 전례일의 세트들이다.
+ * @param {any} item  LectItem
+ * @returns {Array<{ id: string, year: string | null }>}
+ */
+function lectSetsOf(item) {
+  return item.hits ? item.hits.flatMap((/** @type {any} */ h) => h.sets) : item.sets;
+}
+
+/**
+ * 그날 읽는 독서 세트의 해(`A`, `I` 등). 줄의 세트에 없거나 해가 없으면 빈 문자열.
+ * @param {any} item @param {KeptDay} day
+ */
+function lectYearOf(item, day) {
+  const set = lectSetsOf(item).find((s) => String(s.id) === day.setId);
+  return set && set.year ? String(set.year) : "";
+}
+
+/**
+ * 보조 주소. `from`이 있으면 그날부터 처음 지키는 날을 연다(다른 날로 가는 링크).
  * @param {string[]} ids @param {string | null} [from]
  */
 function lectHrefOf(ids, from = null) {
@@ -523,7 +554,7 @@ function lectSlugHref(item) {
  * @param {string} [today]  "YYYY-MM-DD"
  * @returns {{ title: string, href: string, bold: boolean, found: { slot: string, text: string } | null,
  *   colors: Array<{ code: string, name: string }>, meta: string[], lines: string[], label: string,
- *   next: { href: string, label: string, prefix: string, date: string } | null }}
+ *   nexts: LectNext[] }}
  */
 function lectRowOf(item, labelOf, days = null, today = "") {
   const { obs } = item;
@@ -552,6 +583,12 @@ function lectRowOf(item, labelOf, days = null, today = "") {
   const colors = open ? open.colors.map((code) => ({ code, name: LECT_COLOR_LABEL[code] || code })) : [];
   /** 링크 이름에 싣는 meta. 날짜는 요일을 다 쓴다 @type {string[]} */
   const said = [...meta];
+  // 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 열리는 날의 해를 날짜 앞에 적는다. 링크마다 해를 적으므로 줄에도 있어야 견주어 본다
+  const year = days && days.year ? LECT_CYCLE_LABEL[days.year] || "" : "";
+  if (year) {
+    meta.push(year);
+    said.push(year);
+  }
   if (open) {
     meta.push(lectDayText(open.date, today));
     said.push(lectDayText(open.date, today, true));
@@ -562,17 +599,37 @@ function lectRowOf(item, labelOf, days = null, today = "") {
       said.push(date);
     }
   }
-  const later = days && days.next;
-  const next = later ? {
-    href: lectHrefOf(days.nextIds, later.date),
-    // 성탄 평일은 다음 날의 이름이 다르다(12월 30일 독서는 2025년 화요일, 2026년 수요일)
-    label: `${later.obs.startsWith(LECT_CHRISTMAS_WEEKDAY) ? later.name : title}, ${lectDayText(later.date, today, true)}`,
-    prefix: later.date > today ? "다음" : "",
-    date: later.date > today ? lectDateText(later.date) : lectDayText(later.date, today),
-  } : null;
+  // 다른 날로 가는 링크: 해에 따라 다른 독서(가해, 나해, 다해, 홀수해, 짝수해)를 읽는 줄만 둔다. 이름으로 찾은 줄은 다른 해의 날을
+  // 해마다 하나씩(세 해 주기는 둘), 구절로 찾은 줄은 지났을 때 다음에 읽는 날 하나다. 해마다 같은 독서는 다음 해에도 같은 내용이라
+  // 링크를 두지 않고, 날짜가 바뀌는 날만 다음 해의 날을 덧붙인다. 날짜가 정해진 날은 요일만 바뀌어 덧붙이지 않는다(ADR-044 §1)
+  const cyclic = lectSetsOf(item).some((s) => s.year);
+  /** @type {LectNext[]} */
+  const nexts = [];
+  if (days && days.cycles.length) {
+    for (const day of days.cycles) {
+      const cycle = LECT_CYCLE_LABEL[lectYearOf(item, day)] || "다음";
+      nexts.push({
+        href: lectHrefOf(days.nextIds, day.date),
+        label: `${title}, ${cycle} ${lectDateText(day.date, true)}`,
+        prefix: cycle,
+        date: lectDateText(day.date),
+      });
+    }
+  } else if (days && days.next && cyclic) {
+    const later = days.next;
+    nexts.push({
+      href: lectHrefOf(days.nextIds, later.date),
+      label: `${title}, ${lectDayText(later.date, today, true)}`,
+      prefix: later.date > today ? "다음" : "",
+      date: later.date > today ? lectDateText(later.date) : lectDayText(later.date, today),
+    });
+  } else if (days && days.next && !obs.date) {
+    meta.push(lectYearText(days.next.date));
+    said.push(lectYearText(days.next.date, true));
+  }
   const label = [title, found ? `${found.slot} ${found.text}` : null, ...colors.map((c) => c.name), ...said, ...lines]
     .filter(Boolean).join(", ");
-  return { title, href: lectSlugHref(item), bold, found, colors, meta, lines, label, next };
+  return { title, href: lectSlugHref(item), bold, found, colors, meta, lines, label, nexts };
 }
 
 /**
@@ -639,25 +696,24 @@ function fillLectRow(li, row) {
   for (const text of row.lines) body.appendChild(el("span", { className: "cal-row-line" }, text));
   a.appendChild(body);
 
-  let next = /** @type {HTMLElement | undefined} */ (li.children[1]);
-  if (!row.next) {
-    if (next) li.removeChild(next);
-    li.className = "";
-    return;
-  }
-  if (!next) {
-    next = el("a", { className: "lect-row-next" });
-    li.appendChild(next);
-  }
-  while (next.firstChild) next.removeChild(next.firstChild);
-  next.setAttribute("href", row.next.href);
-  next.setAttribute("aria-label", row.next.label);
-  const text = el("span", {});
-  if (row.next.prefix) text.appendChild(document.createTextNode(`${row.next.prefix} `));
-  text.appendChild(el("span", { className: "lect-row-next-date" }, row.next.date));
-  next.appendChild(text);
-  next.appendChild(el("span", { className: "lect-row-next-arrow", "aria-hidden": "true" }, "›"));
-  li.className = "lect-row-pair";
+  // 링크는 한 줄에 하나다(ADR-044 §1). 날짜를 나중에 넣을 때도 있던 링크를 그대로 쓰고 글만 바꿔, 링크에 있던 초점을 지킨다
+  while (li.children.length > row.nexts.length + 1) li.removeChild(li.children[li.children.length - 1]);
+  row.nexts.forEach((link, i) => {
+    let next = /** @type {HTMLElement | undefined} */ (li.children[i + 1]);
+    if (!next) {
+      next = el("a", { className: "lect-row-next" });
+      li.appendChild(next);
+    }
+    while (next.firstChild) next.removeChild(next.firstChild);
+    next.setAttribute("href", link.href);
+    next.setAttribute("aria-label", link.label);
+    const text = el("span", {});
+    if (link.prefix) text.appendChild(document.createTextNode(`${link.prefix} `));
+    text.appendChild(el("span", { className: "lect-row-next-date" }, link.date));
+    next.appendChild(text);
+    next.appendChild(el("span", { className: "lect-row-next-arrow", "aria-hidden": "true" }, "›"));
+  });
+  li.className = row.nexts.length ? "lect-row-pair" : "";
 }
 
 /**
@@ -1137,9 +1193,11 @@ async function sendChristmasNames(mod, today) {
   _christmasNames = { ly, names: new Set(names.values()) };
 }
 
+// ── BEGIN LECT_DAYS ──
 /**
- * 줄 하나가 여는 날과 다음에 읽는 날(ADR-044 §1). 화면의 이름으로 찾은 성탄 평일(워커가 `matched`에 그 이름을 적는다)은 이번 전례년의
- * 그 이름의 날을 열고, 다음은 그 이름이 다음에 오는 날이다(§3). 다음은 여는 날이 지났을 때만 둔다.
+ * 줄 하나가 여는 날과 다른 날(ADR-044 §1). 화면의 이름으로 찾은 성탄 평일(워커가 `matched`에 그 이름을 적는다)은 이번 전례년의
+ * 그 이름의 날을 열고, 다음은 그 이름이 다음에 오는 날이다(§3). 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 다른 해의 날을
+ * 해마다 하나씩 찾는다. 그 밖의 줄은 여는 날이 지났을 때만 다음에 읽는 날을 찾는다.
  * @param {Engine} mod @param {any} item @param {string} today
  * @returns {Promise<LectDays | null>}
  */
@@ -1148,14 +1206,33 @@ async function lectDaysOf(mod, item, today) {
     const { open, next } = await mod.findNamedDays(item.matched, today);
     if (!open) return null;
     const later = open.date < today && next && next.date !== open.date ? next : null;
-    return { open, next: later, nextIds: later ? [later.setId ?? later.obs] : [] };
+    return { open, next: later, nextIds: later ? [later.setId ?? later.obs] : [], year: null, cycles: [] };
   }
   const ids = lectSlugIds(item);
   const open = await mod.findReadingDay(ids, today);
   if (!open) return null;
+  const year = item.hits ? "" : lectYearOf(item, open);
+  if (year) {
+    // 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면, 열리는 날 뒤에 다른 해의 독서를 읽는 첫날을 해마다 찾는다. 열리는 날은 그
+    // 해의 독서라 그날부터 찾아도 그날은 나오지 않는다. 엔진의 표를 한 번에 하나씩 늘리도록 차례로 묻는다
+    /** @type {Map<string, string[]>} */
+    const groups = new Map();
+    for (const set of item.sets) {
+      if (set.year && set.year !== year) groups.set(set.year, [...(groups.get(set.year) || []), String(set.id)]);
+    }
+    /** @type {KeptDay[]} */
+    const cycles = [];
+    for (const group of groups.values()) {
+      const day = await mod.findReadingDay(group, today, open.date);
+      if (day) cycles.push(day);
+    }
+    cycles.sort((a, b) => (a.date < b.date ? -1 : 1));
+    return { open, next: null, nextIds: ids, year, cycles };
+  }
   const next = open.date < today ? await mod.findReadingDay(ids, today, today) : null;
-  return { open, next: next && next.date !== open.date ? next : null, nextIds: ids };
+  return { open, next: next && next.date !== open.date ? next : null, nextIds: ids, year: null, cycles: [] };
 }
+// ── END LECT_DAYS ──
 
 /**
  * 전례일 줄마다 여는 날을 계산해 `screen.days`에 둔다(ADR-044 §1). `deadline`까지만 기다린다(전례일을 기다리는 같은 3초). 그 안에 끝나지

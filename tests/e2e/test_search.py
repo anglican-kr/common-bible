@@ -554,19 +554,18 @@ def test_christmas_weekdays_show_the_name_of_the_day_they_open(page):
 
 
 def test_christmas_weekday_is_found_by_its_name_on_screen(page):
-    """화면의 이름(「성탄 1주 수요일」)으로도 찾는다. 앱을 연 뒤 처음 찾아도 나온다. 다음은 같은 이름의 다음 날이다(ADR-044 §3)."""
+    """화면의 이름(「성탄 1주 수요일」)으로도 찾는다. 앱을 연 뒤 처음 찾아도 나오고, 이번 전례년의 그 이름의 날을 연다(ADR-044 §3)."""
     _fix_today(page)
     _goto_search(page, "성탄 1주 수요일")
     _wait_days(page)
     assert page.locator(".lect-rows .cal-row-title").all_inner_texts() == ["성탄 1주 수요일"]
     assert "지난 2025년 12월 31일 (수)" in page.inner_text(".lect-rows .cal-row-meta")
-    nxt = page.locator(".lect-rows .lect-row-next")
-    assert nxt.get_attribute("href") == f"/lectionary/d/{quote('d1230-성탄주간-t1-s1')}?from=2026-12-30"
-    assert nxt.inner_text().startswith("다음 2026년 12월 30일 (수)")
+    # 성탄 평일은 해마다 같은 날짜의 같은 독서라 다음 링크가 없다(ADR-044 §1)
+    assert page.locator(".lect-rows .lect-row-next").count() == 0
 
 
 def test_row_shows_the_day_it_opens_and_a_link_to_the_next(page):
-    """줄에는 여는 날과 그날의 색을 적고, 지난날을 여는 줄에만 다음에 읽는 날의 링크를 따로 둔다(ADR-044 §1)."""
+    """줄에는 여는 날과 그날의 색을 적고, 해에 따라 다른 독서가 지난날을 열 때만 다음에 읽는 날의 링크를 따로 둔다(ADR-044 §1)."""
     _fix_today(page)
     _goto_search(page, "요한 3:16")
     _wait_days(page)
@@ -580,6 +579,12 @@ def test_row_shows_the_day_it_opens_and_a_link_to_the_next(page):
     # 이번 전례년에 읽지 않는 나해의 독서는 다음 날을 열고, 따로 둘 링크가 없다
     assert "다음 2027년 3월 7일 (일)" in second.locator(".cal-row-meta").inner_text()
     assert second.locator(".lect-row-next").count() == 0
+    # 해마다 같은 독서는 링크가 없고, 날짜가 바뀌는 날(부활2주 수요일)만 다음 해의 날을 덧붙인다
+    third, fifth = rows.nth(2), rows.nth(4)
+    assert third.locator(".lect-row-next").count() == 0
+    assert "2027년에는 4월 7일 (수)" in third.locator(".cal-row-meta").inner_text()
+    assert fifth.locator(".lect-row-next").count() == 0, "성 십자가의 날은 날짜가 정해져 있다"
+    assert "년에는" not in fifth.locator(".cal-row-meta").inner_text()
 
     nxt.click()
     page.wait_for_function("() => location.pathname === '/lectionary/2029-02-25'", timeout=15_000)
@@ -624,8 +629,44 @@ def test_late_engine_puts_the_days_in_place_and_keeps_focus(browser):
     assert "지난 2026년 5월 24일 (일)" in page.inner_text(".lect-rows .cal-row-meta")
     # 같은 링크에 포커스가 남았다(줄을 새로 만들지 않고 글만 바꿨다)
     assert page.evaluate("document.activeElement?.dataset.mark") == "focused"
-    assert page.locator(".lect-rows .lect-row-next").get_attribute("href").endswith("?from=2027-05-16")
+    links = page.locator(".lect-rows > li").first.locator(".lect-row-next")
+    assert [links.nth(i).get_attribute("href").split("?")[1] for i in range(links.count())] == ["from=2027-05-16", "from=2028-06-04"]
     ctx.close()
+
+
+def test_name_row_links_the_days_of_the_other_years(page):
+    """이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 열리는 날의 해를 적고, 다른 해의 날을 해마다 하나씩 한 줄에 하나씩 링크로 둔다.
+    열리는 날이 지났든 아니든 둔다(ADR-044 §1)."""
+    _fix_today(page)
+    _goto_search(page, "성령강림대축일")
+    _wait_days(page)
+    row = page.locator(".lect-rows > li").first
+    assert "가해" in row.locator(".cal-row-meta").inner_text()
+    links = row.locator(".lect-row-next")
+    assert [links.nth(i).get_attribute("aria-label") for i in range(links.count())] == [
+        "성령강림대축일, 나해 2027년 5월 16일 일요일", "성령강림대축일, 다해 2028년 6월 4일 일요일"]
+    first, second = links.nth(0).bounding_box(), links.nth(1).bounding_box()
+    assert second["y"] >= first["y"] + first["height"], "링크는 한 줄에 하나다"
+    links.nth(1).click()
+    page.wait_for_function("() => location.pathname === '/lectionary/2028-06-04'", timeout=15_000)
+    page.wait_for_selector(".lect-day", timeout=15_000)
+    assert "성령강림" in page.inner_text(".lect-day")
+
+    # 두 해 주기는 링크가 하나다
+    _goto_search(page, "연중1주 월요일")
+    _wait_days(page)
+    row = page.locator(".lect-rows > li").first
+    assert "짝수해" in row.locator(".cal-row-meta").inner_text()
+    links = row.locator(".lect-row-next")
+    assert [links.nth(i).get_attribute("aria-label") for i in range(links.count())] == ["연중1주 월요일, 홀수해 2027년 1월 11일 월요일"]
+
+    # 앞날을 여는 줄(왕이신 그리스도 주일은 2026년 11월 22일)도 다른 해의 날을 둔다
+    _goto_search(page, "왕이신 그리스도 주일")
+    _wait_days(page)
+    row = page.locator(".lect-rows > li").first
+    assert "다음 2026년 11월 22일 (일)" in row.locator(".cal-row-meta").inner_text()
+    links = row.locator(".lect-row-next")
+    assert [links.nth(i).get_attribute("href").split("?")[1] for i in range(links.count())] == ["from=2027-11-21", "from=2028-11-26"]
 
 
 def test_missing_chapter_is_told_and_enter_stays(page, base_url):
