@@ -1,4 +1,5 @@
 ---
+pr: 577
 date: 2026-11-17
 branch: fix/lectionary-search-upcoming-day
 title: "fix: 해마다 같은 독서의 전례일 줄은 다가오는 날을 연다"
