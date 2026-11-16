@@ -136,3 +136,176 @@ test("전례독서 표기를 검색창에 치면 저장된 장과 절로 읽는�
   assert.deepStrictEqual(unread, [], "구절로 읽지 못한 표기");
   assert.deepStrictEqual(different, [], "저장된 장과 절과 다른 표기");
 });
+
+// ── 전례독서 검색 색인(ADR-037 §5)으로 찾기(ADR-044, 설계 docs/design/lectionary-search.md §8) ──
+
+const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
+
+/** 워커의 성서 검색 묶음과 전례독서 검색 묶음을 실제 책 이름 목록과 색인으로 실행한다. */
+function loadLectionarySearch() {
+  const ctx = {};
+  vm.createContext(ctx);
+  const worker = fs.readFileSync(path.join(ROOT, "js/search-worker.js"), "utf8");
+  vm.runInContext(
+    `let meta = null; let loadedChunks = {}; function _setMeta(m) { meta = m; }\n`
+      + `${extractBlock("SEARCH_PURE", worker)}\n${extractBlock("LECTIONARY_PURE", worker)}`,
+    ctx,
+  );
+  ctx._setMeta(readJson(path.join(DATA, "search-meta.json")));
+  const raw = readJson(path.join(LECTIONARY, "search-lectionary.json"));
+  return { ctx, raw, index: ctx.buildLectionarySearchIndex(raw) };
+}
+
+const SLOT = { first: 0, psalm: 1, second: 2, gospel: 3 };
+
+test("감사성찬례의 독서 표기를 구절로 치면 그 독서를 읽는 전례일이 나온다", { skip: !haveData }, () => {
+  const { ctx, index } = loadLectionarySearch();
+  const entries = readJson(path.join(LECTIONARY, "eucharist-readings.json")).entries;
+  const missing = [];
+  let checked = 0;
+  for (const entry of entries) {
+    for (const reading of entry.readings) {
+      // 송가는 성구 표기로 찾는다(`루가 1:68-79`). 성구가 없는 송가(창조송가 등)는 구절로 찾을 수 없다.
+      const typed = reading.bookId === "cant" ? reading.scripture_ref : reading.label;
+      if (!typed || typed === "에스 4:17(12-16), 17(23-25)") continue; // 에스델 추가 본문의 번호(위의 시험과 같다)
+      const ref = ctx.tryVerseRef(typed);
+      if (!ref) {
+        missing.push(`${entry.id} ${typed}: 구절로 읽지 못한다`);
+        continue;
+      }
+      checked++;
+      const open = ref.parts.some((p) => p.verses.split(",").some((s) => s.endsWith("-999")));
+      const hit = ctx.searchLectionaryPassage(index, ref).items
+        .flatMap((item) => item.hits)
+        .find((h) => h.slot === SLOT[reading.slot] && h.sets.some((s) => s.id === entry.id));
+      if (!hit) missing.push(`${entry.id} ${reading.slot} ${typed}: 찾지 못한다`);
+      // 자기 독서는 검색어의 절을 모두 담는다. 장 끝까지 이어지는 표기는 장의 마지막 절을 몰라 따지지 않는다.
+      else if (!open && !hit.full) missing.push(`${entry.id} ${reading.slot} ${typed}: 모두 담지 않는다(${hit.overlap}절)`);
+    }
+  }
+  assert.ok(checked > 3100, `대조한 독서가 너무 적다: ${checked}`);
+  assert.deepStrictEqual(missing, []);
+});
+
+test("전례일 이름과 별칭, 성인의 이름과 칭호를 치면 그 전례일이 맨 앞 단계로 나온다", { skip: !haveData }, () => {
+  const { ctx, raw, index } = loadLectionarySearch();
+  const problems = [];
+  /** `orders`의 전례일이 모두 결과에 이름 전체가 같은 단계(1)로 있는가. 이름이 같은 날(성탄주간)이 있어 순서 값으로 가린다. */
+  const expect = (query, orders) => {
+    const items = ctx.searchLectionaryNames(index, query).items;
+    for (const order of orders) {
+      const item = items.find((x) => x.obs.order === order);
+      if (!item) problems.push(`${query}: 순서 ${order}의 전례일이 없다`);
+      else if (item.tier !== 1) problems.push(`${query}: 순서 ${order}의 전례일이 ${item.tier}단계다`);
+    }
+  };
+  for (const o of raw.obs) {
+    expect(o.name, [o.order]);
+    for (const alias of o.aliases) expect(alias, [o.order]);
+  }
+  for (const saint of raw.saints) {
+    const orders = saint.obs.map((i) => raw.obs[i].order);
+    expect(saint.name, orders);
+    expect(saint.title, orders);
+  }
+  assert.ok(raw.obs.length > 500 && raw.saints.length > 100, "색인의 전례일과 성인이 너무 적다");
+  assert.deepStrictEqual(problems, []);
+});
+
+test("비슷한 말 표의 이름을 치면 앱의 이름으로 바꿔 찾고, 바꾼 말을 알린다", { skip: !haveData }, () => {
+  const { ctx, raw, index } = loadLectionarySearch();
+  const problems = [];
+  for (const [from, to] of Object.entries(raw.synonyms)) {
+    const r = ctx.searchLectionaryNames(index, from);
+    if (!r.items.some((item) => item.tier === 1)) problems.push(`${from}: ${to}과 이름 전체가 같은 전례일이 없다`);
+    if (!r.synonyms.some((s) => s.from === from && s.to === to)) problems.push(`${from}: 바꾼 말을 알리지 않는다`);
+  }
+  assert.deepStrictEqual(problems, []);
+});
+
+test("전례일 이름과 성인의 이름은 구절이나 책 이름으로 읽히지 않는다", { skip: !haveData }, () => {
+  // 구절과 책 이름을 먼저 판별하므로, 이름이 그렇게 읽히면 이름 검색이 가려진다(설계 §3).
+  const { ctx, raw } = loadLectionarySearch();
+  const names = [
+    ...raw.obs.flatMap((o) => [o.name, ...o.aliases]),
+    ...raw.saints.flatMap((s) => [s.name, s.title]),
+    ...Object.keys(raw.synonyms),
+  ];
+  assert.deepStrictEqual(names.filter((n) => ctx.tryVerseRef(n)), [], "구절로 읽히는 이름");
+  // 책 이름과 같은 성인 이름(`요한`, `유다`)은 책 이름으로도 읽힌다. 앱은 첫 장 바로가기와 함께 이름 결과도 보인다(ADR-044 §2).
+  const books = names.filter((n) => ctx.tryBookOnly(n)).sort();
+  assert.ok(books.every((n) => !/\s|\(/.test(n)), `책 이름으로 읽히는 긴 이름: ${books.join(", ")}`);
+});
+
+test("책 이름 목록의 이름은 책 이름만 친 검색어로 읽고, 한 글자 약칭은 읽지 않는다", { skip: !haveData }, () => {
+  const { ctx } = loadLectionarySearch();
+  const meta = readJson(path.join(DATA, "search-meta.json"));
+  const wrong = [];
+  for (const [alias, id] of Object.entries(meta.aliases)) {
+    const got = ctx.tryBookOnly(alias);
+    if (Array.from(alias).length < 2) {
+      if (got) wrong.push(`${alias}: 한 글자 약칭인데 ${got.bookId}로 읽는다`);
+    } else if (!got || got.bookId !== id) {
+      wrong.push(`${alias}: ${id}가 아니라 ${got && got.bookId}로 읽는다`);
+    }
+  }
+  assert.deepStrictEqual(wrong, []);
+  // 천주교의 띄어 쓴 책 이름(ADR-044 §2)
+  assert.strictEqual(ctx.tryBookOnly("코린토 1서").bookId, "1cor");
+  assert.strictEqual(ctx.tryVerseRef("코린토 1서 13:4").bookId, "1cor");
+  assert.strictEqual(ctx.tryVerseRef("요한 1서 3:16").bookId, "1john");
+});
+
+test("색인이 독서 세트를 잇는 전례일은 엔진이 그 세트를 내는 전례일과 같다(2025-2050)", { skip: !haveData }, () => {
+  // 앱은 결과 행을 누르면 엔진으로 그 독서를 읽는 날을 찾는다(설계 §7). 색인의 전례일과 엔진의 전례일이 다르면
+  // 엉뚱한 날로 가게 된다.
+  const engine = fs.readFileSync(path.join(ROOT, "js/app/liturgical-engine.js"), "utf8");
+  const e = { Object, Array, Set, Map, String, Number, Boolean, Math, JSON, console, Error, parseInt, isNaN, Date, NaN };
+  vm.createContext(e);
+  vm.runInContext("const anchorCache = new Map(); const spansCache = new Map(); const transferCache = new Map(); const activatedOptionals = new Set();", e);
+  vm.runInContext(extractBlock("LITURGICAL_CORE", engine), e);
+  vm.runInContext(extractBlock("LITURGICAL_LOOKUP", engine), e);
+  const read = (file) => readJson(path.join(LECTIONARY, file));
+  const sanctoral = read("sanctoral.json");
+  const temporal = read("temporal-feasts.json");
+  const cal = e.buildCalendarIndex({
+    sanctoral, temporal, periods: read("periods.json"), ordinalWeeks: read("ordinal-weeks.json"), kasi: read("kasi-lunar.json"),
+  });
+  const lec = e.buildLectionaryIndex({
+    readings: read("eucharist-readings.json"), collects: read("eucharist-collects.json"), commons: read("commons.json"),
+  });
+  const index = read("search-lectionary.json");
+  const obsOfSet = new Map(index.sets.map((s) => [s[1], index.obs[s[0]]]));
+  const tableIds = new Set([...sanctoral.entries, ...temporal.entries].map((r) => r.id));
+
+  const served = new Set();
+  /** 엔진의 전례일과 색인의 전례일이 다른 곳 */
+  const differ = new Map();
+  for (let y = 2025; y <= 2050; y++) {
+    const pass = e.transfersOf(cal, y);
+    for (let d = e.toKey(y, 1, 1); d.slice(0, 4) === String(y); d = e.addDays(d, 1)) {
+      const resolved = e.resolveDateIn(cal, d, pass);
+      for (const candidate of resolved.candidates) {
+        const id = candidate.observance.id;
+        for (const set of e.findReadingsIn(lec, cal, resolved, candidate)) {
+          if (set.common) continue; // 공통 독서는 색인에 없다(ADR-044 §2)
+          served.add(set.id);
+          const mine = obsOfSet.get(set.id);
+          // 격자의 날(`grid:`)은 표에 없는 날이라, 색인도 표의 전례일이 아닌 곳에 이어야 한다.
+          const same = id.startsWith("grid:") ? !!mine && !tableIds.has(mine.key) : !!mine && mine.key === id;
+          if (!same) differ.set(`${id} → ${mine && mine.key}`, { id, mine });
+        }
+      }
+    }
+  }
+  assert.deepStrictEqual(index.sets.map((s) => s[1]).filter((id) => !served.has(id)), [], "엔진이 한 번도 내지 않는 독서 세트");
+  // 다른 곳은 둘뿐이다(데이터 PR anglican-kr/common-bible-data#80). 사계재는 이동 축일 표의 행 하나(`t-춘계재`)가
+  // 지향별 날 넷의 독서를 내고, 색인은 그 넷을 따로 둔다. 대림1주일은 표의 행과 격자의 날이 같은 날이라 하나로 합쳤다.
+  const EMBER = { "t-춘계재": "춘계재", "t-하계재": "하계재", "t-추계재": "추계재", "t-동계재": "동계재" };
+  const MERGED = { "grid:advent-1-sunday": "t-대림1주일" };
+  const unexpected = [...differ]
+    .filter(([, { id, mine }]) => !(mine && ((EMBER[id] && mine.name.includes(EMBER[id])) || MERGED[id] === mine.key)))
+    .map(([k]) => k);
+  assert.deepStrictEqual(unexpected, []);
+  assert.strictEqual([...differ.values()].filter(({ id }) => EMBER[id]).length, 16, "사계재의 지향별 날");
+});

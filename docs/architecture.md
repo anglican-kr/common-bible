@@ -190,7 +190,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | `js/app.js`           | 앱 부트스트랩, 접근성을 위한 `keydown` 이벤트 처리, 오디오 캐시 LRU 소프트캡, 서비스 워커 등록, 업데이트 확인(한 시간에 한 번까지. `checkForUpdates`), 업데이트 토스트, 탭에 돌아올 때 Drive `pollSync` 호출, `clearAllCaches` | ~330    |
 | `js/audio-cache.js`   | 오디오 LRU 기록을 담는 IndexedDB ([ADR-016](decisions/016-audio-cache-lru.md))                                                        | ~190    |
 | `js/manifest-sync.js` | 부팅할 때 콘텐츠 해시 매니페스트를 이전 것과 비교해 `DATA_CACHE`와 `AUDIO_CACHE`를 항목 단위로 무효화 ([ADR-021](decisions/021-pwa-versioning-content-hash.md)) | ~200    |
-| `js/search-worker.js` | Web Worker. 청크 불러오기, 절 검색, 페이지네이션                                                                                    | ~390    |
+| `js/search-worker.js` | Web Worker. 청크 불러오기, 절 검색, 페이지네이션, 전례독서 색인으로 전례일 찾기(ADR-044)                                              | ~1,030  |
 | `js/drive-sync.js`    | Drive 동기화 파사드(조정 모듈). PKCE 콜백 처리, 업로드 디바운스, 로그아웃, 「파일도 삭제」(자격 증명을 먼저 지운다), 다른 탭의 로그아웃 감지, 동기화 스낵바(라이브 영역에도 알린다) | ~285    |
 | `js/types.d.ts`       | 도메인 타입을 정의하는 한 곳 ([ADR-012](decisions/012-typescript-incremental-adoption.md))                                               | —       |
 | `js/package.json`     | 타입 검사가 `js/`의 `import` 경로를 ES 모듈 규칙으로 찾게 한다(`"type": "module"`). 그래서 확장자 없는 상대 경로가 타입 오류가 된다 ([ADR-012](decisions/012-typescript-incremental-adoption.md) 「컴파일러 옵션」) | —       |
@@ -276,7 +276,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
             partial-results / results  ◀──── 신약 청크만 기다린 뒤, 남은 청크가 있으면 부분 결과 한 번 · 다 받으면 최종 결과
 ```
 
-워커 프로토콜은 `search-worker.js:1`의 상단 주석에 정의되어 있다. 워커는 검색마다 부여한 `searchId`로, 사용자가 새 검색어를 친 뒤 뒤늦게 도착한 옛 결과를 무시한다. 책 인덱스는 청크 JSON에 RLE(같은 값이 이어지는 구간을 `[값, 개수]`로 묶는 방식)로 줄여 두고 워커가 펼쳐 `Uint16Array`에 담는다. 장 인덱스와 절 인덱스도 `Uint16Array`로 보관해 메모리를 줄였다. 별칭(요한, 요, 요한복음 등)은 `data/search-meta.json`에 있다. 검색 범위는 책 필터 `in:<책 별칭>`(예: `사랑 in:요한`)이나 책 고르기(URL의 `in=`. [ADR-033](decisions/033-search-options.md))로 좁힌다([ADR-005](decisions/005-search-indexing-strategy.md)).
+워커 프로토콜은 `search-worker.js:1`의 상단 주석에 정의되어 있다. 워커는 검색마다 부여한 `searchId`로, 사용자가 새 검색어를 친 뒤에야 끝난 옛 검색의 결과를 무시한다. 책 인덱스는 청크 JSON에 RLE(같은 값이 이어지는 구간을 `[값, 개수]`로 묶는 방식)로 줄여 두고 워커가 펼쳐 `Uint16Array`에 담는다. 장 인덱스와 절 인덱스도 `Uint16Array`로 보관해 메모리를 줄였다. 별칭(요한, 요, 요한복음 등)은 `data/search-meta.json`에 있다. 앱이 `init` 메시지로 전례독서 색인(`data/lectionary/search-lectionary.json`, ADR-037 §5)의 주소를 넘기면 워커는 그 색인도 받아, 구절과 이름으로 전례일을 찾는다(ADR-044). 앱은 아직 주소를 넘기지 않는다(2026-11-16). 검색 범위는 책 필터 `in:<책 별칭>`(예: `사랑 in:요한`)이나 책 고르기(URL의 `in=`. [ADR-033](decisions/033-search-options.md))로 좁힌다([ADR-005](decisions/005-search-indexing-strategy.md)).
 
 ### 4.3 동기화 (Drive 앱 전용 폴더와 PKCE)
 
