@@ -309,7 +309,8 @@ function listPathOf(date, today) {
 
 /**
  * 목록 줄의 등급 — 주일과 대축일, 주요축일은 `major`, 축일은 `minor`, 평일은 빈 값이다. 모든 날을 보이므로 주일과 축일을 찾기 쉽게
- * 한다. 굵기는 두 단계라 `major`와 `minor`의 제목이 모두 500, 평일이 400이다(DESIGN.md §3, 사용자 결정 2026-11-16).
+ * 한다. 굵기는 두 단계라 `major`와 `minor`의 제목이 모두 500, 평일이 400이다(DESIGN.md §3, 사용자 결정 2026-11-16). 검색 결과의 전례일 줄도
+ * 같은 규칙을 색인으로 따로 계산한다(search.js `LECT_BOLD_RANKS`, `lectRowOf`). 한쪽을 고치면 다른 쪽도 고친다.
  * @param {LectionaryModel} m
  * @returns {"major" | "minor" | ""}
  */

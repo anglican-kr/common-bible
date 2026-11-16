@@ -665,9 +665,12 @@ def test_book_scope_leaves_out_the_lectionary_example(page):
     page.goto(f"{BASE_URL}/search?q={quote('부활절 달걀')}&in=john")
     page.wait_for_selector(".search-examples", timeout=10_000)
     assert "성령강림" not in page.locator(".search-example-q").all_inner_texts()
+    # 전례일은 찾지 않았으므로 「구절을 찾지 못했어요」라고만 알린다
+    assert page.inner_text(".empty-state-subtitle") == "‘부활절 달걀’에 해당하는 구절을 찾지 못했어요."
     page.goto(f"{BASE_URL}/search?q={quote('부활절 달걀')}")
     page.wait_for_selector(".search-examples", timeout=10_000)
     assert "성령강림" in page.locator(".search-example-q").all_inner_texts()
+    assert page.inner_text(".empty-state-subtitle") == "‘부활절 달걀’에 해당하는 구절과 전례일을 찾지 못했어요."
 
 
 def test_saint_with_common_readings_only_shows_its_rank_and_opens_the_day(page):
@@ -714,4 +717,37 @@ def test_late_days_keep_focus_and_let_the_route_finish(browser):
     page.wait_for_selector(".search-pill", timeout=10_000)
     assert page.evaluate("document.activeElement.getAttribute('href')") == href
     assert page.locator(".search-pill[aria-current='true']").inner_text().startswith("성서 본문")
+    ctx.close()
+
+
+def test_lectionary_days_wait_while_bible_chunks_load_with_nothing_found(browser):
+    """성서 본문을 받는 중이고 찾은 성서 결과가 아직 없으면 전례일 목록을 먼저 보이지 않는다(ADR-044 §1).
+    먼저 보이면 뒤이어 온 성서 결과가 기본 알약인 「성서 본문」으로 화면을 바꾼다."""
+    ctx = browser.new_context(service_workers="block")
+    held = {}
+
+    def hold(name):
+        # Playwright는 인자가 둘인 처리기에 요청을 넘기므로, 이름은 함수로 묶는다
+        return lambda route: held.__setitem__(name, route)
+
+    for name in ("nt", "dc", "ot"):
+        ctx.route(f"**/data/search-{name}.json", hold(name))
+    page = ctx.new_page()
+    page.goto(f"{BASE_URL}/search?q={quote('성령강림')}")
+    # 색인이 먼저 오고, 그다음 신약 묶음이 와서 중간 결과에 전례일이 실린다
+    for _ in range(100):
+        if len(held) == 3:
+            break
+        page.wait_for_timeout(100)
+    page.wait_for_timeout(1_000)
+    held["nt"].continue_()
+    page.wait_for_function(
+        "() => document.querySelector('h2.search-count')?.textContent.includes('검색 중')", timeout=15_000)
+    page.wait_for_timeout(500)
+    assert page.locator(".lect-rows").count() == 0
+    assert page.locator(".search-pill").count() == 0
+    held["dc"].continue_()
+    held["ot"].continue_()
+    page.wait_for_selector(".lect-rows a", timeout=15_000)
+    assert page.inner_text("h2.search-count") == "전례일 1건"
     ctx.close()

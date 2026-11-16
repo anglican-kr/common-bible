@@ -403,7 +403,8 @@ const LECT_CYCLE_LABEL = { A: "가해", B: "나해", C: "다해", I: "홀수해"
 const LECT_TRACK_LABEL = { 1: "연속 독서", 2: "복음 주제" };
 /** @type {Record<string, string>} */
 const LECT_RANK_LABEL = { principal: "대축일", major_feast: "주요축일", minor_feast: "축일", commemoration: "기념일" };
-// 캘린더 목록과 같이 축일 이상과 주일의 제목은 한 단계 굵은 500이다(DESIGN.md §3)
+// 캘린더 목록과 같이 축일 이상과 주일의 제목은 한 단계 굵은 500이다(DESIGN.md §3). 캘린더 목록의 규칙은 calendar.js `rowLevelOf`에
+// 있다. 그쪽은 그날의 계산 결과를, 이쪽은 색인을 읽어 함수를 함께 쓰지 못하므로, 한쪽을 고치면 다른 쪽도 고친다.
 const LECT_BOLD_RANKS = new Set(["principal", "privileged_sunday", "major_feast", "minor_feast", "regional_festival"]);
 
 /**
@@ -754,16 +755,18 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
   }
 
   const isPending = result.pendingChunks && result.pendingChunks.length > 0;
-  const lect = shownLectionary(result);
-  // By the whole count, not this page: a page past the end (a link made on a taller screen) still has results. While
-  // the bible chunks load with nothing found yet, the lectionary days alone show — no 「성서 본문 0」 pill that goes away.
-  const hasBible = result.total > 0 || (isPending && !lect);
+  // While the bible chunks load with nothing found yet, the lectionary days wait for the whole result: bible results
+  // still to come would take the screen back to 성서 본문, the first pill (ADR-044 §1). 「검색 중…」 shows meanwhile.
+  const lect = isPending && result.total === 0 ? null : shownLectionary(result);
+  // By the whole count, not this page: a page past the end (a link made on a taller screen) still has results.
+  const hasBible = result.total > 0 || isPending;
   const answer = buildAnswer(result, screen);
 
   if (!answer.node && !hasBible && !lect) {
     if (!unmatched) {
       container.appendChild(
-        buildSearchEmptyState("검색 결과가 없습니다", `‘${query}’에 해당하는 구절과 전례일을 찾지 못했어요.`)
+        // 책을 골라 두었으면 전례일은 찾지 않았다(ADR-044 §1)
+        buildSearchEmptyState("검색 결과가 없습니다", `‘${query}’에 해당하는 ${screen.scoped ? "구절을" : "구절과 전례일을"} 찾지 못했어요.`)
       );
       container.appendChild(buildSearchExamples(true, screen.scoped));
     }
@@ -1691,7 +1694,9 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   // LECTIONARY_WAIT_MS in all and draw once (ADR-044 §1). Past that, draw what came: passage rows fall back to the
   // index's numbers, and days that come later are added to the drawn results (`addLateLectionary`).
   const deadline = Date.now() + LECTIONARY_WAIT_MS;
-  if (result.refMatch) ensureReadingLabels();   // alongside the index, not after it
+  // Alongside the index, not after it. Not when no lectionary days can come (a book scope, no index): the reading data
+  // is about 1.2 MB and only passage rows use it.
+  if (result.refMatch && (result.lectionaryPending || shownLectionary(result))) ensureReadingLabels();
   const waitedOut = result.lectionaryPending ? !(await takeLateLectionary(result, LECTIONARY_WAIT_MS)) : false;
   if (isStale()) return;
   await withReadingLabels(result, screen, deadline - Date.now());
@@ -1776,8 +1781,12 @@ async function withReadingLabels(result, screen, ms) {
   const lect = shownLectionary(result);
   if (!lect || lect.kind !== "passage") return;
   const loading = ensureReadingLabels();
-  const labels = _readingLabelMap
-    || (ms > 0 ? await Promise.race([loading, new Promise((resolve) => setTimeout(() => resolve(null), ms))]) : null);
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let timer;
+  const labels = _readingLabelMap || (ms > 0
+    ? await Promise.race([loading, new Promise((resolve) => { timer = setTimeout(() => resolve(null), ms); })])
+    : null);
+  clearTimeout(timer);
   if (labels) screen.readingLabel = (setId, slot) => labels.get(`${setId}|${slot}`) ?? null;
 }
 
