@@ -1194,7 +1194,7 @@ test("churchName: 목록에는 「성당」을 「교회」로 적고, 주교좌
   assert.equal(churchName("성당동성당"), "성당동교회");
 });
 
-test("parishGroups: 두 줄인 교회는 한 항목이고, 북한에 있던 성당과 교구나 식별자가 없거나 깨진 줄은 뺀다", () => {
+test("parishGroups: 같은 식별자는 한 항목이고, 북한에 있던 성당과 교구나 식별자가 없거나 깨진 줄은 뺀다", () => {
   const table = { parishes: [
     { church_id: "r9n5b3", name: "파주성당", diocese: "서울" },
     { church_id: "r9n5b3", name: "파주성당", diocese: "서울" },

@@ -455,7 +455,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
 
   /**
    * 본당 표를 소속교회 목록(교구별 교회)으로 바꾼다(ADR-041 §6). 북한에 있던 성당, 교구나 식별자가 없는 줄은 넣지 않는다.
-   * 두 줄인 교회(축성일이 둘)는 식별자가 같아 한 항목이다. 이름은 목록에 적는 이름(`churchName`)이고, 묶음 안의 차례는 그 이름의 사전순이다(사용자 확인 2026-11-05).
+   * 한 교회는 표에 한 줄이고(데이터 파서가 두 줄을 오류로 낸다), 같은 식별자가 다시 나와도 한 항목이다. 이름은 목록에 적는 이름(`churchName`)이고, 묶음 안의 차례는 그 이름의 사전순이다(사용자 확인 2026-11-05).
    * @param {any} table @returns {import("../types.js").ParishGroup[]}
    */
   function parishGroups(table) {
