@@ -1,4 +1,5 @@
 ---
+pr: 587
 date: 2026-11-18
 branch: style/sheet-close-text
 title: "style: 시트의 닫기 단추를 「닫기」 글자로"
