@@ -698,7 +698,8 @@ function lectRowOf(item, labelOf, days = null, today = "") {
   const said = [...meta];
   // 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 열리는 날의 해를 날짜 앞에 적는다. 링크마다 해를 적으므로 줄에도 있어야 견주어 본다.
   // 연도를 붙여 찾은 줄은 그해에 읽는 독서의 해다
-  const cycle = yearDay ? (lectCyclic(item) ? lectYearOf(item, yearDay) : "") : days && days.year ? days.year : "";
+  const cyclic = lectCyclic(item);
+  const cycle = yearDay ? (cyclic ? lectYearOf(item, yearDay) : "") : days && days.year ? days.year : "";
   const year = cycle ? LECT_CYCLE_LABEL[cycle] || "" : "";
   if (year) {
     meta.push(year);
@@ -723,7 +724,6 @@ function lectRowOf(item, labelOf, days = null, today = "") {
   // 다른 날로 가는 링크: 해에 따라 다른 독서(가해, 나해, 다해, 홀수해, 짝수해)를 읽는 줄만 둔다. 이름으로 찾은 줄은 다른 해의 날을
   // 해마다 하나씩(세 해 주기는 둘), 구절로 찾은 줄은 지났을 때 다음에 읽는 날 하나다. 해마다 같은 독서는 엔진이 오늘부터 처음 오는
   // 날을 열어 덧붙일 것이 없다(ADR-044 §1, 사용자 결정 2026-11-17)
-  const cyclic = lectCyclic(item);
   /** @type {LectNext[]} */
   const nexts = [];
   if (days && days.cycles.length) {
@@ -1446,7 +1446,16 @@ async function withYearRows(result, screen, isStale) {
       await new Promise((resolve) => setTimeout(resolve, 0));
       if (isStale()) return;
     }
-    perYear.push({ year: y, days: mod.findYearDays(asks, y), lunar: mod.hasLunarYear(y) });
+    try {
+      perYear.push({ year: y, days: mod.findYearDays(asks, y), lunar: mod.hasLunarYear(y) });
+    } catch (err) {
+      // 엔진이 그해를 계산하지 못해도 성서 본문 결과는 그린다(`withLectDays`가 줄마다 오류를 삼키는 것과 같다)
+      console.warn("그해의 날짜를 계산하지 못했습니다", err);
+      lect.items = [];
+      lect.notes = ["그해의 날짜를 계산하지 못했습니다."];
+      lect.yearRows = true;
+      return;
+    }
   }
   const { items, notes } = yearRowsOf(found, perYear, lect.years);
   lect.items = items;
@@ -2276,7 +2285,7 @@ async function addLateLectionary(result, query, screen, target, isStale, draw) {
   const lect = shownLectionary(result);
   if (!lect) {
     // 연도를 붙여 찾은 전례일을 그해에 지키지 않으면 결과 없음 화면에 그 사정을 적는다
-    if (lectNotes(result).length && !result.total && !target.querySelector(".search-answer")) draw(result);
+    if (lectNotes(result).length && !result.total && !target.querySelector(".search-answer")) window.announce(draw(result));
     return;
   }
   await withReadingLabels(result, screen, 0);

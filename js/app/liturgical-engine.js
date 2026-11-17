@@ -2577,7 +2577,8 @@ function yearDaysIn(lix, cal, y) {
     else table.kept.set(key, [day]);
   };
   const pass = transfersOf(cal, y);
-  for (let d = /** @type {string | null} */ (toKey(y, 1, 1)); d && d <= toKey(y, 12, 31); d = addDays(d, 1)) {
+  const last = toKey(y, 12, 31);
+  for (let d = /** @type {string | null} */ (toKey(y, 1, 1)); d && d <= last; d = addDays(d, 1)) {
     const resolved = resolveDateIn(cal, d, pass);
     if (!resolved) continue;
     for (const c of resolved.candidates) {
