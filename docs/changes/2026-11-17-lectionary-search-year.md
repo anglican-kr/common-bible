@@ -1,4 +1,5 @@
 ---
+pr: 579
 date: 2026-11-17
 branch: feat/lectionary-search-year
 title: "feat: 연도를 붙인 전례일 이름 검색"
