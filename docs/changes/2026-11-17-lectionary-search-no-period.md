@@ -1,4 +1,5 @@
 ---
+pr: 583
 date: 2026-11-17
 branch: docs/lectionary-search-no-period
 title: "docs: 검색에서 날짜와 기간을 읽지 않기로 정리"
