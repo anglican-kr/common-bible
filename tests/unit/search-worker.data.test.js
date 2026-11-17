@@ -402,6 +402,61 @@ function keptTable() {
 }
 const TODAY = "2026-11-16";
 
+test("yearDaysIn: 그해에 지키는 날, 옮겨 지키는 날, 겹쳐 기념만 하는 날, 지키지 않는 해(ADR-044 §4)", { skip: !haveData }, () => {
+  const { e, cal, lec } = realEngine();
+  const plain = (v) => JSON.parse(JSON.stringify(v));
+  const y26 = e.yearDaysIn(lec, cal, 2026);
+  const y27 = e.yearDaysIn(lec, cal, 2027);
+  // 2026-12-06은 대림 2주일이라 성 니콜라를 12월 7일에 지킨다(2027 전례독서 책자와 같다)
+  const nicola = plain(e.yearDayIn(y26, ["d1206-성-니콜라-t1-s1"], "d1206-성-니콜라"));
+  assert.deepStrictEqual([nicola.kind, nicola.date, nicola.from, nicola.setId], ["moved", "2026-12-07", "2026-12-06", "d1206-성-니콜라-t1-s1"]);
+  // 2027-03-21은 성지주일이라 토마스 크랜머는 기념만 한다. 색은 그날 기본 화면의 색이다
+  const cranmer = plain(e.yearDayIn(y27, ["d0321-토마스-크랜머"], "d0321-토마스-크랜머"));
+  assert.deepStrictEqual([cranmer.kind, cranmer.date, cranmer.by, cranmer.colors], ["overlap", "2027-03-21", "성지주일", ["red"]]);
+  assert.strictEqual(plain(e.yearDayIn(y26, ["d0321-토마스-크랜머"], "d0321-토마스-크랜머")).kind, "kept", "2026-03-21은 토요일");
+  assert.strictEqual(cranmer.bySaint, false, "주일은 성인 축일이 아니다");
+  // 독서 세트가 있어도 겹치면 전례일로 찾는다
+  assert.strictEqual(plain(e.yearDayIn(y27, ["d0815-광복절-t1-s1"], "d0815-광복절")).by, "연중 20주일");
+  // 겹친 전례일이 성인 축일인지 넘긴다. 국가 명절(추석)은 성인 축일이 아니다
+  const ambrose = plain(e.yearDayIn(y26, [], "d1207-암브로스"));
+  assert.deepStrictEqual([ambrose.date, ambrose.bySaint], ["2026-12-07", true]);
+  assert.match(ambrose.by, /^성 니콜라/);
+  const cyprian = plain(e.yearDayIn(y27, [], "d0915-키프리안"));
+  assert.deepStrictEqual([cyprian.by, cyprian.bySaint], ["추석 명절", false]);
+  // 2027년에는 연중6주일이 없다(재의 수요일이 2월 10일)
+  assert.strictEqual(e.yearDayIn(y27, ["ordinary-6-sun-A-t1-s1", "ordinary-6-sun-B-t1-s1", "ordinary-6-sun-C-t1-s1"], "ordinary-6-sun"), null);
+  // 해에 따라 다른 독서는 그해에 읽는 세트다. 양력 2027년의 대림1주일은 11월 28일, 다해다
+  const advent = plain(e.yearDayIn(y27, ["advent-1-sun-A-t1-s1", "advent-1-sun-B-t1-s1", "advent-1-sun-C-t1-s1"], "t-대림1주일"));
+  assert.deepStrictEqual([advent.kind, advent.date, advent.setId], ["kept", "2027-11-28", "advent-1-sun-C-t1-s1"]);
+  // 성탄 평일은 그날의 이름을 담는다(앱이 그해의 이름으로 거른다)
+  assert.strictEqual(plain(e.yearDayIn(y27, ["d0102-성탄주간-t1-s1"], "d0102-성탄주간")).name, "성탄 1주 토요일");
+  assert.strictEqual(e.yearDayIn(y27, ["d0103-성탄주간-t1-s1"], "d0103-성탄주간"), null, "1월 3일은 성탄 2주일");
+});
+
+test("yearDaysIn: 지키는 날은 지키는 날의 표와 같고, 전례일 자신의 날이다(색인의 모든 전례일, 2026-2028)", { skip: !haveData }, () => {
+  const { e, cal, lec, index } = realEngine();
+  const table = keptTable();
+  const setsOf = index.obs.map(() => []);
+  for (const [o, id] of index.sets) setsOf[o].push(id);
+  for (let y = 2026; y <= 2028; y++) {
+    const year = e.yearDaysIn(lec, cal, y);
+    const wrong = [];
+    index.obs.forEach((o, i) => {
+      const ids = setsOf[i].length ? setsOf[i] : [o.key];
+      const want = ids.map((id) => e.firstDayOf(table.byId.get(id), `${y}-01-01`, `${y}-12-31`)).filter(Boolean)
+        .sort((a, b) => (a.date < b.date ? -1 : 1))[0];
+      const got = e.yearDayIn(year, ids, o.key);
+      const gotKept = got && got.kind !== "overlap" ? got.date : null;
+      if ((want ? want.date : null) !== gotKept) wrong.push([o.key, y, want && want.date, gotKept]);
+      // 독서 세트를 다른 전례일과 함께 쓰더라도, 그 전례일 자신을 지키는 날이 있으면 그날이 골라진다(코드 리뷰 2026-11-17).
+      // 세트로 고른 날이 다른 전례일의 날이면 줄이 엉뚱한 날을 연다. 지금 데이터에서 함께 쓰는 것은 사계재의 지향별 날뿐이다
+      const own = (year.kept.get(o.key) || [])[0];
+      if (own && gotKept && own.date !== gotKept) wrong.push([o.key, y, "own", own.date, gotKept]);
+    });
+    assert.deepStrictEqual(wrong, [], String(y));
+  }
+});
+
 test("지키는 날의 표: 격자 전례일은 전례일로 넣지 않는다(코드 리뷰 2026-11-17)", { skip: !haveData }, () => {
   const table = keptTable();
   // 격자 전례일은 보조 주소와 검색이 전례일로 묻지 않는다. 그날의 독서 세트로만 있다

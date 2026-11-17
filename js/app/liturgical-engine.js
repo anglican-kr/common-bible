@@ -1176,7 +1176,8 @@ function spillOf(prev, y) {
 /**
  * 선택 봉헌 활성화 집합을 바꾼다(§6.2 활성화 계약 — 옮겨 지키기로 한 축일은 원래 날짜에서 목적지 주일로 옮겨 온 축일이
  * 된다). **집합이 실제로 바뀔 때만** 옮김 계산 캐시를 비운다(§4.9) — 같은 집합을 다시 넣으면 옮김 계산을 다시
- * 하지 않는다. v1 은 호출하는 곳이 없다 — 빈 집합이다(설계서 미결15).
+ * 하지 않는다. v1 은 호출하는 곳이 없다 — 빈 집합이다(설계서 미결15). 호출하는 곳이 생기면 옮김 계산으로 만든 표인 지키는 날의 표
+ * (`keptDayTable`)와 연도를 붙인 이름 검색의 해마다의 표(`yearDayTables`)도 함께 비워야 한다(코드 리뷰 2026-11-17).
  * @param {Iterable<string>} ids 켤 전례일 id
  * @returns {boolean} 바뀌었으면 참
  */
@@ -2547,6 +2548,80 @@ function christmasNamesIn(table, today) {
 }
 
 /**
+ * 연도를 붙인 이름 검색(ADR-044 §4)이 찾는 그해의 날 하나. `kind`는 그날 지키면 `kept`, 다른 날에서 옮겨 와 지키면 `moved`(`from`은
+ * 원래 날), 다른 전례일과 겹쳐 기념만 하면 `overlap`(`by`는 그날 지키는 전례일의 이름, `bySaint`는 그 전례일이 성인 축일인가)이다.
+ * 성인 축일은 월별 축일 가운데 국가 명절(설날, 추석)이 아닌 것이다. 검색 결과가 이름 뒤에 「축일」을 붙인다. `colors`는 줄을 누르면 열리는 화면 머리의
+ * 색이다. 지키는 날은 그 전례일을 고른 화면, 겹친 날은 그날의 기본 화면이다(`headerColors`).
+ * @typedef {{ kind: "kept" | "moved" | "overlap", date: string, obs: string, setId: string | null, track: 1 | 2 | null,
+ *   name: string, colors: string[], from: string | null, by: string | null, bySaint: boolean }} YearDay
+ */
+/**
+ * 양력 한 해의 표(`yearDaysIn`). `kept`는 독서 세트의 `id`와 전례일의 `id`마다 지키는 날(날짜 차례), `overlap`은 전례일의 `id`마다
+ * 다른 전례일과 겹쳐 기념만 하는 첫날이다.
+ * @typedef {{ kept: Map<string, YearDay[]>, overlap: Map<string, YearDay> }} YearDayTable
+ */
+
+/**
+ * 양력 `y`년의 모든 날을 계산해 지키는 날과 겹친 날을 모은다(ADR-044 §4). 지키는 날의 뜻은 지키는 날의 표(`extendKeptDaysIn`)와 같고,
+ * 공통 독서를 세지 않는 것도 같다. 생략하는 날(`omitted`)은 기념도 하지 않아 모으지 않는다. Node에서 한 해에 35-55ms다(2026-11-17).
+ * @param {LectionaryIndex} lix @param {CalendarIndex} cal @param {number} y
+ * @returns {YearDayTable}
+ */
+function yearDaysIn(lix, cal, y) {
+  /** @type {YearDayTable} */
+  const table = { kept: new Map(), overlap: new Map() };
+  /** @param {string} key @param {YearDay} day */
+  const keep = (key, day) => {
+    const list = table.kept.get(key);
+    if (list) list.push(day);
+    else table.kept.set(key, [day]);
+  };
+  const pass = transfersOf(cal, y);
+  const last = toKey(y, 12, 31);
+  for (let d = /** @type {string | null} */ (toKey(y, 1, 1)); d && d <= last; d = addDays(d, 1)) {
+    const resolved = resolveDateIn(cal, d, pass);
+    if (!resolved) continue;
+    for (const c of resolved.candidates) {
+      const o = c.observance;
+      const grid = o.id.startsWith(GRID_PREFIX);
+      if (c.status === "proper" || c.status === "transferred_in") {
+        const moved = c.status === "transferred_in";
+        /** @type {YearDay} */
+        const day = { kind: moved ? "moved" : "kept", date: d, obs: o.id, setId: null, track: null, name: o.name,
+          colors: headerColors(resolved, c).colors, from: moved && c.from ? c.from : null, by: null, bySaint: false };
+        // 격자 전례일(날마다 있는 평일)은 검색이 전례일로 묻지 않는다(`extendKeptDaysIn`과 같다). 그날의 독서 세트로는 넣는다
+        if (!grid) keep(o.id, day);
+        for (const g of findReadingsIn(lix, cal, resolved, c)) {
+          if (!g.common) keep(g.id, { ...day, setId: g.id, track: g.reading_track ?? null });
+        }
+      } else if (c.status === "commemorated" && !grid && !table.overlap.has(o.id)) {
+        const by = resolved.candidates.find((x) => x.observance.id === c.displacedBy);
+        const byObs = by ? by.observance : null;
+        table.overlap.set(o.id, { kind: "overlap", date: d, obs: o.id, setId: null, track: null, name: o.name,
+          colors: headerColors(resolved, null).colors, from: null, by: byObs ? byObs.name : null,
+          bySaint: !!byObs && byObs.kind === "sanctoral" && byObs.sanctoral_class !== "national" });
+      }
+    }
+  }
+  return table;
+}
+
+/**
+ * 독서 세트나 전례일(`ids`)을 그해에 처음 지키는 날. 없으면 전례일(`key`)이 다른 전례일과 겹쳐 기념만 하는 날, 그것도 없으면 null이다
+ * (그해에 지키지 않는다, ADR-044 §4).
+ * @param {YearDayTable} table @param {string[]} ids @param {string} key @returns {YearDay | null}
+ */
+function yearDayIn(table, ids, key) {
+  /** @type {YearDay | null} */
+  let best = null;
+  for (const id of ids) {
+    const day = (table.kept.get(id) || [])[0];
+    if (day && (!best || day.date < best.date)) best = day;
+  }
+  return best || table.overlap.get(key) || null;
+}
+
+/**
  * 독서 표의 표기: 「독서 세트 id|독서 자리」 → 표기(「요한 3:14-21」, 「루가 1:68-79 (즈가리야 송가)」). 검색 결과의 줄이 쓴다(ADR-044 §1).
  * @param {LectionaryIndex} lix @returns {Map<string, string>}
  */
@@ -2865,6 +2940,52 @@ async function findChristmasNames(today) {
   return christmasNamesIn(table, today) || new Map();
 }
 
+/** 연도를 붙인 이름 검색의 해마다의 표(`yearDaysIn`). 범위를 다시 찾거나 같은 해를 다시 찾을 때 쓴다. 두 색인이 새로 서면 다시 센다. @type {Map<number, YearDayTable>} */
+const yearDayTables = new Map();
+/** 해마다의 표를 몇 해까지 남기는가. 연도의 범위(10년)를 한 번 더 찾아도 다시 세지 않는다 */
+const YEAR_DAY_TABLES_KEPT = 12;
+/** `yearDayTables`를 만든 색인. @type {{ lix: LectionaryIndex | null, cal: CalendarIndex | null }} */
+const yearDayIndexes = { lix: null, cal: null };
+
+/**
+ * 연도를 붙인 이름 검색(ADR-044 §4): 줄마다(`ids`는 독서 세트나 전례일, `key`는 전례일) 양력 `year`년의 날(`yearDayIn`). 그해를 처음
+ * 찾으면 그해의 모든 날을 계산한다(`yearDaysIn`). 프리로드 규칙은 `findReadings`와 같다.
+ * @param {Array<{ ids: string[], key: string }>} rows @param {number} year
+ * @returns {Array<YearDay | null>}
+ */
+function findYearDays(rows, year) {
+  if (!lectionaryIndex) throw new Error("preloadLectionary() must be awaited before findYearDays()");
+  if (!calendarIndex) throw new Error("preloadCalendar() must be awaited before findYearDays()");
+  if (yearDayIndexes.lix !== lectionaryIndex || yearDayIndexes.cal !== calendarIndex) {
+    yearDayTables.clear();
+    yearDayIndexes.lix = lectionaryIndex;
+    yearDayIndexes.cal = calendarIndex;
+  }
+  let table = yearDayTables.get(year);
+  if (!table) {
+    table = yearDaysIn(lectionaryIndex, calendarIndex, year);
+    yearDayTables.set(year, table);
+    // 가장 먼저 센 해부터 버린다(Map은 넣은 차례를 지킨다)
+    for (const old of yearDayTables.keys()) {
+      if (yearDayTables.size <= YEAR_DAY_TABLES_KEPT) break;
+      yearDayTables.delete(old);
+    }
+  }
+  const t = table;
+  return rows.map(({ ids, key }) => yearDayIn(t, ids, key));
+}
+
+/**
+ * 그해의 음력 날짜 자료(`kasi-lunar.json`)가 있는가. 없는 해에는 설날과 추석을 계산하지 못한다(2025-2050년만 있다). 연도를 붙인 이름
+ * 검색이 그렇다고 알린다(ADR-044 §4). 프리로드 규칙은 `resolveDate`와 같다.
+ * @param {number} year @returns {boolean}
+ */
+function hasLunarYear(year) {
+  if (!calendarIndex) throw new Error("preloadCalendar() must be awaited before hasLunarYear()");
+  const kasi = calendarIndex.kasi;
+  return !!(kasi && kasi.years && kasi.years[String(year)]);
+}
+
 /** `readingLabel`의 값: 독서 세트의 `id`와 독서 자리 → 표기. 독서 색인이 새로 서면 다시 만든다. @type {{ lix: LectionaryIndex, labels: Map<string, string> } | null} */
 let readingLabels = null;
 
@@ -2893,6 +3014,8 @@ export {
   setActivatedOptionals,
   // 검색 결과의 줄과 보조 주소(`/lectionary/d/<slug>`, ADR-044 §1)가 여는 날과 다음에 읽는 날을 찾는다.
   knownSlugIds, firstKeptDay, findReadingDay, findChristmasNames, readingLabel, headerColors,
+  // 연도를 붙인 이름 검색(ADR-044 §4)이 그해의 날과 음력 날짜 자료가 있는지를 묻는다.
+  findYearDays, hasLunarYear,
   // 같은 유형의 성인 둘 이상을 공통 본기도 하나에 모은다(독서 뷰 — 사용자 결정 2026-11-03).
   joinNames, fillCommonName,
   // 사계재 후보인가 — 독서 뷰가 제목과 전례독서 목록에 본문의 제목을 쓴다(사용자 결정 2026-11-05).

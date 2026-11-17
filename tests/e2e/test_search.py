@@ -672,6 +672,87 @@ def test_name_row_links_the_days_of_the_other_years(page):
 
 
 
+def _row_labels(page):
+    return page.locator(".lect-rows a.cal-row").evaluate_all("els => els.map(e => e.getAttribute('aria-label'))")
+
+
+def _goto_year_search(page, query):
+    """연도를 붙인 검색은 그해의 날을 계산한 뒤에 줄을 그린다. 성서 묶음을 받는 동안의 「검색 중…」 제목이 아니라 줄이나 결과 없음 화면을 기다린다."""
+    _goto_search(page, query)
+    page.wait_for_selector(".lect-rows a.cal-row, .empty-state", timeout=15_000)
+
+
+NICOLA = "성 니콜라(대한성공회 수호성인, 미라의 주교, 326년)"
+
+
+def test_year_name_search_shows_a_row_for_each_year(page):
+    """전례일 이름에 연도를 붙이면 그해의 날을 해마다 한 줄로 보이고, 옮겨 지키는 해는 그 사정을 적는다. 다른 해의 날 링크는 없다(ADR-044 §4)."""
+    _fix_today(page)
+    _goto_year_search(page, "2024-2026 성 니콜라")
+    assert page.inner_text("h2.search-count") == "전례일 3건"
+    assert _row_labels(page) == [
+        f"{NICOLA}, 백색, 지난 2024년 12월 6일 금요일",
+        f"{NICOLA}, 백색, 지난 2025년 12월 6일 토요일",
+        f"{NICOLA}, 백색, 다음 2026년 12월 7일 월요일, 12월 6일에서 옮겨 옴",
+    ]
+    assert page.locator(".lect-row-next").count() == 0
+    page.locator(".lect-rows a.cal-row").nth(2).click()
+    page.wait_for_function("() => location.pathname === '/lectionary/2026-12-07'", timeout=15_000)
+    page.wait_for_selector(".lect-day", timeout=15_000)
+    assert "성 니콜라" in page.inner_text(".lect-head")
+
+    # 이름 뒤의 연도와 물결표 범위도 받는다. 해에 따라 다른 독서는 그해에 읽는 해를 적는다
+    _goto_year_search(page, "대림1주일 2027년")
+    assert _row_labels(page)[0] == "대림1주일, 자색, 다해, 다음 2027년 11월 28일 일요일"
+
+    # 찾는 해는 2050년까지다. 그보다 늦은 해만 쳤으면 그렇다고 알린다(사용자 결정 2026-11-17)
+    _goto_year_search(page, "2060 성 니콜라")
+    assert "연도는 2050년까지 찾습니다." in page.inner_text(".empty-state")
+    _goto_year_search(page, "2049-2060 성 니콜라")
+    assert page.inner_text(".search-note") == "연도는 2050년까지 찾습니다. 2049~2050년의 날을 보입니다."
+    assert len(_row_labels(page)) == 2
+
+
+def test_year_search_that_finds_no_lectionary_day_does_not_load_the_engine(page):
+    """연도를 붙였어도 찾은 전례일이 없으면 교회력 자료를 받지 않고, 결과 없음 화면은 범위 안내가 아니라 「찾지 못했어요」다(코드 리뷰 2026-11-17)."""
+    engine_files = []
+    page.on("request", lambda req: engine_files.append(req.url) if "/data/lectionary/sanctoral.json" in req.url else None)
+    _goto_year_search(page, "2000-2050 없는이름")
+    text = page.inner_text(".empty-state")
+    assert "찾지 못했어요" in text and "연도 범위" not in text, text
+    assert engine_files == []
+
+
+def test_year_name_search_keeps_overlapped_years_and_drops_unkept_ones(page):
+    """다른 전례일과 겹쳐 기념만 하는 해는 줄을 두고 그날을 연다. 그해에 지키지 않는 전례일은 줄이 없고, 줄이 하나도 없는 해는 결과
+    위에, 모든 해가 그렇다면 결과 없음 화면에 적는다(ADR-044 §4)."""
+    _fix_today(page)
+    _goto_year_search(page, "크랜머 2026~2027")
+    rows = page.locator(".lect-rows a.cal-row")
+    assert rows.count() == 2
+    assert rows.nth(1).get_attribute("href") == "/lectionary/2027-03-21"
+    assert rows.nth(1).get_attribute("aria-label").endswith("다음 2027년 3월 21일 일요일, 축일, 성지주일과 겹침")
+
+    _goto_year_search(page, "2026-2028 연중6주일")
+    # 2026년은 재의 수요일(2월 18일) 앞의 사흘, 2028년은 이레다. 2027년에는 없다
+    years = [label.split(", ")[-1][3:7] for label in _row_labels(page)]
+    assert years == ["2026"] * 3 + ["2028"] * 7, years
+    # 줄이 하나도 없는 해는 결과 위에 적는다
+    assert page.inner_text(".search-note") == "2027년에는 검색하신 전례일을 지키지 않습니다."
+
+    _goto_year_search(page, "2027 연중6주일")
+    assert "2027년에는 검색하신 전례일을 지키지 않습니다." in page.inner_text(".empty-state")
+    page.wait_for_function("() => document.getElementById('a11y-announce').textContent.includes('지키지 않습니다')")
+
+
+def test_year_name_search_finds_christmas_weekdays_by_that_years_names(page):
+    """성탄 평일은 그해에 붙는 이름으로 찾고, 같은 해 안에서는 날짜 차례다(ADR-044 §3, §4)."""
+    _fix_today(page)
+    _goto_year_search(page, "2027 성탄1주")
+    assert [label.split(",")[0] for label in _row_labels(page)] == [
+        "성탄 1주 토요일", "성탄1주일", "성탄 1주 수요일", "성탄 1주 목요일", "성탄 1주 금요일"]
+
+
 _SWATCH_CODES = "els => els.map(e => e.className.match(/lit-swatch--(\\w+)/)[1])"
 
 
