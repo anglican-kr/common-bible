@@ -464,7 +464,7 @@ HIT_AREA_FACTS = """([root, only]) => {
     const b = box(btn);
     const label = btn.closest('.settings-label');
     const text = label ? box(label.firstElementChild === btn ? (() => { const r = document.createRange(); r.selectNode(label.firstChild); return r; })() : label.firstElementChild) : null;
-    const control = label ? label.closest('.settings-row').querySelector('select, .settings-action-btn') : null;
+    const control = label ? label.closest('.settings-row').querySelector('select, .settings-action-btn, .switch') : null;
     return {
       name: btn.getAttribute('aria-label'),
       info: btn.classList.contains('settings-drive-info-btn'),
@@ -527,7 +527,9 @@ def test_info_and_close_buttons_have_a_hit_area_wider_than_the_glyph_that_covers
                         assert abs(f["width"] - info_w) < 0.2 and abs(f["height"] - info_h) < 0.2, (where, f["width"], f["height"])
                         assert f["iconOnLabelLine"], where
                         assert f["overText"] < 0.05, (where, f["overText"])
-                        on_label_line = action_on_label_line if f["name"] == "백업 및 동기화 안내" else select_on_label_line
+                        # 오프라인 저장의 스위치는 줄의 격자에서 늘 라벨과 같은 줄이다(ADR-045 §2)
+                        on_label_line = {"백업 및 동기화 안내": action_on_label_line, "오프라인 저장 안내": True}.get(
+                            f["name"], select_on_label_line)
                         assert on_label_line is None or f["controlOnLabelLine"] is on_label_line, where
                     else:
                         assert abs(f["width"] - 44) < 0.2 and abs(f["height"] - close_h) < 0.2, (where, f["width"], f["height"])
@@ -1160,5 +1162,227 @@ def test_settings_persist_after_reload(browser):
             "Dark theme should persist after reload"
         assert page.evaluate("() => document.documentElement.style.fontSize") == "20px", \
             "Font size should persist after reload"
+    finally:
+        ctx.close()
+
+
+# ── 오프라인 저장 (ADR-045) ──────────────────────────────────────────────────
+# 서비스 워커를 막고 연다. 화면 없는 Chromium에서는 서비스 워커의 설치가 멈추고(known-issues §6.1), 막으면 페이지의
+# 요청을 page.route로 바꿔 줄 수 있다. 서비스 워커를 거치는 길(머리글로 저장을 건너뛰기, 크기 목록을 DATA_CACHE에
+# 두기)은 dev 배포에서 확인한다.
+
+OFFLINE_SWITCH = "오프라인 저장"
+DATA_CACHE_KEYS = """async () => {
+  if (!(await caches.has('data'))) return null;
+  const cache = await caches.open('data');
+  return (await cache.keys()).map((r) => new URL(r.url).pathname.slice('/data/'.length));
+}"""
+
+
+def _offline_ctx(browser, **options):
+    ctx = browser.new_context(service_workers="block", **options)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    return ctx
+
+
+def _small_size_list(page, per_group=3):
+    """크기 목록을 묶음마다 앞의 몇 파일로 줄인다. 받는 시험이 1,506개를 다 받지 않게 한다."""
+    def handle(route):
+        data = route.fetch().json()
+        counts, keep = {}, []
+        for key in data["sizes"]:
+            group = key.split("/")[0] if "/" in key else "search"
+            if counts.get(group, 0) < per_group:
+                counts[group] = counts.get(group, 0) + 1
+                keep.append(key)
+        route.fulfill(json={"format": 1, "sizes": {k: data["sizes"][k] for k in keep},
+                            "gzip_sizes": {k: data["gzip_sizes"][k] for k in keep}})
+    page.route("**/data/bible-sizes.json", handle)
+
+
+def _caption(root):
+    return root.locator(".offline-caption")
+
+
+def test_offline_save_row_sits_above_backup_and_shows_the_total(browser):
+    ctx = _offline_ctx(browser)
+    page = ctx.new_page()
+    try:
+        _open(page)
+        pop = open_settings(page)
+        system = pop.locator(".settings-section", has=page.locator("h2", has_text="시스템"))
+        # 브라우저 탭이라 「앱 설치」가 맨 위에 있고, 그 아래가 「오프라인 저장」이다(ADR-045 §2)
+        assert system.locator(".settings-label").all_inner_texts()[:3] == ["앱 설치", "오프라인 저장", "백업 & 동기화"]
+        switch = system.get_by_role("switch", name=OFFLINE_SWITCH)
+        assert switch.is_checked() is False
+        page.wait_for_function("() => /MB$/.test(document.querySelector('.settings-popover .offline-caption').textContent)")
+        assert re.fullmatch(r"성서 본문과 교회력 자료 \d+\.\dMB", _caption(system).inner_text())
+        assert system.locator(".offline-progress").is_hidden()
+    finally:
+        ctx.close()
+
+
+def test_offline_save_saves_every_file_of_the_size_list(browser):
+    """실제 크기 목록대로 1,506개를 모두 받고, 시작과 끝을 스크린 리더에 알린다."""
+    ctx = _offline_ctx(browser)
+    page = ctx.new_page()
+    try:
+        _open(page)
+        page.evaluate(RECORD_ANNOUNCEMENTS)
+        pop = open_settings(page)
+        pop.get_by_role("switch", name=OFFLINE_SWITCH).click()
+        page.wait_for_function("() => /모두 저장됨$/.test(document.querySelector('.settings-popover .offline-caption').textContent)",
+                               timeout=120_000)
+        expected = page.evaluate("""async () => {
+          const list = await (await fetch('/data/bible-sizes.json')).json();
+          return Object.keys(list.sizes).filter((k) => k !== 'lectionary/office-readings.json').sort();
+        }""")
+        assert len(expected) > 1500
+        saved = set(page.evaluate(DATA_CACHE_KEYS))
+        assert [k for k in expected if k not in saved] == []
+        assert "lectionary/office-readings.json" not in saved
+        assert _ls(page, "bible-offline-save") == "1"
+        done = _caption(pop).inner_text()
+        assert re.fullmatch(r"\d+\.\dMB 모두 저장됨", done)
+        said = page.evaluate("() => window.__said")
+        assert "오프라인 저장을 시작합니다" in said and done in said
+        assert pop.locator(".offline-progress").is_hidden()
+    finally:
+        ctx.close()
+
+
+def test_offline_save_keeps_files_until_delete_is_confirmed(browser):
+    """끄면 확인 창을 띄운다. 「취소」는 그대로 두고, 「삭제」는 저장한 자료를 지우고 스위치를 끈다(ADR-045 §6)."""
+    ctx = _offline_ctx(browser, viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    page = ctx.new_page()
+    try:
+        _small_size_list(page)
+        page.goto(f"{BASE}/settings")
+        view = page.locator(".settings-view")
+        switch = view.get_by_role("switch", name=OFFLINE_SWITCH)
+        switch.click()
+        page.wait_for_function("() => /모두 저장됨$/.test(document.querySelector('.settings-view .offline-caption').textContent)")
+        assert len(page.evaluate(DATA_CACHE_KEYS)) > 0
+
+        switch.click()
+        modal = page.locator("#bm-confirm-modal")
+        modal.wait_for(state="visible")
+        assert modal.locator("#bm-confirm-title").inner_text() == "오프라인 저장 끄기"
+        assert re.match(r"기기에 저장한 성서 본문과 교회력 자료 \d+\.\dMB를 삭제할까요\? 삭제한 뒤에는 인터넷에 연결되어야 "
+                        r"이 자료를 볼 수 있습니다\. 북마크와 설정은 지우지 않습니다\.$", modal.locator("#bm-confirm-body").inner_text())
+        assert page.evaluate("() => document.activeElement.textContent") == "취소"
+        assert switch.is_checked() is True, "창이 열린 동안 스위치는 켜진 채다"
+        page.keyboard.press("Enter")   # 「취소」
+        modal.wait_for(state="hidden")
+        assert switch.is_checked() is True
+        assert len(page.evaluate(DATA_CACHE_KEYS)) > 0
+
+        switch.click()
+        modal.wait_for(state="visible")
+        modal.get_by_role("button", name="삭제").click()
+        page.wait_for_function("() => !document.querySelector('.settings-view .offline-row .switch-input').checked")
+        page.wait_for_function("async () => !(await caches.has('data'))")
+        assert _ls(page, "bible-offline-save") is None
+    finally:
+        ctx.close()
+
+
+def test_offline_save_waits_for_the_network_and_resumes(browser):
+    ctx = _offline_ctx(browser)
+    page = ctx.new_page()
+    try:
+        _small_size_list(page)
+        _open(page)
+        pop = open_settings(page)
+        ctx.set_offline(True)
+        pop.get_by_role("switch", name=OFFLINE_SWITCH).click()
+        page.wait_for_function("() => document.querySelector('.settings-popover .offline-caption').textContent.startsWith('인터넷에 연결되면 이어서 저장합니다.')")
+        assert pop.get_by_role("switch", name=OFFLINE_SWITCH).is_checked() is True
+        ctx.set_offline(False)
+        page.wait_for_function("() => /모두 저장됨$/.test(document.querySelector('.settings-popover .offline-caption').textContent)")
+    finally:
+        ctx.close()
+
+
+def test_offline_save_reports_a_server_error_and_keeps_the_switch_on(browser):
+    ctx = _offline_ctx(browser)
+    page = ctx.new_page()
+    try:
+        _small_size_list(page)
+        page.route("**/data/search-ot.json", lambda route: route.fulfill(status=500, body=""))
+        _open(page)
+        pop = open_settings(page)
+        pop.get_by_role("switch", name=OFFLINE_SWITCH).click()
+        page.wait_for_function("() => document.querySelector('.settings-popover .offline-caption').textContent.startsWith('일부 자료를 받지 못했습니다.')")
+        assert re.fullmatch(r"일부 자료를 받지 못했습니다\. 앱을 다시 열면 이어서 저장합니다\. \d+\.\dMB / \d+\.\dMB",
+                            _caption(pop).inner_text())
+        assert pop.get_by_role("switch", name=OFFLINE_SWITCH).is_checked() is True
+        assert pop.locator(".offline-progress").is_visible()
+    finally:
+        ctx.close()
+
+
+def test_offline_save_stops_and_turns_off_when_space_runs_out(browser):
+    ctx = _offline_ctx(browser)
+    ctx.add_init_script("navigator.storage.estimate = async () => ({ quota: 1000, usage: 900 });")
+    page = ctx.new_page()
+    try:
+        _small_size_list(page)
+        _open(page)
+        pop = open_settings(page)
+        pop.get_by_role("switch", name=OFFLINE_SWITCH).click()
+        page.wait_for_function("() => document.querySelector('.settings-popover .offline-caption').textContent.startsWith('기기의 저장 공간이')")
+        assert _caption(pop).inner_text() == "기기의 저장 공간이 모자라 저장하지 못했습니다. 공간을 비운 뒤 다시 켜 주세요."
+        assert "offline-caption--warn" in (_caption(pop).get_attribute("class") or "")
+        assert pop.get_by_role("switch", name=OFFLINE_SWITCH).is_checked() is False
+        assert _ls(page, "bible-offline-save") is None
+    finally:
+        ctx.close()
+
+
+def test_offline_save_info_gives_the_sizes_and_the_safari_sentence_only_in_a_safari_tab(browser):
+    pattern = (r"성서 본문과 검색 자료, 캘린더와 전례독서에 쓰는 교회력 자료를 기기에 저장해 인터넷에 연결되지 않아도 모든 장과 "
+               r"모든 날을 볼 수 있게 합니다\. 성서 본문 \d+\.\dMB, 검색 자료 \d+\.\dMB, 교회력 자료 \d+\.\dMB이고, "
+               r"받을 때는 압축되어 약 \d+MB입니다\. {safari}오디오 파일은 재생할 때 다운로드됩니다\.")
+    safari = r"Safari에서 7일 넘게 열지 않으면 저장한 자료가 지워질 수 있습니다\. 홈 화면에 추가한 앱에서 켜면 오래 보관됩니다\. "
+    for options, expect_safari in (({}, False), ({"viewport": MOBILE_VIEWPORT, "user_agent": IPHONE_UA}, True)):
+        ctx = _offline_ctx(browser, **options)
+        page = ctx.new_page()
+        try:
+            if expect_safari:
+                page.goto(f"{BASE}/settings")
+                root = page.locator(".settings-view")
+            else:
+                _open(page)
+                root = open_settings(page)
+            root.get_by_role("button", name="오프라인 저장 안내").click()
+            desc = root.locator(".settings-drive-info-row:not([hidden]) .settings-drive-info-desc")
+            page.wait_for_function("(el) => /MB입니다/.test(el.textContent)", arg=desc.element_handle())
+            assert re.fullmatch(pattern.format(safari=safari if expect_safari else ""), desc.inner_text()), desc.inner_text()
+        finally:
+            ctx.close()
+
+
+def test_info_close_button_sits_beside_the_first_line(browser):
+    """설명이 여러 줄이어도 닫기 단추(✕)는 첫 줄 옆에 있다(ADR-041 §7)."""
+    ctx = browser.new_context(viewport={"width": 360, "height": 640}, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/settings")
+        view = page.locator(".settings-view")
+        for name in ("오프라인 저장 안내", "백업 및 동기화 안내", "소속교회 안내", "세례명 안내"):
+            view.get_by_role("button", name=name).click()
+            row = view.locator(".settings-drive-info-row:not([hidden])", has=page.get_by_role("button", name=f"{name} 닫기"))
+            facts = row.evaluate("""(row) => {
+              const desc = row.querySelector('.settings-drive-info-top > .settings-drive-info-desc, .settings-drive-info-top > .settings-drive-info-email');
+              const close = row.querySelector('.settings-drive-info-close').getBoundingClientRect();
+              const d = desc.getBoundingClientRect();
+              const line = parseFloat(getComputedStyle(desc).lineHeight);
+              return { lines: Math.round(d.height / line), gap: close.top - d.top, closeBottom: close.bottom, firstLineBottom: d.top + line };
+            }""")
+            assert facts["gap"] < 4, (name, facts)
+            assert facts["closeBottom"] <= facts["firstLineBottom"] + 2, (name, facts)
+            view.get_by_role("button", name=f"{name} 닫기").click()
     finally:
         ctx.close()

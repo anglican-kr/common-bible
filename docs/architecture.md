@@ -174,7 +174,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | 로드 모드                                | 파일 수 | 비고                                                                                                                 |
 | ---------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------- |
 | `<script type="module">` (자동 지연 실행) | 28      | 대부분의 모듈. 모듈 범위(scope)에서 `import`와 `export`를 쓸 수 있다                                                                   |
-| `<script defer>` (classic)               | 2       | `audio-cache.js`와 `manifest-sync.js`. `sw.js`도 `audio-cache.js`를 `importScripts()`로 불러오므로 classic이어야 한다(ADR-019 §"예외"). `manifest-sync.js`도 classic이지만 `sw.js`는 불러오지 않는다 |
+| `<script defer>` (classic)               | 3       | `audio-cache.js`, `manifest-sync.js`, `offline-save.js`. `sw.js`도 `audio-cache.js`를 `importScripts()`로 불러오므로 classic이어야 한다(ADR-019 §"예외"). 나머지 둘도 classic이지만 `sw.js`는 불러오지 않는다 |
 | `<script>` (head, 즉시 실행)             | 1       | `pre-fetch.js`. `<head>`에서 즉시 `data/books.json` 내려받기를 시작한다. `type="module"`은 자동으로 지연 실행되어 요청이 늦어진다 |
 
 `<script>` 태그가 없는 런타임 파일이 9개 더 있다. `search-worker.js`는 `new Worker()`로 따로 만드는 독립 컨텍스트이다. `bookmark-{tree,gestures,select,menu,verse-select}.js` 5개는 `bookmark.js`가 ESM `import`로 끌어오며, 브라우저가 `import` 그래프를 따라 받는다. 교회력 셋은 `routing.js`가 그 화면에 처음 갈 때 동적 `import()`로 불러온다. 검색 화면도 전례일 결과가 처음 나올 때 엔진을 같은 방식으로 불러온다(ADR-044 §1). 캘린더 탭은 셋을, 전례독서 화면은 뷰와 엔진 둘을 한꺼번에 요청한다. 차례로 받으면 왕복이 한 번 더 든다(Chromium. WebKit은 앱 안에서 처음 갈 때 의존 모듈을 한 번 더 요청한다. [`known-issues.md`](known-issues.md) §13). 성서만 읽는 세션은 셋(원본 약 210KB, gzip 약 70KB)을 불러오지 않고, 서비스 워커는 오프라인용으로 셋을 미리 받는다(§4.6). 이득과 대가는 서비스 워커 캐시가 없는 첫 방문에만 있다. 첫 화면은 느린 4G에서 0.39초 빨라지고, 첫 방문에 성서 화면에서 캘린더 탭을 열면 0.53초, 그 주소로 바로 들어오면 0.16-0.2초 늦어진다. 바로 열기를 미리 받는 `modulepreload`는 넣지 않았다. WebKit에서 실패한 미리 받기가 그 탭을 막기 때문이다(ADR-038 「검토한 대안 — 모듈 로드」 E). 재방문의 부팅 시간은 어느 쪽이든 측정 오차 안이다(ADR-038 §2 「구현」의 실측). 받지 못하면 라우터가 그 뷰의 제목으로 실패 화면을 그리고 「다시 불러오기」(페이지 새로 고침)를 단다. 지정자는 글자 그대로 둔다. `tests/unit/sw.test.js`가 그 지정자를 따라가 오프라인 목록과 대조하고, 셋이 부팅 그래프 밖에 있는지도 확인한다.
@@ -190,6 +190,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | `js/app.js`           | 앱 부트스트랩, 접근성을 위한 `keydown` 이벤트 처리, 오디오 캐시 LRU 소프트캡, 서비스 워커 등록, 업데이트 확인(한 시간에 한 번까지. `checkForUpdates`), 업데이트 토스트, 탭에 돌아올 때 Drive `pollSync` 호출, `clearAllCaches` | ~330    |
 | `js/audio-cache.js`   | 오디오 LRU 기록을 담는 IndexedDB ([ADR-016](decisions/016-audio-cache-lru.md))                                                        | ~190    |
 | `js/manifest-sync.js` | 부팅할 때 콘텐츠 해시 매니페스트를 이전 것과 비교해 `DATA_CACHE`와 `AUDIO_CACHE`를 항목 단위로 무효화 ([ADR-021](decisions/021-pwa-versioning-content-hash.md)) | ~200    |
+| `js/offline-save.js` | 설정의 「오프라인 저장」. 크기 목록(`bible-sizes.json`)대로 성서 본문, 검색 자료, 교회력 자료를 `DATA_CACHE`에 받고, 이어 받기와 공간 확인, 끄기를 맡는다 ([ADR-045](decisions/045-offline-save.md)) | ~300    |
 | `js/search-worker.js` | Web Worker. 청크 불러오기, 절 검색, 페이지네이션, 전례독서 색인으로 전례일 찾기(ADR-044)                                              | ~1,030  |
 | `js/drive-sync.js`    | Drive 동기화 파사드(조정 모듈). PKCE 콜백 처리, 업로드 디바운스, 로그아웃, 「파일도 삭제」(자격 증명을 먼저 지운다), 다른 탭의 로그아웃 감지, 동기화 스낵바(라이브 영역에도 알린다) | ~285    |
 | `js/types.d.ts`       | 도메인 타입을 정의하는 한 곳 ([ADR-012](decisions/012-typescript-incremental-adoption.md))                                               | —       |
@@ -377,7 +378,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 캐시는 네 가지 이름으로 나뉜다(`sw.js`):
 
 - `SHELL_CACHE`(예: `shell-2.0.0`): 셸과 부팅에 필요한 메타 정보, 그리고 부팅할 때 싣지 않는 교회력 모듈 셋을 담는다. 교회력 모듈 셋은 설치할 때 미리 받는다. 교회력 표는 처음 쓸 때 `DATA_CACHE`에 들어가므로, 오프라인에서 열리는 캘린더와 전례독서는 온라인에서 한 번 연 화면이다. 이름은 `importScripts('/sw-version.js')`로 `self.APP_VERSION`을 읽어 `"shell-" + APP_VERSION`으로 정한다. 릴리스마다 갱신한다.
-- `DATA_CACHE`(`"data"`): 본문 장 JSON(73권 1328장, 머리말, 전례시편 150, 송가 13), 검색 청크 셋, 교회력 표, 전례독서 표를 담는다. 이름은 고정이고, 항목별 무효화는 `js/manifest-sync.js`가 맡는다(ADR-021).
+- `DATA_CACHE`(`"data"`): 본문 장 JSON(73권 1328장, 머리말, 전례시편 150, 송가 13), 검색 청크 셋, 교회력 표, 전례독서 표, 크기 목록(`bible-sizes.json`)을 담는다. 이름은 고정이고, 항목별 무효화는 `js/manifest-sync.js`가 맡는다(ADR-021). 설정의 「오프라인 저장」을 켜면 `js/offline-save.js`가 이 캐시에 모두 받아 둔다(ADR-045).
 - `AUDIO_CACHE`(`"audio"`): 장별 mp3를 담는다. 무효화 방식은 `DATA_CACHE`와 같다.
 - `FONT_CACHE`(`"fonts"`): Google Font 파일을 담는다. 콘텐츠 주소를 기준으로 하므로 사실상 영구하다.
 
@@ -405,13 +406,14 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | `localStorage` | `bible-search-history` | 검색 이력 (LRU, [ADR-014](decisions/014-search-history.md)) | 로컬 전용 |
 | `localStorage` | `bible-bookmark-sort`, `bible-bookmark-sort-dir`, `bible-bookmark-viewed` | 북마크 정렬 기준, 방향, 최근 본 시각 | 로컬 전용 |
 | `localStorage` | `bible-install-nudge`, `bible-cite-coachmark-seen` | 설치 안내 넛지 상태, 인용 칩 안내를 봤는지 여부 | 로컬 전용 |
+| `localStorage` | `bible-offline-save` | 설정 「오프라인 저장」의 스위치(`1`이면 켬, [ADR-045](decisions/045-offline-save.md) §7) | 로컬 전용 |
 | `sessionStorage` | `bible-drive-redirect-state-pkce` | PKCE `{nonce, verifier, returnTo, ts, flow}` (10분 TTL) | 임시 |
 | `sessionStorage` | `bible-drive-back-nav-context` | 리디렉션 전의 기록 길이 (돌아온 뒤 뒤로 가기 보정) | 임시 |
 | `IndexedDB` | `bible-drive-sync` (`keys`, `tokens`) | AES-GCM으로 암호화한 갱신 토큰(암호화 키는 꺼낼 수 없는 상태로 저장한다. `extractable: false`) | 로컬 전용 |
 | `IndexedDB` | `bible-audio-cache` / `entries` | 오디오 LRU 기록([ADR-016](decisions/016-audio-cache-lru.md)) | 로컬 전용 |
 | `IndexedDB` | `bible-manifest-sync` / `snapshots` | 직전 매니페스트 스냅샷(비교 기준) | 로컬 전용 |
 | Cache Storage | `shell-X.Y.Z` (SHELL_CACHE) | 앱 셸, `books.json`, `search-meta.json`, 매니페스트 2종 | (배포물) |
-| Cache Storage | `data` (DATA_CACHE) | 본문 장 JSON(전례시편과 송가 포함), 검색 청크 셋, 교회력 표와 전례독서 표 | (누적) |
+| Cache Storage | `data` (DATA_CACHE) | 본문 장 JSON(전례시편과 송가 포함), 검색 청크 셋, 교회력 표와 전례독서 표, 크기 목록 | (누적. 오프라인 저장을 켜면 모두) |
 | Cache Storage | `audio` (AUDIO_CACHE) | 장별 mp3 (필요 시 다운로드) | (누적) |
 | Cache Storage | `fonts` (FONT_CACHE) | Google Font 파일 | (영구) |
 | Google Drive (`appDataFolder`) | `sync.json` | 동기화 페이로드(v2 문서, `schemaVersion`, `deviceId`)와 ETag | ☁️ 원격 |
@@ -578,6 +580,7 @@ Phase 1(성경 읽기 PWA)은 완성됐고, Phase 3(교회력)은 일부 구현�
 | [041](decisions/041-settings-structure-and-lectionary-preferences.md) | 설정 화면 구조(섹션 다섯)와 전례독서 개인 설정(시작 화면, 대체 독서 표시, 세례명, 소속교회) |
 | [043](decisions/043-desktop-top-bar.md) | 데스크톱 헤더를 늘 보이는 한 줄 상단 바로 개편. 왼쪽에 목적지 탭, 가운데에 제목, 오른쪽에 검색창과 설정. 북마크와 설정은 본문 옆 패널 **(1단계 구현 2026-11-14, 2-4단계 남음)** |
 | [044](decisions/044-lectionary-search-single-box.md) | 전례독서 검색은 성서 검색과 같은 검색창에서 한다. 탭 없이 한 결과 화면에 성서 본문, 전례독서의 차례로 묶음을 보이고, 전례일이 있는 구절은 Enter를 쳐도 결과 화면에서 고른다. 구절 표기의 첫 숫자는 장이고, 책에 없는 장이면 결과 화면에 알린다. 이름 검색(전례년 순서, 소속교회의 지역 축일)과 날짜, 기간 검색의 규칙도 정한다 **(구현 대기)** |
+| [045](decisions/045-offline-save.md) | 설정의 「오프라인 저장」 스위치 하나로 성서 본문, 성서 검색 자료, 교회력 자료를 기기에 저장한다. 아직 저장하지 않은 파일만 받고 끊기면 이어 받으며, 켜 둔 동안 고친 파일을 다시 받는다. 끄면 확인 창을 거쳐 지운다 **(구현 완료 2026-11-18)** |
 
 026은 main에 없다. 1.6.0 노트와 캘린더 설계는 개발을 멈춘 `release/1.6.0` 브랜치에만 있다. 데이터 저장소의 ADR(002, 003, 006, 039 전례시편 DSL)은 그 저장소의 `docs/decisions/`에 있다.
 

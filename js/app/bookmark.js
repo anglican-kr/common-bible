@@ -525,6 +525,8 @@ const appBookmark = {
   updateVerseSelectionBoundaries, updateVerseSelectBar,
   enterBookmarkSelectMode, exitBookmarkSelectMode,
   openDriveDisconnectModal,
+  // The destructive-action confirm dialog, also used by settings' 「오프라인 저장 끄기」(ADR-045 §6).
+  openConfirmModal,
   // Phase 8 drawer geometry init
   initBookmarkSheetDrag, initBookmarkDrawerResize,
 };
