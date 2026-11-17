@@ -276,6 +276,11 @@ function loadPureHelpers() {
     lectSlugHref: ctx.lectSlugHref,
     lectRowOf: ctx.lectRowOf,
     yearRowsOf: ctx.yearRowsOf,
+    nextMonthDay: ctx.nextMonthDay,
+    monthDayIn: ctx.monthDayIn,
+    localNoticeOf: ctx.localNoticeOf,
+    buildLocalNotice: ctx.buildLocalNotice,
+    pickedParishNote: ctx.pickedParishNote,
     looksLikeYearQuery: ctx.looksLikeYearQuery,
     lectNotation: ctx.lectNotation,
     buildLectRow: ctx.buildLectRow,
@@ -291,7 +296,7 @@ function loadLectDays() {
   const ctx = { document, Object, Array, String, Math, JSON, console, Error, Set, Number, Map, Promise, encodeURIComponent, Date, isNaN, bookName: (id) => id };
   vm.createContext(ctx);
   vm.runInContext(extractBlock("VERSE_SPEC", VERSE_SPEC_SOURCE), ctx, { filename: "verse-spec.js" });
-  vm.runInContext(`${EL_SHIM}${extractBlock("PURE HELPERS")}\n${extractBlock("LECT_DAYS")}\nthis.lectDaysOf = lectDaysOf;`, ctx, {
+  vm.runInContext(`${EL_SHIM}${extractBlock("PURE HELPERS")}\n${extractBlock("LECT_DAYS")}\nthis.lectDaysOf = lectDaysOf;\nthis.localYearDayOf = localYearDayOf;`, ctx, {
     filename: "search-lect-days.js",
   });
   return ctx;
@@ -331,7 +336,8 @@ function loadWorkerBlock() {
   // Prelude: DATA_DIR mirrors search.js's module-level constant. Declared
   // outside the marker (it's shared with the rest of the module), so the
   // test loader provides it.
-  const prelude = `const DATA_DIR = "/data";\n`;
+  // loadParish comes from window.appStorage at module top: a stub reading `ctx.__parish` (ADR-041 §6).
+  const prelude = `const DATA_DIR = "/data";\nconst loadParish = () => globalThis.__parish ?? "";\n`;
   vm.runInContext(prelude + extractBlock("WORKER WIRE-UP"), ctx, { filename: "search-worker-block.js" });
   return {
     ctx,
@@ -807,6 +813,20 @@ test("doSearch: posts search payload with type/q/page/pageSize/searchId=1", asyn
   w._emit({ type: "results", searchId: 1, total: 0, results: [] });
   const result = await p;
   assert.strictEqual(result.type, "results");
+});
+
+test("doSearch: 검색마다 소속교회를 싣고, init은 본당 표의 주소를 넘긴다(ADR-044 §3)", async () => {
+  const m = loadWorkerBlock();
+  m.ctx.__parish = "jqdnsv";
+  const p = m.doSearch("용인", 1, 20, null);
+  const w = m.workerInstances[0];
+  assert.strictEqual(w.posts[0].localUrl, "/data/lectionary/local-observances.json");
+  assert.strictEqual(w.posts[1].parish, "jqdnsv");
+  m.ctx.__parish = "";
+  m.doSearch("용인", 1, 20, null);
+  assert.strictEqual(w.posts[2].parish, "", "설정을 바꾸면 다음 검색부터 새 교회다");
+  w._emit({ type: "results", searchId: 2, total: 0, results: [] });
+  void p;
 });
 
 test("doSearch: increments searchId across calls", async () => {
@@ -2050,6 +2070,94 @@ test("yearRowsOf: 범위를 자른 것, 음력 날짜 자료가 없는 해, 줄�
   // 음력이 아닌 전례일도 함께 찾았으면 줄이 없는 해는 지키지 않는 해로 적는다
   assert.deepStrictEqual(notes([seol, plainObs], [{ year: 2060, days: [null, null], lunar: false }], { from: 2060, to: 2060, capped: false }),
     ["2060년의 설날 날짜는 아직 앱에 없습니다.", "2060년에는 검색하신 전례일을 지키지 않습니다."]);
+});
+
+// 지역 축일(ADR-044 §3): 워커가 넘기는 줄
+const LOCAL_ITEM = (level, o = {}) => ({
+  obs: OBS({ key: `local:${level}`, kind: "local", name: level === "dedication" ? "용인성당 축성일" : level === "diocese" ? "서울교구설립일" : "관구설립일",
+    date: level === "dedication" ? "01.31" : level === "diocese" ? "05.27" : "09.29", rank: level === "dedication" ? "major_feast" : null }),
+  sets: [], tier: 1, local: { level, color: level === "dedication" ? "white" : null, year: level === "dedication" ? null : level === "diocese" ? 1965 : 1992 }, ...o,
+});
+
+test("nextMonthDay, monthDayIn: 해마다 같은 날짜의 다음 그날(오늘이면 오늘), 그해에 없는 날은 null", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.nextMonthDay("01.31", "2026-11-17"), "2027-01-31");
+  assert.strictEqual(h.nextMonthDay("11.17", "2026-11-17"), "2026-11-17");
+  assert.strictEqual(h.nextMonthDay("12.05", "2026-11-17"), "2026-12-05");
+  assert.strictEqual(h.nextMonthDay("02.29", "2026-11-17"), "2028-02-29", "평년은 건너뛴다");
+  assert.strictEqual(h.monthDayIn(2027, 2, 29), null);
+  assert.strictEqual(h.monthDayIn(2028, 2, 29), "2028-02-29");
+});
+
+test("localNoticeOf, buildLocalNotice: 소속교회가 없으면 카드에서 고르고, 있으면 날짜만 알린다. 축복일에는 고를 것이 없다(ADR-044 §3)", () => {
+  const h = loadPureHelpers();
+  const plain = (v) => JSON.parse(JSON.stringify(v));
+  const N = (kind, name, date, churchId, mine = null) => ({ kind, name, date, churchId, mine });
+  // 소속교회 없음: 찾은 본당을 고르는 단추
+  assert.deepStrictEqual(plain(h.localNoticeOf(N("consecration", "용인성당", "01.31", "yongin"))), {
+    text: "용인성당의 축성일(1월 31일)은 소속교회로 고르면 축성 독서와 함께 볼 수 있습니다.", pick: { churchId: "yongin", name: "용인성당" }, list: false });
+  // 소속교회가 있으면 날짜만. 축성 독서는 모든 본당이 같다. 소속교회에 축복일만 있으면 뒷문장이 없다
+  assert.deepStrictEqual(plain(h.localNoticeOf(N("consecration", "용인성당", "01.31", "yongin", "consecration"))), {
+    text: "용인성당의 축성일은 1월 31일입니다. 축성 독서는 소속교회의 축성일과 같습니다.", pick: null, list: false });
+  assert.strictEqual(h.localNoticeOf(N("consecration", "용인성당", "01.31", "yongin", "blessing")).text, "용인성당의 축성일은 1월 31일입니다.");
+  assert.deepStrictEqual(plain(h.localNoticeOf(N("blessing", "세종성당", "04.21", "sejong"))),
+    { text: "세종성당의 축복일(4월 21일)에는 따로 읽는 독서가 없습니다.", pick: null, list: false });
+  assert.deepStrictEqual(plain(h.localNoticeOf(N("noParish", null, null, null))),
+    { text: "소속교회의 축성일은 소속교회를 고르면 축성 독서와 함께 볼 수 있습니다.", pick: null, list: true });
+  // 카드: 단추, 목록, 아무것도 없음
+  const pick = h.buildLocalNotice(h.localNoticeOf(N("consecration", "용인성당", "01.31", "yongin")));
+  assert.strictEqual(pick.className, "search-alert search-local-note");
+  assert.strictEqual(pick.children[1].tagName, "BUTTON");
+  assert.strictEqual(pick.children[1].textContent, "용인성당을 소속교회로 고르기");
+  assert.strictEqual(pick.children[1].getAttribute("data-church"), "yongin");
+  const list = h.buildLocalNotice(h.localNoticeOf(N("noParish", null, null, null)));
+  const row = list.children[1];
+  assert.strictEqual(row.className, "search-local-pick");
+  assert.strictEqual(row.children[0].getAttribute("for"), "search-local-church");
+  const select = row.children[1].children[0];
+  assert.deepStrictEqual([select.tagName, select.id, select.getAttribute("disabled")], ["SELECT", "search-local-church", ""], "받는 동안은 고를 수 없다");
+  assert.strictEqual(list.children[2].textContent, "소속교회로 고르기");
+  assert.strictEqual(h.buildLocalNotice(h.localNoticeOf(N("blessing", "세종성당", "04.21", "sejong"))).children.length, 1);
+  assert.strictEqual(h.pickedParishNote("용인교회"), "소속교회를 용인교회로 정했습니다. 설정에서 바꿀 수 있습니다.");
+  assert.strictEqual(h.pickedParishNote("서울주교좌성당"), "소속교회를 서울주교좌성당으로 정했습니다. 설정에서 바꿀 수 있습니다.");
+});
+
+test("lectRowOf: 축성일 줄은 축성일을 고른 화면을 열고 굵게, 설립일 줄은 그날을 열고 설립 연도를 적는다. 등급 줄은 없다(ADR-044 §3)", () => {
+  const h = loadPureHelpers();
+  const plain = (v) => JSON.parse(JSON.stringify(v));
+  const ded = h.lectRowOf(LOCAL_ITEM("dedication"), () => null,
+    { open: DAY("2027-01-31", { obs: "local:dedication", setId: null, name: "용인성당 축성일", colors: ["white"] }), next: null, nextIds: [], year: null, cycles: [] },
+    "2026-11-17");
+  assert.deepStrictEqual(plain([ded.href, ded.bold, ded.meta, ded.lines, ded.label]), [
+    "/lectionary/2027-01-31?obs=my-dedication", true, ["다음 2027년 1월 31일 (일)"], [], "용인성당 축성일, 백색, 다음 2027년 1월 31일 일요일"]);
+  const dio = h.lectRowOf(LOCAL_ITEM("diocese"), () => null,
+    { open: DAY("2027-05-27", { obs: "local:diocese", setId: null, name: "서울교구설립일", colors: ["white"] }), next: null, nextIds: [], year: null, cycles: [] },
+    "2026-11-17");
+  assert.deepStrictEqual(plain([dio.href, dio.bold, dio.meta]), ["/lectionary/2027-05-27", false, ["1965년 설립", "다음 2027년 5월 27일 (목)"]]);
+  // 날짜를 계산하기 전에도 다음 그날의 주소다(엔진 없이 셀 수 있다)
+  assert.strictEqual(h.lectRowOf(LOCAL_ITEM("province"), () => null, null, "2026-11-17").href, "/lectionary/2027-09-29");
+  // 연도를 붙여 찾은 줄은 그해의 날이다
+  const year = h.lectRowOf({ ...LOCAL_ITEM("dedication"), yearDay: { kind: "kept", ...DAY("2028-01-31", { obs: "local:dedication", setId: null, colors: ["white"] }),
+    from: null, by: null, bySaint: false } }, () => null, null, "2026-11-17");
+  assert.strictEqual(year.href, "/lectionary/2028-01-31?obs=my-dedication");
+});
+
+test("lectDaysOf, localYearDayOf: 지역 축일은 엔진의 표 없이 그날을 연다. 축성일은 본당 표의 색, 설립일은 그날의 색이다", async () => {
+  const ctx = loadLectDays();
+  const plain = (v) => JSON.parse(JSON.stringify(v));
+  const mod = {
+    async findReadingDay() { throw new Error("지역 축일은 표에 묻지 않는다"); },
+    resolveDate: (date) => ({ date }),
+    headerColors: (resolved) => ({ colors: resolved.date === "2027-05-27" ? ["white"] : ["green"] }),
+  };
+  const ded = plain(await ctx.lectDaysOf(mod, LOCAL_ITEM("dedication"), "2026-11-17"));
+  assert.deepStrictEqual([ded.open.date, ded.open.obs, ded.open.colors, ded.next, ded.cycles], ["2027-01-31", "local:dedication", ["white"], null, []]);
+  const dio = plain(await ctx.lectDaysOf(mod, LOCAL_ITEM("diocese"), "2026-11-17"));
+  assert.deepStrictEqual([dio.open.date, dio.open.colors], ["2027-05-27", ["white"]]);
+  // 그해의 날: 설립 연도보다 이른 해는 없다
+  assert.deepStrictEqual(plain(ctx.localYearDayOf(mod, LOCAL_ITEM("province"), 2024)).date, "2024-09-29");
+  assert.strictEqual(ctx.localYearDayOf(mod, LOCAL_ITEM("province"), 1991), null);
+  assert.strictEqual(plain(ctx.localYearDayOf(mod, LOCAL_ITEM("dedication"), 1700)).date, "1700-01-31", "축성일은 해를 모른다");
 });
 
 test("lectRowOf: 해마다 같은 독서는 엔진이 다가오는 날을 열어, 링크도 다음 해의 날도 두지 않는다(ADR-044 §1, 2026-11-17)", () => {

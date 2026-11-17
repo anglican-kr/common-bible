@@ -187,6 +187,42 @@ test("감사성찬례의 독서 표기를 구절로 치면 그 독서를 읽는 
   assert.deepStrictEqual(missing, []);
 });
 
+test("지역 축일: 소속교회의 축성일은 본당 이름으로, 다른 본당은 안내로 찾아지고, 교구 설립일은 그 교구의 본당에서 찾는다(ADR-044 §3)", { skip: !haveData }, () => {
+  const { ctx, index } = loadLectionarySearch();
+  const table = readJson(path.join(LECTIONARY, "local-observances.json"));
+  index.local = ctx.buildLocalIndex(table);
+  const plain = (v) => JSON.parse(JSON.stringify(v));
+  const parishes = plain(index.local.parishes);
+  assert.ok(parishes.length > 100, `본당이 너무 적다: ${parishes.length}`);
+  const problems = [];
+  for (const p of parishes) {
+    const base = p.name.replace(/(성당|교회)$/, "");
+    if (p.kind === "consecration") {
+      // 소속교회면 이름, 「성당」을 뗀 이름, 「교회」를 붙인 이름 모두 맨 앞 단계의 축성일 줄이다
+      for (const q of [p.name, base, `${base}교회`]) {
+        const r = plain(ctx.searchLocal(index, q, p.churchId));
+        const row = r.items.find((it) => it.local.level === "dedication");
+        if (!row || row.tier !== 1 || row.obs.name !== `${p.name} 축성일`) problems.push(`${q}: 축성일 줄 ${JSON.stringify(row && [row.obs.name, row.tier])}`);
+      }
+    }
+    // 소속교회가 아니면 「성당」을 붙인 이름이 그 본당을 알린다(같은 이름이 먼저다)
+    const notice = plain(ctx.searchLocal(index, `${base}성당`, "")).notice;
+    if (!notice || notice.name !== p.name || notice.kind !== p.kind) problems.push(`${base}성당: 안내 ${JSON.stringify(notice)}`);
+  }
+  assert.deepStrictEqual(problems, []);
+  // 교구 설립일은 그 교구에 속한 본당을 소속교회로 고르면 찾아진다
+  for (const d of plain(index.local.dioceses)) {
+    const p = parishes.find((x) => x.diocese === d.name);
+    assert.ok(p, d.name);
+    const rows = plain(ctx.searchLocal(index, `${d.name}교구설립일`, p.churchId)).items;
+    assert.deepStrictEqual(rows.map((it) => [it.obs.name, it.tier, it.local.year]), [[`${d.name}교구설립일`, 1, d.year]]);
+  }
+  // 북한에 있던 성당은 찾지 않는다
+  const north = table.parishes.find((x) => x.name.startsWith("북."));
+  assert.ok(north);
+  assert.strictEqual(plain(ctx.searchLocal(index, north.name, north.church_id)).items.length, 0);
+});
+
 test("전례일 이름과 별칭, 성인의 이름과 칭호를 치면 그 전례일이 맨 앞 단계로 나온다", { skip: !haveData }, () => {
   const { ctx, raw, index } = loadLectionarySearch();
   const problems = [];

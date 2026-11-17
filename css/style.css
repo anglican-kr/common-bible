@@ -3422,6 +3422,39 @@ mark.search-highlight {
   line-height: var(--leading-snug);
   color: var(--text);
 }
+/* 지역 축일 안내(ADR-044 §3): 결과 위에 두는 알림 카드. 소속교회를 고르지 않은 사람은 카드 안에서 바로 고른다. 본당 이름으로 찾았으면
+   그 본당을 고르는 단추(.search-local-pick-btn), `축성일`로 찾았으면 교회 목록(.search-local-pick, 설정의 선택 상자와 같은 모양)과 단추다.
+   단추는 1차 버튼(.bm-btn-primary)과 같은 색이고 누르는 영역은 --touch-target 높이다. */
+.search-local-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.search-local-pick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--touch-target);
+  font-size: var(--font-sm);
+}
+.search-local-pick .settings-select { width: 12rem; height: 36px; font-size: var(--font-sm); }
+.search-local-pick-btn {
+  align-self: flex-start;
+  min-height: var(--touch-target);
+  padding: var(--space-2) var(--space-5);
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+.search-local-pick-btn:hover { opacity: 0.88; }
+.search-local-pick-btn:disabled { opacity: 0.35; cursor: default; }
 
 .search-page-info {
   font-size: var(--font-xs);
