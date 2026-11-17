@@ -130,12 +130,15 @@ function parseMonthParam(s) {
   return { y, m };
 }
 
-/** "/calendar/YYYY-MM" — 계산 범위 밖이면 null(이전/다음 단추가 사라진다). @param {number} y @param {number} m */
-function monthHref(y, m) {
-  const yy = m < 1 ? y - 1 : m > 12 ? y + 1 : y;
-  const mm = m < 1 ? 12 : m > 12 ? 1 : m;
-  if (!isComputableYear(yy)) return null;
-  return `/calendar/${String(yy).padStart(4, "0")}-${String(mm).padStart(2, "0")}`;
+/**
+ * `delta`달 옮긴 달. 해를 넘고, 계산 범위 밖이면 null이다(‹ › 단추가 사라지거나 누를 수 없다).
+ * @param {number} y @param {number} m @param {number} delta
+ * @returns {{ y: number, m: number } | null}
+ */
+function monthStep(y, m, delta) {
+  const index = y * 12 + (m - 1) + delta;
+  const ny = Math.floor(index / 12);
+  return isComputableYear(ny) ? { y: ny, m: index - ny * 12 + 1 } : null;
 }
 
 /** 그날 지키지 않는 후보 — 다른 날로 옮겨 감 · 생략. 줄에서 흐리게 그린다(이름은 남긴다 — 「후보 전부 노출」). */
@@ -174,6 +177,17 @@ function cellLabel(name) {
   return shortName(name).replace(/^(\S+?)\s*(\d+)주일$/, "$1$2주");
 }
 
+/**
+ * 그날의 정식 색(사계재 날 축일이면 [자, 백] 병기). `colors`가 없으면 `color` 하나다. 선택 대체색(장미, 청)은 싣지 않는다(DESIGN.md §2).
+ * 월간 칸의 점(`calendarDay`)과 날짜 고르기 판의 점(`pickerColorsOf`)이 같이 쓴다. 엔진이 못 푼 날(null)은 색이 없다.
+ * @param {ResolvedDate | null} resolved
+ * @returns {string[]}
+ */
+function calendarColorsOf(resolved) {
+  if (!resolved) return [];
+  return Array.isArray(resolved.colors) && resolved.colors.length ? resolved.colors.slice() : (resolved.color ? [resolved.color] : []);
+}
+
 /** 후보 → 줄의 이름 원소. @param {Candidate} c @returns {CalendarName} */
 function nameOfCandidate(c) {
   const full = String(c.observance.name || "");
@@ -205,8 +219,7 @@ function calendarDay(date, resolved) {
   const others = resolved.candidates
     .filter((c) => !isGrid(c) && c !== official)
     .map(nameOfCandidate);
-  const colors = Array.isArray(resolved.colors) && resolved.colors.length ? resolved.colors.slice()
-    : (resolved.color ? [resolved.color] : []);
+  const colors = calendarColorsOf(resolved);
   const coord = resolved.coord;
   const cycleCode = coord && coord.type === "sunday" ? coord.year : null;
   const cycle = cycleCode && CYCLE_LABEL[cycleCode] ? CYCLE_LABEL[cycleCode] : null;
@@ -293,17 +306,11 @@ function buildMonthGrid(y, m, today, resolve) {
   return {
     year: y, month: m, title: `${y}년 ${m}월`, shortTitle: `${y}.${String(m).padStart(2, "0")}`, weeks,
     hrefs: {
-      prev: monthHref(y, m - 1), next: monthHref(y, m + 1), today: "/calendar",
+      prev: monthStepPath(y, m, -1, today), next: monthStepPath(y, m, 1, today), today: "/calendar",
       // 보던 달을 유지한다. 이번 달은 오늘 줄이고 다른 달은 그 달 1일의 줄이다(ADR-038 §2).
       view: today.slice(0, 7) === key ? "/calendar/list" : `/calendar/list/${key}-01`,
     },
   };
-}
-
-/** 그 달 1일의 목록 주소 — 계산 범위 밖이면 null(이전/다음 단추가 사라진다). @param {number} y @param {number} m */
-function listHref(y, m) {
-  const month = monthHref(y, m);
-  return month && `${month.replace("/calendar/", "/calendar/list/")}-01`;
 }
 
 /**
@@ -313,6 +320,37 @@ function listHref(y, m) {
  */
 function listPathOf(date, today) {
   return date === today ? "/calendar/list" : `/calendar/list/${date}`;
+}
+
+/**
+ * 그 달의 월간 주소. 이번 달에는 날짜를 적지 않아, 다음 달에 다시 열면 그달이다(`listPathOf`와 같은 규칙). 목록의 월간 단추와 날짜 고르기 판의
+ * 달이 쓴다.
+ * @param {number} y @param {number} m  1-12
+ * @param {string} today  "YYYY-MM-DD"
+ */
+function monthPathOf(y, m, today) {
+  const key = `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}`;
+  return today.slice(0, 7) === key ? "/calendar" : `/calendar/${key}`;
+}
+
+/**
+ * 월간 ‹ ›의 주소. 이번 달이면 날짜 없이 `/calendar`다(`monthPathOf`). 계산 범위 밖이면 null이라 단추가 사라진다.
+ * @param {number} y @param {number} m @param {-1 | 1} delta
+ * @param {string} today  "YYYY-MM-DD"
+ */
+function monthStepPath(y, m, delta, today) {
+  const to = monthStep(y, m, delta);
+  return to && monthPathOf(to.y, to.m, today);
+}
+
+/**
+ * 목록 ‹ ›의 주소. 앞뒤 달 1일의 줄이고, 그날이 오늘(매달 1일)이면 날짜 없이 `/calendar/list`다(`listPathOf`). 계산 범위 밖이면 null이라 단추가 사라진다.
+ * @param {number} y @param {number} m @param {-1 | 1} delta
+ * @param {string} today  "YYYY-MM-DD"
+ */
+function listStepPath(y, m, delta, today) {
+  const to = monthStep(y, m, delta);
+  return to && listPathOf(toKey(to.y, to.m, 1), today);
 }
 
 /**
@@ -403,13 +441,9 @@ function listDatesAfter(date, n) {
  * @returns {ListMonth}
  */
 function listMonthOf(y, m, today) {
-  const key = `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}`;
   return {
     year: y, month: m, title: `${y}년 ${m}월`, shortTitle: `${y}.${String(m).padStart(2, "0")}`,
-    hrefs: {
-      prev: listHref(y, m - 1), next: listHref(y, m + 1), today: "/calendar/list",
-      view: today.slice(0, 7) === key ? "/calendar" : `/calendar/${key}`,
-    },
+    hrefs: { prev: listStepPath(y, m, -1, today), next: listStepPath(y, m, 1, today), today: "/calendar/list", view: monthPathOf(y, m, today) },
   };
 }
 
@@ -443,25 +477,15 @@ function listTrimOf(total, topIndex) {
 /** 해 판 한 쪽의 해 수 — 네 칸씩 세 줄. */
 const PICKER_YEAR_PAGE = 12;
 
-/** 그달의 날 수(그레고리력). @param {number} y @param {number} m  1~12 */
+/** 그달의 날 수. 그 날짜가 있는지는 엔진의 `parseDate`가 가린다(2월 29일은 윤년에만 있다). @param {number} y @param {number} m  1-12 */
 function daysInMonth(y, m) {
-  if (m === 2) return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28;
-  return m === 4 || m === 6 || m === 9 || m === 11 ? 30 : 31;
+  let d = 28;
+  while (d < 31 && parseDate(toKey(y, m, d + 1))) d++;
+  return d;
 }
 
 /**
- * 날 판에서 `delta`달 옮긴 달. 계산 범위 밖이면 null이라 그쪽 단추를 누를 수 없다.
- * @param {number} y @param {number} m @param {number} delta
- * @returns {{ y: number, m: number } | null}
- */
-function pickerMonthStep(y, m, delta) {
-  const index = y * 12 + (m - 1) + delta;
-  const ny = Math.floor(index / 12);
-  return isComputableYear(ny) ? { y: ny, m: index - ny * 12 + 1 } : null;
-}
-
-/**
- * 날 판: 그달의 날을 일요일부터 칸에 채운다. 다른 달의 날은 비운다(null). 날마다 그날의 색(월간 칸의 점과 같다), 오늘인지, 지금 보는 날(목록의
+ * 날 판: 그달의 날을 일요일부터 칸에 넣는다. 다른 달의 날은 비운다(null). 날마다 그날의 색(월간 칸의 점과 같다), 오늘인지, 지금 보는 날(목록의
  * 맨 위 줄)인지를 싣는다.
  * @param {number} y @param {number} m
  * @param {string} today  "YYYY-MM-DD"
@@ -478,7 +502,7 @@ function pickerDays(y, m, today, current, colorsOf) {
     cells.push({ date, day: d, weekday: (lead + d - 1) % 7, colors: colorsOf(date), isToday: date === today, isCurrent: date === current });
   }
   while (cells.length % 7) cells.push(null);
-  return { y, m, title: `${y}년 ${m}월`, cells, prev: pickerMonthStep(y, m, -1), next: pickerMonthStep(y, m, 1) };
+  return { y, m, title: `${y}년 ${m}월`, cells, prev: monthStep(y, m, -1), next: monthStep(y, m, 1) };
 }
 
 /**
@@ -520,11 +544,17 @@ function pickerYears(start, today, current) {
   /** @type {PickerCell[]} */
   const cells = [];
   for (let y = start; y <= last; y++) cells.push({ y, m: 0, label: String(y), isToday: !!t && t.y === y, isCurrent: y === current });
-  return {
-    title: `${start}-${last}년`, cells,
-    prev: start > MIN_YEAR ? Math.max(start - PICKER_YEAR_PAGE, MIN_YEAR) : null,
-    next: last < MAX_YEAR ? Math.min(start + PICKER_YEAR_PAGE, MAX_YEAR - PICKER_YEAR_PAGE + 1) : null,
-  };
+  return { title: `${start}-${last}년`, cells, prev: pickerYearStep(start, -1), next: pickerYearStep(start, 1) };
+}
+
+/**
+ * 해 판에서 한 쪽 옮긴 첫 해. 열두 해씩 옮기되 계산 범위의 끝에서는 범위 안의 마지막 쪽에서 멈추고, 더 옮길 쪽이 없으면 null이다.
+ * @param {number} start  지금 쪽의 첫 해 @param {-1 | 1} dir
+ * @returns {number | null}
+ */
+function pickerYearStep(start, dir) {
+  if (dir < 0) return start > MIN_YEAR ? Math.max(start - PICKER_YEAR_PAGE, MIN_YEAR) : null;
+  return start + PICKER_YEAR_PAGE - 1 < MAX_YEAR ? Math.min(start + PICKER_YEAR_PAGE, MAX_YEAR - PICKER_YEAR_PAGE + 1) : null;
 }
 // ── END CALENDAR_MODEL ──
 
@@ -561,7 +591,7 @@ function commitMonthBar(model, icon) {
   });
   trigger.appendChild(month);
   setPickerTrigger(trigger, model, view);
-  trigger.addEventListener("click", (e) => toggleCalendarPicker(trigger, view, e.detail > 0));
+  trigger.addEventListener("click", (e) => openCalendarPicker(trigger, view, e.detail > 0));
   // 이전 · 다음 달은 계산 범위 밖이면 자리만 지킨다
   commitDateBar({
     title: trigger,
@@ -621,11 +651,11 @@ function setPickerTrigger(trigger, model, view) {
   trigger.setAttribute("aria-label", `${model.title}, ${view === "month" ? "해와 달 고르기" : "날짜 고르기"}`);
 }
 
-/** 그날의 색 코드 — 월간 칸의 점과 같다(`calendarDay`). 교회력 자료는 캘린더 화면이 이미 받아 두었다. @param {string} date */
+/** 그날의 색 코드. 월간 칸의 점과 같은 함수로 정한다(`calendarColorsOf`). 교회력 자료는 캘린더 화면이 이미 받아 두었다. @param {string} date */
 function pickerColorsOf(date) {
   if (!isComputableDate(date)) return [];
   try {
-    return calendarDay(date, resolveDate(date)).colors;
+    return calendarColorsOf(resolveDate(date));
   } catch (err) {
     console.warn("날짜 고르기: 그날의 색을 계산하지 못했습니다", err);
     return [];
@@ -658,15 +688,15 @@ function announcePicker() {
 
 /**
  * 날 판의 날 하나. 그날의 줄을 맨 위에 두는 목록으로 가는 링크이고, 이름은 월간 칸처럼 오늘, 날짜와 요일, 색이다.
- * @param {PickerDay} c @param {number} m
+ * @param {PickerDay} c @param {number} m @param {string} today  "YYYY-MM-DD"
  */
-function buildPickerDay(c, m) {
+function buildPickerDay(c, m, today) {
   const cls = ["cal-picker-day"];
   if (c.isCurrent) cls.push("is-selected");
   if (c.isToday) cls.push("is-today");
   const label = [c.isToday ? "오늘" : null, `${m}월 ${c.day}일 ${CAL_WEEKDAY_FULL[c.weekday]}`, c.colors.length ? colorNames(c.colors) : null]
     .filter(Boolean).join(", ");
-  const a = el("a", { className: cls.join(" "), href: `/calendar/list/${c.date}`, "aria-label": label, "data-focus-key": PICKER_FOCUS_KEY });
+  const a = el("a", { className: cls.join(" "), href: listPathOf(c.date, today), "aria-label": label, "data-focus-key": PICKER_FOCUS_KEY });
   if (c.isCurrent) a.setAttribute("aria-current", "true");
   a.appendChild(el("span", { className: "cal-picker-num" }, String(c.day)));
   const dots = el("span", { className: "cal-picker-dots", "aria-hidden": "true" });
@@ -675,8 +705,8 @@ function buildPickerDay(c, m) {
   return a;
 }
 
-/** 날 판: 요일 머리가 있는 표. 다른 달의 날은 빈 칸이다. @param {PickerDays} days */
-function buildPickerDays(days) {
+/** 날 판: 요일 머리가 있는 표. 다른 달의 날은 빈 칸이다. @param {PickerDays} days @param {string} today  "YYYY-MM-DD" */
+function buildPickerDays(days, today) {
   const table = el("table", { className: "cal-picker-days" });
   table.appendChild(el("caption", { className: "sr-only" }, days.title));
   const head = el("tr");
@@ -685,7 +715,7 @@ function buildPickerDays(days) {
   const rows = el("tbody");
   for (let i = 0; i < days.cells.length; i += 7) {
     const tr = el("tr");
-    for (const c of days.cells.slice(i, i + 7)) tr.appendChild(el("td", null, c ? buildPickerDay(c, days.m) : null));
+    for (const c of days.cells.slice(i, i + 7)) tr.appendChild(el("td", null, c ? buildPickerDay(c, days.m, today) : null));
     rows.appendChild(tr);
   }
   table.appendChild(rows);
@@ -693,10 +723,11 @@ function buildPickerDays(days) {
 }
 
 /**
- * 달 판과 해 판의 칸 열둘. 월간의 달은 그 달로 가는 링크(`link`), 목록의 달(`month`)과 해(`year`)는 판 안에서 한 단계 아래로 가는 단추다.
- * @param {PickerMonths | PickerYears} page @param {"link" | "month" | "year"} kind
+ * 달 판과 해 판의 칸 열둘. 월간의 달은 그 달로 가는 링크(`link`)이고, 이번 달은 날짜 없이 `/calendar`다(`monthPathOf`). 목록의 달(`month`)과
+ * 해(`year`)는 판 안에서 한 단계 아래로 가는 단추다.
+ * @param {PickerMonths | PickerYears} page @param {"link" | "month" | "year"} kind @param {string} today  "YYYY-MM-DD"
  */
-function buildPickerCells(page, kind) {
+function buildPickerCells(page, kind, today) {
   const grid = el("div", { className: "cal-picker-grid", role: "group", "aria-label": page.title });
   for (const c of page.cells) {
     const cls = ["cal-picker-cell"];
@@ -706,7 +737,7 @@ function buildPickerCells(page, kind) {
     /** @type {HTMLElement} */
     let node;
     if (kind === "link") {
-      node = el("a", { className: cls.join(" "), href: monthHref(c.y, c.m) || "", "aria-label": label, "data-focus-key": PICKER_FOCUS_KEY }, c.label);
+      node = el("a", { className: cls.join(" "), href: monthPathOf(c.y, c.m, today), "aria-label": label, "data-focus-key": PICKER_FOCUS_KEY }, c.label);
     } else {
       node = el("button", { type: "button", className: cls.join(" "), "aria-label": label }, c.label);
       node.dataset[kind] = String(kind === "year" ? c.y : c.m);
@@ -730,17 +761,17 @@ function renderPicker() {
   if (s.mode === "day") {
     page = pickerDays(s.y, s.m, s.today, s.current, pickerColorsOf);
     stepLabels = ["이전 달", "다음 달"];
-    p.body.appendChild(buildPickerDays(page));
+    p.body.appendChild(buildPickerDays(page, s.today));
     p.title.setAttribute("aria-label", `${page.title}, 달 고르기`);
   } else if (s.mode === "month") {
     page = pickerMonths(s.y, s.today, s.currentMonth);
     stepLabels = ["이전 해", "다음 해"];
-    p.body.appendChild(buildPickerCells(page, s.view === "month" ? "link" : "month"));
+    p.body.appendChild(buildPickerCells(page, s.view === "month" ? "link" : "month", s.today));
     p.title.setAttribute("aria-label", `${page.title}, 해 고르기`);
   } else {
     page = pickerYears(s.yearStart, s.today, s.currentMonth.y);
     stepLabels = ["이전 열두 해", "다음 열두 해"];
-    p.body.appendChild(buildPickerCells(page, "year"));
+    p.body.appendChild(buildPickerCells(page, "year", s.today));
   }
   // 해 판의 머리는 더 올라갈 단계가 없어 글자만 둔다
   p.title.hidden = s.mode === "year";
@@ -762,7 +793,7 @@ function stepPicker(dir) {
   const p = picker;
   if (!s || !p) return;
   if (s.mode === "day") {
-    const to = pickerMonthStep(s.y, s.m, dir);
+    const to = monthStep(s.y, s.m, dir);
     if (!to) return;
     s.y = to.y;
     s.m = to.m;
@@ -770,8 +801,7 @@ function stepPicker(dir) {
     if (!isComputableYear(s.y + dir)) return;
     s.y += dir;
   } else {
-    const years = pickerYears(s.yearStart, s.today, s.currentMonth.y);
-    const to = dir < 0 ? years.prev : years.next;
+    const to = pickerYearStep(s.yearStart, dir);
     if (to === null) return;
     s.yearStart = to;
   }
@@ -800,6 +830,7 @@ function placePicker() {
 
 /**
  * 시트의 손잡이 줄을 아래로 끌면 시트가 따라 내려가고, 충분히 끌어 놓으면 닫는다. 팝오버와 「닫기」 단추에서는 끌지 않는다.
+ * 끌어 내린 만큼은 `translate` 속성으로 옮긴다. 여는 움직임과 닫는 움직임은 `transform`을 쓰므로, 여는 움직임 중에 끌어도 서로 덮지 않는다.
  * @param {HTMLElement} handle @param {HTMLElement} panel @param {() => void} onClose @param {MediaQueryList} desktop
  */
 function attachPickerDrag(handle, panel, onClose, desktop) {
@@ -812,22 +843,24 @@ function attachPickerDrag(handle, panel, onClose, desktop) {
     startY = e.clientY;
     dy = 0;
     handle.setPointerCapture(e.pointerId);
-    panel.classList.add("cal-picker-dragging");
   });
   handle.addEventListener("pointermove", (e) => {
     if (!dragging) return;
     dy = Math.max(0, e.clientY - startY);
-    panel.style.transform = `translateY(${dy}px)`;
+    panel.style.translate = `0 ${dy}px`;
   });
-  const end = () => {
+  handle.addEventListener("pointerup", () => {
     if (!dragging) return;
     dragging = false;
-    panel.classList.remove("cal-picker-dragging");
     if (dy > Math.min(PICKER_DRAG_CLOSE_PX, panel.offsetHeight * 0.3)) onClose();
-    else panel.style.transform = "";
-  };
-  handle.addEventListener("pointerup", end);
-  handle.addEventListener("pointercancel", end);
+    else panel.style.translate = "";
+  });
+  // 브라우저가 끌기를 가로채면(스크롤, 제스처) 닫지 않고 제자리로 돌린다
+  handle.addEventListener("pointercancel", () => {
+    if (!dragging) return;
+    dragging = false;
+    panel.style.translate = "";
+  });
 }
 
 /** 판의 요소와 오버레이 제어기를 처음 쓸 때 만든다. */
@@ -837,7 +870,7 @@ function ensurePicker() {
   scrim.hidden = true;
   const panel = el("div", { className: "cal-picker", role: "dialog", "aria-modal": "true", "aria-label": "날짜 고르기" });
   panel.hidden = true;
-  // 손잡이 줄: 시트를 아래로 끌어 닫는다. 오른쪽 「닫기」는 끌 수 없는 사용자(화면 읽기 프로그램, 키보드)도 닫게 한다. 팝오버에서는 CSS가 숨긴다
+  // 손잡이 줄: 시트를 아래로 끌어 닫는다. 오른쪽 「닫기」는 끌 수 없는 사용자(스크린 리더, 키보드)도 닫게 한다. 팝오버에서는 CSS가 숨긴다
   const top = el("div", { className: "cal-picker-top" });
   const close = el("button", { type: "button", className: "cal-picker-close" }, "닫기");
   top.appendChild(close);
@@ -855,18 +888,20 @@ function ensurePicker() {
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   let closeTimer;
+  // 휴대폰과 데스크톱의 경계를 넘어 닫는 중이다(아래 `desktop`의 change)
+  let switching = false;
   const overlay = window.appOverlay.createOverlay({
     panel,
     scrim,
+    // 판이 열린 동안 상단 바도 막혀(inert) 제목 단추를 다시 누를 수 없다. 그 자리를 누르면 시트는 뒤 가림이, 팝오버는 바깥 누르기 처리가 판을 닫는다
     closeOnOutside: true,
-    outsideIgnore: ".cal-title-btn",
     inertSelectors: PICKER_INERT_SELECTORS,
     ariaExpanded: ".cal-title-btn",
     // 처음 포커스와 닫은 뒤의 포커스는 여기서 옮긴다. 제어기의 기본(`focus()`)은 스크롤하고 탭한 뒤에도 테두리를 그린다(`focusInPicker`)
     onOpen: () => {
       clearTimeout(closeTimer);
       panel.classList.remove("cal-picker-closing");
-      panel.style.transform = "";
+      panel.style.translate = "";
       placePicker();
       requestAnimationFrame(() => {
         if (overlay.isOpen) focusInPicker(pickerFocusTarget());
@@ -876,11 +911,14 @@ function ensurePicker() {
       const trigger = pickerState?.trigger;
       if (trigger?.isConnected) focusInPicker(trigger);
     },
-    // 시트는 다른 시트처럼 아래로 미끄러져 닫힌다. 팝오버, 움직임을 줄인 설정, 끌어서 닫은 시트는 바로 닫는다
+    // 시트는 다른 시트처럼 아래로 미끄러져 닫힌다. 팝오버, 움직임을 줄인 설정, 끌어서 닫은 시트, 휴대폰과 데스크톱의 경계를 넘을 때는 바로 닫는다.
+    // 경계를 넘을 때 미끄러지면, 보이지 않던 시트가 화면 아래에 나타났다 사라지거나 팝오버의 자리(top, left)에서 늘어난 채 움직인다
     closeTransition: (p, finalizeHide) => {
-      if (desktop.matches || reduceMotion.matches || p.style.transform) {
+      if (switching || desktop.matches || reduceMotion.matches || p.style.translate) {
         finalizeHide();
-        p.style.transform = "";
+        p.style.translate = "";
+        p.style.top = "";
+        p.style.left = "";
         return;
       }
       p.classList.add("cal-picker-closing");
@@ -933,8 +971,13 @@ function ensurePicker() {
     if (e.target instanceof Element && e.target.closest("a[href]")) overlay.close();
   });
   attachPickerDrag(top, panel, () => overlay.close(), desktop);
-  // 휴대폰과 데스크톱의 경계를 넘으면 시트와 팝오버가 바뀌므로 닫는다. 데스크톱에서 창 크기가 바뀌면 자리를 다시 잡는다
-  desktop.addEventListener("change", () => overlay.close());
+  // 휴대폰과 데스크톱의 경계를 넘으면 시트와 팝오버가 바뀌므로 닫는다. 창 크기로 넘으면 resize 처리가 먼저 실행되어 팝오버의 자리를 이미 지웠을 수
+  // 있어, 자리가 아니라 이 표시를 보고 움직임 없이 닫는다. 데스크톱에서 창 크기가 바뀌면 자리를 다시 잡는다
+  desktop.addEventListener("change", () => {
+    switching = true;
+    overlay.close();
+    switching = false;
+  });
   window.addEventListener("resize", () => {
     if (overlay.isOpen) placePicker();
   });
@@ -943,16 +986,12 @@ function ensurePicker() {
 }
 
 /**
- * 제목 단추를 누르면 판을 열고, 열려 있으면 닫는다. 월간은 달 판, 목록은 날 판으로 연다. 목록에서 지금 보는 날은 상단 바 바로 아래 줄이다.
+ * 제목 단추를 누르면 판을 연다. 월간은 달 판, 목록은 날 판으로 연다. 목록에서 지금 보는 날은 상단 바 바로 아래 줄이다.
  * @param {HTMLElement} trigger @param {"month" | "list"} view
  * @param {boolean} pointer  손가락이나 마우스로 눌렀다(키보드면 false)
  */
-function toggleCalendarPicker(trigger, view, pointer) {
+function openCalendarPicker(trigger, view, pointer) {
   const p = ensurePicker();
-  if (p.overlay.isOpen) {
-    p.overlay.close();
-    return;
-  }
   const listRoot = view === "list" ? $app.querySelector(".cal-list") : null;
   const current = listRoot instanceof HTMLElement ? rowUnderBar(listRoot)?.dataset.date ?? null : null;
   const cp = current ? parseDate(current) : null;

@@ -22,6 +22,13 @@ title: "feat: 캘린더에서 해와 달, 날을 고르는 판"
   - 판이 옮기는 포커스는 스크롤 없이 옮긴다. 목록 화면은 스크롤 고정 때문에 상단 바 높이만큼 위쪽 여백(`scroll-padding-top`)을 두는데, 스크립트가 상단 바 안으로 포커스를 옮기면 페이지가 스크롤되었다. 이것을 재다가 main에서도 Tab으로 포커스를 옮길 때마다 목록이 튀는 것을 찾아 known-issues §56으로 적었다. 고치는 법은 정하지 않았다.
   - 처음에는 제목 단추의 `mousedown` 기본 동작도 막았다. 그런데 마우스로 누를 때 생기는 포커스는 스크롤하지 않았고(앞서 본 스크롤은 Playwright의 `click`이 누르기 전에 하는 자동 스크롤이었다), 막는 코드를 되돌려도 시험이 통과해 지웠다. 그래서 e2e는 좌표로 누른다(`_press`).
   - 목록에서는 판의 달과 지금 보는 날을 같은 줄(맨 위 줄)에서 정한다. 상단 바의 달은 스크롤 뒤 다음 화면을 그릴 때 따라가므로, 그 사이에 누르면 둘이 어긋날 수 있다.
+- 코드 검토에서 고친 것(2026-11-18). 검토 도구가 고친 것 가운데 둘은 e2e로 확인해 보니 문제가 남아 다시 고쳤다.
+  - 데스크톱 팝오버에서는 「닫기」를 숨기는데, 공용 포커스 가두기(`trapFocus`)가 이 단추를 첫 칸으로 세어 Shift+Tab이 판 밖으로 나가고 마지막 칸의 Tab이 멈췄다. `trapFocus`가 화면에 그려지지 않은 요소를 건너뛰게 했다. 모든 오버레이에 적용된다.
+  - 판의 오늘과 이번 달은 주소에 날짜를 적지 않는다(`listPathOf`, 새 함수 `monthPathOf`). 다음 날이나 다음 달에 다시 열면 그날과 그달이다. 이번 달은 검토가 정해 달라고 남긴 것을 사용자가 고치기로 했다(2026-11-18). 같은 까닭으로 월간의 ‹ ›도 이번 달로 갈 때는 `/calendar`, 목록의 ‹ ›도 1일이 오늘이면 `/calendar/list`로 적는다(사용자 결정 2026-11-18, `monthStepPath`, `listStepPath`). 그래서 앞뒤 달을 정하는 함수를 `monthStep` 하나로 모으고(판의 `pickerMonthStep`을 옮겼다) 쓰이지 않게 된 `monthHref`와 `listHref`를 지웠다.
+  - 시트가 닫히는 움직임 동안 누른 Esc는 판이 받지 않고 다음 단계로 넘긴다(`app.js`). 브라우저가 끌기를 가로채면(`pointercancel`) 닫지 않고 제자리로 돌린다.
+  - 손잡이로 끌어 내린 만큼 시트를 옮길 때 `transform` 대신 `translate` 속성을 쓴다. 여는 움직임이 `transform`을 쓰므로, 열리는 동안 끌면 시트가 손가락을 따라오지 않았다. 검토 도구는 손잡이를 끌고 있는 동안 여는 움직임을 없애는 규칙(`animation: none`)을 넣었는데, 조금 끌다 놓으면 여는 움직임이 처음부터 다시 실행되어 시트가 화면 아래에서 다시 올라왔다.
+  - 휴대폰과 데스크톱의 경계를 넘어 닫을 때는 움직임 없이 바로 닫는다(`switching` 표시). 검토 도구는 팝오버의 자리(`top`)가 남았는지로 가렸는데, 창이 좁아지면 `resize` 처리가 먼저 실행되어 자리를 지우므로 시트의 닫는 움직임이 실행되었다.
+  - 정리: 판이 열린 동안 상단 바가 막혀 제목 단추를 누를 수 없으므로, 실행되지 않던 「열려 있으면 닫기」 분기와 무시 선택자(`outsideIgnore`)를 지우고 함수 이름을 `openCalendarPicker`로 바꿨다. 그달의 날 수는 엔진의 `parseDate`로 가려 윤년 규칙을 따로 두지 않는다. 날 판의 색은 월간 칸과 같은 `calendarColorsOf`로 정해 하루치를 모두 계산하지 않는다. 해 판의 ‹ ›는 `pickerYearStep` 하나로 정한다.
 - ADR-038의 남은 일은 검색 이원화(A4)였는데 ADR-044가 대체했다. 그래서 이 판으로 상태를 「구현 완료」로 바꾼다.
 - `DESIGN.md`: 데스크톱에서 다른 시트가 오른쪽 패널로 바뀌는 규칙의 예외로, 날짜 고르기는 제목 아래 팝오버라고 적었다. 판이 작아 오른쪽 패널로 두면 고를 자리와 멀어진다(HIG Pickers).
 - 디자인 시스템 아티팩트 34판에 `CalendarDatePicker`(설명, 실제 DOM의 미리보기)를 더하고, `bundle.css`와 `Header` 설명을 맞췄다.
@@ -29,16 +36,18 @@ title: "feat: 캘린더에서 해와 달, 날을 고르는 판"
 
 ## 검증
 
-- 유닛 전체 `node --test tests/unit/*.test.js` 1,887개 통과(`tests/unit/calendar.test.js`에 판의 모델 시험 6개를 더했다), 타입 검사 `npm run typecheck` 통과.
+- 유닛 전체 `node --test tests/unit/*.test.js` 1,892개 통과, 타입 검사 `npm run typecheck` 통과. `tests/unit/calendar.test.js`에 판의 모델 시험 6개와 코드 검토 뒤의 시험(`calendarColorsOf`, `monthPathOf`, `pickerYearStep`, `monthStepPath`, `listStepPath`)을 더하고, 지운 `monthHref`의 시험을 뺐다. `tests/unit/helpers.test.js`에 그려지지 않은 요소를 건너뛰는 포커스 가두기 시험 1개를 더했다.
 - e2e(작업 폴더 서버 8092): `test_calendar_view.py`, `test_lectionary_view.py`, `test_top_bar.py`, `test_a11y_axe.py`, `test_a11y_keyboard.py` 260개 통과(7분 43초). 그 뒤 목록에서 판의 달을 맨 위 줄에서 정하게 고치고 `test_calendar_view.py`와 `test_a11y_axe.py`의 캘린더 시험 105개를 다시 돌려 통과했다. 새로 쓴 시험은 `test_calendar_view.py`의 날짜 고르기 6개와 `test_a11y_axe.py`의 `test_a11y_calendar_date_picker`(날 판, 해 판, 월간의 팝오버)다.
-- 시험이 결함을 잡는지 보려고 고친 곳을 하나씩 되돌렸다. 칸을 누를 때 전파를 멈추는 줄을 되돌리면 `test_picker_title_steps_up_to_months_and_years_and_back_down`이, 판의 이름(`aria-label`)을 지우면 axe의 `aria-dialog-name`(serious)이 실패했다.
+- 코드 검토 뒤 전체 e2e 740개 통과(22분 13초, 작업 폴더 서버 8092). 포커스 가두기는 모든 오버레이가 쓰므로 전체를 돌렸다. 날짜 고르기 시험은 오늘을 2026-11-17로 고정했다. 판의 오늘과 이번 달 링크가 시험하는 날에 따라 바뀌기 때문이다. 끌기와 폭이 바뀔 때의 시험 2개를 더하고, 키보드 시험에는 Shift+Tab과 마지막 칸에서 처음으로 돌아오는지를 더했다.
+- 그 뒤 ‹ ›의 주소를 고치고 `test_calendar_view.py` 104개와, ‹ ›를 누르는 `test_top_bar.py`, `test_liturgical_lazy_load.py`, `test_lectionary_view.py` 145개를 다시 돌려 통과했다. 월간의 ‹ › 시험은 오늘을 2026-11-17로 고정해 이번 달로 가는 주소를 보고, 목록에서 매달 1일의 ‹ › 시험(`test_list_step_to_the_first_that_is_today_has_no_date`)을 더했다.
+- 시험이 결함을 잡는지 보려고 고친 곳을 하나씩 되돌렸다. 칸을 누를 때 전파를 멈추는 줄을 되돌리면 `test_picker_title_steps_up_to_months_and_years_and_back_down`이, 판의 이름(`aria-label`)을 지우면 axe의 `aria-dialog-name`(serious)이 실패했다. 코드 검토 뒤에는 포커스 가두기의 건너뛰기를 되돌리면 `test_picker_works_with_the_keyboard`가 실패했다(Tab이 마지막 칸에 멈춘다). 검토 도구가 넣은 끌기 규칙을 다시 넣으면 `test_picker_sheet_follows_a_drag_and_closes_past_the_line`이 실패했고(시트가 화면 아래로 내려가 다시 올라온다), 검토 도구의 폭 처리로는 `test_picker_popover_closes_in_place_when_the_window_narrows`가 실패했다(닫는 움직임이 실행된다).
 - 사람처럼 좌표로 누르고 탭해 쟀다(Chromium 헤드리스, 오늘을 2026-11-17로 고정): 판을 열고 닫는 동안 목록의 스크롤 값이 그대로였고(데스크톱 2209px, 폭 390px 2251px), 지금 보는 날은 오늘 줄(17일)이었다.
 - 화면으로 확인: 폭 320px의 기본 글자와 글자 24px, 폭 390px의 상단 바(펼침 표시와 ›가 떨어져 있다), 데스크톱의 팝오버(제목 바로 아래 가운데), 다크 모드의 시트.
 
 ## 갱신한 문서
 
-- `docs/decisions/038-calendar-lectionary-ui.md`: 상태(구현 완료), 요약 2, §2 「날짜 고르기」, 「검토한 대안」의 「날짜 고르기」
-- `DESIGN.md`: §6 컴포넌트 「캘린더 날짜 고르기」와 「날짜 이동 줄」, 「시트 vs 모달」
-- `docs/topics/liturgical.md`: 「지금 동작」의 「캘린더 날짜 고르기」, 「결정」의 ADR-038, 「남은 일」의 known-issues §56
+- `docs/decisions/038-calendar-lectionary-ui.md`: 상태(구현 완료), 요약 2, §2 「날짜 고르기」, §2 「목록 보기」의 「오늘 줄의 주소」와 새 「이번 달의 주소」, 「검토한 대안」의 「날짜 고르기」
+- `DESIGN.md`: §6 컴포넌트 「캘린더 날짜 고르기」와 「날짜 이동 줄」, 「시트 vs 모달」, 접근성의 「포커스 트랩」
+- `docs/topics/liturgical.md`: 「지금 동작」의 「캘린더 날짜 고르기」와 「캘린더 월간 표」, 「캘린더 목록 보기」의 ‹ ›, 「결정」의 ADR-038, 「남은 일」의 known-issues §56
 - `docs/known-issues.md`: §56
 - `docs/architecture.md`: 부록 A의 ADR-038 줄

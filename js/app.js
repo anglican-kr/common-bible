@@ -68,7 +68,7 @@ document.addEventListener("keydown", (e) => {
     // focus-trap teardown + aria reset + focus restore run — never hide them
     // directly here. Settings sits above the chapter picker, so it wins first.
     // 캘린더의 날짜 고르기 판(ADR-038 §2)은 뒤 화면을 막는 시트라 가장 위에 있다.
-    if (document.querySelector(".cal-picker:not([hidden])")) { window.closeCalendarPicker?.(); return; }
+    if (document.querySelector(".cal-picker:not([hidden]):not(.cal-picker-closing)")) { window.closeCalendarPicker?.(); return; }
     if (document.querySelector(".settings-popover:not([hidden])")) { window.closeSettings?.(); return; }
     if (document.querySelector(".chapter-popover:not([hidden])")) { window.closeChapterPopover?.(); return; }
     // No higher overlay — close the tab-bar search morph if active.

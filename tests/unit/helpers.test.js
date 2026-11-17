@@ -121,6 +121,9 @@ function makeDom() {
         for (const fn of [...set]) fn(evt);
       },
       focus(opts) { activeElement = this; this._focusOpts = opts; },
+      /** Test-only rendering: `_rendered = false` stands in for display: none (no boxes). */
+      _rendered: true,
+      getClientRects() { return this._rendered ? [{}] : []; },
       querySelectorAll(selector) {
         return findAll(this, selector);
       },
@@ -606,6 +609,22 @@ test("trapFocus: Shift+Tab from the first focusable wraps to the last", () => {
   container._dispatch("keydown", e);
   assert.equal(e._prevented, true);
   assert.equal(h.dom.getActive(), inp, "focus wrapped to last");
+});
+
+test("trapFocus: skips unrendered focusables when wrapping (display: none close row)", () => {
+  const h = loadHelpers();
+  const { container, link, btn, inp } = buildFocusableContainer(h.helpers);
+  link._rendered = false;  // first in DOM order but not rendered
+  btn.focus();  // first rendered focusable
+  h.helpers.trapFocus(container);
+  const back = makeKeyEvent("Tab", { shiftKey: true });
+  container._dispatch("keydown", back);
+  assert.equal(back._prevented, true);
+  assert.equal(h.dom.getActive(), inp, "Shift+Tab from the first rendered stop wraps to the last");
+  const fwd = makeKeyEvent("Tab");
+  container._dispatch("keydown", fwd);
+  assert.equal(fwd._prevented, true);
+  assert.equal(h.dom.getActive(), btn, "Tab from the last wraps to the first rendered stop");
 });
 
 test("trapFocus: Shift+Tab from the container itself wraps to the last", () => {

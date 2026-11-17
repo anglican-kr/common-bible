@@ -1301,7 +1301,8 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   box-shadow: var(--shadow-sheet);
 }
-/* 여는 움직임은 끝난 뒤 남지 않게 한다(backwards). 남으면 시트를 끌 때 붙이는 transform을 덮는다. */
+/* 여는 움직임과 닫는 움직임은 transform을 쓰고, 손잡이로 끌어 내린 만큼은 calendar.js가 translate 속성으로 시트를 옮긴다(`attachPickerDrag`).
+   두 속성은 겹쳐 그려지므로, 여는 움직임 중에 끌어도 시트가 손가락을 따라온다. */
 .cal-picker:not([hidden]):not(.cal-picker-closing) {
   animation: bm-drawer-in-up var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94) backwards;
 }

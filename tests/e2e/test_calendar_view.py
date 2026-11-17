@@ -13,7 +13,7 @@
   ⑦ 잘못된 달 · 자료 실패 · 데스크톱 상단 바의 입구(탭과 같은 곳으로)
   ⑧ 달 이동 뒤 키보드 포커스가 누른 컨트롤에 남는다
   ⑨ 세 화면의 같은 상단 바  ⑩ 목록 보기
-  ⑪ 날짜 고르기 — 달 제목이 여는 판(휴대폰은 시트, 데스크톱은 팝오버), 단계, 고른 곳, 포커스, 닫기
+  ⑪ 날짜 고르기 — 달 제목이 여는 판(휴대폰은 시트, 데스크톱은 팝오버), 단계, 고른 곳, 포커스, 닫기, 끌기, 폭이 바뀔 때
 
 실데이터(data/ 서브모듈)가 필요하다 — 로컬 전용(CLAUDE.md 「테스트」).
 """
@@ -69,8 +69,10 @@ def test_calendar_tab_is_second_and_opens_this_month(mobile_context):
 # ── ② 달 이동 ──
 
 def test_month_nav_links_step_months_and_back_returns(desktop_context):
-    """다음 달은 해를 넘고(2026-12 → 2027-01), 이전 · 오늘도 링크 — 뒤로 가기가 앞 달로 돌아온다."""
+    """다음 달은 해를 넘고(2026-12 → 2027-01), 이전 · 오늘도 링크 — 뒤로 가기가 앞 달로 돌아온다. 이번 달로 가는 ‹ ›는 날짜 없이 /calendar다
+    (ADR-038 §2 「이번 달의 주소」). 오늘을 2026-11-17로 고정한다."""
     page = desktop_context.new_page()
+    page.clock.set_fixed_time(datetime.datetime(2026, 11, 17, 12))
     _open(page, "calendar/2026-12")
     assert page.inner_text(".cal-month") == "2026년 12월"
     page.locator(".lect-datenav-btn[aria-label='다음 달']").click()
@@ -79,14 +81,16 @@ def test_month_nav_links_step_months_and_back_returns(desktop_context):
     page.locator(".lect-datenav-btn[aria-label='이전 달']").click()
     page.wait_for_url("**/calendar/2026-12")
     page.locator(".lect-datenav-btn[aria-label='이전 달']").click()
-    page.wait_for_url("**/calendar/2026-11")
+    page.wait_for_url(f"{BASE}/calendar")   # 이번 달
     page.wait_for_selector(".cal-month:has-text('2026년 11월')")
+    assert page.get_attribute(".lect-datenav-btn[aria-label='다음 달']", "href") == "/calendar/2026-12"
     page.go_back()
     page.wait_for_url("**/calendar/2026-12")
     page.wait_for_selector(".cal-month:has-text('2026년 12월')")
+    assert page.get_attribute(".lect-datenav-btn[aria-label='이전 달']", "href") == "/calendar"
     page.locator("#page-title .lect-today").click()
     page.wait_for_url(f"{BASE}/calendar")
-    page.wait_for_selector(f".cal-month:has-text('{_this_month()[1]}')")
+    page.wait_for_selector(".cal-month:has-text('2026년 11월')")
 
 
 def test_grid_is_six_weeks_from_sunday(desktop_context):
@@ -845,6 +849,18 @@ def test_list_month_steps_and_today(mobile_context):
     assert _row(page, datetime.date.today().isoformat()).get_attribute("aria-current") == "date"
 
 
+def test_list_step_to_the_first_that_is_today_has_no_date(mobile_context):
+    """매달 1일에 ‹ ›로 이번 달에 오면 그 1일이 오늘 줄이라 주소에 날짜가 없다(ADR-038 §2 「오늘 줄의 주소」)."""
+    page = mobile_context.new_page()
+    page.clock.set_fixed_time(datetime.datetime(2026, 12, 1, 12))
+    _open_list(page, "calendar/list/2026-11-15")
+    assert page.get_attribute("#page-title a.lect-datenav-btn[data-focus-key='next']", "href") == "/calendar/list"
+    page.locator("#page-title a.lect-datenav-btn[data-focus-key='next']").click()
+    page.wait_for_url(f"{BASE}/calendar/list")
+    page.wait_for_selector(".cal-month:has-text('2026년 12월')")
+    assert _row(page, "2026-12-01").get_attribute("aria-current") == "date"
+
+
 def test_tab_in_list_keeps_the_list_and_goes_to_today(mobile_context):
     """목록에서 캘린더 탭을 다시 누르면 목록을 유지하고 오늘 줄로 간다(사용자 결정 2026-11-07). 전례독서와 다른 탭에서는 마지막 보기인 목록으로 돌아온다."""
     page = mobile_context.new_page()
@@ -1550,10 +1566,16 @@ def _open_picker(page):
     page.wait_for_timeout(400)   # 시트가 올라오고 포커스가 옮겨 간다
 
 
+def _freeze_today(page):
+    """오늘을 2026-11-17로 고정한다. 판의 오늘과 이번 달 링크는 주소에 날짜가 없어, 시험을 돌리는 날에 따라 링크가 바뀌지 않게 한다."""
+    page.clock.set_fixed_time(datetime.datetime(2026, 11, 17, 12))
+
+
 def test_list_title_opens_the_day_picker_and_a_day_opens_its_row(mobile_context):
     """목록의 달 제목을 누르면 그달의 날 판이 시트로 열리고 지금 보는 날(맨 위 줄)이 골라져 있다. 날마다 월간 칸과 같은 색 점이 있다. ›로
     다음 달로 옮겨 날을 누르면 그날의 줄이 맨 위인 목록이 열리고, 포커스는 새 제목 단추로 돌아간다."""
     page = mobile_context.new_page()
+    _freeze_today(page)
     _open_list(page, "calendar/list/2027-02-01")
     y = page.evaluate("scrollY")
     _open_picker(page)
@@ -1584,6 +1606,7 @@ def test_picker_title_steps_up_to_months_and_years_and_back_down(mobile_context)
     """판은 한 번에 한 단계만 보인다. 날 판의 머리를 누르면 달 판, 달 판의 머리를 누르면 해 판(열두 해)이다. 해를 고르면 그해의 달 판,
     목록에서 달을 고르면 그달의 날 판으로 내려간다. 내려간 판은 처음 칸에 포커스를 둔다."""
     page = mobile_context.new_page()
+    _freeze_today(page)
     _open_list(page, "calendar/list/2027-02-01")
     _open_picker(page)
     _press(page, ".cal-picker button.cal-picker-title")
@@ -1610,6 +1633,7 @@ def test_picker_title_steps_up_to_months_and_years_and_back_down(mobile_context)
 def test_month_title_opens_the_month_picker_as_a_popover_and_goes_to_the_month(desktop_context):
     """월간의 달 제목은 달 판을 연다. 마우스를 쓰는 넓은 화면에서는 제목 아래 팝오버이고 뒤를 가리지 않는다. 달은 그 달로 가는 링크다."""
     page = desktop_context.new_page()
+    _freeze_today(page)
     _open(page, "calendar/2027-02")
     _open_picker(page)
     state = _picker(page)
@@ -1635,6 +1659,7 @@ def test_month_title_opens_the_month_picker_as_a_popover_and_goes_to_the_month(d
 def test_picker_closes_without_moving_the_list_and_returns_focus(mobile_context):
     """「닫기」, Esc, 뒤 가림을 누르면 닫히고 포커스는 제목 단추로 돌아간다. 목록은 움직이지 않는다."""
     page = mobile_context.new_page()
+    _freeze_today(page)
     _open_list(page, "calendar/list/2026-12-15")
     y = page.evaluate("scrollY")
     for close in ("button", "escape", "scrim"):
@@ -1653,9 +1678,54 @@ def test_picker_closes_without_moving_the_list_and_returns_focus(mobile_context)
         assert page.url == f"{BASE}/calendar/list/2026-12-15", close
 
 
+def test_picker_sheet_follows_a_drag_and_closes_past_the_line(mobile_context):
+    """시트는 손잡이 줄을 끌어 내린 만큼 내려간다. 조금 끌다 놓으면 제자리로 돌아오고 여는 움직임이 다시 실행되지 않는다. 충분히 끌어 놓으면 닫힌다."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2026-12-15")
+    _open_picker(page)
+    sheet = """() => { const p = document.querySelector('.cal-picker');
+        return { top: p.getBoundingClientRect().top, running: p.getAnimations().length, hidden: p.hidden }; }"""
+    top = page.evaluate(sheet)["top"]
+    box = page.locator(".cal-picker-top").bounding_box()
+    x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+    page.mouse.move(x, y)
+    page.mouse.down()
+    page.mouse.move(x, y + 40, steps=4)
+    assert abs(page.evaluate(sheet)["top"] - top - 40) <= 1   # 손가락을 따라 내려간다
+    page.mouse.up()
+    page.wait_for_timeout(50)
+    state = page.evaluate(sheet)
+    assert abs(state["top"] - top) <= 1 and state["running"] == 0, state
+    page.mouse.move(x, y)
+    page.mouse.down()
+    page.mouse.move(x, y + 200, steps=8)
+    page.mouse.up()
+    page.wait_for_timeout(50)
+    assert page.evaluate(sheet)["hidden"] is True
+    assert page.evaluate("document.activeElement.classList.contains('cal-title-btn')")
+
+
+def test_picker_popover_closes_in_place_when_the_window_narrows(desktop_context):
+    """팝오버를 연 채 창이 휴대폰 폭으로 좁아지면 미끄러지는 움직임 없이 바로 닫고 팝오버의 자리를 지운다. 다시 열면 화면 아래의 시트다."""
+    page = desktop_context.new_page()
+    _freeze_today(page)
+    _open(page, "calendar/2027-02")
+    _open_picker(page)
+    page.set_viewport_size({"width": 600, "height": 800})
+    page.wait_for_timeout(50)
+    state = page.evaluate("""() => { const p = document.querySelector('.cal-picker');
+        return { hidden: p.hidden, closing: p.classList.contains('cal-picker-closing'), top: p.style.top, left: p.style.left }; }""")
+    assert state == {"hidden": True, "closing": False, "top": "", "left": ""}, state
+    _open_picker(page)
+    bottom = page.evaluate("document.querySelector('.cal-picker').getBoundingClientRect().bottom")
+    assert abs(bottom - 800) <= 1
+
+
 def test_picker_steps_stop_at_the_ends_of_the_calendar(desktop_context):
     """캘린더의 계산 범위(1583-9999년) 밖으로는 옮기지 않는다. 끝에 닿아 누를 수 없게 된 단추의 포커스는 맞은편 단추로 옮긴다."""
     page = desktop_context.new_page()
+    _freeze_today(page)
     _open(page, "calendar/1584-01")
     _open_picker(page)
     assert _picker(page)["prev"] is True
@@ -1675,17 +1745,26 @@ def test_picker_steps_stop_at_the_ends_of_the_calendar(desktop_context):
 
 
 def test_picker_works_with_the_keyboard(desktop_context):
-    """키보드로 제목 단추를 열면 지금 보는 칸에 포커스가 가고, Tab은 판 안에서만 돈다. Enter로 고르면 그 달로 가고 제목 단추에 포커스가 돌아온다."""
+    """키보드로 제목 단추를 열면 지금 보는 칸에 포커스가 가고, Tab과 Shift+Tab은 판 안에서만 돈다. 팝오버에서는 숨긴 「닫기」를 건너뛰고 끝에서
+    처음으로 돌아온다. 이번 달은 날짜 없이 `/calendar`다. Enter로 고르면 그 달로 가고 제목 단추에 포커스가 돌아온다."""
     page = desktop_context.new_page()
+    _freeze_today(page)
     _open(page, "calendar/2026-11")
     page.evaluate("() => document.querySelector('.cal-title-btn').focus({ preventScroll: true })")
     page.keyboard.press("Enter")
     page.wait_for_selector(".cal-picker:not([hidden])")
     page.wait_for_timeout(200)
-    assert _picker(page)["focus"] == "/calendar/2026-11"
+    assert _picker(page)["focus"] == "/calendar"   # 이번 달(2026년 11월)
+    inside = "document.querySelector('.cal-picker').contains(document.activeElement)"
+    seen = set()
     for _ in range(20):
         page.keyboard.press("Tab")
-        assert page.evaluate("document.querySelector('.cal-picker').contains(document.activeElement)")
+        assert page.evaluate(inside)
+        seen.add(page.evaluate("document.activeElement.className"))
+    assert "cal-picker-title" in seen   # 마지막 칸에서 Tab을 누르면 머리의 단추로 돌아온다
+    for _ in range(20):
+        page.keyboard.press("Shift+Tab")
+        assert page.evaluate(inside)
     page.locator(".cal-picker a[href='/calendar/2026-05']").focus()
     page.keyboard.press("Enter")
     page.wait_for_url(f"{BASE}/calendar/2026-05")
