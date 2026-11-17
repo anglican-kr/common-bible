@@ -1405,6 +1405,8 @@ declare global {
     _showSyncSnackbar?: (msg: string) => void;
     closeSettings?: () => void;
     closeChapterPopover?: () => void;
+    /** 캘린더의 날짜 고르기 판을 닫는다(calendar.js, ADR-038 §2). 캘린더 모듈을 받기 전에는 없다. */
+    closeCalendarPicker?: () => void;
     closeBookmarkDrawer?: () => void;
     closeSaveModal?: () => void;
     closeNewFolderModal?: () => void;

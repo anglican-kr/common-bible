@@ -1249,6 +1249,271 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
   overflow-wrap: anywhere;
 }
 
+/* ── 날짜 고르기(ADR-038 §2 「날짜 고르기」, DESIGN.md §6) ──
+   상단 바의 달 제목이 여는 판. 휴대폰과 터치 기기에서는 바텀 시트이고, 마우스를 쓰는 넓은 화면에서는 제목 아래 팝오버다(같은 요소). 칸에는
+   테두리를 두지 않고 지금 보는 것만 강조색으로 채운다. 오늘은 테두리 원이다. 강조색이 글자색과 거의 같아 글자색만으로는 구별되지 않는다. */
+
+/* 상단 바의 달 제목 단추. 펼침 표시는 장 고르기 단추(.title-picker-btn::after)와 같은 모양이다. 글자 칸과 달 글자의 자리를 바꾸지 않으려고
+   펼침 표시는 글자 오른쪽에 띄워 둔다(절대 위치). 그래서 글자는 그대로 화면 가운데이고, 좁은 화면에서 줄이는 기준(@container 15.9rem)도 그대로다.
+   펼침 표시는 ›가 글자 칸 쪽으로 겹친 자리(8px, .lect-bar-mid)에 놓인다. 높이는 ‹ ›처럼 위아래 음수 여백으로 제목 줄 안에 둔다. */
+.lect-date > .cal-title-btn {
+  position: relative;
+  min-height: var(--touch-target);
+  margin-block: calc((var(--font-lg) * var(--leading-snug) - var(--touch-target)) / 2);
+  font-variant-numeric: tabular-nums;
+}
+.lect-date > .cal-title-btn::after {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  margin-left: 0.3em;
+  transform: translateY(-75%) rotate(45deg);
+}
+.lect-date > .cal-title-btn[aria-expanded="true"]::after { transform: translateY(-25%) rotate(-135deg); }
+/* 펼침 표시가 › 그림과 겹치지 않게, › 단추 안에서 그림만 오른쪽으로 옮긴다. 단추의 폭과 누르는 자리(44px)는 그대로다. */
+.lect-date:has(> .cal-title-btn) + .lect-datenav-btn { padding-left: var(--space-6); }
+
+/* 시트: 책 고르기 시트(.book-filter-scrim, .book-filter-sheet, .book-filter-handle)와 같은 뒤 가림, 둥근 위쪽, 위로 뜨는 그림자, 손잡이.
+   높이는 내용만큼이다(HIG Sheets의 medium detent 정도). */
+.cal-picker-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(0, 0, 0, 0.4);
+}
+.cal-picker-scrim[hidden],
+.cal-picker[hidden],
+.cal-picker-title[hidden] { display: none; }
+.cal-picker {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin-inline: auto;
+  max-width: var(--max-width);
+  z-index: 71;
+  padding: 0 var(--space-3) calc(var(--space-6) + env(safe-area-inset-bottom));
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-size: var(--font-base);
+  line-height: var(--leading-snug);
+  color: var(--text);
+  background: var(--bg);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  box-shadow: var(--shadow-sheet);
+}
+/* 여는 움직임은 끝난 뒤 남지 않게 한다(backwards). 남으면 시트를 끌 때 붙이는 transform을 덮는다. */
+.cal-picker:not([hidden]):not(.cal-picker-closing) {
+  animation: bm-drawer-in-up var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94) backwards;
+}
+.cal-picker.cal-picker-closing {
+  animation: bm-drawer-out-down var(--duration-base) ease-in both;
+  pointer-events: none;
+}
+/* 손잡이 줄: 가운데 손잡이를 아래로 끌면 닫히고, 오른쪽 「닫기」로도 닫는다 */
+.cal-picker-top {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: var(--touch-target);
+  touch-action: none;
+}
+.cal-picker-top::before {
+  content: "";
+  position: absolute;
+  top: var(--space-2);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2.25rem;
+  height: 0.25rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 25%, transparent);
+}
+.cal-picker-close {
+  min-height: var(--touch-target);
+  padding: 0 var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+.cal-picker-close:hover,
+.cal-picker-close:focus-visible { background: var(--bg-card); color: var(--text); }
+
+/* 판의 머리: 왼쪽 「2026년 11월 ⌄」(누르면 다음 단계), 오른쪽 ‹ › */
+.cal-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+.cal-picker-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--touch-target);
+  padding: 0 var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--font-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+button.cal-picker-title { cursor: pointer; }
+button.cal-picker-title:hover,
+button.cal-picker-title:focus-visible { background: var(--bg-card); }
+.cal-picker-title .title-back-icon {
+  width: 0.8em;
+  height: 0.8em;
+  color: var(--text-secondary);
+}
+.cal-picker-steps { display: flex; }
+.cal-picker-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-target);
+  height: var(--touch-target);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+}
+.cal-picker-step .title-back-icon { width: 1.1rem; height: 1.1rem; }
+.cal-picker-step:hover,
+.cal-picker-step:focus-visible { background: var(--bg-card); }
+.cal-picker-step:disabled {
+  color: var(--text-tertiary);
+  background: none;
+  cursor: default;
+}
+
+/* 날 판(목록): 요일 머리는 월간 칸의 요일(.cal-grid th)과 같다. 다른 달의 날은 빈 칸이다. 날 아래에는 월간 칸과 같은 색 점을 작게 둔다. */
+.cal-picker-days {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.cal-picker-days th {
+  padding: 0 0 var(--space-1);
+  font-size: var(--font-2xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.cal-picker-days td { padding: 1px 0; text-align: center; }
+.cal-picker-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-0_5);
+  min-height: var(--touch-target);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+}
+.cal-picker-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-md);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.cal-picker-day:hover .cal-picker-num,
+.cal-picker-day:focus-visible .cal-picker-num { background: var(--bg-card); }
+/* 지금 보는 날: 월간 칸의 오늘(.cal-cell--today .cal-date)과 같은 강조색 원판이고, 그 위 글자는 --bg다(DESIGN.md §2 규약). */
+.cal-picker-day.is-selected .cal-picker-num {
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+.cal-picker-day.is-today:not(.is-selected) .cal-picker-num {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  font-weight: 600;
+}
+.cal-picker-dots {
+  display: flex;
+  gap: 2px;
+  min-height: 0.32rem;
+}
+.cal-picker-dot {
+  width: 0.32rem;
+  height: 0.32rem;
+}
+
+/* 달 판과 해 판: 네 칸씩 세 줄, 글자만. 지금 보는 것은 채운 알약, 오늘이 든 달과 해는 테두리 알약이다. */
+.cal-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2) var(--space-1);
+  padding: var(--space-1) 0 var(--space-2);
+}
+.cal-picker-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(var(--touch-target) + var(--space-1));
+  border: none;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--font-md);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  cursor: pointer;
+}
+.cal-picker-cell:hover,
+.cal-picker-cell:focus-visible { background: var(--bg-card); }
+.cal-picker-cell.is-selected {
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+.cal-picker-cell.is-today:not(.is-selected) {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  font-weight: 600;
+}
+
+/* 마우스를 쓰는 넓은 화면: 제목 아래 팝오버(장 고르기 팝오버 .chapter-popover와 같은 반경, 그림자, 테두리). 다른 시트는 이 조건에서 오른쪽
+   패널로 바뀌지만, 이 판은 작아서 팝오버로 둔다(DESIGN.md §6). 자리(top, left)는 calendar.js placePicker가 제목 단추로 잰다. */
+@media (min-width: 769px) and (pointer: fine) {
+  .cal-picker-scrim { display: none; }
+  .cal-picker {
+    right: auto;
+    bottom: auto;
+    width: 22rem;
+    max-width: calc(100vw - 16px);
+    margin: 0;
+    padding: var(--space-2) var(--space-3) var(--space-3);
+    transform: translateX(-50%);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-2);
+  }
+  .cal-picker:not([hidden]):not(.cal-picker-closing) { animation: none; }
+  .cal-picker-top { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cal-picker:not([hidden]):not(.cal-picker-closing),
+  .cal-picker.cal-picker-closing { animation: none; }
+}
+
 /* In-page search input (mirrors the header #search-bar, used in #app). */
 #search-inpage-bar {
   display: flex;

@@ -532,3 +532,79 @@ test("listTrimOf: 줄이 196개 이하면 내리지 않고, 넘으면 먼 쪽부
   assert.strictEqual(both.above % 7, 0);
   assert.strictEqual(both.below % 7, 0);
 });
+
+// ── 날짜 고르기(ADR-038 §2 「날짜 고르기」) ─────────────────────────────────────────
+
+test("daysInMonth: 그레고리력의 날 수 — 윤년 2월(4년마다, 100년은 빼고 400년은 넣는다)", () => {
+  assert.strictEqual(ctx.daysInMonth(2027, 2), 28);
+  assert.strictEqual(ctx.daysInMonth(2028, 2), 29);
+  assert.strictEqual(ctx.daysInMonth(1900, 2), 28);
+  assert.strictEqual(ctx.daysInMonth(2000, 2), 29);
+  same([1, 3, 4, 6, 9, 11, 12].map((m) => ctx.daysInMonth(2026, m)), [31, 31, 30, 30, 30, 30, 31]);
+});
+
+test("pickerMonthStep: 해를 넘어 한 달씩 옮기고, 계산 범위(1583-9999년) 밖이면 null이다", () => {
+  same(ctx.pickerMonthStep(2026, 12, 1), { y: 2027, m: 1 });
+  same(ctx.pickerMonthStep(2027, 1, -1), { y: 2026, m: 12 });
+  same(ctx.pickerMonthStep(2027, 2, 13), { y: 2028, m: 3 });
+  assert.strictEqual(ctx.pickerMonthStep(1583, 1, -1), null);
+  assert.strictEqual(ctx.pickerMonthStep(9999, 12, 1), null);
+});
+
+test("pickerDays: 일요일부터 칸을 채우고 다른 달의 날은 비운다. 오늘, 지금 보는 날, 그날의 색을 싣는다", () => {
+  const colorsOf = (date) => (date === "2027-02-10" ? ["violet"] : ["green"]);
+  const days = ctx.pickerDays(2027, 2, "2026-11-17", "2027-02-10", colorsOf);
+  assert.strictEqual(days.title, "2027년 2월");
+  // 2027-02-01은 월요일 — 맨 앞 한 칸이 빈다. 28일 + 앞 1칸 = 29칸, 7의 배수로 35칸
+  assert.strictEqual(days.cells.length, 35);
+  assert.strictEqual(days.cells[0], null);
+  same(days.cells[1], { date: "2027-02-01", day: 1, weekday: 1, colors: ["green"], isToday: false, isCurrent: false });
+  same(days.cells[10], { date: "2027-02-10", day: 10, weekday: 3, colors: ["violet"], isToday: false, isCurrent: true });
+  assert.ok(days.cells.slice(29).every((c) => c === null));
+  same(days.prev, { y: 2027, m: 1 });
+  same(days.next, { y: 2027, m: 3 });
+  // 일요일로 시작하는 달은 앞 칸이 없고, 오늘을 표시한다
+  const nov = ctx.pickerDays(2026, 11, "2026-11-17", null, () => []);
+  assert.strictEqual(nov.cells[0].date, "2026-11-01");
+  assert.strictEqual(nov.cells.length, 35);
+  assert.ok(nov.cells.find((c) => c && c.date === "2026-11-17").isToday);
+  assert.ok(nov.cells.every((c) => c === null || !c.isCurrent));
+});
+
+test("pickerDays: 계산 범위의 끝 달은 그쪽으로 옮길 수 없다", () => {
+  assert.strictEqual(ctx.pickerDays(1583, 1, "2026-11-17", null, () => []).prev, null);
+  assert.strictEqual(ctx.pickerDays(9999, 12, "2026-11-17", null, () => []).next, null);
+});
+
+test("pickerMonths: 열두 달, 지금 보는 달과 오늘이 든 달을 표시하고, 범위 끝의 해는 그쪽으로 옮길 수 없다", () => {
+  const months = ctx.pickerMonths(2026, "2026-11-17", { y: 2026, m: 3 });
+  assert.strictEqual(months.title, "2026년");
+  same(months.cells.map((c) => c.label), ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"]);
+  same(months.cells.filter((c) => c.isCurrent).map((c) => c.m), [3]);
+  same(months.cells.filter((c) => c.isToday).map((c) => c.m), [11]);
+  assert.strictEqual(months.prev, 2025);
+  assert.strictEqual(months.next, 2027);
+  // 다른 해에는 오늘이 든 달이 없다
+  assert.ok(ctx.pickerMonths(2027, "2026-11-17", null).cells.every((c) => !c.isToday && !c.isCurrent));
+  assert.strictEqual(ctx.pickerMonths(1583, "2026-11-17", null).prev, null);
+  assert.strictEqual(ctx.pickerMonths(9999, "2026-11-17", null).next, null);
+});
+
+test("pickerYearStart, pickerYears: 고른 해가 둘째 줄 첫 칸에 오고, 열두 해씩 옮기며, 범위 끝에서는 범위 안의 쪽에서 멈춘다", () => {
+  assert.strictEqual(ctx.pickerYearStart(2026), 2022);
+  const years = ctx.pickerYears(2022, "2026-11-17", 2027);
+  assert.strictEqual(years.title, "2022-2033년");
+  same(years.cells.map((c) => c.y), [2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033]);
+  assert.strictEqual(years.cells[4].isToday, true);   // 2026은 둘째 줄 첫 칸
+  same(years.cells.filter((c) => c.isCurrent).map((c) => c.y), [2027]);
+  assert.strictEqual(years.prev, 2010);
+  assert.strictEqual(years.next, 2034);
+  // 범위의 첫머리: 첫 해 앞으로 당기지 않고, 앞쪽은 없다
+  assert.strictEqual(ctx.pickerYearStart(1585), 1583);
+  assert.strictEqual(ctx.pickerYears(1583, "2026-11-17", null).prev, null);
+  assert.strictEqual(ctx.pickerYears(1590, "2026-11-17", null).prev, 1583);
+  // 범위의 끝: 마지막 쪽은 9988-9999이고 그 뒤는 없다
+  assert.strictEqual(ctx.pickerYearStart(9998), 9988);
+  assert.strictEqual(ctx.pickerYears(9988, "2026-11-17", null).next, null);
+  assert.strictEqual(ctx.pickerYears(9980, "2026-11-17", null).next, 9988);
+});
