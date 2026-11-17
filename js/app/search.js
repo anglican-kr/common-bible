@@ -17,7 +17,7 @@
 
 import { verseNumberSpec } from "./verse-spec.js";
 
-const { _$, el, clearNode, chUnit, emptyState, barBottom, churchName } = window.appHelpers;
+const { _$, el, clearNode, chUnit, emptyState, barBottom, churchName, SHEET_INERT_SELECTORS } = window.appHelpers;
 const {
   SEARCH_HISTORY_MAX,
   loadSearchHistory, loadSearchHistoryEntries,
@@ -1930,8 +1930,6 @@ function syncSearchFields() {
 // "초기화" clears it. Built lazily as a body-level singleton (sibling of #app),
 // driven by the shared overlay controller (ADR-032).
 
-const BOOK_FILTER_INERT_SELECTORS =
-  "#sticky-group, main#app, #app-header, #audio-bar, #launch-screen, #tab-dock, #verse-select-bar";
 
 /** @type {{ overlay: any, body: HTMLElement, working: Set<string>, updateApplyLabel: () => void } | null} */
 let _bookSheet = null;
@@ -1998,7 +1996,7 @@ function ensureBookSheet() {
     scrim,
     closeOnEsc: true,
     closeOnOutside: true,
-    inertSelectors: BOOK_FILTER_INERT_SELECTORS,
+    inertSelectors: SHEET_INERT_SELECTORS,
     initialFocus: () => applyBtn,
     onOpen: () => {
       if (_bookSheetCloseTimer) { clearTimeout(_bookSheetCloseTimer); _bookSheetCloseTimer = null; }

@@ -286,6 +286,11 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     return typeof window.matchMedia === "function" && window.matchMedia(DESKTOP_LAYOUT_QUERY).matches;
   }
 
+  // What a bottom sheet over the current screen blocks (inert) while it is open: the top bar, the screen, the tab dock
+  // and the docked bars. The book-filter sheet (search.js) and the calendar date picker (calendar.js) share it, so a
+  // new fixed bar only needs adding here.
+  const SHEET_INERT_SELECTORS = "#sticky-group, main#app, #app-header, #audio-bar, #launch-screen, #tab-dock, #verse-select-bar";
+
   /**
    * The bottom edge of the top bar, in px from the top of the viewport — what lies above it is covered.
    * Measured on every call, so it is right at that moment.
@@ -381,7 +386,9 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     // Compare dataset values rather than build a selector — keys are data (an observance id such as
     // `grid:lent-2-weekday-tue`), and a value comparison needs no escaping (a quoted selector would break
     // on a `"` or `\` in a key; colons and Hangul are fine either way).
-    const tagged = Array.from(document.querySelectorAll("[data-focus-key]"));
+    // Only rendered elements: a hidden overlay can carry the same key (the date picker's links share the title
+    // button's key), and focus() on an element with no boxes does nothing — focus would stay on body.
+    const tagged = Array.from(document.querySelectorAll("[data-focus-key]")).filter((n) => n.getClientRects().length > 0);
     const find = (/** @type {string} */ key) =>
       tagged.find((n) => n instanceof HTMLElement && n.dataset.focusKey === key) || null;
     const target = find(spot.key) || (spot.fallback ? find(spot.fallback) : null);
@@ -483,7 +490,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   return {
     _$, chUnit, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
     HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot, SCROLL_ANCHORING, barBottom, scrollUnderBar,
-    publishBarHeight, isFormerNorthChurch, churchName, parishGroups, DESKTOP_LAYOUT_QUERY, isDesktopLayout,
+    publishBarHeight, isFormerNorthChurch, churchName, parishGroups, DESKTOP_LAYOUT_QUERY, isDesktopLayout, SHEET_INERT_SELECTORS,
   };
 })();
 

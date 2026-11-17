@@ -309,6 +309,9 @@ test("escape: closeOnEsc defaults off — no keydown listener, Escape ignored", 
 
 // ── outside click ────────────────────────────────────────────────────────────
 
+/** A click whose dispatch path (`composedPath()`) is fixed when it is sent, like a browser's. */
+const clickOn = (target, path) => ({ target, composedPath: () => path });
+
 test("outside click: attaches next frame; inside and ignored targets stay open", () => {
   const env = makeEnv();
   const panel = new env.StubEl();
@@ -324,13 +327,25 @@ test("outside click: attaches next frame; inside and ignored targets stay open",
   env.flushRaf();
   assert.equal(env.document._listenerCount("click"), 1);
 
-  env.document._dispatch("click", { target: child });   // inside
+  env.document._dispatch("click", clickOn(child, [child, panel]));   // inside
   assert.equal(ov.isOpen, true);
-  env.document._dispatch("click", { target: trigger }); // ignored trigger
+  env.document._dispatch("click", clickOn(trigger, [trigger])); // ignored trigger
   assert.equal(ov.isOpen, true);
-  env.document._dispatch("click", { target: outside }); // truly outside
+  env.document._dispatch("click", clickOn(outside, [outside])); // truly outside
   assert.equal(ov.isOpen, false);
   assert.equal(env.document._listenerCount("click"), 0); // removed on close
+});
+
+test("outside click: a node the click re-rendered out of the panel still counts as inside (dispatch path)", () => {
+  const env = makeEnv();
+  const panel = new env.StubEl();
+  const gone = new env.StubEl();   // pressed inside, then removed by the panel's own click handler
+  const ov = env.createOverlay({ panel, closeOnOutside: true });
+  ov.open();
+  env.flushRaf();
+  assert.equal(panel.contains(gone), false);
+  env.document._dispatch("click", clickOn(gone, [gone, panel]));
+  assert.equal(ov.isOpen, true);
 });
 
 // ── misc ─────────────────────────────────────────────────────────────────────

@@ -1300,6 +1300,22 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
   background: var(--bg);
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   box-shadow: var(--shadow-sheet);
+  /* 화면이 낮으면(휴대폰을 가로로 든 때) 시트를 화면 안에 두고 판의 칸만 스크롤한다. 책 고르기 시트와 같은 높이 제한이다.
+     팝오버는 calendar.js가 창의 남은 높이를 max-height로 준다(`placePicker`). */
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+  max-height: 85dvh;
+}
+.cal-picker-top,
+.cal-picker-head { flex-shrink: 0; }
+/* 칸의 포커스 테두리가 스크롤 상자에 잘리지 않게 안쪽 여백을 두고, 같은 크기의 바깥 여백을 음수로 두어 자리는 그대로 둔다 */
+.cal-picker-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  margin: -4px;
 }
 /* 여는 움직임과 닫는 움직임은 transform을 쓰고, 손잡이로 끌어 내린 만큼은 calendar.js가 translate 속성으로 시트를 옮긴다(`attachPickerDrag`).
    두 속성은 겹쳐 그려지므로, 여는 움직임 중에 끌어도 시트가 손가락을 따라온다. */

@@ -931,6 +931,15 @@ test("restoreFocusSpot: 새 화면에서 같은 키를 값으로 찾는다 — �
   assert.equal(h.dom.getActive(), null, "찾지 못하면 포커스를 옮기지 않는다");
 });
 
+test("restoreFocusSpot: 그려지지 않은 요소(닫힌 날짜 고르기 판의 링크)는 같은 키여도 고르지 않고 대체 키로 간다", () => {
+  const h = loadHelpers();
+  const { root, byKey } = viewWith(h.helpers, 0, [["month-title", 0], ["today", 40]]);
+  byKey["month-title"]._rendered = false;   // 판은 닫혀 있고(hidden) 새 화면에는 제목 단추가 없다
+  h.dom.setActive(null);
+  assert.equal(h.helpers.restoreFocusSpot(spotOf({ key: "month-title", fallback: "today", top: 0, offset: 0 }), root), byKey.today);
+  assert.equal(h.dom.getActive(), byKey.today);
+});
+
 test("restoreFocusSpot: 누른 때의 화면 위치로 — 스켈레톤이 스크롤을 맨 위로 눌렀어도 같은 컨트롤이 같은 자리에, 스크롤은 즉시", () => {
   const h = loadHelpers();
   // 누른 때: 스크롤 218, 루트 문서 위치 100, 컨트롤은 루트 안 300 — 화면 위치 182

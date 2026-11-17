@@ -41,7 +41,7 @@ import {
 // barBottom: 상단 바의 아래쪽(화면 위에서 잰 값).
 const {
   _$, el, clearNode, HEADER_ICON_PATHS, SCROLL_ANCHORING, focusSpotOf, restoreFocusSpot, barBottom, scrollUnderBar, headerIcon,
-  isModifiedClick, DESKTOP_LAYOUT_QUERY,
+  isModifiedClick, DESKTOP_LAYOUT_QUERY, SHEET_INERT_SELECTORS,
 } = window.appHelpers;
 
 const $app = _$("app");
@@ -498,7 +498,8 @@ function pickerDays(y, m, today, current, colorsOf) {
   const lead = dayOfWeek(toKey(y, m, 1));
   /** @type {(PickerDay | null)[]} */
   const cells = Array.from({ length: lead }, () => null);
-  for (let d = 1; d <= daysInMonth(y, m); d++) {
+  const last = daysInMonth(y, m);
+  for (let d = 1; d <= last; d++) {
     const date = toKey(y, m, d);
     cells.push({ date, day: d, weekday: (lead + d - 1) % 7, colors: colorsOf(date), isToday: date === today, isCurrent: date === current });
   }
@@ -619,8 +620,6 @@ function commitMonthBar(model, view) {
 
 /** 제목 단추와 판의 링크가 함께 다는 포커스 열쇠. 고른 곳으로 간 뒤 라우터가 새 화면의 제목 단추로 포커스를 돌려준다(helpers.js `restoreFocusSpot`). */
 const PICKER_FOCUS_KEY = "month-title";
-/** 판이 열린 동안 막아 두는 뒤 화면. 책 고르기 시트와 같은 범위다(search.js `BOOK_FILTER_INERT_SELECTORS`). */
-const PICKER_INERT_SELECTORS = "#sticky-group, main#app, #app-header, #audio-bar, #launch-screen, #tab-dock, #verse-select-bar";
 /** 시트를 이만큼(px) 넘게 아래로 끌어 놓으면 닫는다. 시트 높이의 3할이 이보다 작으면 그것을 쓴다. */
 const PICKER_DRAG_CLOSE_PX = 120;
 /** 팝오버와 제목 사이, 팝오버와 화면 가장자리 사이(px). */
@@ -630,7 +629,8 @@ const PICKER_ICON = { down: "m6 9 6 6 6-6", prev: "m15 18-6-6 6-6", next: "m9 18
 
 /**
  * 판의 상태. `view`는 판을 연 보기, `mode`는 지금 단계다. `y`와 `m`은 날 판과 달 판이 보이는 해와 달이고, `yearStart`는 해 판의 첫 해다.
- * `current`는 지금 보는 날(목록의 맨 위 줄)이라 월간은 null이고, `currentMonth`는 지금 보는 달이다. `pointer`는 손가락이나 마우스로 열었는지다.
+ * `current`는 지금 보는 날(목록의 맨 위 줄)이라 월간은 null이고, `currentMonth`는 지금 보는 달이다. `pointer`는 마지막 입력이 손가락이나 마우스였는지다. 열 때 정하고, 판이 열린 동안
+ * 누르거나 키를 칠 때마다 바꾼다(`ensurePicker`). 그래서 탭으로 열고 Esc로 닫으면 제목 단추에 포커스 테두리를 그린다.
  * @typedef {{
  *   view: "month" | "list", mode: "day" | "month" | "year", y: number, m: number, yearStart: number,
  *   current: string | null, currentMonth: { y: number, m: number }, today: string, trigger: HTMLElement, pointer: boolean,
@@ -676,13 +676,20 @@ function pickerFocusTarget() {
 
 /**
  * 포커스를 옮긴다. 스크롤하지 않는다. 목록 화면은 스크롤 고정 때문에 상단 바 높이만큼 위쪽 여백(scroll-padding-top)을 두는데, 스크립트가 상단 바
- * 안의 제목 단추로 포커스를 옮기면 브라우저가 그 단추를 여백에 가려진 것으로 보고 페이지를 스크롤한다(known-issues §56). 손가락이나 마우스로 연
- * 판이면 포커스 테두리를 그리지 않는다. WebKit(iOS)은 탭한 뒤 스크립트가 옮긴 포커스에 테두리를 그린다(helpers.js `restoreFocusSpot`과 같다).
+ * 안의 제목 단추로 포커스를 옮기면 브라우저가 그 단추를 여백에 가려진 것으로 보고 페이지를 스크롤한다(known-issues §56). 마지막 입력이 손가락이나
+ * 마우스였으면 포커스 테두리를 그리지 않는다. WebKit(iOS)은 탭한 뒤 스크립트가 옮긴 포커스에 테두리를 그린다(helpers.js `restoreFocusSpot`과 같다).
+ * 판의 칸은 화면이 낮으면 판 안에서 스크롤하므로, 칸 안의 대상이 가려져 있으면 판의 칸만 스크롤해 보인다.
  * @param {HTMLElement | null | undefined} target
  */
 function focusInPicker(target) {
   if (!target) return;
   target.focus(pickerState?.pointer ? { preventScroll: true, focusVisible: false } : { preventScroll: true });
+  const body = picker?.body;
+  if (!body || !body.contains(target)) return;
+  const b = body.getBoundingClientRect();
+  const r = target.getBoundingClientRect();
+  if (r.bottom > b.bottom) body.scrollTop += r.bottom - b.bottom;
+  else if (r.top < b.top) body.scrollTop -= b.top - r.top;
 }
 
 /** 판의 머리 글을 알린다 — 단계를 바꾸거나 ‹ ›로 옮겼을 때. */
@@ -759,6 +766,7 @@ function renderPicker() {
   const p = picker;
   if (!s || !p) return;
   clearNode(p.body);
+  p.body.scrollTop = 0;
   /** @type {PickerDays | PickerMonths | PickerYears} */
   let page;
   /** @type {[string, string]} */
@@ -822,15 +830,24 @@ function placePicker() {
   const p = picker;
   if (!s || !p) return;
   if (!window.matchMedia(DESKTOP_LAYOUT_QUERY).matches) {
-    p.panel.style.top = "";
-    p.panel.style.left = "";
+    clearPickerPlace(p.panel);
     return;
   }
   const r = s.trigger.getBoundingClientRect();
   const half = p.panel.offsetWidth / 2;
   const center = Math.min(Math.max(r.left + r.width / 2, half + PICKER_POPOVER_GAP), window.innerWidth - half - PICKER_POPOVER_GAP);
-  p.panel.style.top = `${Math.round(r.bottom + PICKER_POPOVER_GAP)}px`;
+  const top = Math.round(r.bottom + PICKER_POPOVER_GAP);
+  p.panel.style.top = `${top}px`;
   p.panel.style.left = `${Math.round(center)}px`;
+  // 창이 낮으면 팝오버를 창 안에 두고 판의 칸만 스크롤한다(CSS `.cal-picker-body`)
+  p.panel.style.maxHeight = `${Math.max(window.innerHeight - top - PICKER_POPOVER_GAP, 0)}px`;
+}
+
+/** 팝오버의 자리와 높이 제한을 지운다. 시트는 CSS가 자리와 높이를 정한다. @param {HTMLElement} panel */
+function clearPickerPlace(panel) {
+  panel.style.top = "";
+  panel.style.left = "";
+  panel.style.maxHeight = "";
 }
 
 /**
@@ -896,6 +913,14 @@ function ensurePicker() {
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   let closeTimer;
+  /** 시트가 닫히는 움직임이 끝나면 숨기는 처리. 움직임 중에 다시 열면 지운다. @type {(() => void) | null} */
+  let closeDone = null;
+  const cancelClosing = () => {
+    clearTimeout(closeTimer);
+    if (closeDone) panel.removeEventListener("animationend", closeDone);
+    closeDone = null;
+    panel.classList.remove("cal-picker-closing");
+  };
   // 휴대폰과 데스크톱의 경계를 넘어 닫는 중이다(아래 `desktop`의 change)
   let switching = false;
   const overlay = window.appOverlay.createOverlay({
@@ -903,12 +928,12 @@ function ensurePicker() {
     scrim,
     // 판이 열린 동안 상단 바도 막혀(inert) 제목 단추를 다시 누를 수 없다. 그 자리를 누르면 시트는 뒤 가림이, 팝오버는 바깥 누르기 처리가 판을 닫는다
     closeOnOutside: true,
-    inertSelectors: PICKER_INERT_SELECTORS,
+    // 판이 열린 동안 막아 두는 뒤 화면. 책 고르기 시트와 같은 범위다(helpers.js `SHEET_INERT_SELECTORS`)
+    inertSelectors: SHEET_INERT_SELECTORS,
     ariaExpanded: ".cal-title-btn",
     // 처음 포커스와 닫은 뒤의 포커스는 여기서 옮긴다. 제어기의 기본(`focus()`)은 스크롤하고 탭한 뒤에도 테두리를 그린다(`focusInPicker`)
     onOpen: () => {
-      clearTimeout(closeTimer);
-      panel.classList.remove("cal-picker-closing");
+      cancelClosing();
       panel.style.translate = "";
       placePicker();
       requestAnimationFrame(() => {
@@ -925,23 +950,24 @@ function ensurePicker() {
       if (switching || desktop.matches || reduceMotion.matches || p.style.translate) {
         finalizeHide();
         p.style.translate = "";
-        p.style.top = "";
-        p.style.left = "";
+        clearPickerPlace(p);
         return;
       }
       p.classList.add("cal-picker-closing");
       const done = () => {
-        clearTimeout(closeTimer);
-        p.removeEventListener("animationend", done);
-        p.classList.remove("cal-picker-closing");
+        cancelClosing();
         finalizeHide();
       };
+      closeDone = done;
       p.addEventListener("animationend", done);
       closeTimer = setTimeout(done, 350);
     },
   });
 
   close.addEventListener("click", () => overlay.close());
+  // 마지막 입력을 적어 둔다. 닫은 뒤 제목 단추의 포커스 테두리는 연 입력이 아니라 이것으로 정한다(`focusInPicker`)
+  document.addEventListener("pointerdown", () => { if (overlay.isOpen && pickerState) pickerState.pointer = true; }, true);
+  document.addEventListener("keydown", () => { if (overlay.isOpen && pickerState) pickerState.pointer = false; }, true);
   title.addEventListener("click", () => {
     const s = pickerState;
     if (!s) return;
@@ -961,8 +987,7 @@ function ensurePicker() {
     const s = pickerState;
     const cell = e.target instanceof Element ? e.target.closest("button[data-year], button[data-month]") : null;
     if (!s || !(cell instanceof HTMLElement)) return;
-    // 다시 그리면 누른 칸이 판에서 빠진다. 이 누름이 문서까지 올라가면 오버레이의 「바깥을 누르면 닫기」가 판 밖을 누른 것으로 보고 닫는다
-    e.stopPropagation();
+    // 다시 그리면 누른 칸이 판에서 빠지지만, 오버레이의 「바깥을 누르면 닫기」는 누른 때의 경로로 판 안을 가린다(overlay.js)
     if (cell.dataset.year) {
       s.y = Number(cell.dataset.year);
       s.mode = "month";
@@ -1015,12 +1040,18 @@ function openCalendarPicker(trigger, view, pointer) {
     view, mode: view === "month" ? "month" : "day", y, m, yearStart: pickerYearStart(y),
     current, currentMonth: { y, m }, today: todayKey(new Date()), trigger, pointer,
   };
+  // 판의 이름은 제목 단추가 알리는 일과 같게 한다. 월간은 해와 달까지만 고른다
+  p.panel.setAttribute("aria-label", view === "month" ? "해와 달 고르기" : "날짜 고르기");
   renderPicker();
   p.overlay.open(null);
 }
 
-// 앱 전체의 Esc 처리(app.js)가 열린 판을 먼저 닫는다. 판이 없으면 아무것도 하지 않는다
-window.closeCalendarPicker = () => picker?.overlay.close();
+// 앱 전체의 Esc 처리(app.js)가 열린 판을 먼저 닫는다. 닫았으면 true다. 판이 없거나 닫히는 움직임 중이면 이미 닫혔으므로 false라 Esc가 다음 단계로 간다
+window.closeCalendarPicker = () => {
+  if (!picker?.overlay.isOpen) return false;
+  picker.overlay.close();
+  return true;
+};
 
 /** 색 점 줄 — 장식(aria-hidden). 색 이름은 링크 이름이 싣는다. @param {string[]} colors */
 function buildDots(colors) {

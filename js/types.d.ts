@@ -963,6 +963,8 @@ export interface AppHelpers {
   // The desktop-layout condition (ADR-029 §1) — a wide window and a mouse. One string for every module that asks.
   DESKTOP_LAYOUT_QUERY: string;
   isDesktopLayout: () => boolean;
+  /** 바텀 시트가 열린 동안 막아 두는(inert) 뒤 화면. 책 고르기 시트와 캘린더 날짜 고르기 판이 같이 쓴다. */
+  SHEET_INERT_SELECTORS: string;
   /** 상단 바의 높이를 `:root`의 `--top-bar-h`에 넣고, 높이가 바뀔 때마다 고친다(CSS용). app.js가 시작할 때 한 번 호출한다. */
   publishBarHeight: () => void;
 }
@@ -1406,7 +1408,7 @@ declare global {
     closeSettings?: () => void;
     closeChapterPopover?: () => void;
     /** 캘린더의 날짜 고르기 판을 닫는다(calendar.js, ADR-038 §2). 캘린더 모듈을 받기 전에는 없다. */
-    closeCalendarPicker?: () => void;
+    closeCalendarPicker?: () => boolean;
     closeBookmarkDrawer?: () => void;
     closeSaveModal?: () => void;
     closeNewFolderModal?: () => void;

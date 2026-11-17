@@ -194,7 +194,9 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
           if (!_open) return;
           _outsideHandler = (e) => {
             const t = e.target;
-            if (t instanceof Node && panel.contains(t)) return;
+            // The path is fixed when the event is dispatched, so a click whose handler re-rendered the panel (the
+            // pressed node is gone from it by now) still counts as inside — panel.contains(t) would say outside.
+            if (e.composedPath().includes(panel) || (t instanceof Node && panel.contains(t))) return;
             if (outsideIgnore && t instanceof Element && t.closest(outsideIgnore)) return;
             close();
           };

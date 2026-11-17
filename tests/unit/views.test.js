@@ -976,7 +976,7 @@ test("setTitleWithChapterPicker: clicking the mobile settings gear closes the ch
   const gear = new h.dom.RichElement("button");
   gear.className = "title-settings-btn";
   h.$title.appendChild(gear);
-  h.dom.document._dispatch("click", { target: gear });
+  h.dom.document._dispatch("click", { target: gear, composedPath: () => [gear, h.$title] });   // a browser click carries its dispatch path
   assert.equal(popover.hidden, true);
   assert.equal(btn.getAttribute("aria-expanded"), "false");
 });

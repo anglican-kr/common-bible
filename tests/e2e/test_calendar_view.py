@@ -1588,6 +1588,7 @@ def test_list_title_opens_the_day_picker_and_a_day_opens_its_row(mobile_context)
     assert ash.locator(".cal-picker-dot.lit-swatch--violet").count() == 1
     assert ash.get_attribute("aria-label") == "2월 10일 수요일, 자색"
     assert page.get_attribute(".cal-picker", "role") == "dialog"
+    assert page.get_attribute(".cal-picker", "aria-label") == "날짜 고르기"
     assert page.locator(".cal-picker table caption").inner_text() == "2027년 2월"
     _press(page, ".cal-picker .cal-picker-step >> nth=1")
     page.wait_for_timeout(150)
@@ -1639,6 +1640,7 @@ def test_month_title_opens_the_month_picker_as_a_popover_and_goes_to_the_month(d
     state = _picker(page)
     assert (state["title"], state["current"], state["focus"]) == ("2027년", "/calendar/2027-02", "/calendar/2027-02"), state
     assert page.get_attribute(".cal-title-btn", "aria-label") == "2027년 2월, 해와 달 고르기"
+    assert page.get_attribute(".cal-picker", "aria-label") == "해와 달 고르기"   # 판의 이름도 제목 단추가 알리는 일과 같다
     box = page.evaluate("""() => { const p = document.querySelector('.cal-picker').getBoundingClientRect();
         const t = document.querySelector('.cal-title-btn').getBoundingClientRect();
         return { gap: p.top - t.bottom, mid: (p.left + p.right) / 2 - (t.left + t.right) / 2 }; }""")
@@ -1657,7 +1659,8 @@ def test_month_title_opens_the_month_picker_as_a_popover_and_goes_to_the_month(d
 
 
 def test_picker_closes_without_moving_the_list_and_returns_focus(mobile_context):
-    """「닫기」, Esc, 뒤 가림을 누르면 닫히고 포커스는 제목 단추로 돌아간다. 목록은 움직이지 않는다."""
+    """「닫기」, Esc, 뒤 가림을 누르면 닫히고 포커스는 제목 단추로 돌아간다. 목록은 움직이지 않는다. 포커스 테두리는 닫은 입력으로 정해,
+    탭으로 열었어도 Esc로 닫으면 그리고 누르거나 탭해 닫으면 그리지 않는다."""
     page = mobile_context.new_page()
     _freeze_today(page)
     _open_list(page, "calendar/list/2026-12-15")
@@ -1673,6 +1676,7 @@ def test_picker_closes_without_moving_the_list_and_returns_focus(mobile_context)
         page.wait_for_timeout(500)
         assert _picker(page) is None, close
         assert page.evaluate("document.activeElement.classList.contains('cal-title-btn')"), close
+        assert page.evaluate("document.activeElement.matches(':focus-visible')") is (close == "escape"), close
         assert page.get_attribute(".cal-title-btn", "aria-expanded") == "false", close
         assert page.evaluate("scrollY") == y, close
         assert page.url == f"{BASE}/calendar/list/2026-12-15", close
@@ -1704,6 +1708,35 @@ def test_picker_sheet_follows_a_drag_and_closes_past_the_line(mobile_context):
     page.wait_for_timeout(50)
     assert page.evaluate(sheet)["hidden"] is True
     assert page.evaluate("document.activeElement.classList.contains('cal-title-btn')")
+
+
+def test_picker_sheet_fits_a_short_screen_and_scrolls_only_its_cells(mobile_context):
+    """화면이 낮으면(휴대폰을 가로로 든 때) 시트는 화면 안에 있고 머리는 두고 칸만 스크롤한다. 지금 보는 날과 마지막 주의 날을 고를 수 있다."""
+    page = mobile_context.new_page()
+    page.set_viewport_size({"width": 667, "height": 375})
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2027-01-30")   # 2027년 1월은 여섯 주이고, 30일은 마지막 주다
+    _open_picker(page)
+    state = page.evaluate("""() => { const p = document.querySelector('.cal-picker').getBoundingClientRect();
+        const b = document.querySelector('.cal-picker-body'); const br = b.getBoundingClientRect();
+        const cur = document.querySelector('.cal-picker-body [aria-current="true"]').getBoundingClientRect();
+        const head = document.querySelector('.cal-picker-head').getBoundingClientRect();
+        return { top: p.top, bottom: p.bottom, h: innerHeight, scrolls: b.scrollHeight > b.clientHeight,
+                 headIn: head.top >= p.top, curIn: cur.top >= br.top - 1 && cur.bottom <= br.bottom + 1 }; }""")
+    assert state["top"] >= 0 and state["bottom"] <= state["h"] + 1, state
+    assert state["scrolls"] and state["headIn"] and state["curIn"], state
+    y = page.evaluate("scrollY")
+    box = page.locator(".cal-picker-body").bounding_box()
+    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    page.mouse.wheel(0, 400)   # 마지막 주(31일)는 칸을 스크롤해야 보인다
+    page.wait_for_timeout(300)
+    assert page.evaluate("scrollY") == y   # 목록은 움직이지 않는다
+    last = page.evaluate("""() => { const b = document.querySelector('.cal-picker-body').getBoundingClientRect();
+        const r = document.querySelector(".cal-picker a[href='/calendar/list/2027-01-31']").getBoundingClientRect();
+        return r.top >= b.top - 1 && r.bottom <= b.bottom + 1; }""")
+    assert last
+    _press(page, ".cal-picker a[href='/calendar/list/2027-01-31']")
+    page.wait_for_url(f"{BASE}/calendar/list/2027-01-31")
 
 
 def test_picker_popover_closes_in_place_when_the_window_narrows(desktop_context):
