@@ -896,7 +896,7 @@ function ensurePicker() {
   panel.hidden = true;
   // 손잡이 줄: 시트를 아래로 끌어 닫는다. 오른쪽 「닫기」는 끌 수 없는 사용자(스크린 리더, 키보드)도 닫게 한다. 팝오버에서는 CSS가 숨긴다
   const top = el("div", { className: "cal-picker-top" });
-  const close = el("button", { type: "button", className: "cal-picker-close" }, "닫기");
+  const close = el("button", { type: "button", className: "cal-picker-close sheet-close" }, "닫기");
   top.appendChild(close);
   const title = /** @type {HTMLButtonElement} */ (el("button", { type: "button", className: "cal-picker-title" }));
   const heading = el("span", { className: "cal-picker-title" });

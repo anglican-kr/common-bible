@@ -145,6 +145,23 @@ def open_settings(page):
     return popover
 
 
+def assert_sheet_close_button(page, selector) -> None:
+    """시트 머리의 닫기 단추는 모든 시트에서 같은 「닫기」 글자 단추다(DESIGN.md 「시트 vs 모달」, 사용자 결정 2026-11-17).
+    보이는 글자가 이름이라 aria-label이 없고, 공용 클래스(.sheet-close)의 작은 글자(--font-sm)이며, 44px 이상이다."""
+    state = page.evaluate("""sel => {
+        const b = document.querySelector(sel);
+        const r = b.getBoundingClientRect();
+        const probe = document.createElement('span');
+        probe.style.fontSize = 'var(--font-sm)';
+        document.body.append(probe);
+        const small = getComputedStyle(probe).fontSize;
+        probe.remove();
+        return { text: b.textContent.trim(), label: b.getAttribute('aria-label'), shared: b.classList.contains('sheet-close'),
+                 small: getComputedStyle(b).fontSize === small, w: r.width >= 44, h: r.height >= 44 };
+    }""", selector)
+    assert state == {"text": "닫기", "label": None, "shared": True, "small": True, "w": True, "h": True}, (selector, state)
+
+
 def close_popovers(page) -> None:
     """Dismiss any open popovers/modals by pressing Escape."""
     page.keyboard.press("Escape")

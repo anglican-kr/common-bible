@@ -2,7 +2,7 @@
 
 import json
 
-from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA
+from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, assert_sheet_close_button
 
 BASE = "http://localhost:8080"
 
@@ -118,6 +118,7 @@ def test_save_after_drawer_close_uses_current_chapter_not_stale(browser):
     # 2) Open drawer at gen/1, then close it.
     page.locator(".title-bookmark-btn").click()
     page.wait_for_selector("#bookmark-drawer:not([hidden])")
+    assert_sheet_close_button(page, "#bookmark-drawer-close")
     page.locator("#bookmark-drawer-close").click()
     page.wait_for_selector("#bookmark-drawer", state="hidden")
 

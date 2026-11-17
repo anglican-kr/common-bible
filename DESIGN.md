@@ -313,7 +313,7 @@ HIG의 절제된 깊이 표현이다. 라이트 기준 값이며, **다크에서
 | 아이콘 버튼 | `.title-back-btn`, `.title-bookmark-btn`, `.title-view-btn`, `.settings-btn` | 투명, `--accent`, **≥44px 탭 영역** | ADR-024 |
 | 구분 탭 | `.division-tab`, `.division-tab-indicator` | 슬라이드 인디케이터(트랙과 같은 색의 칩에 그림자 단계 적용) | ADR-024 |
 | 챕터 팝오버 | `.chapter-popover`, `.popover-grid`, `.popover-item` | `--radius-lg`, 격자 카드 | ADR-024 |
-| 바텀 시트 / 사이드 패널 | `#cite-sheet`, `#bookmark-drawer`, `.book-filter-sheet` | 모바일과 터치: 하단 시트(상단 `--radius-xl`, `--shadow-sheet`, 핸들, 높이 드래그 리사이즈, 안전 영역). `pointer:fine`이고 ≥769px: 우측 패널(`--shadow-drawer`, 좌측 가장자리 폭 리사이즈) | ADR-022·032 |
+| 바텀 시트 / 사이드 패널 | `#cite-sheet`, `#bookmark-drawer`, `.book-filter-sheet`, `.sheet-close` | 모바일과 터치: 하단 시트(상단 `--radius-xl`, `--shadow-sheet`, 핸들, 높이 드래그 리사이즈, 안전 영역). `pointer:fine`이고 ≥769px: 우측 패널(`--shadow-drawer`, 좌측 가장자리 폭 리사이즈). 머리의 오른쪽 끝에 「닫기」 글자 단추(`.sheet-close`)를 둔다(「시트 vs 모달」) | ADR-022·032 |
 | 모달 | install/disconnect/bookmark 다이얼로그 | 중앙 정렬, `--radius-modal`, `--shadow-4`, scrim `rgba(0,0,0,.45)` | ADR-008 |
 | 툴팁(주석) | `.note-tooltip`, `.note-anchor`(※) | 클릭 트리거, footnote 패턴 | ADR-022·027 |
 | 인용 칩 | `.cite-chip`, `.cite-chip-label` | 옅은 회색 칩, 클릭하면 인용 시트. 앞 절을 고르거나 강조하면 같은 배경색을 받는다 | ADR-022 |
@@ -343,7 +343,7 @@ HIG의 절제된 깊이 표현이다. 라이트 기준 값이며, **다크에서
 | 독서 카드 | `.lect-cards`, `.lect-cards-list`, `.lect-card`, `.lect-card-name`, `.lect-card-ref`, `.lect-card-ref--differs`, `.lect-cards-fold`, `.lect-cards-pills` | 「또는」이 있는 날의 독서를 본기도 아래, 제1독서 바로 위에서 고른다. 머리줄은 「독서」 제목과 접기 단추이고, 그 아래에 카드 두 장이 나란하다. 카드는 링크이고 고른 카드에 `aria-current="page"`를 단다. 안쪽 여백은 `--space-3`, 글자는 산세리프 `--font-sm`, 테두리는 `--border`, 반경은 `--radius`다. 고른 카드는 `--bg-card` 바탕에 `--accent`를 60%로 낮춘 1px 테두리와 `--shadow-1`이고, 이름은 `--accent`다. 테두리 대비는 3:1 이상이다(카드 쪽과 바깥쪽이 라이트 3.49:1과 3.29:1, 다크 3.68:1과 3.98:1). 고르지 않은 카드의 이름은 `--text-secondary`다. 이름은 굵기 600이고, 아래에 `--border` 1px 가로선이 있다(위아래 8px). 모든 항목의 성구를 적고, 두 카드에서 다른 성구는 `--text`에 굵기 500, 같은 성구는 `--text-secondary`에 굵기 400이다(색만으로 전하지 않는다). 같은 항목끼리 줄이 맞도록 `subgrid`를 쓴다. 칸의 최소 폭은 7.5rem이라 320px 기본 글자에서도 두 칸이고, 글자가 커져 두 칸이 들어가지 않으면 한 장씩 쌓인다(WCAG 1.4.10). 접기 단추는 글자 「접기」와 꺾쇠이고, 접으면 꺾쇠만 남는다. 칸은 `--touch-target`(44px)이며 `aria-expanded`와 `aria-controls`를 단다. 접으면 제목 옆에 본기도 번호와 같은 부품이 남는다. 이름이 「독서 N」이면 번호이고, 그 밖은 알약(`.lect-cards-pills`, 테두리 `--border`, 고른 알약은 `--accent`로 채운다)이다. 접힘은 `bible-lectionary-cards-folded`에 저장하고 모든 날에 같이 쓴다. 「독서 · 본기도」 단추(`.lect-sets`)만 구분 탭의 작은 모양으로 본기도 위에 남는다(사용자 결정 2026-11-05 — 「독서 1 · 2」와 트랙의 세그먼트를 대신한다) | ADR-038 |
 | 캘린더 목록 | `.cal-list-month`, `.cal-rows`, `.cal-row`, `.cal-row-day`, `.cal-row-title`, `.cal-row-meta`, `.cal-row-line` | 모든 날을 한 줄씩 보인다. 위아래로 이어지고 달마다 달 이름(`.cal-list-month`)을 적으며, 상단 바의 달은 맨 위 줄의 달을 따라간다. 줄 전체가 그날 전례독서로 가는 링크이고 끝에 ›를 두지 않는다. 왼쪽에 날짜(`--font-md`)와 요일(`--font-2xs`, `--text-secondary`), 오른쪽에 전례독서 제목 영역과 같은 글을 같은 차례로 둔다. 제목(`--font-md`), 전례색과 해, 대재일과 소재일(`--font-xs`, `--text-secondary`, `.cal-row-dot`은 `.lit-swatch`), 그 아래에 안내, 이름 줄, 다른 전례일을 한 줄씩(`--font-xs`, `--text-secondary`) 둔다. 선택 대체색은 그리지 않는다(§2). 제목의 굵기는 주일과 대축일, 주요축일, 축일이 500이고 평일이 400이다(사용자 결정 2026-11-16). 오늘은 날짜에 `--accent` 원을 그리고 글자는 `--bg`로 한다. 전례년 첫날은 해 대신 「나해 시작」(`.cal-mark`)이다. 줄 사이는 월간 표와 같은 `--border` 1px 가로선이다. 줄의 최소 높이는 `--list-row-h`다. 긴 이름은 말줄임 없이 낱말 사이에서 줄을 바꾼다. 링크 이름은 보이는 글을 모두 싣는다(WCAG 2.5.3) | ADR-038 |
 | 캘린더 월간 표 | `.cal-grid`, `.cal-cell`, `.cal-dot`, `.cal-name` | `<table>` 7열에 `table-layout:fixed`를 쓴다(칸이 내용에 밀려 넓어지지 않으며, 1.6.0 달력에서 휴대폰 화면을 넘치던 문제가 다시 생기지 않게 한다). 칸 전체가 링크다. 오늘은 날짜에 `--accent` 원을 그리고 글자는 `--bg`로 한다. 이름은 `--font-2xs`로 두 줄까지 보이고 넘치면 말줄임한다. 색 점은 `.lit-swatch`다(§2 「전례색」). 링크 이름은 칸에 보이는 이름 그대로다(WCAG 2.5.3). 달 이동 뒤 포커스는 누른 단추로 돌아간다 | ADR-038 |
-| 캘린더 날짜 고르기 | `.cal-title-btn`, `.cal-picker`, `.cal-picker-title`, `.cal-picker-step`, `.cal-picker-days`, `.cal-picker-day`, `.cal-picker-dot`, `.cal-picker-grid`, `.cal-picker-cell`, `.cal-picker-close` | 상단 바의 달 제목 단추(`.cal-title-btn`)가 연다. 판은 한 번에 한 단계만 보인다(날 판, 달 판, 해 판). 머리는 왼쪽에 「2026년 11월」과 펼침 표시(`--font-lg`, 굵기 600, 누르면 다음 단계), 오른쪽에 ‹ › 원형 단추(`--accent`, ≥44px, 범위 끝에서는 `--text-tertiary`로 누를 수 없다)다. 날 판은 요일 머리(`--font-2xs`, 굵기 600, `--text-secondary`)가 있는 표이고, 날은 숫자(`--font-md`)와 그 아래의 전례색 점(0.32rem, `.lit-swatch`)이다. 칸에는 테두리를 두지 않는다. 지금 보는 날, 달, 해는 `--accent`로 채운 원과 알약에 `--bg` 글자, 굵기 600이고, 오늘은 1.5px `--accent` 테두리 원이다. 요일 머리에 빨강을 쓰지 않는다(적색은 전례색이다). 달 판과 해 판은 네 칸씩 세 줄의 글자 알약이다(높이 `--touch-target`에 `--space-1`을 더한다). 휴대폰과 터치 기기에서는 바텀 시트(위쪽 `--radius-xl`, `--shadow-sheet`, 손잡이, 뒤 가림, 내용만큼의 높이이되 화면의 85%까지)이고, 손잡이 줄 오른쪽에 「닫기」 글자 단추(`--font-sm`, `--text-secondary`)를 둔다. `pointer:fine`이고 ≥769px이면 제목 아래 팝오버(`--radius-lg`, `--shadow-2`, `--border`, 폭 22rem, 높이는 창의 남은 높이까지)다. 판이 화면보다 높으면 머리는 두고 칸만 스크롤한다 | ADR-038 §2 |
+| 캘린더 날짜 고르기 | `.cal-title-btn`, `.cal-picker`, `.cal-picker-title`, `.cal-picker-step`, `.cal-picker-days`, `.cal-picker-day`, `.cal-picker-dot`, `.cal-picker-grid`, `.cal-picker-cell`, `.cal-picker-close` | 상단 바의 달 제목 단추(`.cal-title-btn`)가 연다. 판은 한 번에 한 단계만 보인다(날 판, 달 판, 해 판). 머리는 왼쪽에 「2026년 11월」과 펼침 표시(`--font-lg`, 굵기 600, 누르면 다음 단계), 오른쪽에 ‹ › 원형 단추(`--accent`, ≥44px, 범위 끝에서는 `--text-tertiary`로 누를 수 없다)다. 날 판은 요일 머리(`--font-2xs`, 굵기 600, `--text-secondary`)가 있는 표이고, 날은 숫자(`--font-md`)와 그 아래의 전례색 점(0.32rem, `.lit-swatch`)이다. 칸에는 테두리를 두지 않는다. 지금 보는 날, 달, 해는 `--accent`로 채운 원과 알약에 `--bg` 글자, 굵기 600이고, 오늘은 1.5px `--accent` 테두리 원이다. 요일 머리에 빨강을 쓰지 않는다(적색은 전례색이다). 달 판과 해 판은 네 칸씩 세 줄의 글자 알약이다(높이 `--touch-target`에 `--space-1`을 더한다). 휴대폰과 터치 기기에서는 바텀 시트(위쪽 `--radius-xl`, `--shadow-sheet`, 손잡이, 뒤 가림, 내용만큼의 높이이되 화면의 85%까지)이고, 손잡이 줄 오른쪽에 다른 시트와 같은 「닫기」 글자 단추(`.sheet-close`)를 둔다. `pointer:fine`이고 ≥769px이면 제목 아래 팝오버(`--radius-lg`, `--shadow-2`, `--border`, 폭 22rem, 높이는 창의 남은 높이까지)다. 판이 화면보다 높으면 머리는 두고 칸만 스크롤한다 | ADR-038 §2 |
 
 ### 상태 컴포넌트 (로딩 · 빈 · 에러 · 전체 화면 실패 · 업데이트 · 남는 안내)
 
@@ -400,7 +400,8 @@ HIG의 절제된 깊이 표현이다. 라이트 기준 값이며, **다크에서
   캘린더의 날짜 고르기(`.cal-picker`)도 모바일과 터치 기기에서는 같은 모양의 바텀 시트지만 내용만큼의 높이이고, 높이를 끌어 바꾸지 않고 아래로 끌면 닫힌다. `pointer: fine`이고 ≥769px인 환경에서는
   오른쪽 패널이 아니라 제목 아래 팝오버다. 판이 작아 오른쪽 패널로 두면 고를 자리(제목)와 멀어진다(HIG Pickers: 선택기는 고칠 자리 가까이 둔다).
   (전체화면 검색 `/search`는 시트가 아니라 라우트다. §7.)
-- **모달**: 결정을 강제한다(설치 안내, 연결 해제, 북마크 저장). 중앙 정렬, scrim, 포커스 트랩을 쓴다.
+- **시트의 닫기 단추는 「닫기」 글자다.** 인용 시트, 북마크 패널, 책 고르기 시트, 날짜 고르기 시트는 머리의 오른쪽 끝에 같은 글자 단추(`.sheet-close`)를 둔다. `--font-sm`, 굵기 400, `--text-secondary`이고, 최소 44px(`--touch-target`)이며, 누르거나 포커스를 두면 `--bg-card` 바탕에 `--text` 글자다. 네 시트의 글자 크기와 단추 크기가 같다. 인용 시트만 뒤로 단추와 머리의 높이를 맞추려고 높이를 `--icon-btn-touch`로 둔다. 전에는 × 글리프였고, 북마크와 책 고르기의 단추는 32px라 최소 탭 크기보다 작았다(사용자 결정 2026-11-17). 데스크톱의 오른쪽 패널에서도 같다.
+- **모달**: 결정을 강제한다(설치 안내, 연결 해제, 북마크 저장). 중앙 정렬, scrim, 포커스 트랩을 쓴다. 닫기 단추는 ×를 그대로 둔다(사용자 결정 2026-11-17).
 
 ---
 
@@ -485,7 +486,7 @@ HIG의 적응형 내비 패턴을 따른다. **좁은 화면은 하단 탭 바(U
 - **HIG 44pt 최소 탭 영역.** 아이콘 버튼은 시각 크기가 작아도 클릭 영역을 ≥44px로 확보한다
   (`--touch-target`). **rem 기반 헤더 아이콘**은 `--icon-btn-touch`(2.45rem)로 박스를
   정해 기본 폰트(18px)에서 ≈44px가 되고 큰 폰트에서는 rem으로 함께 커진다
-  (`.title-back-btn`, `.title-bookmark-btn`, `#cite-sheet-back`, `#cite-sheet-close`가 공유한다).
+  (`.title-back-btn`, `.title-bookmark-btn`, `#cite-sheet-back`이 공유하고, 인용 시트의 「닫기」는 높이만 같게 둔다).
   고정 크기 컨트롤(오디오 재생 등)은 `min-width/min-height: var(--touch-target)`로 최소 크기를 보장한다.
   설정의 ⓘ 단추와 설명의 닫기 단추(`.settings-drive-info-btn`, `.settings-drive-info-close`)는 예외다. 행의 높이와
   간격 안에서 이웃한 컨트롤을 덮지 않는 데까지만 넓혀 44px보다 작다(ADR-041 §7).
