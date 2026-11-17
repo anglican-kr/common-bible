@@ -1,4 +1,5 @@
 ---
+pr: 586
 date: 2026-11-18
 branch: feat/offline-save
 title: "feat: 설정의 오프라인 저장"
