@@ -462,6 +462,141 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     return row;
   }
 
+  // ── 오프라인 저장 (ADR-045 §2, §6) ──
+  /** @param {number} bytes @returns {string} 1MB = 1,000,000 bytes, like the phone's storage screen */
+  function formatMB(bytes) {
+    return `${(bytes / 1e6).toFixed(1)}MB`;
+  }
+
+  /**
+   * The ⓘ text. Sizes come from the size list once it is read; the Safari sentence is for an iPhone Safari tab
+   * only — the home-screen app keeps its data, a Safari tab loses it after 7 days unopened (ADR-045 §5).
+   * @param {import("../types.js").OfflineSaveSummary | null} sum
+   * @returns {string}
+   */
+  function offlineInfoText(sum) {
+    const parts = ["성서 본문과 검색 자료, 캘린더와 전례독서에 쓰는 교회력 자료를 기기에 저장해 인터넷에 연결되지 않아도 모든 장과 모든 날을 볼 수 있게 합니다."];
+    if (sum) {
+      const gz = Math.max(1, Math.round(sum.gzipTotal / 1e6));
+      parts.push(`성서 본문 ${formatMB(sum.groups.bible)}, 검색 자료 ${formatMB(sum.groups.search)}, 교회력 자료 ${formatMB(sum.groups.lectionary)}이고, 받을 때는 압축되어 약 ${gz}MB입니다.`);
+    }
+    if (window.install?.detectPlatform() === "ios-safari") {
+      parts.push("Safari에서 7일 넘게 열지 않으면 저장한 자료가 지워질 수 있습니다. 홈 화면에 추가한 앱에서 켜면 오래 보관됩니다.");
+    }
+    parts.push("오디오 파일은 재생할 때 다운로드됩니다.");
+    return parts.join(" ");
+  }
+
+  /**
+   * The line under the switch for each state (ADR-045 §2). Sizes are what the device stores.
+   * @param {import("../types.js").OfflineSaveState} s @returns {string}
+   */
+  function offlineCaption({ status, saved, total }) {
+    const of = saved != null && total != null ? ` ${formatMB(saved)} / ${formatMB(total)}` : "";
+    switch (status) {
+      case "saving": return `저장 중${of}`;
+      case "done": return total != null ? `${formatMB(total)} 모두 저장됨` : "모두 저장됨";
+      case "offline": return `인터넷에 연결되면 이어서 저장합니다.${of}`;
+      case "failed": return `일부 자료를 받지 못했습니다. 앱을 다시 열면 이어서 저장합니다.${of}`;
+      case "no-space": return "기기의 저장 공간이 모자라 저장하지 못했습니다. 공간을 비운 뒤 다시 켜 주세요.";
+      default: return total != null ? `성서 본문과 교회력 자료 ${formatMB(total)}` : "성서 본문과 교회력 자료";
+    }
+  }
+
+  /**
+   * The 「오프라인 저장」 switch row and its ⓘ description. The row follows window.offlineSave while it is on
+   * screen; a rebuilt settings surface drops the old row, whose listener then unsubscribes itself.
+   * @param {() => void} dismiss closes the desktop popover before the confirm dialog opens
+   * @returns {HTMLElement[]}
+   */
+  function makeOfflineRows(dismiss) {
+    const os = window.offlineSave;
+    const id = `settings-offline-${++_toggleIdSeq}`;
+    const row = el("div", { className: "settings-row offline-row" });
+
+    const labelWrap = el("span", { className: "settings-label" });
+    labelWrap.appendChild(el("label", { for: id, id: `${id}-label` }, "오프라인 저장"));
+    const infoBtn = makeInfoButton("오프라인 저장 안내");
+    labelWrap.appendChild(infoBtn);
+    row.appendChild(labelWrap);
+
+    const sw = el("span", { className: "switch" });
+    const input = /** @type {HTMLInputElement} */ (el("input", { type: "checkbox", role: "switch", className: "switch-input", id, "aria-describedby": `${id}-cap` }));
+    const track = el("span", { className: "switch-track", "aria-hidden": "true" });
+    track.appendChild(el("span", { className: "switch-thumb" }));
+    sw.append(input, track);
+    row.appendChild(sw);
+
+    const caption = el("span", { className: "settings-toggle-caption offline-caption", id: `${id}-cap` });
+    row.appendChild(caption);
+    const progress = /** @type {HTMLProgressElement} */ (el("progress", { className: "offline-progress", "aria-labelledby": `${id}-label` }));
+    row.appendChild(progress);
+
+    const infoRow = makeInfoRow(infoBtn, offlineInfoText(null));
+    os.summary().then((sum) => {
+      const desc = infoRow.querySelector(".settings-drive-info-desc");
+      if (sum && desc) desc.textContent = offlineInfoText(sum);
+    });
+
+    /** @param {import("../types.js").OfflineSaveState} s */
+    const render = (s) => {
+      input.checked = os.isEnabled();
+      caption.textContent = offlineCaption(s);
+      caption.classList.toggle("offline-caption--warn", s.status === "no-space");
+      const showBar = (s.status === "saving" || s.status === "offline" || s.status === "failed") && !!s.total;
+      progress.hidden = !showBar;
+      if (showBar) {
+        progress.max = /** @type {number} */ (s.total);
+        progress.value = s.saved ?? 0;
+      }
+      progress.classList.toggle("offline-progress--paused", s.status !== "saving");
+    };
+    let last = os.getState();
+    render(last);
+    // Before the first pass has measured the saved set, the switch shows on and the total; fill it in.
+    if (last.status === "off" || last.status === "checking") {
+      os.summary().then((sum) => {
+        if (sum && os.getState().total == null) render({ ...os.getState(), total: sum.total });
+      });
+    }
+    if (last.status === "checking") os.resume();
+
+    const unsubscribe = os.subscribe((s) => {
+      if (!row.isConnected) { unsubscribe(); return; }
+      if (s.status !== last.status) {
+        // 스크린 리더에 받기의 시작, 끝, 멈춤, 실패를 알린다(ADR-045 §2).
+        if (s.status === "saving" && last.status !== "saving") announce("오프라인 저장을 시작합니다");
+        else if (s.status !== "checking" && s.status !== "off") announce(offlineCaption(s));
+      }
+      last = s;
+      render(s);
+    });
+
+    input.addEventListener("change", async () => {
+      if (input.checked) { os.enable(); return; }
+      // 창이 열린 동안 스위치는 켜진 채다. 「취소」는 아무것도 바꾸지 않는다(ADR-045 §6).
+      input.checked = true;
+      const saved = await os.savedBytes();
+      dismiss();
+      window.appBookmark.openConfirmModal({
+        title: "오프라인 저장 끄기",
+        message: `기기에 저장한 성서 본문과 교회력 자료 ${formatMB(saved)}를 삭제할까요? 삭제한 뒤에는 인터넷에 연결되어야 이 자료를 볼 수 있습니다. 북마크와 설정은 지우지 않습니다.`,
+        confirmLabel: "삭제",
+        onConfirm: () => { os.disable(); },
+      });
+    });
+    // role="switch" toggles on Enter as well as Space (same as makeToggleRow).
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        input.checked = !input.checked;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+
+    return [row, infoRow];
+  }
+
   // ── 목록에서 고르는 설정: 세례명, 소속교회 (ADR-041 §5, §6, §7, §9) ──
   // 응답 없이 멈춘 요청(연결은 됐지만 답이 오지 않는 망)을 이 시간 뒤에 받지 못한 것으로 본다. 서비스 워커는 캐시에
   // 없으면 시간 제한 없이 네트워크로 요청한다.
@@ -810,9 +945,10 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     appearanceSection.appendChild(colorRow);
     target.appendChild(appearanceSection);
 
-    // ── Section: 시스템 (install, drive sync, update, cache) ──
+    // ── Section: 시스템 (install, offline save, drive sync, update, cache) ──
     const showInstall = !!window.install && window.install.detectPlatform() !== "installed";
     const showCache = "caches" in window;
+    const showOffline = showCache && !!window.offlineSave;
     const showDrive = !!window.driveSync;
     const showUpdateCheck = "serviceWorker" in navigator;
     if (showInstall || showCache || showDrive || showUpdateCheck) {
@@ -828,6 +964,11 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
         });
         installRow.appendChild(installBtn);
         systemSection.appendChild(installRow);
+      }
+
+      // 「백업 & 동기화」 위, 「앱 설치」가 있으면 그 아래(ADR-045 §2).
+      if (showOffline) {
+        for (const node of makeOfflineRows(dismiss)) systemSection.appendChild(node);
       }
 
       if (showDrive) {

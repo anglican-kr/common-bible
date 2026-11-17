@@ -365,6 +365,41 @@ export interface ManifestSync {
   _urlToManifestKey: (requestUrl: string) => string | null;
 }
 
+// ── Offline save (ADR-045) ───────────────────────────────────────────────────
+
+/** "checking": the switch is on and the saved set is not measured yet. "failed": a server error or a
+ *  failed write; the next app open retries. "no-space": the device ran out of room and the switch went off. */
+export type OfflineSaveStatus = "off" | "checking" | "saving" | "done" | "offline" | "failed" | "no-space";
+
+export interface OfflineSaveState {
+  status: OfflineSaveStatus;
+  /** Bytes of the saved set now stored; null until measured. */
+  saved: number | null;
+  /** Bytes of the whole set; null until the size list is read. */
+  total: number | null;
+}
+
+export interface OfflineSaveSummary {
+  groups: { bible: number; search: number; lectionary: number };
+  total: number;
+  /** Bytes on the wire (gzip at the server's level). */
+  gzipTotal: number;
+}
+
+export interface OfflineSave {
+  isEnabled: () => boolean;
+  getState: () => OfflineSaveState;
+  subscribe: (fn: (state: OfflineSaveState) => void) => () => void;
+  enable: () => void;
+  disable: () => Promise<void>;
+  resume: () => void;
+  forget: () => void;
+  summary: () => Promise<OfflineSaveSummary | null>;
+  savedBytes: () => Promise<number>;
+  _parseSizeList: (data: unknown) => { files: Map<string, number>; summary: OfflineSaveSummary } | null;
+  _run: () => Promise<void>;
+}
+
 // ── Store v2 ─────────────────────────────────────────────────────────────────
 
 export interface SyncStoreV2 {
@@ -1264,6 +1299,7 @@ export interface AppBookmark {
   enterBookmarkSelectMode: () => void;
   exitBookmarkSelectMode: () => void;
   openDriveDisconnectModal: () => void;
+  openConfirmModal: (opts: { title: string; message: string; confirmLabel?: string; onConfirm: () => void }) => void;
   initBookmarkSheetDrag: () => void;
   initBookmarkDrawerResize: () => void;
 }
@@ -1299,6 +1335,7 @@ declare global {
     refreshStore: RefreshTokenStore;
     bibleAudioCache: BibleAudioCache;
     manifestSync: ManifestSync;
+    offlineSave: OfflineSave;
     createSyncMachine: (opts?: {
       onStateChange?: (state: SyncState) => void;
     }) => SyncMachine;
