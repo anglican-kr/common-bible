@@ -1,4 +1,5 @@
 ---
+pr: 582
 date: 2026-11-17
 branch: docs/parish-one-dedication
 title: "docs: 한 교회 한 축성일에 맞춰 두 줄인 교회의 설명 정리"
