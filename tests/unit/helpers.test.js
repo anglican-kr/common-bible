@@ -121,6 +121,9 @@ function makeDom() {
         for (const fn of [...set]) fn(evt);
       },
       focus(opts) { activeElement = this; this._focusOpts = opts; },
+      /** Test-only rendering: `_rendered = false` stands in for display: none (no boxes). */
+      _rendered: true,
+      getClientRects() { return this._rendered ? [{}] : []; },
       querySelectorAll(selector) {
         return findAll(this, selector);
       },
@@ -608,6 +611,22 @@ test("trapFocus: Shift+Tab from the first focusable wraps to the last", () => {
   assert.equal(h.dom.getActive(), inp, "focus wrapped to last");
 });
 
+test("trapFocus: skips unrendered focusables when wrapping (display: none close row)", () => {
+  const h = loadHelpers();
+  const { container, link, btn, inp } = buildFocusableContainer(h.helpers);
+  link._rendered = false;  // first in DOM order but not rendered
+  btn.focus();  // first rendered focusable
+  h.helpers.trapFocus(container);
+  const back = makeKeyEvent("Tab", { shiftKey: true });
+  container._dispatch("keydown", back);
+  assert.equal(back._prevented, true);
+  assert.equal(h.dom.getActive(), inp, "Shift+Tab from the first rendered stop wraps to the last");
+  const fwd = makeKeyEvent("Tab");
+  container._dispatch("keydown", fwd);
+  assert.equal(fwd._prevented, true);
+  assert.equal(h.dom.getActive(), btn, "Tab from the last wraps to the first rendered stop");
+});
+
 test("trapFocus: Shift+Tab from the container itself wraps to the last", () => {
   const h = loadHelpers();
   const { container, inp } = buildFocusableContainer(h.helpers);
@@ -910,6 +929,15 @@ test("restoreFocusSpot: 새 화면에서 같은 키를 값으로 찾는다 — �
   assert.equal(restore(spotOf({ key: "next" })), null);
   assert.equal(restore(null), null);
   assert.equal(h.dom.getActive(), null, "찾지 못하면 포커스를 옮기지 않는다");
+});
+
+test("restoreFocusSpot: 그려지지 않은 요소(닫힌 날짜 고르기 판의 링크)는 같은 키여도 고르지 않고 대체 키로 간다", () => {
+  const h = loadHelpers();
+  const { root, byKey } = viewWith(h.helpers, 0, [["month-title", 0], ["today", 40]]);
+  byKey["month-title"]._rendered = false;   // 판은 닫혀 있고(hidden) 새 화면에는 제목 단추가 없다
+  h.dom.setActive(null);
+  assert.equal(h.helpers.restoreFocusSpot(spotOf({ key: "month-title", fallback: "today", top: 0, offset: 0 }), root), byKey.today);
+  assert.equal(h.dom.getActive(), byKey.today);
 });
 
 test("restoreFocusSpot: 누른 때의 화면 위치로 — 스켈레톤이 스크롤을 맨 위로 눌렀어도 같은 컨트롤이 같은 자리에, 스크롤은 즉시", () => {

@@ -182,6 +182,38 @@ def test_a11y_search_local_days(browser):
         ctx.close()
 
 
+def test_a11y_calendar_date_picker(browser):
+    """캘린더 날짜 고르기(ADR-038 §2): 목록의 날 판(시트, 전례색 점)과 해 판, 월간의 달 판(팝오버) — critical/serious 위반 0건.
+    판은 요소의 click()으로 연다. Playwright의 click은 누르기 전에 상단 바 안의 단추를 화면 안으로 스크롤한다(test_calendar_view.py `_press`)."""
+    from .conftest import IPHONE_UA, MOBILE_VIEWPORT
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    try:
+        page = ctx.new_page()
+        page.goto(f"{BASE}/calendar/list/2027-02-01")
+        page.wait_for_selector(".cal-rows", timeout=20_000)
+        page.evaluate("() => document.querySelector('.cal-title-btn').click()")
+        page.wait_for_selector(".cal-picker:not([hidden]) .cal-picker-dot")
+        page.wait_for_timeout(400)
+        v = _violations(page, context=".cal-picker")
+        assert not v, f"Date picker (days): {len(v)} violation(s):\n{_fmt(v)}"
+        page.evaluate("() => { const t = document.querySelector('.cal-picker button.cal-picker-title'); t.click(); t.click(); }")
+        page.wait_for_selector(".cal-picker button[data-year]")
+        v = _violations(page, context=".cal-picker")
+        assert not v, f"Date picker (years): {len(v)} violation(s):\n{_fmt(v)}"
+    finally:
+        ctx.close()
+    ctx, page = _open(browser, "calendar/2026-11")
+    try:
+        page.wait_for_selector(".calendar .cal-grid", timeout=20_000)
+        page.evaluate("() => document.querySelector('.cal-title-btn').click()")
+        page.wait_for_selector(".cal-picker:not([hidden]) .cal-picker-cell")
+        v = _violations(page, context=".cal-picker")
+        assert not v, f"Date picker (months, popover): {len(v)} violation(s):\n{_fmt(v)}"
+    finally:
+        ctx.close()
+
+
 def test_a11y_bookmark_drawer(browser):
     """북마크 드로어 (북마크 있는 상태) — critical/serious 위반 0건."""
     import json as _json

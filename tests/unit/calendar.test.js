@@ -109,17 +109,26 @@ test("parseMonthParam: YYYY-MM 만 · 달 1~12 · 교회력을 계산하는 연�
   }
 });
 
-test("monthHref: 해를 넘는 앞뒤 달 · 계산 범위 밖은 null(이전/다음 단추가 사라진다)", () => {
-  assert.strictEqual(ctx.monthHref(2026, 0), "/calendar/2025-12");
-  assert.strictEqual(ctx.monthHref(2026, 13), "/calendar/2027-01");
-  assert.strictEqual(ctx.monthHref(2026, 7), "/calendar/2026-07");
-  assert.strictEqual(ctx.monthHref(1583, 0), null);
-  assert.strictEqual(ctx.monthHref(9999, 13), null);
+test("monthStepPath: 해를 넘는 앞뒤 달, 이번 달은 날짜 없이 /calendar, 계산 범위 밖은 null(이전/다음 단추가 사라진다)", () => {
+  assert.strictEqual(ctx.monthStepPath(2026, 1, -1, "2026-11-17"), "/calendar/2025-12");
+  assert.strictEqual(ctx.monthStepPath(2026, 12, 1, "2026-11-17"), "/calendar/2027-01");
+  assert.strictEqual(ctx.monthStepPath(2026, 12, -1, "2026-11-17"), "/calendar");   // 이번 달
+  assert.strictEqual(ctx.monthStepPath(2026, 10, 1, "2026-11-17"), "/calendar");
+  assert.strictEqual(ctx.monthStepPath(1583, 1, -1, "2026-11-17"), null);
+  assert.strictEqual(ctx.monthStepPath(9999, 12, 1, "2026-11-17"), null);
+});
+
+test("listStepPath: 앞뒤 달 1일의 줄, 그날이 오늘(매달 1일)이면 날짜 없이 /calendar/list, 계산 범위 밖은 null", () => {
+  assert.strictEqual(ctx.listStepPath(2026, 11, 1, "2026-11-17"), "/calendar/list/2026-12-01");
+  assert.strictEqual(ctx.listStepPath(2027, 1, -1, "2026-11-17"), "/calendar/list/2026-12-01");
+  assert.strictEqual(ctx.listStepPath(2026, 11, 1, "2026-12-01"), "/calendar/list");   // 오늘 줄
+  assert.strictEqual(ctx.listStepPath(1583, 1, -1, "2026-11-17"), null);
+  assert.strictEqual(ctx.listStepPath(9999, 12, 1, "2026-11-17"), null);
 });
 
 // ── 월간 표의 배치 ────────────────────────────────────────────────────────────
 
-test("buildMonthGrid: 2026년 10월 — 1일(목)이 든 주의 일요일 9.27 부터 6주 42칸, 앞뒤 달 · 오늘 표시", () => {
+test("buildMonthGrid: 2026년 10월 — 1일(목)이 있는 주의 일요일 9.27 부터 6주 42칸, 앞뒤 달 · 오늘 표시", () => {
   const calls = [];
   const m = ctx.buildMonthGrid(2026, 10, "2026-10-15", (d) => { calls.push(d); return plainDay(d); });
   assert.strictEqual(m.title, "2026년 10월");
@@ -158,6 +167,7 @@ test("buildMonthGrid: 윤년 2월(2028)은 29일까지 · 12월은 다음 해 1�
   assert.strictEqual(cells[41].date, "2027-01-09");
   assert.ok(cells.some((c) => c.date === "2027-01-01" && !c.inMonth));
   same(dec.hrefs, { prev: "/calendar/2026-11", next: "/calendar/2027-01", today: "/calendar", view: "/calendar/list/2026-12-01" });   // 다른 달은 1일의 줄로
+  assert.strictEqual(ctx.buildMonthGrid(2026, 12, "2026-11-17", plainDay).hrefs.prev, "/calendar");   // 이번 달로 가는 ‹는 날짜 없이
 });
 
 test("buildMonthGrid: 계산 범위 끝(1583년 1월 · 9999년 12월) — 범위 밖 칸은 엔진에 묻지 않고 링크가 없다", () => {
@@ -302,6 +312,15 @@ test("calendarDay: 색은 그날의 정식 색(병기 포함) — 선택 대체�
   const legacy = ctx.calendarDay("2026-10-16", resolvedOf("2026-10-16", [grid("ordinary-28-weekday-fri", "연중 28주 금요일")],
     { color: "green", colors: [] }));
   same(legacy.colors, ["green"]);
+});
+
+test("calendarColorsOf: 월간 칸과 날짜 고르기 판이 같이 쓰는 색 — colors 의 복사본, 없으면 color 하나, 엔진이 못 푼 날은 빈 배열", () => {
+  const ember = resolvedOf("2026-09-16", [cand(obs("t-추계재", "추계재", { color: "violet" }))], { color: "white", colors: ["violet", "white"] });
+  const colors = ctx.calendarColorsOf(ember);
+  same(colors, ["violet", "white"]);
+  assert.notStrictEqual(colors, ember.colors);   // 복사본이라 엔진의 값을 바꾸지 않는다
+  same(ctx.calendarColorsOf(resolvedOf("2026-10-16", [grid("ordinary-28-weekday-fri", "연중 28주 금요일")], { color: "green", colors: [] })), ["green"]);
+  same(ctx.calendarColorsOf(null), []);
 });
 
 test("calendarDay: 전례년 첫날(대림 1주일 — 엔진 liturgicalYearOf 가 바뀌는 날)에 「나해 시작」, 그 전날 · 다음 주일엔 없다", () => {
@@ -499,12 +518,20 @@ test("listMonthOf: 앞뒤 달은 1일의 줄, 오른쪽 단추는 그 달", () =
   assert.strictEqual(ctx.listMonthOf(9999, 12, "2026-10-15").hrefs.next, null);   // 계산 범위 끝
   assert.strictEqual(ctx.listMonthOf(1583, 1, "2026-10-15").hrefs.prev, null);
   assert.strictEqual(ctx.listMonthOf(2026, 12, "2026-10-15").hrefs.next, "/calendar/list/2027-01-01");
+  assert.strictEqual(ctx.listMonthOf(2026, 11, "2026-12-01").hrefs.next, "/calendar/list");   // 매달 1일에는 오늘 줄
 });
 
 test("listPathOf: 오늘 줄에는 날짜를 적지 않고, 다른 날은 날짜를 적는다(사용자 결정 2026-11-07)", () => {
   assert.strictEqual(ctx.listPathOf("2026-10-15", "2026-10-15"), "/calendar/list");
   assert.strictEqual(ctx.listPathOf("2026-10-14", "2026-10-15"), "/calendar/list/2026-10-14");
   assert.strictEqual(ctx.listPathOf("2027-01-01", "2026-10-15"), "/calendar/list/2027-01-01");
+});
+
+test("monthPathOf: 이번 달에는 날짜를 적지 않고, 다른 달은 그 달을 적는다", () => {
+  assert.strictEqual(ctx.monthPathOf(2026, 11, "2026-11-17"), "/calendar");
+  assert.strictEqual(ctx.monthPathOf(2026, 12, "2026-11-17"), "/calendar/2026-12");
+  assert.strictEqual(ctx.monthPathOf(2025, 11, "2026-11-17"), "/calendar/2025-11");
+  assert.strictEqual(ctx.monthPathOf(1583, 1, "2026-11-17"), "/calendar/1583-01");
 });
 
 test("listDatesBefore, listDatesAfter: 날짜 차례로 달과 해를 넘고, 윤년 2월을 지나며, 그 날짜는 빼고 낸다", () => {
@@ -531,4 +558,89 @@ test("listTrimOf: 줄이 196개 이하면 내리지 않고, 넘으면 먼 쪽부
   assert.ok(400 - both.above - both.below <= 196);
   assert.strictEqual(both.above % 7, 0);
   assert.strictEqual(both.below % 7, 0);
+});
+
+// ── 날짜 고르기(ADR-038 §2 「날짜 고르기」) ─────────────────────────────────────────
+
+test("daysInMonth: 그레고리력의 날 수 — 윤년 2월(4년마다, 100년은 빼고 400년은 넣는다)", () => {
+  assert.strictEqual(ctx.daysInMonth(2027, 2), 28);
+  assert.strictEqual(ctx.daysInMonth(2028, 2), 29);
+  assert.strictEqual(ctx.daysInMonth(1900, 2), 28);
+  assert.strictEqual(ctx.daysInMonth(2000, 2), 29);
+  same([1, 3, 4, 6, 9, 11, 12].map((m) => ctx.daysInMonth(2026, m)), [31, 31, 30, 30, 30, 30, 31]);
+});
+
+test("monthStep: 해를 넘어 달을 옮기고, 계산 범위(1583-9999년) 밖이면 null이다", () => {
+  same(ctx.monthStep(2026, 12, 1), { y: 2027, m: 1 });
+  same(ctx.monthStep(2027, 1, -1), { y: 2026, m: 12 });
+  same(ctx.monthStep(2027, 2, 13), { y: 2028, m: 3 });
+  assert.strictEqual(ctx.monthStep(1583, 1, -1), null);
+  assert.strictEqual(ctx.monthStep(9999, 12, 1), null);
+});
+
+test("pickerDays: 일요일부터 칸에 넣고 다른 달의 날은 비운다. 오늘, 지금 보는 날, 그날의 색을 싣는다", () => {
+  const colorsOf = (date) => (date === "2027-02-10" ? ["violet"] : ["green"]);
+  const days = ctx.pickerDays(2027, 2, "2026-11-17", "2027-02-10", colorsOf);
+  assert.strictEqual(days.title, "2027년 2월");
+  // 2027-02-01은 월요일 — 맨 앞 한 칸이 빈다. 28일 + 앞 1칸 = 29칸, 7의 배수로 35칸
+  assert.strictEqual(days.cells.length, 35);
+  assert.strictEqual(days.cells[0], null);
+  same(days.cells[1], { date: "2027-02-01", day: 1, weekday: 1, colors: ["green"], isToday: false, isCurrent: false });
+  same(days.cells[10], { date: "2027-02-10", day: 10, weekday: 3, colors: ["violet"], isToday: false, isCurrent: true });
+  assert.ok(days.cells.slice(29).every((c) => c === null));
+  same(days.prev, { y: 2027, m: 1 });
+  same(days.next, { y: 2027, m: 3 });
+  // 일요일로 시작하는 달은 앞 칸이 없고, 오늘을 표시한다
+  const nov = ctx.pickerDays(2026, 11, "2026-11-17", null, () => []);
+  assert.strictEqual(nov.cells[0].date, "2026-11-01");
+  assert.strictEqual(nov.cells.length, 35);
+  assert.ok(nov.cells.find((c) => c && c.date === "2026-11-17").isToday);
+  assert.ok(nov.cells.every((c) => c === null || !c.isCurrent));
+});
+
+test("pickerDays: 계산 범위의 끝 달은 그쪽으로 옮길 수 없다", () => {
+  assert.strictEqual(ctx.pickerDays(1583, 1, "2026-11-17", null, () => []).prev, null);
+  assert.strictEqual(ctx.pickerDays(9999, 12, "2026-11-17", null, () => []).next, null);
+});
+
+test("pickerMonths: 열두 달, 지금 보는 달과 오늘이 있는 달을 표시하고, 범위 끝의 해는 그쪽으로 옮길 수 없다", () => {
+  const months = ctx.pickerMonths(2026, "2026-11-17", { y: 2026, m: 3 });
+  assert.strictEqual(months.title, "2026년");
+  same(months.cells.map((c) => c.label), ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"]);
+  same(months.cells.filter((c) => c.isCurrent).map((c) => c.m), [3]);
+  same(months.cells.filter((c) => c.isToday).map((c) => c.m), [11]);
+  assert.strictEqual(months.prev, 2025);
+  assert.strictEqual(months.next, 2027);
+  // 다른 해에는 오늘이 있는 달이 없다
+  assert.ok(ctx.pickerMonths(2027, "2026-11-17", null).cells.every((c) => !c.isToday && !c.isCurrent));
+  assert.strictEqual(ctx.pickerMonths(1583, "2026-11-17", null).prev, null);
+  assert.strictEqual(ctx.pickerMonths(9999, "2026-11-17", null).next, null);
+});
+
+test("pickerYearStart, pickerYears: 고른 해가 둘째 줄 첫 칸에 오고, 열두 해씩 옮기며, 범위 끝에서는 범위 안의 쪽에서 멈춘다", () => {
+  assert.strictEqual(ctx.pickerYearStart(2026), 2022);
+  const years = ctx.pickerYears(2022, "2026-11-17", 2027);
+  assert.strictEqual(years.title, "2022-2033년");
+  same(years.cells.map((c) => c.y), [2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033]);
+  assert.strictEqual(years.cells[4].isToday, true);   // 2026은 둘째 줄 첫 칸
+  same(years.cells.filter((c) => c.isCurrent).map((c) => c.y), [2027]);
+  assert.strictEqual(years.prev, 2010);
+  assert.strictEqual(years.next, 2034);
+  // 범위의 첫머리: 첫 해 앞으로 당기지 않고, 앞쪽은 없다
+  assert.strictEqual(ctx.pickerYearStart(1585), 1583);
+  assert.strictEqual(ctx.pickerYears(1583, "2026-11-17", null).prev, null);
+  assert.strictEqual(ctx.pickerYears(1590, "2026-11-17", null).prev, 1583);
+  // 범위의 끝: 마지막 쪽은 9988-9999이고 그 뒤는 없다
+  assert.strictEqual(ctx.pickerYearStart(9998), 9988);
+  assert.strictEqual(ctx.pickerYears(9988, "2026-11-17", null).next, null);
+  assert.strictEqual(ctx.pickerYears(9980, "2026-11-17", null).next, 9988);
+});
+
+test("pickerYearStep: 해 판의 ‹ ›는 열두 해씩 옮기고, 범위 끝에서는 범위 안의 마지막 쪽에서 멈추며, 더 갈 쪽이 없으면 null이다", () => {
+  assert.strictEqual(ctx.pickerYearStep(2022, -1), 2010);
+  assert.strictEqual(ctx.pickerYearStep(2022, 1), 2034);
+  assert.strictEqual(ctx.pickerYearStep(1590, -1), 1583);
+  assert.strictEqual(ctx.pickerYearStep(1583, -1), null);
+  assert.strictEqual(ctx.pickerYearStep(9980, 1), 9988);
+  assert.strictEqual(ctx.pickerYearStep(9988, 1), null);
 });
