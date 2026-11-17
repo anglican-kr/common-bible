@@ -2410,7 +2410,7 @@ const KEPT_DAYS_LAST = "2050-12-31";
 const CHRISTMAS_WEEKDAY_PREFIX = `${GRID_PREFIX}christmas-x-weekday-`;
 
 /**
- * 전례년(대림 1주일부터 다음 대림 1주일 전날까지) 가운데 그 날짜가 든 것.
+ * 전례년(대림 1주일부터 다음 대림 1주일 전날까지) 가운데 그 날짜가 있는 것.
  * @param {string} dateStr @returns {{ from: string, to: string }}
  */
 function liturgicalYearSpan(dateStr) {

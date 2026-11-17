@@ -41,6 +41,7 @@ import {
 // barBottom: 상단 바의 아래쪽(화면 위에서 잰 값).
 const {
   _$, el, clearNode, HEADER_ICON_PATHS, SCROLL_ANCHORING, focusSpotOf, restoreFocusSpot, barBottom, scrollUnderBar, headerIcon,
+  isModifiedClick, DESKTOP_LAYOUT_QUERY,
 } = window.appHelpers;
 
 const $app = _$("app");
@@ -178,7 +179,7 @@ function cellLabel(name) {
 }
 
 /**
- * 그날의 정식 색(사계재 날 축일이면 [자, 백] 병기). `colors`가 없으면 `color` 하나다. 선택 대체색(장미, 청)은 싣지 않는다(DESIGN.md §2).
+ * 그날의 정식 색. 사계재 날의 축일이면 자색과 백색을 함께 싣는다. `colors`가 없으면 `color` 하나다. 선택 대체색(장미, 청)은 싣지 않는다(DESIGN.md §2).
  * 월간 칸의 점(`calendarDay`)과 날짜 고르기 판의 점(`pickerColorsOf`)이 같이 쓴다. 엔진이 못 푼 날(null)은 색이 없다.
  * @param {ResolvedDate | null} resolved
  * @returns {string[]}
@@ -276,7 +277,7 @@ function gridDate(from, n) {
 }
 
 /**
- * 월간 표(ADR-038 §2): 그달 1일이 든 주의 일요일부터 6주 42칸. 앞뒤 달의 칸도 같은 링크다(흐리게 · 이름 없이 —
+ * 월간 표(ADR-038 §2): 그달 1일이 있는 주의 일요일부터 6주 42칸. 앞뒤 달의 칸도 같은 링크다(흐리게 · 이름 없이 —
  * DOM 이 가린다). 계산 범위(1583-9999) 밖의 칸은 날짜만 있고 링크가 없다 — 그 날짜는 `resolve` 를 호출하지 않는다.
  * `resolve` 는 엔진 `resolveDate`(프리로드 뒤 동기)다 — 연도 캐시가 있어 42번 호출해도 부활절 계산은 해마다 한 번이다
  * (설계서 §4.9 「computus 최대 세 번」).
@@ -506,7 +507,7 @@ function pickerDays(y, m, today, current, colorsOf) {
 }
 
 /**
- * 달 판: 그해의 열두 달. 지금 보는 달(월간은 그 달, 목록은 맨 위 줄의 달)과 오늘이 든 달을 표시한다.
+ * 달 판: 그해의 열두 달. 지금 보는 달(월간은 그 달, 목록은 맨 위 줄의 달)과 오늘이 있는 달을 표시한다.
  * @param {number} y
  * @param {string} today  "YYYY-MM-DD"
  * @param {{ y: number, m: number } | null} current
@@ -577,10 +578,9 @@ function announceMonth(/** @type {CalendarMonth} */ model) {
  * 상단 바의 제목 자리에 달 이동 줄을 그린다 — 전례독서와 같은 줄이다(사용자 결정 2026-11-07). 달 제목은 날짜를 고르는 판을 여는 단추다
  * (ADR-038 §2 「날짜 고르기」).
  * @param {CalendarMonth | ListMonth} model
- * @param {string} icon  오른쪽 단추의 아이콘 — 누르면 갈 보기
+ * @param {"month" | "list"} view  지금 보기. 오른쪽 단추는 다른 보기로 간다
  */
-function commitMonthBar(model, icon) {
-  const view = icon === HEADER_ICON_PATHS.viewList ? "month" : "list";
+function commitMonthBar(model, view) {
   // 폭이 모자라면 CSS가 짧은 표기를 보인다(사용자 결정 2026-11-05). 스크린 리더는 단추의 이름(전체 이름)을 읽는다.
   const month = el("span", { className: "cal-month" });
   month.appendChild(el("span", { className: "cal-month-full" }, model.title));
@@ -592,16 +592,23 @@ function commitMonthBar(model, icon) {
   trigger.appendChild(month);
   setPickerTrigger(trigger, model, view);
   trigger.addEventListener("click", (e) => openCalendarPicker(trigger, view, e.detail > 0));
+  // 판이 열린 채 바를 다시 그리면(데스크톱 목록에서 팝오버 아래로 스크롤해 계산 범위 끝에 이른 때) 새 제목 단추를 판의 제목 단추로 삼는다.
+  // 그러지 않으면 닫을 때 포커스를 돌려줄 곳과 팝오버의 자리를 잴 곳이 문서에서 빠진 단추다
+  if (pickerState && picker?.overlay.isOpen && pickerState.view === view) {
+    pickerState.trigger = trigger;
+    trigger.setAttribute("aria-expanded", "true");
+  }
   // 이전 · 다음 달은 계산 범위 밖이면 자리만 지킨다
   commitDateBar({
     title: trigger,
     todayHref: model.hrefs.today,
     prev: { href: model.hrefs.prev, label: "이전 달" },
     next: { href: model.hrefs.next, label: "다음 달" },
-    view: icon === HEADER_ICON_PATHS.viewList
-      ? { href: model.hrefs.view, label: "목록으로 보기", icon }
-      : { href: model.hrefs.view, label: "월간으로 보기", icon },
+    view: view === "month"
+      ? { href: model.hrefs.view, label: "목록으로 보기", icon: HEADER_ICON_PATHS.viewList }
+      : { href: model.hrefs.view, label: "월간으로 보기", icon: HEADER_ICON_PATHS.viewMonth },
   });
+  if (pickerState?.trigger === trigger) placePicker();
 }
 
 // ── 날짜 고르기(ADR-038 §2 「날짜 고르기」, DESIGN.md §6) ──
@@ -612,8 +619,6 @@ function commitMonthBar(model, icon) {
 
 /** 제목 단추와 판의 링크가 함께 다는 포커스 열쇠. 고른 곳으로 간 뒤 라우터가 새 화면의 제목 단추로 포커스를 돌려준다(helpers.js `restoreFocusSpot`). */
 const PICKER_FOCUS_KEY = "month-title";
-/** 마우스를 쓰는 넓은 화면이면 팝오버다. 다른 시트가 오른쪽 패널로 바뀌는 조건과 같다(DESIGN.md §6). */
-const PICKER_DESKTOP_QUERY = "(min-width: 769px) and (pointer: fine)";
 /** 판이 열린 동안 막아 두는 뒤 화면. 책 고르기 시트와 같은 범위다(search.js `BOOK_FILTER_INERT_SELECTORS`). */
 const PICKER_INERT_SELECTORS = "#sticky-group, main#app, #app-header, #audio-bar, #launch-screen, #tab-dock, #verse-select-bar";
 /** 시트를 이만큼(px) 넘게 아래로 끌어 놓으면 닫는다. 시트 높이의 3할이 이보다 작으면 그것을 쓴다. */
@@ -806,7 +811,7 @@ function stepPicker(dir) {
     s.yearStart = to;
   }
   renderPicker();
-  // 끝에 닿아 누른 단추를 누를 수 없게 되면 포커스가 사라지지 않게 맞은편 단추로 옮긴다
+  // 범위 끝이라 누른 단추를 더 누를 수 없게 되면 포커스가 사라지지 않게 맞은편 단추로 옮긴다
   if ((dir < 0 ? p.prev : p.next).disabled) focusInPicker(dir < 0 ? p.next : p.prev);
   announcePicker();
 }
@@ -816,7 +821,7 @@ function placePicker() {
   const s = pickerState;
   const p = picker;
   if (!s || !p) return;
-  if (!window.matchMedia(PICKER_DESKTOP_QUERY).matches) {
+  if (!window.matchMedia(DESKTOP_LAYOUT_QUERY).matches) {
     p.panel.style.top = "";
     p.panel.style.left = "";
     return;
@@ -831,6 +836,8 @@ function placePicker() {
 /**
  * 시트의 손잡이 줄을 아래로 끌면 시트가 따라 내려가고, 충분히 끌어 놓으면 닫는다. 팝오버와 「닫기」 단추에서는 끌지 않는다.
  * 끌어 내린 만큼은 `translate` 속성으로 옮긴다. 여는 움직임과 닫는 움직임은 `transform`을 쓰므로, 여는 움직임 중에 끌어도 서로 덮지 않는다.
+ * 인용 시트와 북마크 패널의 끌기(overlay.js `attachSheetDrag`)는 시트의 높이를 바꾸고 놓은 높이에 그대로 두는 것이라 쓰지 않는다. 이 판은
+ * 내용만큼의 높이라 높이를 줄이면 칸이 잘린다.
  * @param {HTMLElement} handle @param {HTMLElement} panel @param {() => void} onClose @param {MediaQueryList} desktop
  */
 function attachPickerDrag(handle, panel, onClose, desktop) {
@@ -884,7 +891,8 @@ function ensurePicker() {
   panel.append(top, head, body);
   document.body.append(scrim, panel);
 
-  const desktop = window.matchMedia(PICKER_DESKTOP_QUERY);
+  // 마우스를 쓰는 넓은 화면이면 팝오버다. 다른 시트가 오른쪽 패널로 바뀌는 조건과 같다(helpers.js, DESIGN.md §6)
+  const desktop = window.matchMedia(DESKTOP_LAYOUT_QUERY);
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   let closeTimer;
@@ -966,8 +974,10 @@ function ensurePicker() {
     focusInPicker(pickerFocusTarget());
     announcePicker();
   });
-  // 날과 월간의 달은 링크다. 라우터가 그 화면으로 가기 전에 판을 닫아 포커스를 제목 단추로 돌려 둔다
+  // 날과 월간의 달은 링크다. 라우터가 그 화면으로 가기 전에 판을 닫아 포커스를 제목 단추로 돌려 둔다. 수정 키를 누른 클릭은 새 탭에서 열리고
+  // 라우터가 이 화면을 바꾸지 않으므로 판을 그대로 둔다(라우터와 같은 조건, helpers.js `isModifiedClick`)
   panel.addEventListener("click", (e) => {
+    if (isModifiedClick(e)) return;
     if (e.target instanceof Element && e.target.closest("a[href]")) overlay.close();
   });
   attachPickerDrag(top, panel, () => overlay.close(), desktop);
@@ -1069,7 +1079,7 @@ function buildMonthTable(model) {
 function commitMonth(model) {
   stopList?.();
   commitLiturgicalTitle("calendar");   // 문서 제목(views.js)
-  commitMonthBar(model, HEADER_ICON_PATHS.viewList);
+  commitMonthBar(model, "month");
   clearNode($app);
   const root = el("div", { className: "calendar" });
   root.appendChild(buildMonthTable(model));
@@ -1242,7 +1252,7 @@ function updateMonthBar(model) {
   if (!prev !== !model.hrefs.prev || !next !== !model.hrefs.next) {
     const active = document.activeElement;
     const spot = active && focusSpotOf(active, new Event("scroll"), null);
-    commitMonthBar(model, HEADER_ICON_PATHS.viewMonth);
+    commitMonthBar(model, "list");
     restoreFocusSpot(spot, null);
     return;
   }
@@ -1431,7 +1441,7 @@ function startListScroll(list) {
 
 /**
  * Commit the list view — synchronous, called only after both bundles are loaded and the route is still current.
- * @param {ListMonth} month  주소의 날짜가 든 달
+ * @param {ListMonth} month  주소의 날짜가 있는 달
  * @param {string} anchor  "YYYY-MM-DD" — 상단 바 바로 아래에 둘 줄
  * @param {string} today  "YYYY-MM-DD"
  * @param {(date: string) => ListRow | null} rowOf
@@ -1440,7 +1450,7 @@ function startListScroll(list) {
 function commitList(month, anchor, today, rowOf, isStale) {
   stopList?.();
   commitLiturgicalTitle("calendar");   // 문서 제목(views.js)
-  commitMonthBar(month, HEADER_ICON_PATHS.viewMonth);
+  commitMonthBar(month, "list");
   clearNode($app);
   const root = el("div", { className: "calendar cal-list" });
   const above = el("div", { "aria-hidden": "true" });

@@ -128,7 +128,7 @@ test("listStepPath: 앞뒤 달 1일의 줄, 그날이 오늘(매달 1일)이면 
 
 // ── 월간 표의 배치 ────────────────────────────────────────────────────────────
 
-test("buildMonthGrid: 2026년 10월 — 1일(목)이 든 주의 일요일 9.27 부터 6주 42칸, 앞뒤 달 · 오늘 표시", () => {
+test("buildMonthGrid: 2026년 10월 — 1일(목)이 있는 주의 일요일 9.27 부터 6주 42칸, 앞뒤 달 · 오늘 표시", () => {
   const calls = [];
   const m = ctx.buildMonthGrid(2026, 10, "2026-10-15", (d) => { calls.push(d); return plainDay(d); });
   assert.strictEqual(m.title, "2026년 10월");
@@ -603,7 +603,7 @@ test("pickerDays: 계산 범위의 끝 달은 그쪽으로 옮길 수 없다", (
   assert.strictEqual(ctx.pickerDays(9999, 12, "2026-11-17", null, () => []).next, null);
 });
 
-test("pickerMonths: 열두 달, 지금 보는 달과 오늘이 든 달을 표시하고, 범위 끝의 해는 그쪽으로 옮길 수 없다", () => {
+test("pickerMonths: 열두 달, 지금 보는 달과 오늘이 있는 달을 표시하고, 범위 끝의 해는 그쪽으로 옮길 수 없다", () => {
   const months = ctx.pickerMonths(2026, "2026-11-17", { y: 2026, m: 3 });
   assert.strictEqual(months.title, "2026년");
   same(months.cells.map((c) => c.label), ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"]);
@@ -611,7 +611,7 @@ test("pickerMonths: 열두 달, 지금 보는 달과 오늘이 든 달을 표시
   same(months.cells.filter((c) => c.isToday).map((c) => c.m), [11]);
   assert.strictEqual(months.prev, 2025);
   assert.strictEqual(months.next, 2027);
-  // 다른 해에는 오늘이 든 달이 없다
+  // 다른 해에는 오늘이 있는 달이 없다
   assert.ok(ctx.pickerMonths(2027, "2026-11-17", null).cells.every((c) => !c.isToday && !c.isCurrent));
   assert.strictEqual(ctx.pickerMonths(1583, "2026-11-17", null).prev, null);
   assert.strictEqual(ctx.pickerMonths(9999, "2026-11-17", null).next, null);

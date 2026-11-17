@@ -534,7 +534,7 @@ def test_month_and_lectionary_share_the_head_row(mobile_context):
 
 
 def test_lectionary_view_button_goes_to_the_month_of_the_date_shown(mobile_context):
-    """전례독서 상단 바의 오른쪽 단추는 지금 보는 날짜가 든 달로 간다. ‹ ›로 달을 넘겼으면 넘긴 날짜의 달이다. 탭 바의 캘린더 탭은 마지막으로
+    """전례독서 상단 바의 오른쪽 단추는 지금 보는 날짜가 있는 달로 간다. ‹ ›로 달을 넘겼으면 넘긴 날짜의 달이다. 탭 바의 캘린더 탭은 마지막으로
     본 보기로 가므로 다르다(ADR-038 §1)."""
     page = mobile_context.new_page()
     page.goto(f"{BASE}/lectionary/2027-01-01")
@@ -1722,8 +1722,40 @@ def test_picker_popover_closes_in_place_when_the_window_narrows(desktop_context)
     assert abs(bottom - 800) <= 1
 
 
+def test_picker_stays_open_on_a_modified_click_and_follows_a_rebuilt_bar(desktop_context):
+    """수정 키를 누른 클릭은 새 탭에서 열리므로 판을 닫지 않는다. 팝오버 아래로 목록을 스크롤해 계산 범위 끝에서 상단 바를 다시 그려도, 판은 새 제목
+    단추 아래에 자리를 잡고 닫으면 포커스가 새 제목 단추로 돌아간다."""
+    page = desktop_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/9999-11-20")
+    _open_picker(page)
+    box = page.locator(".cal-picker a[href='/calendar/list/9999-11-10']").bounding_box()
+    page.keyboard.down("Control")
+    page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    page.keyboard.up("Control")
+    page.wait_for_timeout(200)
+    assert _picker(page) is not None
+    assert page.url == f"{BASE}/calendar/list/9999-11-20"
+    page.mouse.move(200, 500)   # 팝오버 밖의 목록 위
+    for _ in range(25):
+        page.mouse.wheel(0, 400)
+        page.wait_for_timeout(80)
+    page.wait_for_timeout(600)
+    assert page.locator("#page-title a[data-focus-key='next']").count() == 0   # 9999년 12월이라 바를 다시 그렸다
+    assert _picker(page)["expanded"] == "true"
+    page.set_viewport_size({"width": 1100, "height": 800})
+    page.wait_for_timeout(100)
+    box = page.evaluate("""() => { const p = document.querySelector('.cal-picker').getBoundingClientRect();
+        const t = document.querySelector('.cal-title-btn').getBoundingClientRect();
+        return { gap: p.top - t.bottom, mid: (p.left + p.right) / 2 - (t.left + t.right) / 2 }; }""")
+    assert 0 < box["gap"] <= 12 and abs(box["mid"]) <= 1, box
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(100)
+    assert page.evaluate("document.activeElement.classList.contains('cal-title-btn')")
+
+
 def test_picker_steps_stop_at_the_ends_of_the_calendar(desktop_context):
-    """캘린더의 계산 범위(1583-9999년) 밖으로는 옮기지 않는다. 끝에 닿아 누를 수 없게 된 단추의 포커스는 맞은편 단추로 옮긴다."""
+    """캘린더의 계산 범위(1583-9999년) 밖으로는 옮기지 않는다. 범위 끝이라 더 누를 수 없게 된 단추의 포커스는 맞은편 단추로 옮긴다."""
     page = desktop_context.new_page()
     _freeze_today(page)
     _open(page, "calendar/1584-01")

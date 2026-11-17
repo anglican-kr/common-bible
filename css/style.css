@@ -1456,7 +1456,7 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   height: 0.32rem;
 }
 
-/* 달 판과 해 판: 네 칸씩 세 줄, 글자만. 지금 보는 것은 채운 알약, 오늘이 든 달과 해는 테두리 알약이다. */
+/* 달 판과 해 판: 네 칸씩 세 줄, 글자만. 지금 보는 것은 채운 알약, 오늘이 있는 달과 해는 테두리 알약이다. */
 .cal-picker-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
