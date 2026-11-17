@@ -138,6 +138,8 @@ async function clearAllCaches() {
     return;
   }
   if (!confirm("캐시를 비우면 오프라인 데이터가 삭제됩니다.\n저장된 북마크는 사라지지 않습니다.\n비울까요?")) return;
+  // 초기화는 오프라인 저장 스위치도 끈다. 켜 둔 채면 다시 열자마자 모두 다시 받는다(ADR-045 §6).
+  window.offlineSave?.forget();
   try {
     const keys = await caches.keys();
     await Promise.all(keys.map((k) => caches.delete(k)));
@@ -332,9 +334,11 @@ window.addEventListener("DOMContentLoaded", () => {
       // Manifest-driven lazy cache invalidation (ADR-021). Runs after SW
       // registration so cache.open targets the freshly named caches; safe
       // when SW is still installing — diff is a no-op without entries.
-      if (window.manifestSync) {
-        window.manifestSync.syncManifests().catch(() => { /* best-effort */ });
-      }
+      // 오프라인 저장이 켜져 있으면 그 뒤에 지운 파일과 새 파일을 받는다(ADR-045 §4). 매니페스트를 견주기 전에
+      // 받으면 막 받은 새 파일을 바뀐 파일로 보고 지운다.
+      (window.manifestSync?.syncManifests() ?? Promise.resolve())
+        .catch(() => { /* best-effort */ })
+        .finally(() => window.offlineSave?.resume());
       maybeShowInstallNudge();
       if (window.driveSync) window.driveSync.initDriveSync();
       // Last: an in-app browser hands the page to the device browser (ADR-008 §7).

@@ -72,6 +72,7 @@ const SHELL_FILES = [
   "/js/drive-sync.js",
   "/js/audio-cache.js",
   "/js/manifest-sync.js",
+  "/js/offline-save.js",
   "/js/sync/debug-log.js",
   "/js/sync/refresh-store.js",
   "/js/sync/transport.js",
@@ -123,16 +124,26 @@ const MANIFEST_PATHS = new Set([
   "/data/audio-manifest.json",
 ]);
 
+// 설정의 「오프라인 저장」이 쓰는 크기 목록(ADR-045 §8). 매니페스트처럼 네트워크에서 먼저 받되, 셸 캐시가 아니라
+// DATA_CACHE에 둔다. 셸에 미리 받아 두면 이 기능을 쓰지 않는 기기도 설치 때마다 받고, 셸 캐시에 두면 셸
+// 버전을 올릴 때 지워져 오프라인에서 크기를 보이지 못한다. 스위치를 끄면 DATA_CACHE와 함께 지워진다.
+const SIZE_LIST_PATH = "/data/bible-sizes.json";
+
+// 「오프라인 저장」이 받는 요청에 붙는 머리글(js/offline-save.js). 페이지가 응답을 받아 직접 저장하고 그
+// 저장을 기다려야 공간 부족을 알 수 있으므로, 여기서는 캐시를 보지도 저장하지도 않고 네트워크로만 보낸다.
+const OFFLINE_SAVE_HEADER = "X-Offline-Save";
+
 // Network-first for content-hash manifests. The manifest must reflect what
 // the server currently advertises so js/manifest-sync.js can detect drift
 // and invalidate stale Cache API entries. Fall back to the precached copy
-// in SHELL_CACHE when offline so the app still boots.
-function handleManifest(event, pathname) {
+// in SHELL_CACHE when offline so the app still boots. The size list takes the
+// same path with DATA_CACHE as its store.
+function handleManifest(event, pathname, cacheName = SHELL_CACHE) {
   event.respondWith((async () => {
     try {
       const res = await fetch(new Request(event.request, { cache: "no-cache" }));
       if (res.ok) {
-        const cache = await caches.open(SHELL_CACHE);
+        const cache = await caches.open(cacheName);
         cache.put(event.request, res.clone());
       }
       return res;
@@ -342,8 +353,18 @@ self.addEventListener("fetch", (event) => {
   // Bypass cache for Google OAuth and Drive API — always network-only.
   if (DRIVE_HOSTNAMES.includes(hostname)) return;
 
+  if (event.request.headers.has(OFFLINE_SAVE_HEADER)) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   if (MANIFEST_PATHS.has(pathname)) {
     handleManifest(event, pathname);
+    return;
+  }
+
+  if (pathname === SIZE_LIST_PATH) {
+    handleManifest(event, pathname, DATA_CACHE);
     return;
   }
 
