@@ -193,11 +193,19 @@
  * @property {LectReadingHit[]} [hits]  passage search: the readings that matched, best first
  * @property {number} [tier]  name search: 1 the whole name, 2 its start, 3 inside it (설계 §4.3)
  * @property {string} [matched]  name search: the alias or saint title that matched, when the name itself did not
+ * @property {string[]} [yearNames]  year search: a Christmas weekday found only by the names it may take (「성탄 1주 수요일」).
+ *   The app keeps a year's row only when that year's name of the day is one of them (ADR-044 §4)
  *
  * @typedef LectResult
  * @property {"name" | "passage"} kind
  * @property {LectItem[]} items
  * @property {Array<{ from: string, to: string }>} synonyms  name search: the replacements that found something
+ * @property {LectYears} [years]  name search with a year (`2027년 성 니콜라`): the years to show (ADR-044 §4)
+ *
+ * @typedef LectYears  연도를 붙인 이름 검색의 해(양력, ADR-044 §4)
+ * @property {number} from
+ * @property {number} to
+ * @property {boolean} capped  the range was longer than LECT_YEAR_SPAN and was cut to its first years
  */
 
 /** @type {SearchMeta | null} */
@@ -921,6 +929,90 @@ function searchLectionaryNames(index, query, extra = []) {
   return result;
 }
 
+// 연도를 붙인 이름 검색(ADR-044 §4). 연도는 「년」을 붙이거나 네 자리 숫자만 쓰고, 이름의 앞이나 뒤에 둔다. 범위는 하이픈이나
+// 물결표로 잇는다. 받는 해는 캘린더와 같다(교회력 엔진 `MIN_YEAR`, `MAX_YEAR`. 워커는 엔진을 읽지 않는다). 범위는 앞의
+// `LECT_YEAR_SPAN`해까지 찾는다. 앱이 그해의 모든 날을 엔진으로 계산하기 때문이다.
+const LECT_YEAR_MIN = 1583;
+const LECT_YEAR_MAX = 9999;
+const LECT_YEAR_SPAN = 10;
+const LECT_YEARS_SRC = "(\\d{4})년?(?:\\s*[-~～–]\\s*(\\d{4})년?)?";
+const LECT_YEAR_LEAD_RE = new RegExp(`^${LECT_YEARS_SRC}\\s+(.+)$`);
+const LECT_YEAR_TAIL_RE = new RegExp(`^(.+?)\\s+${LECT_YEARS_SRC}$`);
+/** 이름이 될 수 없는 나머지: 숫자와 연도 표기뿐이다(`2024 2026`). */
+const LECT_YEAR_ONLY_RE = /^[\d\s년~～–,-]*$/;
+
+/**
+ * 검색어의 앞이나 뒤에 붙은 연도와 그 나머지(전례일 이름). 연도가 없거나, 받는 해 밖이거나, 나머지가 이름이 아니면 null.
+ * 거꾸로 쓴 범위(`2026-2024`)는 작은 해부터로 고친다. 날짜(`2026-12-25`)와 여러 해를 늘어놓은 것(`2024, 2026`)은 읽지 않는다.
+ * @param {string} keyword
+ * @returns {{ name: string, from: number, to: number, capped: boolean } | null}
+ */
+function parseLectYear(keyword) {
+  const s = keyword.trim();
+  /** @type {string | undefined} */
+  let a;
+  /** @type {string | undefined} */
+  let b;
+  /** @type {string | undefined} */
+  let name;
+  const lead = LECT_YEAR_LEAD_RE.exec(s);
+  if (lead) [, a, b, name] = lead;
+  else {
+    const tail = LECT_YEAR_TAIL_RE.exec(s);
+    if (!tail) return null;
+    [, name, a, b] = tail;
+  }
+  name = (name || "").trim();
+  if (!name || LECT_YEAR_ONLY_RE.test(name)) return null;
+  let from = Number(a);
+  let to = b ? Number(b) : from;
+  if (from > to) [from, to] = [to, from];
+  if (from < LECT_YEAR_MIN || to > LECT_YEAR_MAX) return null;
+  const capped = to - from + 1 > LECT_YEAR_SPAN;
+  if (capped) to = from + LECT_YEAR_SPAN - 1;
+  return { name, from, to, capped };
+}
+
+// 날짜로 독서가 정해진 성탄 평일(색인의 이름은 13개 모두 「성탄주간」)이 해마다 받는 이름. 교회력 엔진 `christmasWeekdayName`이
+// 만드는 이름의 모두다: 그 주의 주일이 성탄 1주일이나 2주일이면 「성탄 N주 X요일」, 주일이 오기 전이면 「성탄 후 X요일」.
+const LECT_CHRISTMAS_NAME = "성탄주간";
+const LECT_CHRISTMAS_WEEKDAY_NAMES = ["성탄 1주", "성탄 2주", "성탄 후"].flatMap((head) =>
+  ["월", "화", "수", "목", "금", "토"].map((d) => `${head} ${d}요일`));
+
+/**
+ * 이름 하나(`name`)가 검색어로 찾아지는가. 이름 검색(`searchLectionaryNames`)과 같게, 검색어 전체가 들어 있거나 낱말이 모두 들어 있다.
+ * @param {string} name @param {string} query @returns {boolean}
+ */
+function lectNameMatches(name, query) {
+  const key = normalizeLectName(name);
+  const typed = normalizeLectName(query);
+  if (typed && lectTier(key, typed)) return true;
+  const words = query.trim().split(/\s+/).map(normalizeLectName).filter(Boolean);
+  return words.length > 1 && words.every((w) => findWhole(key, w) !== -1);
+}
+
+/**
+ * 연도를 붙인 이름 검색(ADR-044 §4). 연도를 뗀 이름으로 찾고, 앱이 찾은 전례일마다 그해의 날을 계산하도록 해를 함께 넘긴다.
+ * 성탄 평일의 이름은 해마다 바뀌어(§3) 오늘부터 한 해의 이름(`lect-names`)으로 찾지 않는다. 그 이름이 될 수 있는 것 가운데 검색어로
+ * 찾아지는 것을 줄(`yearNames`)에 달아 넘기고, 앱이 그해의 이름으로 거른다(`2027 성탄1주`).
+ * @param {LectionaryIndex} index
+ * @param {{ name: string, from: number, to: number, capped: boolean }} yq  parseLectYear
+ * @returns {LectResult}
+ */
+function searchLectionaryYears(index, yq) {
+  const result = searchLectionaryNames(index, yq.name);
+  result.years = { from: yq.from, to: yq.to, capped: yq.capped };
+  const yearNames = LECT_CHRISTMAS_WEEKDAY_NAMES.filter((n) => lectNameMatches(n, yq.name));
+  if (yearNames.length) {
+    const have = new Set(result.items.map((item) => item.obs.key));
+    index.obs.forEach((o, i) => {
+      if (o.name !== LECT_CHRISTMAS_NAME || have.has(o.key)) return;
+      result.items.push({ obs: lectObsInfo(index, i), sets: index.setsOfObs[i].map((x) => lectSetInfo(index, x)), tier: 3, yearNames });
+    });
+  }
+  return result;
+}
+
 /**
  * Merge overlapping or touching [from, to] verse ranges.
  * @param {Array<[number, number]>} ranges
@@ -1127,6 +1219,8 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       // 전례일(§3)은 책을 골라 두었으면 찾지 않는다(§1).
       const scoped = restrictBooks.size > 0;
       const bookOnly = tryBookOnly(keyword);
+      // 이름에 붙인 연도(ADR-044 §4). 성서 본문은 친 그대로 찾는다
+      const yearQuery = parseLectYear(keyword);
       // The name search depends on the keyword and the index only: computed once per index and shared by the partial
       // results, the results and a later "lectionary" message. A new index (`init`) computes it again.
       /** @type {LectionaryIndex | null} */
@@ -1137,7 +1231,7 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       const findNames = (index) => {
         if (index !== namesIndex || !names) {
           namesIndex = index;
-          names = searchLectionaryNames(index, keyword, lectExtraNames);
+          names = yearQuery ? searchLectionaryYears(index, yearQuery) : searchLectionaryNames(index, keyword, lectExtraNames);
         }
         return names;
       };

@@ -567,6 +567,74 @@ test("searchLectionaryNames: 비슷한 말은 긴 낱말부터 바꾼다", () =>
   assert.deepEqual(r.synonyms, [{ from: "그리스도왕 대축일", to: "왕이신 그리스도 주일" }]);
 });
 
+test("parseLectYear: 이름의 앞이나 뒤에 붙인 연도와 범위를 읽는다(ADR-044 §4)", () => {
+  const year = (q) => plain(ctx.parseLectYear(q));
+  const nicola = (from, to = from, capped = false) => ({ name: "성 니콜라", from, to, capped });
+  assert.deepStrictEqual(year("2027년 성 니콜라"), nicola(2027));
+  assert.deepStrictEqual(year("2027 성 니콜라"), nicola(2027), "「년」 없이 네 자리 숫자만");
+  assert.deepStrictEqual(year("성 니콜라 2027년"), nicola(2027), "이름 뒤");
+  assert.deepStrictEqual(year("  성 니콜라   2027  "), nicola(2027));
+  assert.deepStrictEqual(year("2024-2026 성 니콜라"), nicola(2024, 2026));
+  assert.deepStrictEqual(year("2024~2026 성 니콜라"), nicola(2024, 2026), "물결표");
+  assert.deepStrictEqual(year("2024～2026 성 니콜라"), nicola(2024, 2026), "전각 물결표");
+  assert.deepStrictEqual(year("2024년-2026년 성 니콜라"), nicola(2024, 2026));
+  assert.deepStrictEqual(year("2024 - 2026 성 니콜라"), nicola(2024, 2026), "기호 앞뒤의 공백");
+  assert.deepStrictEqual(year("성 니콜라 2026-2024"), nicola(2024, 2026), "거꾸로 쓴 범위는 작은 해부터");
+});
+
+test("parseLectYear: 범위는 앞의 10년까지이고, 받는 해는 캘린더와 같은 1583-9999년이다", () => {
+  assert.deepStrictEqual(plain(ctx.parseLectYear("2000-2050 성 니콜라")), { name: "성 니콜라", from: 2000, to: 2009, capped: true });
+  assert.deepStrictEqual(plain(ctx.parseLectYear("2000-2009 성 니콜라")), { name: "성 니콜라", from: 2000, to: 2009, capped: false });
+  assert.deepStrictEqual(plain(ctx.parseLectYear("1583 성 니콜라")), { name: "성 니콜라", from: 1583, to: 1583, capped: false });
+  // 성인 칭호의 해(「1556년」)는 받는 해 밖이라 이름의 일부로 찾는다
+  assert.equal(ctx.parseLectYear("1556년 크랜머"), null);
+  assert.equal(ctx.parseLectYear("1580-1590 성 니콜라"), null);
+});
+
+test("parseLectYear: 두 자리 연도, 여러 해를 늘어놓은 것, 날짜, 이름 없는 연도는 읽지 않는다", () => {
+  for (const q of ["27년 성 니콜라", "2024, 2026 성 니콜라", "2026-12-25 성탄", "2027", "2027년", "2024 2026", "2024-2026",
+    "연중 7주", "성 니콜라", "2027년성 니콜라"]) {
+    assert.equal(ctx.parseLectYear(q), null, q);
+  }
+});
+
+test("lectNameMatches: 이름 검색과 같게 검색어 전체나 낱말이 모두 든 이름이다", () => {
+  assert.equal(ctx.lectNameMatches("성탄 1주 수요일", "성탄1주"), true);
+  assert.equal(ctx.lectNameMatches("성탄 1주 수요일", "성탄 1주일"), true, "「1주일」도 「1주」로 맞춘다");
+  assert.equal(ctx.lectNameMatches("성탄 1주 수요일", "수요일 성탄"), true, "낱말이 모두 들었다");
+  assert.equal(ctx.lectNameMatches("성탄 1주 수요일", "성탄 11주"), false, "숫자는 통째로");
+  assert.equal(ctx.lectNameMatches("성탄 1주 수요일", "성탄주간"), false);
+});
+
+// 성탄 평일 둘(색인의 이름은 「성탄주간」)을 더한 색인
+const LECT_XMAS = ctx.buildLectionarySearchIndex({
+  ...LECT_RAW,
+  obs: [...LECT_RAW.obs,
+    obs("d1229-성탄주간", "성탄주간", 40, { date: "12.29" }), // 12
+    obs("d0102-성탄주간", "성탄주간", 41, { date: "01.02" })], // 13
+  sets: [...LECT_RAW.sets, [12, "d1229-성탄주간-t1-s1", null, null, 1, "성탄주간"], [13, "d0102-성탄주간-t1-s1", null, null, 1, "성탄주간"]],
+});
+
+test("searchLectionaryYears: 연도를 뗀 이름으로 찾고 해를 함께 넘긴다(ADR-044 §4)", () => {
+  const r = plain(ctx.searchLectionaryYears(LECT_XMAS, ctx.parseLectYear("2024-2026 대림1주일")));
+  assert.deepStrictEqual(r.years, { from: 2024, to: 2026, capped: false });
+  assert.deepStrictEqual(r.items.map((it) => [it.obs.name, it.yearNames]), [["대림1주일", undefined], ["대림1주 월요일", undefined]]);
+});
+
+test("searchLectionaryYears: 성탄 평일은 그해에 받을 수 있는 이름으로 찾고, 그 이름들을 줄에 단다", () => {
+  const r = plain(ctx.searchLectionaryYears(LECT_XMAS, ctx.parseLectYear("2027 성탄1주")));
+  assert.deepStrictEqual(r.items.map((it) => it.obs.key), ["d1229-성탄주간", "d0102-성탄주간"]);
+  assert.deepStrictEqual(r.items[0].yearNames, ["월", "화", "수", "목", "금", "토"].map((d) => `성탄 1주 ${d}요일`));
+  assert.deepStrictEqual(plain(ctx.searchLectionaryYears(LECT_XMAS, ctx.parseLectYear("2027 성탄 2주 화요일"))).items
+    .map((it) => it.yearNames), [["성탄 2주 화요일"], ["성탄 2주 화요일"]]);
+  // 색인의 이름으로 찾았으면 해마다 둔다(이름을 달지 않는다)
+  const own = plain(ctx.searchLectionaryYears(LECT_XMAS, ctx.parseLectYear("2027 성탄주간")));
+  assert.deepStrictEqual(own.items.map((it) => [it.obs.key, it.yearNames]), [["d1229-성탄주간", undefined], ["d0102-성탄주간", undefined]]);
+  // 성탄 평일의 이름이 될 수 없는 검색어는 성탄 평일을 더하지 않는다
+  assert.deepStrictEqual(plain(ctx.searchLectionaryYears(LECT_XMAS, ctx.parseLectYear("2027 연중7주일"))).items.map((it) => it.obs.key),
+    ["ordinary-7-sun", "ordinary-7-wed"]);
+});
+
 test("swapSynonyms: 바꾼 말을 다시 바꾸지 않는다", () => {
   const index = ctx.buildLectionarySearchIndex({ ...LECT_RAW, synonyms: { "가": "나", "나": "다" } });
   assert.deepEqual(plain(ctx.swapSynonyms(index, "가나")), {
@@ -796,6 +864,24 @@ test("메시지: 색인을 받아 두었으면 구절과 이름으로 찾은 전
   assert.deepEqual(byBook.bookOnly, { bookId: "isa", bookNameKo: "이사야" });
   assert.deepEqual(byBook.lectionary.items, []);
   assert.deepEqual(w.lects(), [], "따로 보낼 것이 없다");
+});
+
+test("메시지: 이름에 연도를 붙이면 연도를 뗀 이름으로 찾고 해를 넘긴다. 앱이 보낸 성탄 평일 이름은 쓰지 않는다(ADR-044 §4)", async () => {
+  const w = startWorker(WORKER_FILES);
+  await w.send(INIT);
+  await flush();
+  await w.send({ type: "lect-names", names: [["advent-1-mon-t1-s1", "성탄 1주 화요일"]] });
+  await w.send(search("2027년 고난주일"));
+  const [byYear] = w.results();
+  assert.deepStrictEqual(plain(byYear.lectionary.years), { from: 2027, to: 2027, capped: false });
+  assert.deepStrictEqual(byYear.lectionary.items.map((it) => [it.obs.name, it.matched]), [["성지주일", "고난주일"]]);
+  assert.equal(byYear.keyword, "2027년 고난주일", "성서 본문은 친 그대로 찾는다");
+  // 오늘부터 한 해의 이름(lect-names)은 다른 해에는 맞지 않는다
+  await w.send(search("2027 성탄 1주 화요일"));
+  assert.deepStrictEqual(w.results()[1].lectionary.items, []);
+  await w.send(search("고난주일"));
+  assert.equal(w.results()[2].lectionary.years, undefined, "연도가 없으면 해를 넘기지 않는다");
+  assert.equal(w.posted.filter((m) => m.type === "error").length, 0);
 });
 
 test("메시지: `lect-names`로 받은 이름은 다음 검색부터 찾는다(ADR-044 §3)", async () => {

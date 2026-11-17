@@ -462,6 +462,85 @@ function fixedDateText(date) {
   return m ? `${Number(m[1])}월 ${Number(m[2])}일` : null;
 }
 
+/** 「2026-12-06」을 「12월 6일」로. @param {string} date */
+function monthDayText(date) {
+  const [, m, d] = date.split("-").map(Number);
+  return `${m}월 ${d}일`;
+}
+
+/**
+ * 해의 목록(오름차순)을 「2027년」, 「2027, 2032년」, 「2024, 2026~2027년」으로 적는다. 이어진 해는 물결표로 잇는다(ADR-044 §4).
+ * @param {number[]} years
+ */
+function yearsText(years) {
+  /** @type {string[]} */
+  const parts = [];
+  for (let i = 0; i < years.length; ) {
+    let j = i;
+    while (j + 1 < years.length && years[j + 1] === years[j] + 1) j++;
+    parts.push(j > i ? `${years[i]}~${years[j]}` : `${years[i]}`);
+    i = j + 1;
+  }
+  return `${parts.join(", ")}년`;
+}
+
+/**
+ * 「…과 겹침」에 적는 전례일 이름(ADR-044 §4). 괄호 안의 설명은 떼고, 성인 축일이면 이름 뒤에 「축일」을 붙인다(「성 니콜라 축일」).
+ * 이름이 「날」이나 「축일」로 끝나면 붙이지 않는다(「성 십자가의 날」). 전례독서 화면이 옮긴 축일을 알리는 말(lectionary.js
+ * `feastPhraseOf`)과 같은 규칙이다. 주일과 국가 명절(설날, 추석)은 이름 그대로다.
+ * @param {string} name @param {boolean} saint
+ */
+function overlapName(name, saint) {
+  const short = name.replace(/\s*\([^()]*\)/g, "").replace(/\s{2,}/g, " ").trim() || name;
+  return saint && !short.endsWith("날") && !short.endsWith("축일") ? `${short} 축일` : short;
+}
+
+/** 음력 날짜로 지키는 전례일(설날, 추석)의 키. 음력 날짜 자료(`kasi-lunar.json`)가 없는 해에는 계산하지 못한다. */
+const LECT_LUNAR_PREFIX = "lunar";
+
+/**
+ * 연도를 붙인 이름 검색의 줄(ADR-044 §4). `found`는 워커가 찾은 전례일이고, `perYear`는 해마다 그 전례일들의 날(엔진 `findYearDays`,
+ * `found`와 같은 차례)과 그해의 음력 날짜 자료가 있는지다. 줄은 전례일마다, 해마다 하나이고 날짜 차례다. 해가 날짜의 앞자리라 해의
+ * 차례로 묶이고, 같은 날이면 이름 결과의 차례를 지킨다(`Array.prototype.sort`는 안정 정렬이다). 그해에 지키지 않는 전례일은 줄을
+ * 두지 않는다. 성탄 평일을 그해의 이름으로만 찾았으면(`yearNames`) 그해의 이름이 맞는 날만 둔다. `notes`는 결과 위나 결과 없음 화면에
+ * 적는 문장이다: 범위를 자른 것, 음력 날짜 자료가 없는 해, 줄이 하나도 없는 해(「2027, 2032년에는 검색하신 전례일을 지키지 않습니다.」).
+ * @param {any[]} found  LectItem[]
+ * @param {Array<{ year: number, days: Array<any | null>, lunar: boolean }>} perYear  YearDay | null
+ * @param {{ from: number, to: number, capped: boolean }} years
+ * @returns {{ items: any[], notes: string[] }}
+ */
+function yearRowsOf(found, perYear, years) {
+  /** @type {any[]} */
+  const items = [];
+  /** 줄이 하나도 없는 해 @type {number[]} */
+  const empty = [];
+  for (const { year, days } of perYear) {
+    const before = items.length;
+    found.forEach((item, i) => {
+      const day = days[i];
+      if (day && (!item.yearNames || item.yearNames.includes(day.name))) items.push({ ...item, yearDay: day });
+    });
+    if (items.length === before) empty.push(year);
+  }
+  items.sort((a, b) => (a.yearDay.date < b.yearDay.date ? -1 : a.yearDay.date > b.yearDay.date ? 1 : 0));
+  /** @type {string[]} */
+  const notes = [];
+  if (years.capped) {
+    notes.push(`연도 범위는 ${years.to - years.from + 1}년까지 찾습니다. ${yearsText(perYear.map((x) => x.year))}의 날을 보입니다.`);
+  }
+  const lunar = found.filter((item) => item.obs.key.startsWith(LECT_LUNAR_PREFIX));
+  const lunarNames = [...new Set(lunar.map((item) => item.obs.name))];
+  const noLunar = lunarNames.length ? perYear.filter((x) => !x.lunar).map((x) => x.year) : [];
+  if (noLunar.length) {
+    const names = lunarNames.reduce((acc, name) => (acc ? `${acc}${hasBatchim(acc) ? "과" : "와"} ${name}` : name), "");
+    notes.push(`${yearsText(noLunar)}의 ${names} 날짜는 아직 앱에 없습니다.`);
+  }
+  // 음력으로 지키는 전례일만 찾았으면 음력 자료가 없는 해는 위에서 알렸다. 지키지 않는 것이 아니라 모르는 것이다
+  const unkept = lunar.length === found.length ? empty.filter((y) => !noLunar.includes(y)) : empty;
+  if (found.length && unkept.length) notes.push(`${yearsText(unkept)}에는 검색하신 전례일을 지키지 않습니다.`);
+  return { items, notes };
+}
+
 /**
  * 「2027-03-07」을 「2027년 3월 7일 (일)」로. `full`이면 요일을 「일요일」로 쓴다(스크린 리더가 읽는 링크 이름).
  * @param {string} date @param {boolean} [full]
@@ -573,7 +652,10 @@ function lectRowOf(item, labelOf, days = null, today = "") {
   const { obs } = item;
   // 주일은 등급이 비어 있어 이름으로 안다. 이동 축일의 이름만 본다(월별 축일에는 「주일」로 끝나는 이름이 없다)
   const bold = LECT_BOLD_RANKS.has(obs.rank) || (obs.kind === "temporal" && /주일$/.test(obs.name));
-  const open = days ? days.open : null;
+  // 연도를 붙여 찾은 줄은 그해의 날을 연다(ADR-044 §4, `yearRowsOf`)
+  const yearDay = item.yearDay || null;
+  /** @type {KeptDay | null} */
+  const open = yearDay || (days ? days.open : null);
   const title = open && open.obs.startsWith(LECT_CHRISTMAS_WEEKDAY) ? open.name : obs.name;
   /** @type {{ slot: string, text: string } | null} */
   let found = null;
@@ -596,8 +678,10 @@ function lectRowOf(item, labelOf, days = null, today = "") {
   const colors = open ? open.colors.map((code) => ({ code, name: LECT_COLOR_LABEL[code] || code })) : [];
   /** 링크 이름에 싣는 meta. 날짜는 요일을 다 쓴다 @type {string[]} */
   const said = [...meta];
-  // 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 열리는 날의 해를 날짜 앞에 적는다. 링크마다 해를 적으므로 줄에도 있어야 견주어 본다
-  const year = days && days.year ? LECT_CYCLE_LABEL[days.year] || "" : "";
+  // 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 열리는 날의 해를 날짜 앞에 적는다. 링크마다 해를 적으므로 줄에도 있어야 견주어 본다.
+  // 연도를 붙여 찾은 줄은 그해에 읽는 독서의 해다
+  const cycle = yearDay ? (lectCyclic(item) ? lectYearOf(item, yearDay) : "") : days && days.year ? days.year : "";
+  const year = cycle ? LECT_CYCLE_LABEL[cycle] || "" : "";
   if (year) {
     meta.push(year);
     said.push(year);
@@ -611,6 +695,12 @@ function lectRowOf(item, labelOf, days = null, today = "") {
       meta.push(date);
       said.push(date);
     }
+  }
+  // 연도를 붙여 찾은 줄은 그해의 사정을 적는다: 다른 날에서 옮겨 온 날, 다른 전례일과 겹쳐 기념만 하는 날(ADR-044 §4)
+  if (yearDay && yearDay.kind === "moved" && yearDay.from) lines.push(`${monthDayText(yearDay.from)}에서 옮겨 옴`);
+  if (yearDay && yearDay.kind === "overlap") {
+    const by = yearDay.by ? overlapName(yearDay.by, !!yearDay.bySaint) : "";
+    lines.push(by ? `${by}${hasBatchim(by) ? "과" : "와"} 겹침` : "다른 전례일과 겹침");
   }
   // 다른 날로 가는 링크: 해에 따라 다른 독서(가해, 나해, 다해, 홀수해, 짝수해)를 읽는 줄만 둔다. 이름으로 찾은 줄은 다른 해의 날을
   // 해마다 하나씩(세 해 주기는 둘), 구절로 찾은 줄은 지났을 때 다음에 읽는 날 하나다. 해마다 같은 독서는 엔진이 오늘부터 처음 오는
@@ -639,7 +729,9 @@ function lectRowOf(item, labelOf, days = null, today = "") {
   }
   const label = [title, found ? `${found.slot} ${found.text}` : null, ...colors.map((c) => c.name), ...said, ...lines]
     .filter(Boolean).join(", ");
-  const href = open && lectYearlyWithYears(item) ? lectHrefOf(lectSlugIds(item), open.date) : lectSlugHref(item);
+  // 연도를 붙여 찾은 줄: 지키는 날은 그날부터 처음 지키는 날(곧 그날)을 고른 화면, 겹친 날은 그날의 기본 화면이다
+  const href = yearDay ? (yearDay.kind === "overlap" ? `/lectionary/${yearDay.date}` : lectHrefOf(lectSlugIds(item), yearDay.date))
+    : open && lectYearlyWithYears(item) ? lectHrefOf(lectSlugIds(item), open.date) : lectSlugHref(item);
   return { title, href, bold, found, colors, meta, lines, label, nexts };
 }
 
@@ -892,7 +984,15 @@ function buildAnswer(result, screen) {
  * @returns {any}
  */
 function shownLectionary(result) {
-  return result.lectionary && result.lectionary.items && result.lectionary.items.length ? result.lectionary : null;
+  const lect = result.lectionary;
+  // 연도를 붙인 검색은 그해의 날을 계산한 뒤에 줄이 정해진다(`withYearRows`)
+  if (lect && lect.years && !lect.yearRows) return null;
+  return lect && lect.items && lect.items.length ? lect : null;
+}
+
+/** 전례일 묶음이나 결과 없음 화면에 적는 문장(연도를 붙인 검색, `yearRowsOf`). @param {any} result @returns {string[]} */
+function lectNotes(result) {
+  return (result.lectionary && result.lectionary.notes) || [];
 }
 
 /** 전례일 묶음의 이름: 구절로 찾았으면 「이 구절을 읽는 날」(ADR-044 §1). @param {any} lect */
@@ -912,6 +1012,7 @@ function appendLectGroup(container, lect, screen) {
   if (lect.kind === "name" && lect.synonyms && lect.synonyms.length) {
     container.appendChild(el("p", { className: "search-note" }, synonymNote(lect.synonyms)));
   }
+  for (const note of lect.notes || []) container.appendChild(el("p", { className: "search-note" }, note));
   const rows = el("ul", { className: "lect-rows", role: "list" });
   for (const item of lect.items) rows.appendChild(buildLectRow(lectRowOf(item, screen.readingLabel, screen.days?.get(item) ?? null, screen.today)));
   container.appendChild(rows);
@@ -965,15 +1066,18 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
   const { isPending, lect, hasBible, group } = resultGroups(result, screen);
   const answer = buildAnswer(result, screen);
 
+  // 연도를 붙여 찾았는데 줄이 없으면 그 사정(ADR-044 §4)
+  const notes = lect ? [] : lectNotes(result);
   if (!answer.node && !hasBible && !lect) {
     if (!unmatched) {
       container.appendChild(
         // 책을 골라 두었으면 전례일은 찾지 않았다(ADR-044 §1)
-        buildSearchEmptyState("검색 결과가 없습니다", `‘${query}’에 해당하는 ${screen.scoped ? "구절을" : "구절과 전례일을"} 찾지 못했어요.`)
+        buildSearchEmptyState("검색 결과가 없습니다", notes.length ? notes.join(" ")
+          : `‘${query}’에 해당하는 ${screen.scoped ? "구절을" : "구절과 전례일을"} 찾지 못했어요.`)
       );
       container.appendChild(buildSearchExamples(true, screen.scoped));
     }
-    return `"${query}" 검색 결과 0건`;
+    return `"${query}" 검색 결과 0건${notes.length ? `. ${notes.join(" ")}` : ""}`;
   }
 
   /** @type {string[]} */
@@ -1004,6 +1108,7 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
   }
 
   if (hasBible) {
+    for (const note of notes) container.appendChild(el("p", { className: "search-note" }, note));
     const countLabel = isPending
       ? `"${query}" 검색 중… (현재 ${result.total}건)`
       : `성서 본문 ${result.total}건 (${page}/${totalPages}쪽)`;
@@ -1253,7 +1358,8 @@ async function lectDaysOf(mod, item, today, isStale = () => false) {
  */
 async function withLectDays(result, screen, deadline, isStale) {
   const lect = shownLectionary(result);
-  if (!lect) return null;
+  // 연도를 붙여 찾은 줄은 그해의 날을 이미 담았다(`withYearRows`)
+  if (!lect || lect.years) return null;
   const days = new Map();
   screen.days = days;
   const work = (async () => {
@@ -1285,6 +1391,41 @@ function patchLectDays(target, lect, screen, labelOf) {
     const li = /** @type {HTMLElement | undefined} */ (rows[i]);
     if (li) fillLectRow(li, lectRowOf(item, labelOf, screen.days?.get(item) ?? null, screen.today));
   });
+}
+
+/**
+ * 연도를 붙인 이름 검색(ADR-044 §4): 찾은 전례일마다 그해의 날을 엔진으로 계산해 줄로 바꾼다(`yearRowsOf`). 줄이 계산에 달려 있어 3초를
+ * 기다리지 않고 끝까지 기다린다. 그동안 결과 자리에는 「검색 중…」이 보인다. 한 해씩 세고 해 사이마다 차례를 넘긴다. 교회력 자료를
+ * 내려받지 못했으면 줄 없이 그렇다고 적는다. 화면을 떠났으면(`isStale`) 그친다.
+ * @param {any} result @param {SearchScreen} screen @param {() => boolean} isStale
+ */
+async function withYearRows(result, screen, isStale) {
+  const lect = result.lectionary;
+  if (!lect || !lect.years || lect.yearRows) return;
+  const mod = await ensureEngine();
+  if (isStale()) return;
+  if (!mod) {
+    lect.items = [];
+    lect.notes = ["교회력 자료를 내려받지 못해 그해의 날짜를 계산하지 못했습니다."];
+    lect.yearRows = true;
+    return;
+  }
+  const found = lect.items;
+  const asks = found.map((/** @type {any} */ item) => ({ ids: lectSlugIds(item), key: item.obs.key }));
+  /** @type {Array<{ year: number, days: Array<any | null>, lunar: boolean }>} */
+  const perYear = [];
+  for (let y = lect.years.from; y <= lect.years.to; y++) {
+    if (y > lect.years.from) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (isStale()) return;
+    }
+    perYear.push({ year: y, days: mod.findYearDays(asks, y), lunar: mod.hasLunarYear(y) });
+  }
+  const { items, notes } = yearRowsOf(found, perYear, lect.years);
+  lect.items = items;
+  lect.notes = notes;
+  lect.yearRows = true;
+  screen.today = todayOf(mod);
 }
 
 // alias(소문자) → book id, for absorbing typed/example `in:<alias>` operators
@@ -2052,6 +2193,8 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   if (isStale()) return;
   await withReadingLabels(result, screen, deadline - Date.now());
   if (isStale()) return;
+  await withYearRows(result, screen, isStale);
+  if (isStale()) return;
 
   // Enter opens the chapter at once only when there is nothing to choose from (ADR-044 §1, §2): a verse reference read
   // on no lectionary day, or a book name alone with no results at all. A reference across chapters never navigates:
@@ -2101,8 +2244,14 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
  */
 async function addLateLectionary(result, query, screen, target, isStale, draw) {
   if (!(await takeLateLectionary(result, Infinity)) || isStale() || !target.isConnected) return;
+  await withYearRows(result, screen, () => isStale() || !target.isConnected);
+  if (isStale() || !target.isConnected) return;
   const lect = shownLectionary(result);
-  if (!lect) return;
+  if (!lect) {
+    // 연도를 붙여 찾은 전례일을 그해에 지키지 않으면 결과 없음 화면에 그 사정을 적는다
+    if (lectNotes(result).length && !result.total && !target.querySelector(".search-answer")) draw(result);
+    return;
+  }
   await withReadingLabels(result, screen, 0);
   if (isStale() || !target.isConnected) return;
   // 날짜는 이미 계산한 표가 있으면 곧 나온다. 기다리지 않고 그린 뒤 넣는다
