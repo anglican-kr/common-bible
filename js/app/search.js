@@ -1964,10 +1964,9 @@ function ensureBookSheet() {
   head.appendChild(el("h2", { id: "book-filter-title", className: "book-filter-title" }, "책 선택"));
   const headActions = el("div", { className: "book-filter-head-actions" });
   const resetBtn = el("button", { type: "button", className: "book-filter-reset" }, "초기화");
-  // Close (×) for the desktop side-panel, matching the bookmark/cite panels; the
-  // scrim and Esc still close too. Always present (cite-sheet shows × on mobile
-  // too); harmless beside the mobile drag handle.
-  const closeBtn = el("button", { type: "button", className: "book-filter-close", "aria-label": "닫기" }, "×");
+  // 「닫기」 글자 단추. 인용 시트, 북마크 패널과 같은 모양이고(.sheet-close, DESIGN.md 「시트 vs 모달」) 휴대폰의 손잡이 옆에도 늘 둔다.
+  // 뒤 가림과 Esc로도 닫힌다.
+  const closeBtn = el("button", { type: "button", className: "book-filter-close sheet-close" }, "닫기");
   headActions.appendChild(resetBtn);
   headActions.appendChild(closeBtn);
   head.appendChild(headActions);

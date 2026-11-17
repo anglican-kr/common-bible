@@ -15,7 +15,7 @@ from urllib.parse import quote
 
 import pytest
 
-from .conftest import CLEAR_APP_STORAGE, emulate_status_bar, wait_app_ready
+from .conftest import CLEAR_APP_STORAGE, assert_sheet_close_button, emulate_status_bar, wait_app_ready
 
 BASE_URL = "http://localhost:8080"
 SEARCH_URL = f"{BASE_URL}/search?q=%EC%B0%BD%EC%84%B8%201%3A1"
@@ -30,6 +30,23 @@ def test_keyword_search_shows_results(page, base_url):
 
     page.wait_for_selector(".search-count, .search-empty", timeout=8000)
     assert page.locator(".search-result-item").count() > 0
+
+
+@pytest.mark.parametrize("ctx_name", ["mobile_context", "desktop_context"])
+def test_book_filter_sheet_closes_with_its_close_button(ctx_name, request):
+    """책 선택 시트(휴대폰은 바텀 시트, 데스크톱은 오른쪽 패널)의 머리에는 다른 시트와 같은 「닫기」 글자 단추가 있다. 누르면 닫히고 포커스는
+    시트를 연 깔때기 단추로 돌아간다."""
+    page = request.getfixturevalue(ctx_name).new_page()
+    page.goto(f"{BASE_URL}/search?q={quote('사랑')}")
+    funnel = page.locator(".token-funnel:visible").first
+    funnel.wait_for(timeout=20_000)
+    funnel.click()
+    page.wait_for_selector("#book-filter-sheet:not([hidden])")
+    page.wait_for_timeout(300)
+    assert_sheet_close_button(page, ".book-filter-close")
+    page.locator(".book-filter-close").click()
+    page.wait_for_selector("#book-filter-sheet", state="hidden")
+    assert page.evaluate("document.activeElement.classList.contains('token-funnel')")
 
 
 @pytest.mark.only_browser("chromium")

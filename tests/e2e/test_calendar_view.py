@@ -22,7 +22,7 @@ import re
 
 import pytest
 
-from .conftest import CLEAR_APP_STORAGE, IPHONE_UA, emulate_status_bar
+from .conftest import CLEAR_APP_STORAGE, IPHONE_UA, assert_sheet_close_button, emulate_status_bar
 
 BASE = "http://localhost:8080"
 
@@ -1589,6 +1589,7 @@ def test_list_title_opens_the_day_picker_and_a_day_opens_its_row(mobile_context)
     assert ash.get_attribute("aria-label") == "2월 10일 수요일, 자색"
     assert page.get_attribute(".cal-picker", "role") == "dialog"
     assert page.get_attribute(".cal-picker", "aria-label") == "날짜 고르기"
+    assert_sheet_close_button(page, ".cal-picker-close")
     assert page.locator(".cal-picker table caption").inner_text() == "2027년 2월"
     _press(page, ".cal-picker .cal-picker-step >> nth=1")
     page.wait_for_timeout(150)

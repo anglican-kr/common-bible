@@ -82,7 +82,7 @@ HIG의 8pt 그리드를 따르되 **레이아웃(간격)과 콘텐츠(글자)를
 - **반경**: 34곳을 `--radius-*`로 바꿨다. 아주 작은 값(2px 손잡이, 1px 진행바)은 그대로 두었다.
 - **elevation**: 토큰과 정확히 같은 것만 `--shadow-*`로 바꿨다(나머지는 포커스 링과 여러 겹 직접 만든 그림자). 이 부분은 뒤에 §9가 넓혔다.
 - **모션**: 토큰을 실제 쓰임에 맞게 고친 뒤 맞췄다. `--duration-fast`를 0.18에서 **0.15s**로 바꾸고, `--duration-instant(0.1)`·`--ease-standard(cubic-bezier(0.4,0,0.2,1))`를 새로 두었다. 지속 시간 64줄을 맞췄다. CSS 기본 `ease`, 스피너, 한 번만 쓰는 곡선은 그대로 두었다.
-- **새 토큰** `--icon-btn-touch(2.45rem)`: rem 스케일의 헤더 아이콘 상자다(18px 루트에서 약 44px, Dynamic Type을 따른다). `.title-back-btn`·`.title-bookmark-btn`·`#cite-sheet-back`·`#cite-sheet-close`가 함께 쓴다. 고정 px인 `--touch-target`과 역할이 다르다.
+- **새 토큰** `--icon-btn-touch(2.45rem)`: rem 스케일의 헤더 아이콘 상자다(18px 루트에서 약 44px, Dynamic Type을 따른다). `.title-back-btn`, `.title-bookmark-btn`, `#cite-sheet-back`이 함께 쓴다. 인용 시트의 「닫기」는 글자 단추가 되어 높이만 같게 둔다(DESIGN.md 「시트 vs 모달」, 2026-11-18). 고정 px인 `--touch-target`과 역할이 다르다.
 
 함께 고친 버그: 인용 시트 머리의 높이가 back 버튼을 켜고 끌 때 바뀌던 문제를, 닫기 버튼을 `--icon-btn-touch`로 맞춰 해결했다(HIG 44px 터치 영역도 만족한다). DESIGN.md §3·4·5·8·9를 고쳤다.
 

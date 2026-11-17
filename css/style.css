@@ -170,7 +170,7 @@
   --icon-btn: 40px;
   /* 헤더 아이콘 버튼 박스 — 기본 폰트(18px)에서 ≈44px 로 HIG 탭 영역을 충족하고
      큰 폰트에서는 rem 으로 함께 커진다(§8). 고정 px --touch-target 과 달리 rem
-     스케일. .title-back-btn·.title-bookmark-btn·#cite-sheet-back·#cite-sheet-close 공유. */
+     스케일. .title-back-btn, .title-bookmark-btn, #cite-sheet-back이 쓰고, 인용 시트의 「닫기」는 높이만 같게 둔다. */
   --icon-btn-touch: 2.45rem;
   /* 플로팅 dock 컨트롤 — 탭바를 기준점으로 한 공통 크기. 탭 pill 높이·검색/취소 원형
      지름·오디오 바 높이·절/북마크 선택 바 pill·원형이 모두 이 크기(60px)를 공유한다.
@@ -1346,7 +1346,11 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text) 25%, transparent);
 }
-.cal-picker-close {
+/* 바텀 시트와 사이드 패널의 「닫기」 글자 단추. 날짜 고르기 시트, 인용 시트, 북마크 패널, 책 고르기 시트가 같이 쓰고 자리는 머리의 오른쪽 끝이다
+   (DESIGN.md 「시트 vs 모달」, 사용자 결정 2026-11-17). 글자 크기와 색, 최소 크기(44px)가 모두 같다. 모달은 ×를 그대로 둔다. */
+.sheet-close {
+  flex-shrink: 0;
+  min-width: var(--touch-target);
   min-height: var(--touch-target);
   padding: 0 var(--space-2);
   border: none;
@@ -1355,10 +1359,12 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
   color: var(--text-secondary);
   font-family: inherit;
   font-size: var(--font-sm);
+  font-weight: 400;
+  line-height: 1;
   cursor: pointer;
 }
-.cal-picker-close:hover,
-.cal-picker-close:focus-visible { background: var(--bg-card); color: var(--text); }
+.sheet-close:hover,
+.sheet-close:focus-visible { background: var(--bg-card); color: var(--text); }
 
 /* 판의 머리: 왼쪽 「2026년 11월 ⌄」(누르면 다음 단계), 오른쪽 ‹ › */
 .cal-picker-head {
@@ -3009,32 +3015,6 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   gap: var(--space-1);
 }
 
-/* Close (×) — mirrors #bookmark-drawer-close / #cite-sheet-close. */
-.book-filter-close {
-  width: 2rem;
-  height: 2rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-secondary);
-  font-size: var(--font-xl);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-xs);
-  transition: color var(--duration-fast);
-  padding: 0;
-}
-
-.book-filter-close:hover {
-  color: var(--text);
-}
-
-.book-filter-close:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
-}
-
 .book-filter-body {
   flex: 1;
   overflow-y: auto;
@@ -4677,28 +4657,9 @@ body.cites-shown .note-anchor--variant:focus-visible {
   white-space: nowrap;
 }
 
-#cite-sheet-close {
-  font-size: var(--font-xl);
-  line-height: 1;
-  /* Match #cite-sheet-back's 2.45rem so the always-visible close button fixes
-     the header height — the back button toggling in/out no longer changes it.
-     Also meets the HIG 44px touch target. */
-  width: var(--icon-btn-touch);
-  height: var(--icon-btn-touch);
-  flex-shrink: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  color: var(--text-secondary);
-  border-radius: var(--radius-sm);
-}
-
-#cite-sheet-close:hover,
-#cite-sheet-close:focus-visible {
-  background: var(--border);
-  color: var(--text);
-  outline: none;
-}
+/* The close button (.sheet-close) is as tall as #cite-sheet-back's 2.45rem box, so the header height stays put
+   while the back button toggles in and out. */
+#cite-sheet-close { min-height: var(--icon-btn-touch); }
 
 /* Sheet back button mirrors `.title-back-btn` in the main app header. */
 #cite-sheet-back {
@@ -7024,26 +6985,6 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   font-weight: 600;
   color: var(--text-secondary);
   margin: 0;
-}
-
-#bookmark-drawer-close {
-  width: 2rem;
-  height: 2rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-secondary);
-  font-size: var(--font-xl);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-xs);
-  transition: color var(--duration-fast);
-  padding: 0;
-}
-
-#bookmark-drawer-close:hover {
-  color: var(--text);
 }
 
 #bookmark-drawer-toolbar {

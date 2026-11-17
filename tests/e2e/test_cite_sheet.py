@@ -4,7 +4,7 @@ ADR-022 인용 시트의 생명주기가 ADR-032 공용 오버레이 컨트롤�
 칩 클릭 → 시트 열림, 닫기 버튼/Escape → 닫힘 + 포커스 복귀가 유지되는지 검증한다.
 마태 16장에 실제 cite 칩(시편 62:12 · 잠언 24:12)이 있어 그 장으로 진입한다.
 """
-from .conftest import CLEAR_APP_STORAGE
+from .conftest import CLEAR_APP_STORAGE, assert_sheet_close_button
 
 BASE = "http://localhost:8080"
 
@@ -46,6 +46,7 @@ def test_cite_sheet_close_button_restores_focus(browser):
     try:
         page.click(".cite-chip")
         page.wait_for_selector("#cite-sheet:not([hidden])", timeout=8_000)
+        assert_sheet_close_button(page, "#cite-sheet-close")
         page.click("#cite-sheet-close")
         page.wait_for_function(
             "() => { const s = document.getElementById('cite-sheet'); return !!s && s.hidden; }",
