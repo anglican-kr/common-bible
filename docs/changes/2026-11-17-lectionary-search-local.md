@@ -1,4 +1,5 @@
 ---
+pr: 580
 date: 2026-11-17
 branch: feat/lectionary-search-local
 title: "feat: 전례독서 검색의 지역 축일과 안내"
