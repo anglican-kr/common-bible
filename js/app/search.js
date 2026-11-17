@@ -17,13 +17,13 @@
 
 import { verseNumberSpec } from "./verse-spec.js";
 
-const { _$, el, clearNode, chUnit, emptyState, barBottom } = window.appHelpers;
+const { _$, el, clearNode, chUnit, emptyState, barBottom, churchName } = window.appHelpers;
 const {
   SEARCH_HISTORY_MAX,
   loadSearchHistory, loadSearchHistoryEntries,
-  pushSearchHistory, removeSearchHistory, clearSearchHistory,
+  pushSearchHistory, removeSearchHistory, clearSearchHistory, loadParish, saveParish,
 } = window.appStorage;
-const { dismissLaunchScreen } = window.appSettings;
+const { dismissLaunchScreen, loadParishOptions, fillSelect } = window.appSettings;
 
 // Visible-by-default count for the history panel; the rest are revealed
 // behind a "더 보기" button. Local to this module — only the panel
@@ -99,6 +99,8 @@ function ensureSearchWorker() {
       { name: "ot", url: `${DATA_DIR}/search-ot.json` },
     ],
     lectionaryUrl: `${DATA_DIR}/lectionary/search-lectionary.json`,
+    // 지역 축일(ADR-044 §3)을 찾는 본당 표. 전례독서 색인과 함께 받는다
+    localUrl: `${DATA_DIR}/lectionary/local-observances.json`,
   });
   return searchWorker;
 }
@@ -152,6 +154,8 @@ function doSearch(query, page, pageSize, onPartial, opts) {
     worker.postMessage({
       type: "search", q: query, page, pageSize, searchId: activeSearchId,
       scopeBooks: (opts && opts.scopeBooks) || [],
+      // 소속교회(ADR-041 §6). 검색마다 실어, 설정을 바꾼 뒤의 검색이 곧 새 교회로 찾는다
+      parish: loadParish(),
     });
   });
 }
@@ -507,6 +511,105 @@ function looksLikeYearQuery(query) {
   return LECT_YEAR_RE.test(query);
 }
 
+/**
+ * 「MM.DD」 날짜를 지키는 다음 날(`today`와 같거나 늦은 첫 그날). `today`가 비었으면 기기의 오늘이다. 없는 날(평년의 2월 29일)은 그날이 있는
+ * 해까지 넘긴다. 지역 축일(축성일, 설립일)은 해마다 같은 날짜이고 옮겨 지키지 않는다(ADR-044 §3).
+ * @param {string} md 「MM.DD」 @param {string} [today] "YYYY-MM-DD" @returns {string}
+ */
+function nextMonthDay(md, today = "") {
+  const now = today || (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+  const [m, d] = md.split(".").map(Number);
+  for (let y = Number(now.slice(0, 4)); y < Number(now.slice(0, 4)) + 8; y++) {
+    const date = monthDayIn(y, m, d);
+    if (date && date >= now) return date;
+  }
+  return `${now.slice(0, 4)}-${md.replace(".", "-")}`;
+}
+
+/**
+ * `y`년의 그 월일(「YYYY-MM-DD」). 그해에 없는 날(평년의 2월 29일)이면 null.
+ * @param {number} y @param {number} m @param {number} d @returns {string | null}
+ */
+function monthDayIn(y, m, d) {
+  const t = new Date(Date.UTC(y, m - 1, d));
+  if (t.getUTCMonth() !== m - 1) return null;
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/**
+ * 지역 축일 줄(ADR-044 §3)이 여는 주소. 소속교회의 축성일은 그날 축성일을 고른 화면(`?obs=my-dedication`, lectionary.js `MY_DEDICATION_ID`),
+ * 설립일은 그날이다. 설립일은 그날의 전례일이 아니라 본기도만 덧붙는 날이다.
+ * @param {any} item  LectItem with `local` @param {string} date
+ */
+function localHref(item, date) {
+  return item.local.level === "dedication" ? `/lectionary/${date}?obs=my-dedication` : `/lectionary/${date}`;
+}
+
+/**
+ * 지역 축일을 찾지 못했을 때 결과 위에 두는 안내(ADR-044 §3). `pick`이 있으면 그 본당을 소속교회로 등록하는 단추를, `list`면 교회 목록을 카드
+ * 안에 둔다. 소속교회를 등록하지 않은 사람만 등록하게 한다. 소속교회가 있는 사람이 다른 본당을 찾았으면 날짜만 알린다. 축성 독서는 모든 본당이
+ * 같은 공통 독서(「성당 축성일」)라 바꿀 것이 없다. 소속교회에 축복일만 있으면 축성 독서가 없어 뒷문장을 뺀다. 축복일에는 축성 독서가 없다.
+ * 등록하는 단추의 이름은 설정의 교회 목록에 적는 이름이다(「용인교회」, `nameOf`는 helpers.js `churchName`). 등록한 뒤의 알림과 같다. 축성한 것은
+ * 성당이므로 카드의 문장은 본당 표의 이름 그대로다(ADR-041 §6).
+ * @param {{ kind: string, name: string | null, date: string | null, churchId?: string | null, mine?: string | null }} notice  워커의 LocalNotice
+ * @param {(name: string) => string} nameOf  본당 표의 이름을 설정 목록의 이름으로
+ * @returns {{ text: string, pick: { churchId: string, name: string } | null, list: boolean }}
+ */
+function localNoticeOf(notice, nameOf) {
+  const date = notice.date ? fixedDateText(notice.date) : "";
+  if (notice.kind === "blessing") return { text: `${notice.name}의 축복일(${date})에는 따로 읽는 독서가 없습니다.`, pick: null, list: false };
+  if (notice.kind === "consecration") {
+    if (notice.mine) {
+      const same = notice.mine === "consecration" ? " 축성 독서는 소속교회의 축성일과 같습니다." : "";
+      return { text: `${notice.name}의 축성일은 ${date}입니다.${same}`, pick: null, list: false };
+    }
+    return { text: `${notice.name}의 축성일(${date})은 소속교회로 등록하면 축성 독서와 함께 볼 수 있습니다.`,
+      pick: notice.churchId && notice.name ? { churchId: notice.churchId, name: nameOf(notice.name) } : null, list: false };
+  }
+  return { text: "소속교회의 축성일은 소속교회를 등록하면 축성 독서와 함께 볼 수 있습니다.", pick: null, list: true };
+}
+
+/** 카드 안 교회 목록의 선택 상자 id. 한 화면에 카드는 하나다. */
+const LOCAL_PICK_SELECT_ID = "search-local-church";
+
+/**
+ * 지역 축일 안내 카드(없는 장의 알림 카드와 같은 모양). 등록하는 단추와 교회 목록은 그리기만 하고, 동작은 화면이 단다(`wireLocalNotice`).
+ * 교회 목록은 받는 동안 「불러오는 중」 하나뿐이고 고를 수 없다.
+ * @param {{ text: string, pick: { churchId: string, name: string } | null, list: boolean }} notice
+ * @returns {HTMLElement}
+ */
+function buildLocalNotice(notice) {
+  const card = el("div", { className: "search-alert search-local-note" });
+  card.appendChild(el("p", { className: "search-alert-title" }, notice.text));
+  if (notice.pick) {
+    const { churchId, name } = notice.pick;
+    card.appendChild(el("button", { type: "button", className: "search-local-pick-btn", "data-church": churchId, "data-name": name },
+      `${name}${hasBatchim(name) ? "을" : "를"} 소속교회로 선택`));
+  } else if (notice.list) {
+    const row = el("div", { className: "search-local-pick" });
+    row.appendChild(el("label", { for: LOCAL_PICK_SELECT_ID }, "소속교회"));
+    const wrap = el("span", { className: "settings-select-wrap" });
+    const select = el("select", { className: "settings-select", id: LOCAL_PICK_SELECT_ID, disabled: "" });
+    select.appendChild(el("option", { value: "" }, "불러오는 중"));
+    wrap.appendChild(select);
+    row.appendChild(wrap);
+    card.appendChild(row);
+    card.appendChild(el("button", { type: "button", className: "search-local-pick-btn", disabled: "" }, "소속교회로 선택"));
+  }
+  return card;
+}
+
+/**
+ * 카드에서 소속교회를 등록한 뒤 다시 그린 결과 위의 한 줄. 이름은 설정의 교회 목록에 적는 이름이다(helpers.js `churchName`).
+ * @param {string} name @returns {string}
+ */
+function pickedParishNote(name) {
+  return `${name}${hasBatchim(name) ? "을" : "를"} 소속교회로 등록했습니다. 설정에서 바꿀 수 있습니다.`;
+}
+
 /** 음력 날짜로 지키는 전례일(설날, 추석)의 키. 음력 날짜 자료(`kasi-lunar.json`)가 없는 해에는 계산하지 못한다. */
 const LECT_LUNAR_PREFIX = "lunar";
 
@@ -687,7 +790,7 @@ function lectRowOf(item, labelOf, days = null, today = "") {
     found = { slot: LECT_SLOT_LABEL[hit.slot], text };
     const cycles = lectCyclesText(hit.sets);
     if (cycles) meta.push(cycles);
-  } else if (!item.sets.length && LECT_RANK_LABEL[obs.rank]) {
+  } else if (!item.sets.length && !item.local && LECT_RANK_LABEL[obs.rank]) {
     // 고유 독서가 없으면 등급을 적는다. 공통 독서만 있는 성인도 그렇다. 전례독서 화면이 공통 독서만 있는 후보를 아직 보이지
     // 않아(ADR-038 §3), 누르면 그날의 평일 독서와 성인의 이름 줄이 열리기 때문이다(사용자 결정 2026-11-16, ADR-044 §1).
     lines.push(LECT_RANK_LABEL[obs.rank]);
@@ -704,6 +807,11 @@ function lectRowOf(item, labelOf, days = null, today = "") {
   if (year) {
     meta.push(year);
     said.push(year);
+  }
+  // 설립일 줄에는 설립 연도를 적는다(ADR-044 §3)
+  if (item.local && item.local.level !== "dedication" && item.local.year) {
+    meta.push(`${item.local.year}년 설립`);
+    said.push(`${item.local.year}년 설립`);
   }
   if (open) {
     meta.push(lectDayText(open.date, today));
@@ -748,7 +856,8 @@ function lectRowOf(item, labelOf, days = null, today = "") {
   const label = [title, found ? `${found.slot} ${found.text}` : null, ...colors.map((c) => c.name), ...said, ...lines]
     .filter(Boolean).join(", ");
   // 연도를 붙여 찾은 줄: 지키는 날은 그날부터 처음 지키는 날(곧 그날)을 고른 화면, 겹친 날은 그날의 기본 화면이다
-  const href = yearDay ? (yearDay.kind === "overlap" ? `/lectionary/${yearDay.date}` : lectHrefOf(lectSlugIds(item), yearDay.date))
+  const href = item.local ? localHref(item, open ? open.date : nextMonthDay(obs.date, today))
+    : yearDay ? (yearDay.kind === "overlap" ? `/lectionary/${yearDay.date}` : lectHrefOf(lectSlugIds(item), yearDay.date))
     : open && lectYearlyWithYears(item) ? lectHrefOf(lectSlugIds(item), open.date) : lectSlugHref(item);
   return { title, href, bold, found, colors, meta, lines, label, nexts };
 }
@@ -926,6 +1035,7 @@ function buildSearchPagination(state, currentPage, totalPages) {
  * @property {boolean} scoped  a book scope is set: no lectionary days, so no lectionary example either
  * @property {Map<any, LectDays | null> | null} days  the day each lectionary row opens, once the engine computed it
  * @property {string} today  "YYYY-MM-DD", the day `days` counts from
+ * @property {string | null} [picked]  the parish just chosen in the local-day card (its listed name), told above the results
  */
 
 /** @type {SearchScreen} */
@@ -1086,6 +1196,13 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
 
   // 연도를 붙여 찾았는데 줄이 없으면 그 사정(ADR-044 §4)
   const notes = lect ? [] : lectNotes(result);
+  // 지역 축일을 찾지 못한 안내는 결과 위에 둔다(ADR-044 §3). 다른 결과가 없으면 이 안내만 보인다
+  const notice = !screen.scoped && result.lectionary && result.lectionary.localNotice ? localNoticeOf(result.lectionary.localNotice, churchName) : null;
+  // 카드에서 소속교회를 등록한 뒤 다시 찾았으면 등록한 것을 맨 위에 알린다
+  const picked = screen.picked ? pickedParishNote(screen.picked) : null;
+  if (picked) container.appendChild(el("p", { className: "search-note" }, picked));
+  if (notice) container.appendChild(buildLocalNotice(notice));
+  if (notice && !answer.node && !hasBible && !lect) return `"${query}" ${[picked, notice.text].filter(Boolean).join(" ")}`;
   if (!answer.node && !hasBible && !lect) {
     if (!unmatched) {
       container.appendChild(
@@ -1098,6 +1215,8 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
     return `"${query}" 검색 결과 0건${notes.length ? `. ${notes.join(" ")}` : ""}`;
   }
 
+  // 알림은 앞의 문장(등록한 소속교회, 지역 축일 안내)을 그대로 잇고, 그 뒤에 답 카드와 결과 수를 쉼표로 잇는다
+  const lead = [picked, notice ? notice.text : null].filter(Boolean).join(" ");
   /** @type {string[]} */
   const said = [];
   if (answer.node) {
@@ -1122,7 +1241,7 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
 
   if (group === "lectionary" && lect) {
     appendLectGroup(container, lect, screen);
-    return `"${query}" ${said.join(", ")}`;
+    return `"${query}" ${lead ? `${lead} ` : ""}${said.join(", ")}`;
   }
 
   if (hasBible) {
@@ -1147,7 +1266,7 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
 
     if (paged && paginationBuilder) container.appendChild(paginationBuilder(query, page, totalPages));
   }
-  return `"${query}" ${said.join(", ")}`;
+  return `"${query}" ${lead ? `${lead} ` : ""}${said.join(", ")}`;
 }
 
 // ── In-page search input (mobile full-screen view, ADR-029 / P2) ──
@@ -1340,6 +1459,8 @@ async function sendChristmasNames(mod, today) {
  * @returns {Promise<LectDays | null>}
  */
 async function lectDaysOf(mod, item, today, isStale = () => false) {
+  // 지역 축일은 해마다 같은 날짜라 엔진의 표 없이 다음 그날을 연다(ADR-044 §3)
+  if (item.local) return { open: localDayOf(mod, item, nextMonthDay(item.obs.date, today)), next: null, nextIds: [], year: null, cycles: [] };
   const ids = lectSlugIds(item);
   // 해마다 같은 독서인데 해 표시가 있는 세트를 넘기는 줄은 엔진이 해에 따라 다른 독서로 보므로, 오늘부터 찾게 한다(ADR-044 §1)
   const open = await mod.findReadingDay(ids, today, lectYearlyWithYears(item) ? today : null, isStale);
@@ -1364,6 +1485,32 @@ async function lectDaysOf(mod, item, today, isStale = () => false) {
   }
   const next = open.date < today ? await mod.findReadingDay(ids, today, today, isStale) : null;
   return { open, next: next && next.date !== open.date ? next : null, nextIds: ids, year: null, cycles: [] };
+}
+
+/**
+ * 지역 축일 줄이 그날 여는 날(ADR-044 §3). 색 점은 줄을 누르면 열리는 화면 머리의 색이다. 소속교회의 축성일은 축성일을 고른 화면이라 본당 표의
+ * 색이고(화면이 만든 후보는 자기 색 하나다, 엔진 `headerColors`), 설립일은 그날의 화면이라 그날의 색이다.
+ * @param {Engine} mod @param {any} item  LectItem with `local` @param {string} date
+ * @returns {KeptDay}
+ */
+function localDayOf(mod, item, date) {
+  let colors = item.local.color ? [item.local.color] : [];
+  if (item.local.level !== "dedication") {
+    const resolved = mod.resolveDate(date);
+    colors = resolved ? mod.headerColors(resolved, null).colors : [];
+  }
+  return { date, obs: item.obs.key, setId: null, track: null, name: item.obs.name, colors };
+}
+
+/**
+ * 연도를 붙여 찾은 지역 축일의 그해 날(ADR-044 §3, §4). 설립 연도보다 이른 해와 그해에 없는 날(평년의 2월 29일)에는 없다.
+ * @param {Engine} mod @param {any} item @param {number} y @returns {any}  YearDay | null
+ */
+function localYearDayOf(mod, item, y) {
+  const [m, d] = item.obs.date.split(".").map(Number);
+  const date = monthDayIn(y, m, d);
+  if (!date || (item.local.level !== "dedication" && item.local.year && y < item.local.year)) return null;
+  return { kind: "kept", ...localDayOf(mod, item, date), from: null, by: null, bySaint: false };
 }
 // ── END LECT_DAYS ──
 
@@ -1438,7 +1585,9 @@ async function withYearRows(result, screen, isStale) {
     return;
   }
   const found = lect.items;
-  const asks = found.map((/** @type {any} */ item) => ({ ids: lectSlugIds(item), key: item.obs.key }));
+  // 지역 축일은 해마다 같은 날짜라 엔진의 해마다의 표에 묻지 않는다(`localYearDayOf`)
+  const engineItems = found.filter((/** @type {any} */ item) => !item.local);
+  const asks = engineItems.map((/** @type {any} */ item) => ({ ids: lectSlugIds(item), key: item.obs.key }));
   /** @type {Array<{ year: number, days: Array<any | null>, lunar: boolean }>} */
   const perYear = [];
   for (let y = lect.years.from; y <= lect.years.to; y++) {
@@ -1447,7 +1596,10 @@ async function withYearRows(result, screen, isStale) {
       if (isStale()) return;
     }
     try {
-      perYear.push({ year: y, days: mod.findYearDays(asks, y), lunar: mod.hasLunarYear(y) });
+      const engineDays = asks.length ? mod.findYearDays(asks, y) : [];
+      let k = 0;
+      const days = found.map((/** @type {any} */ item) => (item.local ? localYearDayOf(mod, item, y) : engineDays[k++]));
+      perYear.push({ year: y, days, lunar: mod.hasLunarYear(y) });
     } catch (err) {
       // 엔진이 그해를 계산하지 못해도 성서 본문 결과는 그린다(`withLectDays`가 줄마다 오류를 삼키는 것과 같다)
       console.warn("그해의 날짜를 계산하지 못했습니다", err);
@@ -1462,6 +1614,57 @@ async function withYearRows(result, screen, isStale) {
   lect.notes = notes;
   lect.yearRows = true;
   screen.today = todayOf(mod);
+}
+
+/** 카드에서 방금 등록한 소속교회(설정 목록의 이름)와 그때의 검색어. 다시 그린 같은 검색이 한 번 알린다. @type {{ name: string, q: string } | null} */
+let _pickedParish = null;
+
+/**
+ * 지역 축일 안내 카드에서 소속교회를 등록한다(ADR-044 §3): 설정에 저장하고 같은 검색을 다시 그린다. 다시 그린 결과는 등록한 것을 맨 위에 알리고
+ * 소속교회의 축성일 줄에, 그 줄이 없으면(축복일만 있는 교회) 그 알림에 포커스를 둔다(누른 단추가 사라지므로, WCAG 2.4.3). 설정을 다른 기기와 맞추는 일은 `saveParish`가 한다.
+ * @param {string} churchId @param {string} name  설정 목록의 이름 @param {string} query
+ */
+function pickParish(churchId, name, query) {
+  saveParish(churchId);
+  _pickedParish = { name, q: query };
+  window.route();
+}
+
+/**
+ * 그린 안내 카드에 동작을 단다(`buildLocalNotice`). 그 본당을 등록하는 단추는 누르면 등록하고, 교회 목록은 받은 뒤 선택할 수 있게 한다. 목록을
+ * 받지 못하면 「목록 없음」으로 둔다. 「소속교회로 선택」을 눌렀는데 선택한 교회가 없으면 선택 상자로 포커스를 옮긴다.
+ * @param {HTMLElement} target @param {string} query
+ */
+function wireLocalNotice(target, query) {
+  const card = /** @type {HTMLElement | null} */ (target.querySelector(".search-local-note"));
+  if (!card || card.dataset.wired) return;
+  card.dataset.wired = "1";
+  const pick = /** @type {HTMLButtonElement | null} */ (card.querySelector("button[data-church]"));
+  if (pick) {
+    // 단추의 이름은 이미 설정 목록의 이름이다(`localNoticeOf`)
+    pick.addEventListener("click", () => pickParish(pick.dataset.church || "", pick.dataset.name || "", query));
+  }
+  const select = /** @type {HTMLSelectElement | null} */ (card.querySelector(`#${LOCAL_PICK_SELECT_ID}`));
+  const go = /** @type {HTMLButtonElement | null} */ (card.querySelector(".search-local-pick-btn:not([data-church])"));
+  if (!select || !go) return;
+  // 설정 화면과 같은 목록이다. 받는 데 시간 제한이 있고, 옛 표(식별자가 없음)면 오류로 끝난다
+  loadParishOptions().then((options) => {
+    if (!select.isConnected) return;
+    fillSelect(select, [["", "선택 안 함"], ...options], "");
+    select.disabled = false;
+    go.disabled = false;
+  }, () => {
+    if (!select.isConnected) return;
+    fillSelect(select, [["", "목록 없음"]], "");
+  });
+  go.addEventListener("click", () => {
+    const option = select.selectedOptions[0];
+    if (!select.value || !option) {
+      select.focus();
+      return;
+    }
+    pickParish(select.value, option.textContent || "", query);
+  });
 }
 
 // alias(소문자) → book id, for absorbing typed/example `in:<alias>` operators
@@ -2167,7 +2370,10 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
     scoped: filterBooks.length > 0,
     days: null,
     today: "",
+    // 카드에서 소속교회를 등록한 뒤 다시 그린 같은 검색이면 한 번 알린다
+    picked: _pickedParish && _pickedParish.q === query ? _pickedParish.name : null,
   };
+  _pickedParish = null;
   /** @param {any} res */
   const draw = (res) => renderSearchResultList(resultsTarget, res, query, page, pageSize, paginationBuilder, screen);
 
@@ -2177,6 +2383,8 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
     // detached and announcing a stale query would mislead AT (ADR-033, Bugbot).
     if (isStale() || !resultsTarget.isConnected) return;
     draw(partial);
+    // 성서 묶음을 받는 동안에도 안내 카드의 단추가 동작하게 한다
+    wireLocalNotice(resultsTarget, query);
     window.announce(`"${query}" 검색 중… 현재 ${partial.total}건`);
   }
 
@@ -2250,6 +2458,18 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   if (isStale()) return;
 
   window.announce(draw(result));
+  wireLocalNotice(resultsTarget, query);
+  // 카드에서 등록한 뒤면 누른 단추가 사라졌으므로, 새로 생긴 소속교회의 축성일 줄로 포커스를 옮긴다
+  // 축성일 줄이 없거나(축복일만 있는 교회) 성서 본문 묶음이 보이면 맨 위의 「소속교회로 등록했습니다」 줄로 옮긴다
+  if (screen.picked) {
+    const row = /** @type {HTMLElement | null} */ (resultsTarget.querySelector('.lect-rows a.cal-row[href*="obs=my-dedication"]'));
+    const note = /** @type {HTMLElement | null} */ (resultsTarget.querySelector(".search-note"));
+    if (row) row.focus();
+    else if (note) {
+      note.tabIndex = -1;
+      note.focus();
+    }
+  }
   dismissLaunchScreen();
   // Instant, not the root's smooth scroll: when a page link led here, the router then keeps that link where it was
   // on screen (routing.js restoreFocusSpot), and a smooth scroll still running would carry it off afterwards.
@@ -2283,10 +2503,21 @@ async function addLateLectionary(result, query, screen, target, isStale, draw) {
   await withYearRows(result, screen, () => isStale() || !target.isConnected);
   if (isStale() || !target.isConnected) return;
   const lect = shownLectionary(result);
+  const late = result.lectionary && result.lectionary.localNotice ? localNoticeOf(result.lectionary.localNotice, churchName) : null;
   if (!lect) {
-    // 연도를 붙여 찾은 전례일을 그해에 지키지 않으면 결과 없음 화면에 그 사정을 적는다
-    if (lectNotes(result).length && !result.total && !target.querySelector(".search-answer")) window.announce(draw(result));
+    // 연도를 붙여 찾은 전례일을 그해에 지키지 않으면 결과 없음 화면에 그 사정을, 지역 축일을 찾지 못했으면 그 안내를 적는다(ADR-044 §3, §4)
+    if ((lectNotes(result).length || late) && !result.total && !target.querySelector(".search-answer")) window.announce(draw(result));
+    else if (late) {
+      target.prepend(buildLocalNotice(late));
+      window.announce(`"${query}" ${late.text}`);
+    }
+    wireLocalNotice(target, query);
     return;
+  }
+  // 이미 그린 결과 위에 지역 축일 안내를 더한다(그리면 결과의 맨 위다)
+  if (late) {
+    target.prepend(buildLocalNotice(late));
+    wireLocalNotice(target, query);
   }
   await withReadingLabels(result, screen, 0);
   if (isStale() || !target.isConnected) return;
@@ -2305,6 +2536,8 @@ async function addLateLectionary(result, query, screen, target, isStale, draw) {
     appendLectGroup(target, lect, screen);
   } else {
     draw(result);
+    // 다시 그리면 위에서 동작을 단 카드가 새 카드로 바뀐다
+    wireLocalNotice(target, query);
   }
   window.announce(`"${query}" ${lectGroupName(lect)} ${lect.items.length}건을 더 찾았습니다`);
 }

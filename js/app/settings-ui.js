@@ -1195,6 +1195,8 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     applyColorScheme,
     applyCiteShow,
     dismissLaunchScreen,
+    loadParishOptions,
+    fillSelect,
   };
 })();
 

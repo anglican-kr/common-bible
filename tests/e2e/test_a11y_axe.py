@@ -163,6 +163,25 @@ def test_a11y_search_results(browser):
         ctx.close()
 
 
+def test_a11y_search_local_days(browser):
+    """지역 축일 안내 카드(고르는 단추, 교회 목록)와 지역 축일 줄(ADR-044 §3) — critical/serious 위반 0건. 관구설립일 줄은 소속교회 없이도 나온다."""
+    ctx, page = _open(browser, "search?q=%EC%9A%A9%EC%9D%B8%EC%84%B1%EB%8B%B9")  # 용인성당, 소속교회 없음
+    try:
+        page.wait_for_selector(".search-local-note button", timeout=10_000)
+        v = _violations(page)
+        assert not v, f"Local notice: {len(v)} violation(s):\n{_fmt(v)}"
+        page.goto(page.url.split("/search")[0] + "/search?q=%EC%B6%95%EC%84%B1%EC%9D%BC")  # 축성일: 카드 안의 교회 목록
+        page.wait_for_function("() => { const s = document.querySelector('#search-local-church'); return s && !s.disabled; }", timeout=10_000)
+        v = _violations(page)
+        assert not v, f"Local notice list: {len(v)} violation(s):\n{_fmt(v)}"
+        page.goto(page.url.split("/search")[0] + "/search?q=%EC%84%A4%EB%A6%BD%EC%9D%BC")  # 설립일
+        page.wait_for_selector(".lect-rows a.cal-row", timeout=10_000)
+        v = _violations(page)
+        assert not v, f"Local rows: {len(v)} violation(s):\n{_fmt(v)}"
+    finally:
+        ctx.close()
+
+
 def test_a11y_bookmark_drawer(browser):
     """북마크 드로어 (북마크 있는 상태) — critical/serious 위반 0건."""
     import json as _json

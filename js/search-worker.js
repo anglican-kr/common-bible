@@ -8,13 +8,18 @@
  *   Main → Worker:
  *     { type: "init", metaUrl: "data/search-meta.json",
  *       chunks: [{ name, url }, ...],
- *       lectionaryUrl: "data/lectionary/search-lectionary.json" }
+ *       lectionaryUrl: "data/lectionary/search-lectionary.json",
+ *       localUrl: "data/lectionary/local-observances.json" }
  *       — lectionaryUrl is optional: without it the worker never loads the
  *         lectionary index and `lectionary` stays null (ADR-044).
+ *       — localUrl is optional: the parish table, loaded with the lectionary index.
+ *         Without it (or when it fails) there are no local days (ADR-044 §3).
  *     { type: "search", q: "keyword", page: 1, pageSize: 50, searchId: N,
- *       scopeBooks: ["john", ...] }
+ *       scopeBooks: ["john", ...], parish: "jqdnsv" }
  *       — scopeBooks: structured book filter (book ids) from the book picker,
  *         merged with any typed `in:<alias>` tokens (ADR-033).
+ *       — parish: the church id of the user's parish, "" when none (ADR-041 §6).
+ *         The name search adds its local days (ADR-044 §3).
  *     { type: "lect-names", names: [[setId, name], ...] }
  *       — this liturgical year's names of the Christmas weekdays (「성탄 1주 수요일」),
  *         which change every year and so are not in the index. The name search finds
@@ -97,6 +102,7 @@
  * @property {string} metaUrl
  * @property {ChunkConfig[]} chunks
  * @property {string} [lectionaryUrl]
+ * @property {string} [localUrl]
  *
  * @typedef SearchMessage
  * @property {"search"} type
@@ -105,6 +111,7 @@
  * @property {number} pageSize
  * @property {number} searchId
  * @property {string[]} [scopeBooks]
+ * @property {string} [parish]
  *
  * @typedef LectNamesMessage  오늘부터 한 해 안에 오는 성탄 평일의 화면 이름(ADR-044 §3). 해마다 바뀌어 색인에 없으므로 앱이 교회력 엔진으로 계산해 보낸다.
  * @property {"lect-names"} type
@@ -163,6 +170,34 @@
  * @property {Map<string, number>} obsOfSet  set id → obs
  * @property {Map<string, number[]>} covOfBook  book id → cov rows
  * @property {Map<number, number[]>} covOfReading  set * 4 + slot → cov rows
+ * @property {LocalIndex | null} local  the parish table for local days (ADR-044 §3), null when it was not loaded
+ *
+ * @typedef LocalParish  본당 표(`local-observances.json`)의 교회 하나
+ * @property {string} name
+ * @property {string} base  normalizeLectName(name) without a final 「성당」 or 「교회」
+ * @property {string} churchId
+ * @property {"consecration" | "blessing"} kind
+ * @property {string} date  「MM.DD」
+ * @property {string | null} diocese
+ * @property {string | null} color
+ * @property {string | null} rank
+ *
+ * @typedef LocalFounding  설립일 하나(관구, 교구)
+ * @property {string} name
+ * @property {string} date  「MM.DD」
+ * @property {number | null} year
+ *
+ * @typedef LocalIndex
+ * @property {LocalParish[]} parishes  in table order, former northern churches (「북.」) left out
+ * @property {LocalFounding[]} dioceses
+ * @property {LocalFounding | null} province
+ *
+ * @typedef LocalNotice  지역 축일을 찾지 못했을 때 결과 위에 두는 안내(ADR-044 §3)
+ * @property {"consecration" | "blessing" | "noParish"} kind  다른 본당의 축성일, 축복일만 있는 본당, 소속교회를 등록하지 않음
+ * @property {string | null} name
+ * @property {string | null} date  「MM.DD」
+ * @property {string | null} churchId  그 본당의 교회 식별자. 소속교회로 등록하는 단추가 쓴다
+ * @property {"consecration" | "blessing" | null} mine  소속교회가 있으면 그 교회의 종류(축성일이 있는가), 없으면 null
  *
  * @typedef LectSetInfo
  * @property {string} id
@@ -193,6 +228,8 @@
  * @property {LectReadingHit[]} [hits]  passage search: the readings that matched, best first
  * @property {number} [tier]  name search: 1 the whole name, 2 its start, 3 inside it (설계 §4.3)
  * @property {string} [matched]  name search: the alias or saint title that matched, when the name itself did not
+ * @property {{ level: "dedication" | "diocese" | "province", color: string | null, year: number | null }} [local]
+ *   a local day (ADR-044 §3): the user's parish dedication or a founding day. Its obs key is `local:<level>`
  * @property {string[]} [yearNames]  year search: a Christmas weekday found only by the names it may take (「성탄 1주 수요일」).
  *   The app keeps a year's row only when that year's name of the day is one of them (ADR-044 §4)
  *
@@ -201,6 +238,7 @@
  * @property {LectItem[]} items
  * @property {Array<{ from: string, to: string }>} synonyms  name search: the replacements that found something
  * @property {LectYears} [years]  name search with a year (`2027년 성 니콜라`): the years to show (ADR-044 §4)
+ * @property {LocalNotice | null} [localNotice]  name search: the notice above the results when no local day was found
  *
  * @typedef LectYears  연도를 붙인 이름 검색의 해(양력, ADR-044 §4)
  * @property {number} from
@@ -228,6 +266,9 @@ let currentSearchId = 0;
 
 /** @type {string | null} */
 let lectionaryUrl = null;
+
+/** 본당 표(지역 축일, ADR-044 §3)의 주소. 전례독서 색인과 함께 받는다. @type {string | null} */
+let localUrl = null;
 
 /** Bumped by each `init` that changes lectionaryUrl, so a request for an older address leaves the state alone. */
 let lectionaryGen = 0;
@@ -329,13 +370,18 @@ function loadLectionary() {
   // The signal also stops a body that stalls after the headers came.
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), LECTIONARY_TIMEOUT_MS);
-  lectionaryPromise = fetch(lectionaryUrl, { signal: controller.signal })
+  // 본당 표는 함께 받되 받지 못해도 색인은 쓴다. 그때는 지역 축일이 없다
+  const local = localUrl
+    ? fetch(localUrl, { signal: controller.signal }).then((r) => (r.ok ? r.json() : null)).catch(() => null)
+    : Promise.resolve(null);
+  lectionaryPromise = Promise.all([fetch(lectionaryUrl, { signal: controller.signal })
     .then((r) => {
       if (!r.ok) throw new Error(`전례독서 색인 로드 실패: ${r.status}`);
       return r.json();
-    })
-    .then((/** @type {LectionaryRaw} */ raw) => {
+    }), local])
+    .then(([/** @type {LectionaryRaw} */ raw, localRaw]) => {
       const index = buildLectionarySearchIndex(raw);
+      index.local = buildLocalIndex(localRaw);
       if (gen === lectionaryGen) {
         lectionary = index;
         lectionaryPromise = null;
@@ -798,6 +844,7 @@ function buildLectionarySearchIndex(raw) {
     obsOfSet: new Map(raw.sets.map((s) => [s[1], s[0]])),
     covOfBook,
     covOfReading,
+    local: null,
   };
 }
 
@@ -1020,6 +1067,157 @@ function searchLectionaryYears(index, yq) {
   return result;
 }
 
+// 지역 축일(ADR-044 §3): 소속교회의 축성일, 그 교구의 설립일, 관구 설립일. 사람마다 소속교회가 달라 색인에 넣지 않고, 본당 표와 검색 메시지의
+// 소속교회로 검색할 때 더한다(설계 §4.2). 본당 이름은 띄어쓰기를 무시하고 끝의 「성당」과 「교회」를 같은 말로 보고 떼어 비교한다.
+const LOCAL_SUFFIX_RE = /(성당|교회)$/;
+/** 북한에 있던 성당. 본당 표에는 있지만 화면에 보이지 않는다(lectionary.js `isFormerNorthChurch`). */
+const LOCAL_FORMER_NORTH = "북.";
+
+/**
+ * 본당 이름을 비교하는 값: 띄어쓰기 등을 지우고(`normalizeLectName`) 끝의 「성당」이나 「교회」를 뗀다.
+ * @param {string} name @returns {string}
+ */
+function localBase(name) {
+  return normalizeLectName(name).replace(LOCAL_SUFFIX_RE, "");
+}
+
+/**
+ * 설립일 행 하나(관구, 교구). 형식이 깨졌으면 null.
+ * @param {any} row @returns {LocalFounding | null}
+ */
+function localFoundingOf(row) {
+  if (!row || typeof row.name !== "string" || typeof row.founded !== "string" || !/^\d{2}\.\d{2}$/.test(row.founded)) return null;
+  return { name: row.name, date: row.founded, year: Number.isInteger(row.founded_year) ? row.founded_year : null };
+}
+
+/**
+ * 본당 표 → 지역 축일을 찾는 색인. 표가 없거나 형식이 깨졌으면 null. 형식이 깨진 행과 북한에 있던 성당은 뺀다.
+ * @param {any} raw @returns {LocalIndex | null}
+ */
+function buildLocalIndex(raw) {
+  if (!raw || typeof raw !== "object" || !Array.isArray(raw.parishes)) return null;
+  /** @type {LocalParish[]} */
+  const parishes = [];
+  for (const p of raw.parishes) {
+    const d = p && p.dedication;
+    if (!d || typeof p.name !== "string" || p.name.startsWith(LOCAL_FORMER_NORTH) || typeof p.church_id !== "string" || !p.church_id) continue;
+    if ((d.kind !== "consecration" && d.kind !== "blessing") || typeof d.date !== "string" || !/^\d{2}\.\d{2}$/.test(d.date)) continue;
+    parishes.push({ name: p.name, base: localBase(p.name), churchId: p.church_id, kind: d.kind, date: d.date,
+      diocese: typeof p.diocese === "string" && p.diocese ? p.diocese : null,
+      color: typeof d.color === "string" ? d.color : null, rank: typeof d.rank === "string" ? d.rank : null });
+  }
+  /** @type {LocalFounding[]} */
+  const dioceses = [];
+  for (const row of Array.isArray(raw.dioceses) ? raw.dioceses : []) {
+    const f = localFoundingOf(row);
+    if (f) dioceses.push(f);
+  }
+  return { parishes, dioceses, province: localFoundingOf(raw.province) };
+}
+
+/**
+ * 지역 축일의 전례년 순서. 날짜가 정해진 월별 축일 사이에 날짜로 끼운다(설계 §4.3. 월별 축일은 날짜순이다).
+ * @param {LectionaryIndex} index @param {string} date 「MM.DD」 @returns {number}
+ */
+function localOrder(index, date) {
+  let before = -Infinity;
+  let first = Infinity;
+  for (const o of index.obs) {
+    if (o.kind !== "sanctoral" || !o.date) continue;
+    if (o.order < first) first = o.order;
+    if (o.date <= date && o.order > before) before = o.order;
+  }
+  if (before !== -Infinity) return before + 0.5;
+  return first !== Infinity ? first - 0.5 : 0;
+}
+
+/**
+ * 지역 축일(ADR-044 §3). 소속교회(`parish`, 교회 식별자)의 축성일은 그 이름(「용인성당 축성일」)이나 본당 이름(`용인`, `용인교회`, 이름이 같은
+ * 것, 시작하는 것, 든 것의 차례)으로 찾는다. 그 교구의 설립일(「서울교구설립일」)과 관구 설립일(「관구설립일」, 소속교회와 상관없다)은 이름으로
+ * 찾는다. 이름 규칙은 다른 전례일과 같다. 소속교회의 축성일을 찾지 못했으면 안내를 낸다. 검색어 끝에 「성당」이나 「교회」를 붙였으면
+ * 그 이름의 본당이고(`오산교회`로 `오산세마대성당`), 아니면 `축성일`로 찾았는데 소속교회를 등록하지 않았거나 소속교회에 축복일만 있는 사정이다.
+ * 「성당」이나 「교회」만 친 검색어는 찾지 않는다.
+ * @param {LectionaryIndex} index
+ * @param {string} query
+ * @param {string} parish  빈 문자열은 선택 안 함
+ * @returns {{ items: LectItem[], notice: LocalNotice | null }}
+ */
+function searchLocal(index, query, parish) {
+  /** @type {{ items: LectItem[], notice: LocalNotice | null }} */
+  const out = { items: [], notice: null };
+  const local = index.local;
+  if (!local) return out;
+  const typed = normalizeLectName(query);
+  const stripped = typed.replace(LOCAL_SUFFIX_RE, "");
+  if (!stripped) return out;
+  /** @param {string} name */
+  const nameTier = (name) => lectTier(normalizeLectName(name), typed) || (lectNameMatches(name, query) ? 3 : 0);
+  /**
+   * @param {"dedication" | "diocese" | "province"} level @param {string} name @param {string} date @param {number} tier
+   * @param {{ rank?: string | null, color?: string | null, year?: number | null }} extra
+   */
+  const add = (level, name, date, tier, extra) => {
+    out.items.push({
+      obs: { key: `local:${level}`, name, kind: "local", date, rank: extra.rank ?? null, common: null, order: localOrder(index, date) },
+      sets: [], tier, local: { level, color: extra.color ?? null, year: extra.year ?? null },
+    });
+  };
+  const mine = parish ? local.parishes.find((p) => p.churchId === parish) || null : null;
+  if (mine && mine.kind === "consecration") {
+    const name = `${mine.name} 축성일`;
+    // 설정의 교회 목록은 「용인성당」을 「용인교회」로 적는다(helpers.js `churchName`). 그 이름에 「축성일」을 붙여도 찾는다
+    const tiers = [nameTier(name), nameTier(`${mine.base}교회 축성일`), lectTier(mine.base, stripped)].filter((t) => t > 0);
+    if (tiers.length) add("dedication", name, mine.date, Math.min(...tiers), { rank: mine.rank, color: mine.color });
+  }
+  const diocese = mine && mine.diocese ? local.dioceses.find((d) => d.name === mine.diocese) : undefined;
+  if (diocese) {
+    const name = `${diocese.name}교구설립일`;
+    const tier = nameTier(name);
+    if (tier) add("diocese", name, diocese.date, tier, { year: diocese.year });
+  }
+  if (local.province) {
+    const name = "관구설립일";
+    const tier = nameTier(name);
+    if (tier) add("province", name, local.province.date, tier, { year: local.province.year });
+  }
+  if (out.items.some((item) => item.local && item.local.level === "dedication")) return out;
+  if (typed !== stripped) {
+    // 이름이 같은 것, 시작하는 것, 든 것의 차례이고, 같은 단계면 표의 차례다
+    /** @type {LocalParish | null} */
+    let best = null;
+    let bestTier = 0;
+    for (const p of local.parishes) {
+      const tier = lectTier(p.base, stripped);
+      if (tier && (!bestTier || tier < bestTier)) {
+        best = p;
+        bestTier = tier;
+      }
+    }
+    if (best) out.notice = { kind: best.kind, name: best.name, date: best.date, churchId: best.churchId, mine: mine ? mine.kind : null };
+  }
+  if (!out.notice && typed.includes("축성")) {
+    if (!mine) out.notice = { kind: "noParish", name: null, date: null, churchId: null, mine: null };
+    else if (mine.kind === "blessing") out.notice = { kind: "blessing", name: mine.name, date: mine.date, churchId: mine.churchId, mine: "blessing" };
+  }
+  return out;
+}
+
+/**
+ * 이름 검색의 결과에 지역 축일을 더한다(`searchLocal`). 찾은 단계, 전례년 순서로 다시 늘어놓고, 안내는 `localNotice`에 둔다.
+ * @param {LectionaryIndex} index @param {LectResult} result @param {string} query @param {string} parish
+ * @returns {LectResult}
+ */
+function withLocalDays(index, result, query, parish) {
+  const { items, notice } = searchLocal(index, query, parish);
+  result.localNotice = notice;
+  if (!items.length) return result;
+  result.items = [...result.items, ...items]
+    .map((item, i) => ({ item, i }))
+    .sort((a, b) => (a.item.tier ?? 3) - (b.item.tier ?? 3) || a.item.obs.order - b.item.obs.order || a.i - b.i)
+    .map(({ item }) => item);
+  return result;
+}
+
 /**
  * Merge overlapping or touching [from, to] verse ranges.
  * @param {Array<[number, number]>} ranges
@@ -1146,7 +1344,9 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
     chunkConfig = msg.chunks;
     // A new lectionary address drops what the old one loaded or was loading.
     const nextLectionaryUrl = msg.lectionaryUrl || null;
-    if (nextLectionaryUrl !== lectionaryUrl) {
+    const nextLocalUrl = msg.localUrl || null;
+    if (nextLectionaryUrl !== lectionaryUrl || nextLocalUrl !== localUrl) {
+      localUrl = nextLocalUrl;
       lectionaryGen++;
       lectionaryUrl = nextLectionaryUrl;
       lectionary = null;
@@ -1178,6 +1378,7 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
   if (msg.type === "search") {
     const { q, page, pageSize, searchId } = msg;
     const scopeBooks = msg.scopeBooks || [];
+    const parish = msg.parish || "";
     currentSearchId = searchId;
 
     try {
@@ -1238,7 +1439,8 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       const findNames = (index) => {
         if (index !== namesIndex || !names) {
           namesIndex = index;
-          names = yearQuery ? searchLectionaryYears(index, yearQuery) : searchLectionaryNames(index, keyword, lectExtraNames);
+          const found = yearQuery ? searchLectionaryYears(index, yearQuery) : searchLectionaryNames(index, keyword, lectExtraNames);
+          names = withLocalDays(index, found, yearQuery ? yearQuery.name : keyword, parish);
         }
         return names;
       };

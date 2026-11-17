@@ -375,7 +375,7 @@ SORTED_KO = "(names) => [...names].sort((a, b) => a.localeCompare(b, 'ko'))"
 
 
 def test_parish_select_lists_churches_by_diocese_and_saves_the_id(browser):
-    """소속교회는 교구별 묶음(서울 60, 대전 38, 부산 18)의 사전순 목록이고, 「북.」 성당은 없고 두 줄인 교회는 한 번만 있다.
+    """소속교회는 교구별 묶음(서울 60, 대전 39, 부산 19)의 사전순 목록이고, 「북.」 성당은 없고 두 줄인 교회는 한 번만 있다.
     고르면 교회 이름이 아니라 식별자를 저장하고, 설정을 다시 열면 고른 교회가 보인다. 「선택 안 함」은 빈 문자열이다(ADR-041 §6, §8, §9)."""
     ctx = browser.new_context()
     ctx.add_init_script(CLEAR_APP_STORAGE)
@@ -389,7 +389,7 @@ def test_parish_select_lists_churches_by_diocese_and_saves_the_id(browser):
         assert select.locator("option:checked").inner_text() == "선택 안 함"
         groups = select.evaluate(GROUP_FACTS)
         assert [g["label"] for g in groups] == ["서울교구", "대전교구", "부산교구"]
-        assert [len(g["names"]) for g in groups] == [60, 38, 18]
+        assert [len(g["names"]) for g in groups] == [60, 39, 19]
         for g in groups:
             assert not [n for n in g["names"] if n.startswith("북.")], g["label"]
             assert g["names"] == page.evaluate(SORTED_KO, g["names"]), g["label"]

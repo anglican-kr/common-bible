@@ -640,6 +640,93 @@ test("searchLectionaryYears: 성탄 평일은 그해에 받을 수 있는 이름
     ["ordinary-7-sun", "ordinary-7-wed"]);
 });
 
+// 본당 표(지역 축일, ADR-044 §3)
+const DED = (date, kind = "consecration") => ({ date, kind, color: "white", rank: kind === "consecration" ? "major_feast" : null });
+const LOCAL_RAW = {
+  province: { name: "대한성공회", founded: "09.29", founded_year: 1992 },
+  dioceses: [{ name: "서울", founded: "05.27", founded_year: 1965 }, { name: "부산", founded: "06.01", founded_year: 1974 }],
+  parishes: [
+    { name: "용인성당", church_id: "yongin", diocese: "서울", dedication: DED("01.31") },
+    { name: "오산세마대성당", church_id: "osan", diocese: "서울", dedication: DED("12.05") },
+    { name: "세종성당", church_id: "sejong", diocese: "대전", dedication: DED("04.21", "blessing") },
+    { name: "북.평양성당", church_id: "pyongyang", diocese: "서울", dedication: DED("05.01") },
+    { name: "이름만성당", church_id: "", diocese: "서울", dedication: DED("05.02") },
+    { name: "날짜틀림성당", church_id: "bad", diocese: "서울", dedication: DED("5.2") },
+  ],
+};
+const LECT_LOCAL = Object.assign(ctx.buildLectionarySearchIndex(LECT_RAW), { local: ctx.buildLocalIndex(LOCAL_RAW) });
+const local = (q, parish = "") => plain(ctx.searchLocal(LECT_LOCAL, q, parish));
+const localRows = (q, parish = "") => local(q, parish).items.map((it) => [it.obs.name, it.tier]);
+
+test("buildLocalIndex: 북한에 있던 성당과 식별자나 날짜가 없는 행은 빼고, 설립일을 읽는다", () => {
+  const index = plain(LECT_LOCAL.local);
+  assert.deepStrictEqual(index.parishes.map((p) => [p.name, p.base, p.kind]),
+    [["용인성당", "용인", "consecration"], ["오산세마대성당", "오산세마대", "consecration"], ["세종성당", "세종", "blessing"]]);
+  assert.deepStrictEqual(index.province, { name: "대한성공회", date: "09.29", year: 1992 });
+  assert.deepStrictEqual(index.dioceses.map((d) => d.name), ["서울", "부산"]);
+  assert.strictEqual(ctx.buildLocalIndex(null), null);
+  assert.strictEqual(ctx.buildLocalIndex({ parishes: "x" }), null);
+});
+
+test("searchLocal: 소속교회의 축성일은 그 이름이나 본당 이름으로 찾는다. 끝의 「성당」과 「교회」는 같은 말이다(ADR-044 §3)", () => {
+  assert.deepStrictEqual(localRows("용인", "yongin"), [["용인성당 축성일", 1]]);
+  assert.deepStrictEqual(localRows("용인교회", "yongin"), [["용인성당 축성일", 1]]);
+  assert.deepStrictEqual(localRows("용인 성당", "yongin"), [["용인성당 축성일", 1]]);
+  assert.deepStrictEqual(localRows("용인성당 축성일", "yongin"), [["용인성당 축성일", 1]]);
+  assert.deepStrictEqual(localRows("축성일", "yongin"), [["용인성당 축성일", 3]]);
+  const row = local("용인", "yongin").items[0];
+  assert.deepStrictEqual([row.obs.key, row.obs.kind, row.obs.date, row.obs.rank, row.local], ["local:dedication", "local", "01.31", "major_feast",
+    { level: "dedication", color: "white", year: null }]);
+  // 「성당」이나 「교회」만 친 검색어는 찾지 않는다. 소속교회가 아니면 이름으로 찾지 않는다
+  assert.deepStrictEqual(local("성당", "yongin"), { items: [], notice: null });
+  assert.deepStrictEqual(local("용인", ""), { items: [], notice: null });
+  assert.deepStrictEqual(localRows("용인", "osan"), []);
+});
+
+test("searchLocal: 설정 목록의 이름(「용인교회」)에 「축성일」을 붙여도 찾는다", () => {
+  assert.deepStrictEqual(localRows("용인교회 축성일", "yongin"), [["용인성당 축성일", 1]]);
+  assert.deepStrictEqual(localRows("용인교회축성일", "yongin"), [["용인성당 축성일", 1]]);
+});
+
+test("searchLocal: 그 교구의 설립일과 관구 설립일은 이름으로 찾는다. 관구 설립일은 소속교회와 상관없다", () => {
+  assert.deepStrictEqual(localRows("설립일", "yongin"), [["서울교구설립일", 3], ["관구설립일", 3]]);
+  assert.deepStrictEqual(localRows("서울교구", "yongin"), [["서울교구설립일", 2]]);
+  assert.deepStrictEqual(localRows("설립일", ""), [["관구설립일", 3]]);
+  assert.deepStrictEqual(localRows("설립일", "sejong"), [["관구설립일", 3]], "표에 없는 교구(대전)의 설립일은 없다");
+  assert.deepStrictEqual(local("관구설립일").items[0].local, { level: "province", color: null, year: 1992 });
+  assert.strictEqual(local("관구설립일").items[0].obs.rank, null, "설립일 줄은 굵게 하지 않는다");
+});
+
+test("searchLocal: 소속교회의 축성일을 찾지 못하면 다른 본당, 소속교회 없음, 축복일을 알린다", () => {
+  const N = (kind, name, date, churchId, mine = null) => ({ kind, name, date, churchId, mine });
+  assert.deepStrictEqual(local("용인성당").notice, N("consecration", "용인성당", "01.31", "yongin"));
+  assert.deepStrictEqual(local("오산교회").notice, N("consecration", "오산세마대성당", "12.05", "osan"), "이름이 시작하는 본당");
+  // 소속교회가 있으면 그 교회의 종류를 함께 넘긴다(날짜만 알린다)
+  assert.deepStrictEqual(local("오산성당", "yongin").notice, N("consecration", "오산세마대성당", "12.05", "osan", "consecration"), "다른 본당");
+  assert.deepStrictEqual(local("용인성당", "sejong").notice, N("consecration", "용인성당", "01.31", "yongin", "blessing"));
+  assert.deepStrictEqual(local("세종성당").notice, N("blessing", "세종성당", "04.21", "sejong"));
+  assert.deepStrictEqual(local("축성일").notice, N("noParish", null, null, null));
+  assert.deepStrictEqual(local("축성일", "sejong").notice, N("blessing", "세종성당", "04.21", "sejong", "blessing"));
+  // 끝에 「성당」이나 「교회」를 붙이지 않은 본당 이름은 알리지 않는다(낱말과 겹치는 본당 이름이 있다). 북한에 있던 성당은 없다
+  assert.strictEqual(local("오산").notice, null);
+  assert.strictEqual(local("평양성당").notice, null);
+  assert.strictEqual(local("용인성당", "yongin").notice, null, "소속교회의 줄이 있으면 알리지 않는다");
+});
+
+test("withLocalDays: 지역 축일은 찾은 단계와 날짜로 월별 축일 사이에 끼운다", () => {
+  const OBS_INFO = (i) => ({ key: LECT_RAW.obs[i].key, name: LECT_RAW.obs[i].name, kind: LECT_RAW.obs[i].kind, date: LECT_RAW.obs[i].date,
+    rank: null, common: null, order: LECT_RAW.obs[i].order });
+  // 바울로의 회심(1월 25일, 30)과 성 요셉(3월 19일, 31) 사이에 1월 31일의 축성일
+  const found = { kind: "name", items: [{ obs: OBS_INFO(7), sets: [], tier: 3 }, { obs: OBS_INFO(8), sets: [], tier: 3 }], synonyms: [] };
+  const r = plain(ctx.withLocalDays(LECT_LOCAL, found, "축성일", "yongin"));
+  assert.deepStrictEqual(r.items.map((it) => it.obs.name), ["사도 성 바울로의 회심", "용인성당 축성일", "성 요셉(성모 마리아의 남편)"]);
+  assert.strictEqual(r.items[1].obs.order, 30.5);
+  assert.strictEqual(r.localNotice, null);
+  // 본당 표를 받지 못했으면 지역 축일도 안내도 없다
+  const none = plain(ctx.withLocalDays(LECT, { kind: "name", items: [], synonyms: [] }, "축성일", "yongin"));
+  assert.deepStrictEqual([none.items, none.localNotice], [[], null]);
+});
+
 test("swapSynonyms: 바꾼 말을 다시 바꾸지 않는다", () => {
   const index = ctx.buildLectionarySearchIndex({ ...LECT_RAW, synonyms: { "가": "나", "나": "다" } });
   assert.deepEqual(plain(ctx.swapSynonyms(index, "가나")), {
@@ -887,6 +974,32 @@ test("메시지: 이름에 연도를 붙이면 연도를 뗀 이름으로 찾고
   await w.send(search("고난주일"));
   assert.equal(w.results()[2].lectionary.years, undefined, "연도가 없으면 해를 넘기지 않는다");
   assert.equal(w.posted.filter((m) => m.type === "error").length, 0);
+});
+
+test("메시지: 본당 표를 색인과 함께 받고, 검색의 소속교회로 지역 축일과 안내를 찾는다(ADR-044 §3)", async () => {
+  const w = startWorker({ ...WORKER_FILES, local: LOCAL_RAW });
+  await w.send({ ...INIT, localUrl: "local" });
+  await flush();
+  assert.ok(w.fetched.includes("local"));
+  await w.send({ ...search("용인"), parish: "yongin" });
+  assert.deepStrictEqual(w.results()[0].lectionary.items.map((it) => [it.obs.name, it.local.level]), [["용인성당 축성일", "dedication"]]);
+  await w.send({ ...search("2027 용인"), parish: "yongin" });
+  assert.deepStrictEqual(w.results()[1].lectionary.items.map((it) => it.obs.key), ["local:dedication"], "연도를 붙여도 찾는다");
+  await w.send(search("용인성당"));
+  const notice = w.results()[2];
+  assert.deepStrictEqual(notice.lectionary.items, []);
+  assert.deepStrictEqual(notice.lectionary.localNotice, { kind: "consecration", name: "용인성당", date: "01.31", churchId: "yongin", mine: null });
+  assert.equal(w.posted.filter((m) => m.type === "error").length, 0);
+});
+
+test("메시지: 본당 표를 받지 못해도 전례독서 색인은 쓴다. 지역 축일만 없다", async () => {
+  const w = startWorker({ ...WORKER_FILES, local: "fail" });
+  await w.send({ ...INIT, localUrl: "local" });
+  await flush();
+  await w.send({ ...search("고난주일"), parish: "yongin" });
+  assert.deepStrictEqual(w.results()[0].lectionary.items.map((it) => it.obs.name), ["성지주일"]);
+  await w.send(search("용인성당"));
+  assert.strictEqual(w.results()[1].lectionary.localNotice, null);
 });
 
 test("메시지: `lect-names`로 받은 이름은 다음 검색부터 찾는다(ADR-044 §3)", async () => {
