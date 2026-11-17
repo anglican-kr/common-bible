@@ -798,8 +798,8 @@ def test_local_notices_without_my_parish(page):
     _fix_today(page)
     _goto_local_search(page, "용인성당")
     note = page.locator(".search-local-note")
-    assert note.locator(".search-alert-title").inner_text() == "용인성당의 축성일(1월 31일)은 소속교회로 고르면 축성 독서와 함께 볼 수 있습니다."
-    assert note.locator("button").inner_text() == "용인성당을 소속교회로 고르기"
+    assert note.locator(".search-alert-title").inner_text() == "용인성당의 축성일(1월 31일)은 소속교회로 등록하면 축성 독서와 함께 볼 수 있습니다."
+    assert note.locator("button").inner_text() == "용인교회를 소속교회로 선택"
     page.wait_for_function("() => document.getElementById('a11y-announce').textContent.includes('용인성당의 축성일')")
 
     _goto_local_search(page, "오산교회")
@@ -810,7 +810,7 @@ def test_local_notices_without_my_parish(page):
     assert page.locator(".search-local-note button, .search-local-note select").count() == 0
 
     _goto_local_search(page, "축성일")
-    assert page.inner_text(".search-local-note .search-alert-title") == "소속교회의 축성일은 소속교회를 고르면 축성 독서와 함께 볼 수 있습니다."
+    assert page.inner_text(".search-local-note .search-alert-title") == "소속교회의 축성일은 소속교회를 등록하면 축성 독서와 함께 볼 수 있습니다."
     page.wait_for_function("() => !document.querySelector('#search-local-church').disabled", timeout=15_000)
 
     # 관구설립일은 소속교회와 상관없다
@@ -819,17 +819,17 @@ def test_local_notices_without_my_parish(page):
 
 
 def test_local_notice_picks_my_parish(page):
-    """안내 카드에서 고르면 소속교회로 저장하고 같은 검색을 다시 그린다. 고른 것을 알리고 새 축성일 줄에 포커스를 둔다(ADR-044 §3)."""
+    """안내 카드에서 소속교회를 등록하면 설정에 저장하고 같은 검색을 다시 그린다. 등록한 것을 알리고 새 축성일 줄에 포커스를 둔다(ADR-044 §3)."""
     _fix_today(page)
     _goto_local_search(page, "용인성당")
     page.click(".search-local-note button")
     page.wait_for_selector(".lect-rows a.cal-row", timeout=15_000)
     assert page.evaluate("localStorage.getItem('bible-parish')") == "jqdnsv"
-    assert page.inner_text(".search-view-results .search-note") == "소속교회를 용인교회로 정했습니다. 설정에서 바꿀 수 있습니다."
+    assert page.inner_text(".search-view-results .search-note") == "용인교회를 소속교회로 등록했습니다. 설정에서 바꿀 수 있습니다."
     assert page.evaluate("document.activeElement.getAttribute('aria-label')") == "용인성당 축성일, 백색, 다음 2027년 1월 31일 일요일"
     assert "q=%EC%9A%A9%EC%9D%B8%EC%84%B1%EB%8B%B9" in page.url, "같은 검색이다"
 
-    # 목록에서 고르기: 고르지 않고 누르면 목록으로 포커스를 옮긴다
+    # 목록에서 등록하기: 교회를 선택하지 않고 누르면 목록으로 포커스를 옮긴다
     page.evaluate("localStorage.setItem('bible-parish', '')")
     _goto_local_search(page, "축성일")
     page.wait_for_function("() => !document.querySelector('#search-local-church').disabled", timeout=15_000)
@@ -841,6 +841,20 @@ def test_local_notice_picks_my_parish(page):
     assert _row_labels(page) == ["용인성당 축성일, 백색, 다음 2027년 1월 31일 일요일"]
 
 
+def test_local_notice_pick_without_a_dedication_row_focuses_the_note(page):
+    """축복일만 있는 교회를 등록하면 축성일 줄이 없으므로 맨 위의 「소속교회로 등록했습니다」 줄에 포커스를 둔다(WCAG 2.4.3, 코드 리뷰 2026-11-17)."""
+    _fix_today(page)
+    _goto_local_search(page, "축성일")
+    page.wait_for_function("() => !document.querySelector('#search-local-church').disabled", timeout=15_000)
+    page.select_option("#search-local-church", "pr7dd7")  # 세종성당
+    page.click(".search-local-note button")
+    page.wait_for_function(
+        "() => document.activeElement && document.activeElement.classList.contains('search-note')", timeout=15_000
+    )
+    assert page.inner_text(".search-view-results .search-note") == "세종교회를 소속교회로 등록했습니다. 설정에서 바꿀 수 있습니다."
+    assert page.inner_text(".search-local-note").strip() == "세종성당의 축복일(4월 21일)에는 따로 읽는 독서가 없습니다."
+
+
 def test_local_notice_for_a_parish_holder_tells_the_date_only(browser):
     """소속교회가 있는 사람이 다른 본당을 찾으면 그 본당의 축성일 날짜만 알린다. 축성 독서는 모든 본당이 같다(ADR-044 §3)."""
     ctx, page = _parish_page(browser, "uhfhvh")  # 오산세마대성당
@@ -850,6 +864,20 @@ def test_local_notice_for_a_parish_holder_tells_the_date_only(browser):
         assert page.locator(".search-local-note button, .search-local-note select").count() == 0
     finally:
         ctx.close()
+
+
+def test_parish_changed_elsewhere_redraws_the_results(page):
+    """검색 결과가 열린 채 설정 팝오버나 다른 기기에서 소속교회가 바뀌면 결과를 다시 그린다(ADR-041 §8, 코드 리뷰 2026-11-17)."""
+    _fix_today(page)
+    _goto_local_search(page, "용인성당")
+    assert page.locator(".search-local-note button").count() == 1
+    page.evaluate("""() => {
+        localStorage.setItem('bible-parish', 'jqdnsv');
+        return window.redrawIfSyncedSettingsChanged();
+    }""")
+    page.wait_for_selector(".lect-rows a.cal-row", timeout=15_000)
+    assert page.locator(".lect-rows a.cal-row").first.get_attribute("aria-label") == "용인성당 축성일, 백색, 다음 2027년 1월 31일 일요일"
+    assert page.locator(".search-local-note").count() == 0
 
 
 _SWATCH_CODES = "els => els.map(e => e.className.match(/lit-swatch--(\\w+)/)[1])"

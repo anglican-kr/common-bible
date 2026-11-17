@@ -683,6 +683,11 @@ test("searchLocal: 소속교회의 축성일은 그 이름이나 본당 이름�
   assert.deepStrictEqual(localRows("용인", "osan"), []);
 });
 
+test("searchLocal: 설정 목록의 이름(「용인교회」)에 「축성일」을 붙여도 찾는다", () => {
+  assert.deepStrictEqual(localRows("용인교회 축성일", "yongin"), [["용인성당 축성일", 1]]);
+  assert.deepStrictEqual(localRows("용인교회축성일", "yongin"), [["용인성당 축성일", 1]]);
+});
+
 test("searchLocal: 그 교구의 설립일과 관구 설립일은 이름으로 찾는다. 관구 설립일은 소속교회와 상관없다", () => {
   assert.deepStrictEqual(localRows("설립일", "yongin"), [["서울교구설립일", 3], ["관구설립일", 3]]);
   assert.deepStrictEqual(localRows("서울교구", "yongin"), [["서울교구설립일", 2]]);

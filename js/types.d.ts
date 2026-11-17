@@ -1218,7 +1218,13 @@ export interface AppSettings {
   applyColorScheme: (schemeName: string) => void;
   applyCiteShow: (on: boolean) => void;
   dismissLaunchScreen: () => void;
+  /** 설정의 교회 목록(교구별 묶음, ADR-041 §6). 검색 결과의 안내 카드도 쓴다(ADR-044 §3). 받지 못하면 오류로 끝나고 다음 호출에 다시 받는다. */
+  loadParishOptions: () => Promise<SelectOption[]>;
+  fillSelect: (select: HTMLSelectElement, options: SelectOption[], value: string) => void;
 }
+
+/** A settings <select> entry: [value, visible text], or a labelled group of them (settings-ui.js). */
+export type SelectOption = [string, string] | { label: string; options: [string, string][] };
 
 // ── Reading context (js/app/reading-context.js) ─────────────────────────────
 // Phase 6a of the app.js modularization (ADR-018 §5.1 Option A). Cross-

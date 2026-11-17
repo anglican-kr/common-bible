@@ -193,10 +193,10 @@
  * @property {LocalFounding | null} province
  *
  * @typedef LocalNotice  지역 축일을 찾지 못했을 때 결과 위에 두는 안내(ADR-044 §3)
- * @property {"consecration" | "blessing" | "noParish"} kind  다른 본당의 축성일, 축복일만 있는 본당, 소속교회를 고르지 않음
+ * @property {"consecration" | "blessing" | "noParish"} kind  다른 본당의 축성일, 축복일만 있는 본당, 소속교회를 등록하지 않음
  * @property {string | null} name
  * @property {string | null} date  「MM.DD」
- * @property {string | null} churchId  그 본당의 교회 식별자. 소속교회로 고르는 단추가 쓴다
+ * @property {string | null} churchId  그 본당의 교회 식별자. 소속교회로 등록하는 단추가 쓴다
  * @property {"consecration" | "blessing" | null} mine  소속교회가 있으면 그 교회의 종류(축성일이 있는가), 없으면 null
  *
  * @typedef LectSetInfo
@@ -1135,7 +1135,7 @@ function localOrder(index, date) {
  * 지역 축일(ADR-044 §3). 소속교회(`parish`, 교회 식별자)의 축성일은 그 이름(「용인성당 축성일」)이나 본당 이름(`용인`, `용인교회`, 이름이 같은
  * 것, 시작하는 것, 든 것의 차례)으로 찾는다. 그 교구의 설립일(「서울교구설립일」)과 관구 설립일(「관구설립일」, 소속교회와 상관없다)은 이름으로
  * 찾는다. 이름 규칙은 다른 전례일과 같다. 소속교회의 축성일을 찾지 못했으면 안내를 낸다. 검색어 끝에 「성당」이나 「교회」를 붙였으면
- * 그 이름의 본당이고(`오산교회`로 `오산세마대성당`), 아니면 `축성일`로 찾았는데 소속교회를 고르지 않았거나 소속교회에 축복일만 있는 사정이다.
+ * 그 이름의 본당이고(`오산교회`로 `오산세마대성당`), 아니면 `축성일`로 찾았는데 소속교회를 등록하지 않았거나 소속교회에 축복일만 있는 사정이다.
  * 「성당」이나 「교회」만 친 검색어는 찾지 않는다.
  * @param {LectionaryIndex} index
  * @param {string} query
@@ -1165,7 +1165,8 @@ function searchLocal(index, query, parish) {
   const mine = parish ? local.parishes.find((p) => p.churchId === parish) || null : null;
   if (mine && mine.kind === "consecration") {
     const name = `${mine.name} 축성일`;
-    const tiers = [nameTier(name), lectTier(mine.base, stripped)].filter((t) => t > 0);
+    // 설정의 교회 목록은 「용인성당」을 「용인교회」로 적는다(helpers.js `churchName`). 그 이름에 「축성일」을 붙여도 찾는다
+    const tiers = [nameTier(name), nameTier(`${mine.base}교회 축성일`), lectTier(mine.base, stripped)].filter((t) => t > 0);
     if (tiers.length) add("dedication", name, mine.date, Math.min(...tiers), { rank: mine.rank, color: mine.color });
   }
   const diocese = mine && mine.diocese ? local.dioceses.find((d) => d.name === mine.diocese) : undefined;

@@ -2093,33 +2093,36 @@ test("localNoticeOf, buildLocalNotice: 소속교회가 없으면 카드에서 �
   const h = loadPureHelpers();
   const plain = (v) => JSON.parse(JSON.stringify(v));
   const N = (kind, name, date, churchId, mine = null) => ({ kind, name, date, churchId, mine });
+  // helpers.js `churchName`의 대신: 단추의 이름은 설정 목록의 이름이다
+  const nameOf = (name) => name.replace(/성당$/, "교회");
+  const notice = (n) => h.localNoticeOf(n, nameOf);
   // 소속교회 없음: 찾은 본당을 고르는 단추
-  assert.deepStrictEqual(plain(h.localNoticeOf(N("consecration", "용인성당", "01.31", "yongin"))), {
-    text: "용인성당의 축성일(1월 31일)은 소속교회로 고르면 축성 독서와 함께 볼 수 있습니다.", pick: { churchId: "yongin", name: "용인성당" }, list: false });
+  assert.deepStrictEqual(plain(notice(N("consecration", "용인성당", "01.31", "yongin"))), {
+    text: "용인성당의 축성일(1월 31일)은 소속교회로 등록하면 축성 독서와 함께 볼 수 있습니다.", pick: { churchId: "yongin", name: "용인교회" }, list: false });
   // 소속교회가 있으면 날짜만. 축성 독서는 모든 본당이 같다. 소속교회에 축복일만 있으면 뒷문장이 없다
-  assert.deepStrictEqual(plain(h.localNoticeOf(N("consecration", "용인성당", "01.31", "yongin", "consecration"))), {
+  assert.deepStrictEqual(plain(notice(N("consecration", "용인성당", "01.31", "yongin", "consecration"))), {
     text: "용인성당의 축성일은 1월 31일입니다. 축성 독서는 소속교회의 축성일과 같습니다.", pick: null, list: false });
-  assert.strictEqual(h.localNoticeOf(N("consecration", "용인성당", "01.31", "yongin", "blessing")).text, "용인성당의 축성일은 1월 31일입니다.");
-  assert.deepStrictEqual(plain(h.localNoticeOf(N("blessing", "세종성당", "04.21", "sejong"))),
+  assert.strictEqual(notice(N("consecration", "용인성당", "01.31", "yongin", "blessing")).text, "용인성당의 축성일은 1월 31일입니다.");
+  assert.deepStrictEqual(plain(notice(N("blessing", "세종성당", "04.21", "sejong"))),
     { text: "세종성당의 축복일(4월 21일)에는 따로 읽는 독서가 없습니다.", pick: null, list: false });
-  assert.deepStrictEqual(plain(h.localNoticeOf(N("noParish", null, null, null))),
-    { text: "소속교회의 축성일은 소속교회를 고르면 축성 독서와 함께 볼 수 있습니다.", pick: null, list: true });
+  assert.deepStrictEqual(plain(notice(N("noParish", null, null, null))),
+    { text: "소속교회의 축성일은 소속교회를 등록하면 축성 독서와 함께 볼 수 있습니다.", pick: null, list: true });
   // 카드: 단추, 목록, 아무것도 없음
-  const pick = h.buildLocalNotice(h.localNoticeOf(N("consecration", "용인성당", "01.31", "yongin")));
+  const pick = h.buildLocalNotice(notice(N("consecration", "용인성당", "01.31", "yongin")));
   assert.strictEqual(pick.className, "search-alert search-local-note");
   assert.strictEqual(pick.children[1].tagName, "BUTTON");
-  assert.strictEqual(pick.children[1].textContent, "용인성당을 소속교회로 고르기");
+  assert.strictEqual(pick.children[1].textContent, "용인교회를 소속교회로 선택");
   assert.strictEqual(pick.children[1].getAttribute("data-church"), "yongin");
-  const list = h.buildLocalNotice(h.localNoticeOf(N("noParish", null, null, null)));
+  const list = h.buildLocalNotice(notice(N("noParish", null, null, null)));
   const row = list.children[1];
   assert.strictEqual(row.className, "search-local-pick");
   assert.strictEqual(row.children[0].getAttribute("for"), "search-local-church");
   const select = row.children[1].children[0];
   assert.deepStrictEqual([select.tagName, select.id, select.getAttribute("disabled")], ["SELECT", "search-local-church", ""], "받는 동안은 고를 수 없다");
-  assert.strictEqual(list.children[2].textContent, "소속교회로 고르기");
-  assert.strictEqual(h.buildLocalNotice(h.localNoticeOf(N("blessing", "세종성당", "04.21", "sejong"))).children.length, 1);
-  assert.strictEqual(h.pickedParishNote("용인교회"), "소속교회를 용인교회로 정했습니다. 설정에서 바꿀 수 있습니다.");
-  assert.strictEqual(h.pickedParishNote("서울주교좌성당"), "소속교회를 서울주교좌성당으로 정했습니다. 설정에서 바꿀 수 있습니다.");
+  assert.strictEqual(list.children[2].textContent, "소속교회로 선택");
+  assert.strictEqual(h.buildLocalNotice(notice(N("blessing", "세종성당", "04.21", "sejong"))).children.length, 1);
+  assert.strictEqual(h.pickedParishNote("용인교회"), "용인교회를 소속교회로 등록했습니다. 설정에서 바꿀 수 있습니다.");
+  assert.strictEqual(h.pickedParishNote("서울주교좌성당"), "서울주교좌성당을 소속교회로 등록했습니다. 설정에서 바꿀 수 있습니다.");
 });
 
 test("lectRowOf: 축성일 줄은 축성일을 고른 화면을 열고 굵게, 설립일 줄은 그날을 열고 설립 연도를 적는다. 등급 줄은 없다(ADR-044 §3)", () => {
