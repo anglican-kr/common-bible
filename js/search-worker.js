@@ -206,6 +206,8 @@
  * @property {number} from
  * @property {number} to
  * @property {boolean} capped  the range was longer than LECT_YEAR_SPAN and was cut to its first years
+ * @property {boolean} over  the typed years went past `last` and were cut there. Past it from the start, `from` is after `to`
+ * @property {number} last  the last year searched (LECT_YEAR_LAST)
  */
 
 /** @type {SearchMeta | null} */
@@ -930,10 +932,12 @@ function searchLectionaryNames(index, query, extra = []) {
 }
 
 // 연도를 붙인 이름 검색(ADR-044 §4). 연도는 「년」을 붙이거나 네 자리 숫자만 쓰고, 이름의 앞이나 뒤에 둔다. 범위는 하이픈이나
-// 물결표로 잇는다. 받는 해는 캘린더와 같다(교회력 엔진 `MIN_YEAR`, `MAX_YEAR`. 워커는 엔진을 읽지 않는다). 범위는 앞의
-// `LECT_YEAR_SPAN`해까지 찾는다. 앱이 그해의 모든 날을 엔진으로 계산하기 때문이다.
+// 물결표로 잇는다. 첫 해는 캘린더와 같다(교회력 엔진 `MIN_YEAR`. 워커는 엔진을 읽지 않는다). 마지막 해는 2050년이다. 음력 날짜
+// 자료(`kasi-lunar.json`)와 줄이 여는 보조 주소가 찾는 지키는 날의 표(엔진 `KEPT_DAYS_LAST`)가 2050년까지라서다(사용자 결정
+// 2026-11-17). 그보다 늦은 해도 연도로 읽어 2050년까지 찾았다고 알린다. 범위는 앞의 `LECT_YEAR_SPAN`해까지 찾는다. 앱이 그해의 모든
+// 날을 엔진으로 계산하기 때문이다.
 const LECT_YEAR_MIN = 1583;
-const LECT_YEAR_MAX = 9999;
+const LECT_YEAR_LAST = 2050;
 const LECT_YEAR_SPAN = 10;
 const LECT_YEARS_SRC = "(\\d{4})년?(?:\\s*[-~～–]\\s*(\\d{4})년?)?";
 const LECT_YEAR_LEAD_RE = new RegExp(`^${LECT_YEARS_SRC}\\s+(.+)$`);
@@ -942,10 +946,11 @@ const LECT_YEAR_TAIL_RE = new RegExp(`^(.+?)\\s+${LECT_YEARS_SRC}$`);
 const LECT_YEAR_ONLY_RE = /^[\d\s년~～–,-]*$/;
 
 /**
- * 검색어의 앞이나 뒤에 붙은 연도와 그 나머지(전례일 이름). 연도가 없거나, 받는 해 밖이거나, 나머지가 이름이 아니면 null.
- * 거꾸로 쓴 범위(`2026-2024`)는 작은 해부터로 고친다. 날짜(`2026-12-25`)와 여러 해를 늘어놓은 것(`2024, 2026`)은 읽지 않는다.
+ * 검색어의 앞이나 뒤에 붙은 연도와 그 나머지(전례일 이름). 연도가 없거나, 첫 해(1583년)보다 이르거나, 나머지가 이름이 아니면 null.
+ * 거꾸로 쓴 범위(`2026-2024`)는 작은 해부터로 고친다. 2050년보다 늦은 해는 2050년에서 자른다(`over`). 처음부터 늦으면 찾을 해가 없다
+ * (`from`이 `to`보다 늦다). 날짜(`2026-12-25`)와 여러 해를 늘어놓은 것(`2024, 2026`)은 읽지 않는다.
  * @param {string} keyword
- * @returns {{ name: string, from: number, to: number, capped: boolean } | null}
+ * @returns {{ name: string, from: number, to: number, capped: boolean, over: boolean, last: number } | null}
  */
 function parseLectYear(keyword) {
   const s = keyword.trim();
@@ -967,10 +972,12 @@ function parseLectYear(keyword) {
   let from = Number(a);
   let to = b ? Number(b) : from;
   if (from > to) [from, to] = [to, from];
-  if (from < LECT_YEAR_MIN || to > LECT_YEAR_MAX) return null;
+  if (from < LECT_YEAR_MIN) return null;
+  const over = to > LECT_YEAR_LAST;
+  if (over) to = LECT_YEAR_LAST;
   const capped = to - from + 1 > LECT_YEAR_SPAN;
   if (capped) to = from + LECT_YEAR_SPAN - 1;
-  return { name, from, to, capped };
+  return { name, from, to, capped, over, last: LECT_YEAR_LAST };
 }
 
 // 날짜로 독서가 정해진 성탄 평일(색인의 이름은 13개 모두 「성탄주간」)이 해마다 받는 이름. 교회력 엔진 `christmasWeekdayName`이
@@ -996,12 +1003,12 @@ function lectNameMatches(name, query) {
  * 성탄 평일의 이름은 해마다 바뀌어(§3) 오늘부터 한 해의 이름(`lect-names`)으로 찾지 않는다. 그 이름이 될 수 있는 것 가운데 검색어로
  * 찾아지는 것을 줄(`yearNames`)에 달아 넘기고, 앱이 그해의 이름으로 거른다(`2027 성탄1주`).
  * @param {LectionaryIndex} index
- * @param {{ name: string, from: number, to: number, capped: boolean }} yq  parseLectYear
+ * @param {{ name: string, from: number, to: number, capped: boolean, over: boolean, last: number }} yq  parseLectYear
  * @returns {LectResult}
  */
 function searchLectionaryYears(index, yq) {
   const result = searchLectionaryNames(index, yq.name);
-  result.years = { from: yq.from, to: yq.to, capped: yq.capped };
+  result.years = { from: yq.from, to: yq.to, capped: yq.capped, over: yq.over, last: yq.last };
   const yearNames = LECT_CHRISTMAS_WEEKDAY_NAMES.filter((n) => lectNameMatches(n, yq.name));
   if (yearNames.length) {
     const have = new Set(result.items.map((item) => item.obs.key));

@@ -462,10 +462,9 @@ function fixedDateText(date) {
   return m ? `${Number(m[1])}월 ${Number(m[2])}일` : null;
 }
 
-/** 「2026-12-06」을 「12월 6일」로. @param {string} date */
+/** 「2026-12-06」을 「12월 6일」로(`fixedDateText`). 형식이 다르면 받은 그대로다. @param {string} date */
 function monthDayText(date) {
-  const [, m, d] = date.split("-").map(Number);
-  return `${m}월 ${d}일`;
+  return fixedDateText(date.slice(5).replace("-", ".")) || date;
 }
 
 /**
@@ -487,12 +486,25 @@ function yearsText(years) {
 /**
  * 「…과 겹침」에 적는 전례일 이름(ADR-044 §4). 괄호 안의 설명은 떼고, 성인 축일이면 이름 뒤에 「축일」을 붙인다(「성 니콜라 축일」).
  * 이름이 「날」이나 「축일」로 끝나면 붙이지 않는다(「성 십자가의 날」). 전례독서 화면이 옮긴 축일을 알리는 말(lectionary.js
- * `feastPhraseOf`)과 같은 규칙이다. 주일과 국가 명절(설날, 추석)은 이름 그대로다.
+ * `shortName`, `feastPhraseOf`)과 같은 규칙이다. 한쪽을 고치면 다른 쪽도 고친다. 그쪽의 「재의 수요일」 예외는 여기에 필요 없다.
+ * 이동 축일이라 성인 축일(`saint`)이 아니기 때문이다. 검색 화면은 lectionary.js를 받지 않고, 시험이 코드 구역을 잘라 읽어 함께 쓰지
+ * 않는다. 주일과 국가 명절(설날, 추석)은 이름 그대로다.
  * @param {string} name @param {boolean} saint
  */
 function overlapName(name, saint) {
   const short = name.replace(/\s*\([^()]*\)/g, "").replace(/\s{2,}/g, " ").trim() || name;
   return saint && !short.endsWith("날") && !short.endsWith("축일") ? `${short} 축일` : short;
+}
+
+const LECT_YEAR_RE = /(?:^|\s)\d{4}년?(?:\s*[-~～–]\s*\d{4}년?)?(?:\s|$)/;
+
+/**
+ * 연도를 붙인 이름 검색어(ADR-044 §4)로 보이는가. 워커(`parseLectYear`)는 받는 해와 이름까지 보고 정하지만, 여기서는 찾기 전에 성탄 평일의
+ * 이름을 보내고 기다릴지만 가른다. 연도를 붙인 검색은 그 이름(오늘부터 한 해의 이름)을 쓰지 않는다(코드 리뷰 2026-11-17).
+ * @param {string} query @returns {boolean}
+ */
+function looksLikeYearQuery(query) {
+  return LECT_YEAR_RE.test(query);
 }
 
 /** 음력 날짜로 지키는 전례일(설날, 추석)의 키. 음력 날짜 자료(`kasi-lunar.json`)가 없는 해에는 계산하지 못한다. */
@@ -503,13 +515,16 @@ const LECT_LUNAR_PREFIX = "lunar";
  * `found`와 같은 차례)과 그해의 음력 날짜 자료가 있는지다. 줄은 전례일마다, 해마다 하나이고 날짜 차례다. 해가 날짜의 앞자리라 해의
  * 차례로 묶이고, 같은 날이면 이름 결과의 차례를 지킨다(`Array.prototype.sort`는 안정 정렬이다). 그해에 지키지 않는 전례일은 줄을
  * 두지 않는다. 성탄 평일을 그해의 이름으로만 찾았으면(`yearNames`) 그해의 이름이 맞는 날만 둔다. `notes`는 결과 위나 결과 없음 화면에
- * 적는 문장이다: 범위를 자른 것, 음력 날짜 자료가 없는 해, 줄이 하나도 없는 해(「2027, 2032년에는 검색하신 전례일을 지키지 않습니다.」).
+ * 적는 문장이다: 2050년에서 자르거나 10년으로 자른 것, 음력 날짜 자료가 없는 해, 줄이 하나도 없는 해(「2027, 2032년에는 검색하신
+ * 전례일을 지키지 않습니다.」).
  * @param {any[]} found  LectItem[]
- * @param {Array<{ year: number, days: Array<any | null>, lunar: boolean }>} perYear  YearDay | null
- * @param {{ from: number, to: number, capped: boolean }} years
+ * @param {Array<{ year: number, days: Array<any | null>, lunar: boolean }>} perYear  YearDay | null. 찾을 해가 없으면 비었다
+ * @param {{ from: number, to: number, capped: boolean, over?: boolean, last?: number }} years  워커의 LectYears
  * @returns {{ items: any[], notes: string[] }}
  */
 function yearRowsOf(found, perYear, years) {
+  // 찾은 전례일이 없으면 알릴 것도 없다. 결과 없음 화면은 「찾지 못했어요」다(코드 리뷰 2026-11-17)
+  if (!found.length) return { items: [], notes: [] };
   /** @type {any[]} */
   const items = [];
   /** 줄이 하나도 없는 해 @type {number[]} */
@@ -525,9 +540,12 @@ function yearRowsOf(found, perYear, years) {
   items.sort((a, b) => (a.yearDay.date < b.yearDay.date ? -1 : a.yearDay.date > b.yearDay.date ? 1 : 0));
   /** @type {string[]} */
   const notes = [];
-  if (years.capped) {
-    notes.push(`연도 범위는 ${years.to - years.from + 1}년까지 찾습니다. ${yearsText(perYear.map((x) => x.year))}의 날을 보입니다.`);
-  }
+  /** 자른 것을 알리는 문장 @type {string[]} */
+  const cut = [];
+  if (years.over) cut.push(`연도는 ${years.last}년까지 찾습니다.`);
+  if (years.capped) cut.push(`연도 범위는 ${years.to - years.from + 1}년까지 찾습니다.`);
+  if (cut.length && perYear.length) cut.push(`${yearsText(perYear.map((x) => x.year))}의 날을 보입니다.`);
+  if (cut.length) notes.push(cut.join(" "));
   const lunar = found.filter((item) => item.obs.key.startsWith(LECT_LUNAR_PREFIX));
   const lunarNames = [...new Set(lunar.map((item) => item.obs.name))];
   const noLunar = lunarNames.length ? perYear.filter((x) => !x.lunar).map((x) => x.year) : [];
@@ -537,7 +555,7 @@ function yearRowsOf(found, perYear, years) {
   }
   // 음력으로 지키는 전례일만 찾았으면 음력 자료가 없는 해는 위에서 알렸다. 지키지 않는 것이 아니라 모르는 것이다
   const unkept = lunar.length === found.length ? empty.filter((y) => !noLunar.includes(y)) : empty;
-  if (found.length && unkept.length) notes.push(`${yearsText(unkept)}에는 검색하신 전례일을 지키지 않습니다.`);
+  if (unkept.length) notes.push(`${yearsText(unkept)}에는 검색하신 전례일을 지키지 않습니다.`);
   return { items, notes };
 }
 
@@ -1402,6 +1420,15 @@ function patchLectDays(target, lect, screen, labelOf) {
 async function withYearRows(result, screen, isStale) {
   const lect = result.lectionary;
   if (!lect || !lect.years || lect.yearRows) return;
+  // 이름으로 찾은 전례일이 없거나(`사랑 2000`, 코드 리뷰 2026-11-17) 찾을 해가 없으면(2050년보다 늦은 해만 쳤다) 교회력 자료를
+  // 받지도, 해를 세지도 않는다
+  if (!lect.items.length || lect.years.from > lect.years.to) {
+    const { items, notes } = yearRowsOf(lect.items, [], lect.years);
+    lect.items = items;
+    lect.notes = notes;
+    lect.yearRows = true;
+    return;
+  }
   const mod = await ensureEngine();
   if (isStale()) return;
   if (!mod) {
@@ -2150,7 +2177,7 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   // 다 받으면 다음 검색부터 그 이름으로 찾는다(코드 리뷰 2026-11-16, 11-17). 내려받지 못한 교회력 자료는 다음 호출에 다시 받는다
   // (`ensureEngine`, 엔진 `preloadCalendar`).
   let namesWaited = 0;
-  if (!filterBooks.length && query.includes("성탄") && !christmasNamesFresh()) {
+  if (!filterBooks.length && query.includes("성탄") && !looksLikeYearQuery(query) && !christmasNamesFresh()) {
     const sending = ensureEngine()
       .then(async (mod) => {
         if (!mod) return false;

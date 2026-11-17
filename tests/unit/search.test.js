@@ -276,6 +276,7 @@ function loadPureHelpers() {
     lectSlugHref: ctx.lectSlugHref,
     lectRowOf: ctx.lectRowOf,
     yearRowsOf: ctx.yearRowsOf,
+    looksLikeYearQuery: ctx.looksLikeYearQuery,
     lectNotation: ctx.lectNotation,
     buildLectRow: ctx.buildLectRow,
     fillLectRow: ctx.fillLectRow,
@@ -1981,6 +1982,33 @@ test("yearRowsOf: 줄은 날짜 차례라 해의 차례로 묶이고, 그해에 
   assert.deepStrictEqual(JSON.parse(JSON.stringify(items.map((it) => [it.obs.key, it.yearDay.date]))),
     [["b", "2026-01-05"], ["a", "2026-12-01"], ["c", "2027-02-01"], ["a", "2027-03-01"], ["b", "2027-03-01"]]);
   assert.deepStrictEqual(JSON.parse(JSON.stringify(notes)), []);
+});
+
+test("yearRowsOf: 2050년보다 늦은 해를 쳤으면 2050년까지 찾았다고 알린다(ADR-044 §4)", () => {
+  const h = loadPureHelpers();
+  const nicola = { obs: OBS({ key: "d1206", name: "성 니콜라" }), sets: [] };
+  const notes = (perYear, years) => JSON.parse(JSON.stringify(h.yearRowsOf([nicola], perYear, { last: 2050, ...years }).notes));
+  // 찾을 해가 없다
+  assert.deepStrictEqual(notes([], { from: 2060, to: 2050, capped: false, over: true }), ["연도는 2050년까지 찾습니다."]);
+  const years = (from, to) => Array.from({ length: to - from + 1 }, (_, i) => ({ year: from + i, days: [YDAY(`${from + i}-12-06`)], lunar: true }));
+  assert.deepStrictEqual(notes(years(2045, 2050), { from: 2045, to: 2050, capped: false, over: true }),
+    ["연도는 2050년까지 찾습니다. 2045~2050년의 날을 보입니다."]);
+  assert.deepStrictEqual(notes(years(2030, 2039), { from: 2030, to: 2039, capped: true, over: true }),
+    ["연도는 2050년까지 찾습니다. 연도 범위는 10년까지 찾습니다. 2030~2039년의 날을 보입니다."]);
+});
+
+test("yearRowsOf: 찾은 전례일이 없으면 줄도 알림도 없다(범위를 잘랐어도, 코드 리뷰 2026-11-17)", () => {
+  const h = loadPureHelpers();
+  const empty = h.yearRowsOf([], [{ year: 2000, days: [], lunar: false }], { from: 2000, to: 2009, capped: true });
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(empty)), { items: [], notes: [] });
+});
+
+test("looksLikeYearQuery: 연도를 붙인 검색어는 성탄 평일 이름을 기다리지 않는다(코드 리뷰 2026-11-17)", () => {
+  const h = loadPureHelpers();
+  for (const q of ["2027 성탄1주", "2027년 성탄 1주 수요일", "성탄 1주 2027년", "2024-2026 성탄", "2024~2026 성탄주간"]) {
+    assert.strictEqual(h.looksLikeYearQuery(q), true, q);
+  }
+  for (const q of ["성탄 1주 화요일", "성탄주간", "2026-12-25 성탄", "성탄 2027-01-02"]) assert.strictEqual(h.looksLikeYearQuery(q), false, q);
 });
 
 test("yearRowsOf: 그해의 이름으로만 찾은 성탄 평일은 그해의 이름이 맞는 날만 둔다", () => {

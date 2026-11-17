@@ -433,7 +433,7 @@ test("yearDaysIn: 그해에 지키는 날, 옮겨 지키는 날, 겹쳐 기념�
   assert.strictEqual(e.yearDayIn(y27, ["d0103-성탄주간-t1-s1"], "d0103-성탄주간"), null, "1월 3일은 성탄 2주일");
 });
 
-test("yearDaysIn: 지키는 날은 지키는 날의 표와 같다(색인의 모든 전례일, 2026-2028)", { skip: !haveData }, () => {
+test("yearDaysIn: 지키는 날은 지키는 날의 표와 같고, 전례일 자신의 날이다(색인의 모든 전례일, 2026-2028)", { skip: !haveData }, () => {
   const { e, cal, lec, index } = realEngine();
   const table = keptTable();
   const setsOf = index.obs.map(() => []);
@@ -448,6 +448,10 @@ test("yearDaysIn: 지키는 날은 지키는 날의 표와 같다(색인의 모�
       const got = e.yearDayIn(year, ids, o.key);
       const gotKept = got && got.kind !== "overlap" ? got.date : null;
       if ((want ? want.date : null) !== gotKept) wrong.push([o.key, y, want && want.date, gotKept]);
+      // 독서 세트를 다른 전례일과 함께 쓰더라도, 그 전례일 자신을 지키는 날이 있으면 그날이 골라진다(코드 리뷰 2026-11-17).
+      // 세트로 고른 날이 다른 전례일의 날이면 줄이 엉뚱한 날을 연다. 지금 데이터에서 함께 쓰는 것은 사계재의 지향별 날뿐이다
+      const own = (year.kept.get(o.key) || [])[0];
+      if (own && gotKept && own.date !== gotKept) wrong.push([o.key, y, "own", own.date, gotKept]);
     });
     assert.deepStrictEqual(wrong, [], String(y));
   }

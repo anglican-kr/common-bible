@@ -705,6 +705,23 @@ def test_year_name_search_shows_a_row_for_each_year(page):
     _goto_year_search(page, "대림1주일 2027년")
     assert _row_labels(page)[0] == "대림1주일, 자색, 다해, 다음 2027년 11월 28일 일요일"
 
+    # 찾는 해는 2050년까지다. 그보다 늦은 해만 쳤으면 그렇다고 알린다(사용자 결정 2026-11-17)
+    _goto_year_search(page, "2060 성 니콜라")
+    assert "연도는 2050년까지 찾습니다." in page.inner_text(".empty-state")
+    _goto_year_search(page, "2049-2060 성 니콜라")
+    assert page.inner_text(".search-note") == "연도는 2050년까지 찾습니다. 2049~2050년의 날을 보입니다."
+    assert len(_row_labels(page)) == 2
+
+
+def test_year_search_that_finds_no_lectionary_day_does_not_load_the_engine(page):
+    """연도를 붙였어도 찾은 전례일이 없으면 교회력 자료를 받지 않고, 결과 없음 화면은 범위 안내가 아니라 「찾지 못했어요」다(코드 리뷰 2026-11-17)."""
+    engine_files = []
+    page.on("request", lambda req: engine_files.append(req.url) if "/data/lectionary/sanctoral.json" in req.url else None)
+    _goto_year_search(page, "2000-2050 없는이름")
+    text = page.inner_text(".empty-state")
+    assert "찾지 못했어요" in text and "연도 범위" not in text, text
+    assert engine_files == []
+
 
 def test_year_name_search_keeps_overlapped_years_and_drops_unkept_ones(page):
     """다른 전례일과 겹쳐 기념만 하는 해는 줄을 두고 그날을 연다. 그해에 지키지 않는 전례일은 줄이 없고, 줄이 하나도 없는 해는 결과
