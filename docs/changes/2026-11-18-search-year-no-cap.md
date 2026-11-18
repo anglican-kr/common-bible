@@ -1,4 +1,5 @@
 ---
+pr: 589
 date: 2026-11-18
 branch: feat/search-year-no-cap
 title: "feat: 검색의 2050년 제한을 풀고 설날과 추석의 찾는 해를 알림"
