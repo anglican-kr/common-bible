@@ -504,16 +504,26 @@ def test_in_operator_multiple_aliases_or(page, base_url):
 
 
 def test_in_operator_unmatched_alias_blocks_search(page, base_url):
-    """`사랑 in:없는책` → 결과 없음 + 안내 메시지 표시."""
+    """`사랑 in:없는책`은 찾지 않고, 다른 결과 없음 화면과 같은 모양으로 그 책을 찾지 못했다고 알리며 고치는 방법을 적는다. 검색 예시에는
+    책 범위 예시(`사랑 in:요한`)도 있다. 최근 검색에는 넣지 않는다(ADR-005 「검색 연산자 `in:`」, ADR-014 D1). 결과 위에 「in:없는책 —
+    알 수 없는 책 별칭입니다」 한 줄만 보이던 때가 있었다(사용자 결정 2026-11-18)."""
     page.goto(base_url)
     wait_app_ready(page)
 
+    page.fill("#search-input", "사랑")
+    page.press("#search-input", "Enter")
+    page.wait_for_selector(".search-count", timeout=20_000)
     page.fill("#search-input", "사랑 in:없는책")
     page.press("#search-input", "Enter")
-    page.wait_for_selector(".search-notice", timeout=8_000)
+    page.wait_for_selector(".empty-state", timeout=20_000)
     assert page.locator(".search-result-item:not(.ref-match-item)").count() == 0
-    notice_text = page.locator(".search-notice").inner_text()
-    assert "in:없는책" in notice_text and "알 수 없는" in notice_text
+    empty_text = page.locator(".empty-state").inner_text()
+    assert "검색 결과가 없습니다" in empty_text, empty_text
+    assert "‘없는책’이라는 책을 찾지 못했어요. in: 뒤에는 마르, 마르코처럼 책 이름을 적어 주세요." in empty_text, empty_text
+    examples = page.locator(".search-example-q").all_inner_texts()
+    assert "사랑 in:요한" in examples, examples
+    recent = page.evaluate("JSON.parse(localStorage.getItem('bible-search-history') || '[]').map((e) => e.q)")
+    assert recent == ["사랑"], recent
 
 
 def test_search_result_hl_strips_in_operator(page, base_url):

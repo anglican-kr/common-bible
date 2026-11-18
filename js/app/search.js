@@ -460,6 +460,18 @@ function synonymNote(synonyms) {
   return `${parts.join(", ")} 찾았습니다.`;
 }
 
+/**
+ * 검색이 모르는 책 이름을 `in:` 뒤에 쳤을 때의 설명(ADR-005 「검색 연산자 `in:`」, 사용자 결정 2026-11-18):
+ * 「‘없는책’이라는 책을 찾지 못했어요. in: 뒤에는 마르, 마르코처럼 책 이름을 적어 주세요.」 조사는 마지막 이름의 받침으로 고른다.
+ * @param {string[]} names
+ * @returns {string}
+ */
+function unknownBookNote(names) {
+  const last = names[names.length - 1] || "";
+  const listed = names.map((n) => `‘${n}’`).join(", ");
+  return `${listed}${hasBatchim(last) ? "이라는" : "라는"} 책을 찾지 못했어요. in: 뒤에는 마르, 마르코처럼 책 이름을 적어 주세요.`;
+}
+
 /** 「12.29」를 「12월 29일」로. @param {string | null} date */
 function fixedDateText(date) {
   const m = /^(\d\d)\.(\d\d)$/.exec(date || "");
@@ -1185,13 +1197,15 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
   // search term highlighted (the raw query would never match the verse text).
   const highlightTerm = result.keyword || query;
 
-  // Unrecognized in:<alias> notice. Worker blocks search in this case
-  // (results = 0) so the notice replaces what would otherwise be a silent
-  // empty state.
-  const unmatched = result.unmatchedScopes && result.unmatchedScopes.length > 0;
-  if (unmatched) {
-    const aliasList = result.unmatchedScopes.map((/** @type {string} */ a) => `in:${a}`).join(", ");
-    container.appendChild(el("p", { className: "search-notice" }, `${aliasList} — 알 수 없는 책 별칭입니다`));
+  // A book name after `in:` the search does not know: the worker searched
+  // nothing, so this is the zero-result screen with what to fix (ADR-005
+  // 「검색 연산자 `in:`」). Unlike the other zero-result screens it keeps the
+  // book-scope example, which shows how to write the scope.
+  if (result.unmatchedScopes && result.unmatchedScopes.length > 0) {
+    const note = unknownBookNote(result.unmatchedScopes);
+    container.appendChild(buildSearchEmptyState("검색 결과가 없습니다", note));
+    container.appendChild(buildSearchExamples(false, screen.scoped));
+    return `"${query}" 검색 결과 0건. ${note}`;
   }
 
   const { isPending, lect, hasBible, group } = resultGroups(result, screen);
@@ -1207,14 +1221,12 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
   if (notice) container.appendChild(buildLocalNotice(notice));
   if (notice && !answer.node && !hasBible && !lect) return `"${query}" ${[picked, notice.text].filter(Boolean).join(" ")}`;
   if (!answer.node && !hasBible && !lect) {
-    if (!unmatched) {
-      container.appendChild(
-        // 책을 골라 두었으면 전례일은 찾지 않았다(ADR-044 §1)
-        buildSearchEmptyState("검색 결과가 없습니다", notes.length ? notes.join(" ")
-          : `‘${query}’에 해당하는 ${screen.scoped ? "구절을" : "구절과 전례일을"} 찾지 못했어요.`)
-      );
-      container.appendChild(buildSearchExamples(true, screen.scoped));
-    }
+    container.appendChild(
+      // 책을 골라 두었으면 전례일은 찾지 않았다(ADR-044 §1)
+      buildSearchEmptyState("검색 결과가 없습니다", notes.length ? notes.join(" ")
+        : `‘${query}’에 해당하는 ${screen.scoped ? "구절을" : "구절과 전례일을"} 찾지 못했어요.`)
+    );
+    container.appendChild(buildSearchExamples(true, screen.scoped));
     return `"${query}" 검색 결과 0건${notes.length ? `. ${notes.join(" ")}` : ""}`;
   }
 
@@ -2710,9 +2722,13 @@ function commitTopSearch(rawQuery, opts = {}) {
   // The recent-search label holds the scope searched, chips included (ADR-014
   // D1). A scope-only commit has nothing to search and is not kept. A replayed
   // label written another way (an older `in:요한복음`) gives way to the new one.
+  // An `in:` left in the keyword once the alias map is loaded names a book the
+  // search does not know: the results only say so (ADR-005), so it is not kept,
+  // and a recent search like that is dropped when tapped (ADR-014 D1).
+  const unknownBook = !!_aliasMap && /(?:^|\s)in:\s*\S/.test(keyword);
   if (keyword) {
     if (opts.fromHistory) removeSearchHistory(raw);
-    pushSearchHistory(historyLabel(keyword, filterBooks, _aliasById));
+    if (!unknownBook) pushSearchHistory(historyLabel(keyword, filterBooks, _aliasById));
     if (topSearchHistory) topSearchHistory.refresh();
   }
   // Arm verse-ref auto-navigate only when there's a keyword to search; a
