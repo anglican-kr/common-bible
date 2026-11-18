@@ -1,4 +1,5 @@
 ---
+pr: 591
 date: 2026-11-18
 branch: feat/lect-date-picker
 title: "feat: 전례독서 화면의 날짜로도 날짜 고르기 판을 엶"
