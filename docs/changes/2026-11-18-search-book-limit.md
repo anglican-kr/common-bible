@@ -1,4 +1,5 @@
 ---
+pr: 594
 date: 2026-11-18
 branch: feat/search-book-limit
 title: "feat: 검색할 책을 5권까지로 제한"
