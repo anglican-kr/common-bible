@@ -1,4 +1,5 @@
 ---
+pr: 590
 date: 2026-11-18
 branch: claude/quirky-carson-njp7up
 title: "fix: 책 선택의 「적용」이 친 검색어를 함께 찾음"
