@@ -2390,6 +2390,10 @@ function buildSearchEmptyState(title, subtitle) {
 /** @param {{ filterBooks?: string[] }} [state] */
 async function renderSearchView(state) {
   const filterBooks = (state && state.filterBooks) || [];
+  // Searched with books but no word (ADR-033 「책은 5권까지」): say what is missing above the recents. Taken
+  // before the await and only for the address it was asked for, so a view that bails or a later visit never shows it.
+  const askKeyword = _askKeywordPath === location.pathname + location.search;
+  _askKeywordPath = null;
   // Resolve book names before building the filter bar so pre-set/deep-linked
   // scope chips render with names rather than raw ids (ADR-033). Capture the
   // route sequence first and bail if navigation happened during the await, so a
@@ -2410,9 +2414,6 @@ async function renderSearchView(state) {
     const morphing = document.body.classList.contains("tabbar-searching");
     view.appendChild(buildInPageSearchInput("", !morphing));
   }
-  // Searched with books but no word (ADR-033 「책은 5권까지」): say what is missing above the recents.
-  const askKeyword = _askKeyword;
-  _askKeyword = false;
   if (askKeyword) view.appendChild(el("p", { className: "search-note search-keyword-note" }, KEYWORD_NOTE));
   const dyn = el("div", { className: "search-empty-dynamic" });
   view.appendChild(dyn);
@@ -2741,9 +2742,10 @@ function autoNavigateTarget(result, screen) {
 // to verse references) from URL-triggered ones (show clickable card).
 let searchAutoNavigate = false;
 
-// The empty search view the next route draws asks for a word to search: a
-// search with books but none (`goSearch`). Taken once by renderSearchView.
-let _askKeyword = false;
+// The address whose empty search view asks for a word to search: a search with
+// books but none (`goSearch`). Taken once by renderSearchView.
+/** @type {string | null} */
+let _askKeywordPath = null;
 const KEYWORD_NOTE = "검색어를 입력해주세요.";
 
 // The recent-search line the last commit kept, with the search it ran
@@ -2800,8 +2802,9 @@ function commitTopSearch(rawQuery, opts = {}) {
   let filterBooks = ids.length ? Array.from(new Set(scope.concat(ids))) : scope;
   // No sixth chip from a typed `in:` (ADR-033 「책은 5권까지」): past the limit the
   // tokens stay text in the query, the worker counts them with the chips,
-  // searches nothing and says so.
-  if (filterBooks.length > MAX_SCOPE_BOOKS && ids.length) {
+  // searches nothing and says so. Known here, so the search is not kept (ADR-014 D1).
+  const tooManyBooks = filterBooks.length > MAX_SCOPE_BOOKS;
+  if (tooManyBooks && ids.length) {
     keyword = raw;
     filterBooks = scope;
   }
@@ -2812,9 +2815,11 @@ function commitTopSearch(rawQuery, opts = {}) {
   // then drop this line again (`takeCommittedSearch`, ADR-014 D1).
   if (keyword) {
     if (opts.fromHistory) removeSearchHistory(raw);
-    const label = historyLabel(keyword, filterBooks, _aliasById);
-    pushSearchHistory(label);
-    _committedSearch = { q: keyword, books: filterBooks.join(" "), label };
+    if (!tooManyBooks) {
+      const label = historyLabel(keyword, filterBooks, _aliasById);
+      pushSearchHistory(label);
+      _committedSearch = { q: keyword, books: filterBooks.join(" "), label };
+    }
     if (topSearchHistory) topSearchHistory.refresh();
   }
   // Arm verse-ref auto-navigate only when there's a keyword to search; a
@@ -2832,8 +2837,8 @@ function commitTopSearch(rawQuery, opts = {}) {
  * @param {string} q @param {string[]} filterBooks @param {boolean} askKeyword
  */
 function goSearch(q, filterBooks, askKeyword) {
-  _askKeyword = askKeyword;
   const newPath = buildSearchUrl({ q, page: 1, filterBooks });
+  _askKeywordPath = askKeyword ? newPath : null;
   // If path is unchanged, popstate won't fire — call route() directly.
   if (location.pathname + location.search === newPath) {
     window.route();
