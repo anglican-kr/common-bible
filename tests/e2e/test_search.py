@@ -49,6 +49,102 @@ def test_book_filter_sheet_closes_with_its_close_button(ctx_name, request):
     assert page.evaluate("document.activeElement.classList.contains('token-funnel')")
 
 
+def _apply_books_to_typed_query(page, ctx_name, typed, book_id):
+    """검색 입력 칸에 `typed`를 치고 Enter는 누르지 않은 채, 깔때기로 책 선택 시트를 열어 `book_id`를 고르고 「적용」을 누른다.
+    휴대폰은 탭 바의 검색 입력(`#tab-search-dock`), 데스크톱은 상단 바의 검색 입력(`#search-bar`)이다. 그 입력 칸의 선택자를 돌려준다."""
+    page.goto(BASE_URL)
+    wait_app_ready(page)
+    if ctx_name == "mobile_context":
+        page.locator("#tab-search").click()
+        page.wait_for_selector("#tab-search-input:not([hidden])")
+        bar, field = "#tab-search-dock", "#tab-search-input"
+    else:
+        bar, field = "#search-bar", "#search-input"
+    page.locator(field).fill(typed)
+    page.locator(f"{bar} .token-funnel").click()
+    page.wait_for_selector(f'#book-filter-sheet:not([hidden]) .book-filter-option[data-book-id="{book_id}"]', timeout=20_000)
+    page.locator(f'#book-filter-sheet .book-filter-option[data-book-id="{book_id}"]').click()
+    page.locator("#book-filter-sheet .book-filter-apply").click()
+    return field
+
+
+@pytest.mark.parametrize("ctx_name", ["mobile_context", "desktop_context"])
+def test_book_filter_apply_searches_the_typed_query(ctx_name, request):
+    """책 선택 시트의 「적용」은 입력 칸에 보이는 검색어를 고른 책 안에서 찾는다(ADR-033 D3). Enter를 누르지 않고 친 검색어도
+    찾고, Enter처럼 최근 검색에 넣는다. 포커스는 깔때기로 돌아가 휴대폰에서 키보드가 결과를 가리지 않는다.
+    범위만 주소에 넣던 때는 친 검색어가 지워지고 최근 검색 화면이 나왔다(사용자 보고 2026-11-18)."""
+    page = request.getfixturevalue(ctx_name).new_page()
+    field = _apply_books_to_typed_query(page, ctx_name, "사랑", "mark")
+    page.wait_for_selector(".search-count", timeout=20_000)
+    state = page.evaluate(f"""() => ({{
+        q: new URLSearchParams(location.search).getAll('q'),
+        books: new URLSearchParams(location.search).getAll('in'),
+        refs: [...document.querySelectorAll('.search-result-ref')].map((n) => n.textContent),
+        field: document.querySelector('{field}').value,
+        recent: (JSON.parse(localStorage.getItem('bible-search-history') || '[]')[0] || {{}}).q,
+        funnelFocused: document.activeElement.classList.contains('token-funnel'),
+    }})""")
+    assert state["q"] == ["사랑"] and state["books"] == ["mark"], state
+    assert state["refs"] and all(r.startswith("마르코의 복음서 ") for r in state["refs"]), state
+    assert state["field"] == "사랑", state
+    assert state["recent"] == "사랑", state
+    assert state["funnelFocused"], state
+
+
+@pytest.mark.parametrize("ctx_name", ["mobile_context", "desktop_context"])
+def test_book_filter_apply_with_only_a_typed_scope_focuses_the_field(ctx_name, request):
+    """입력 칸에 `in:<별칭>`만 치고 「적용」을 누르면 별칭은 칩이 되고 찾을 낱말이 없어 최근 검색 화면에 간다. 검색어가 없을 때와
+    같이 포커스를 입력 칸에 두어 바로 칠 수 있게 한다(ADR-033 D3). 칸에 글이 있었다고 검색한 것으로 보면 포커스가 깔때기에 남는다."""
+    page = request.getfixturevalue(ctx_name).new_page()
+    field = _apply_books_to_typed_query(page, ctx_name, "in:마르", "matt")
+    page.wait_for_selector(".search-empty-dynamic", timeout=20_000)
+    state = page.evaluate(f"""() => ({{
+        q: new URLSearchParams(location.search).get('q'),
+        books: new URLSearchParams(location.search).getAll('in').sort(),
+        focused: document.activeElement === document.querySelector('{field}'),
+    }})""")
+    assert state["q"] is None and state["books"] == ["mark", "matt"], state
+    assert state["focused"], state
+
+
+@pytest.mark.parametrize("typed", ["아들", None])
+def test_book_filter_apply_from_the_in_page_bar_focuses_its_new_funnel(typed, mobile_context):
+    """휴대폰의 페이지 안 검색창(탭 바 검색을 열지 않고 들어온 검색 화면)에서 연 시트로 찾으면, 결과 화면이 그 검색창을 새로 그린다.
+    포커스는 새 검색창의 깔때기로 간다(ADR-033 D3, WCAG 2.4.3). 옛 깔때기와 함께 사라져 문서 본문에 남던 때가 있었다(코드 리뷰
+    2026-11-18). 새로 친 검색어(「아들」)와, 검색어는 그대로 두고 책만 고른 경우(None)를 본다."""
+    page = mobile_context.new_page()
+    page.goto(f"{BASE_URL}/search?q={quote('사랑')}")
+    page.wait_for_selector(".search-count", timeout=20_000)
+    bar = "#search-inpage-bar"
+    if typed is not None:
+        page.locator(f"{bar} #search-inpage-input").fill(typed)
+    page.locator(f"{bar} .token-funnel").click()
+    page.wait_for_selector('#book-filter-sheet:not([hidden]) .book-filter-option[data-book-id="mark"]', timeout=20_000)
+    page.locator('#book-filter-sheet .book-filter-option[data-book-id="mark"]').click()
+    page.locator("#book-filter-sheet .book-filter-apply").click()
+    # 새 결과(모두 마르코의 복음서)가 그려질 때까지 기다린다. 옛 결과의 머리(.search-count)가 남아 있을 수 있다
+    page.wait_for_function("""() => {
+        const refs = [...document.querySelectorAll('.search-result-ref')].map((n) => n.textContent);
+        return refs.length > 0 && refs.every((r) => r.startsWith('마르코의 복음서 '));
+    }""", timeout=20_000)
+    state = page.evaluate("""() => ({
+        q: new URLSearchParams(location.search).get('q'),
+        funnelFocused: document.activeElement === document.querySelector('#search-inpage-bar .token-funnel'),
+        active: document.activeElement.id || document.activeElement.className || document.activeElement.tagName,
+    })""")
+    assert state["q"] == (typed or "사랑"), state
+    assert state["funnelFocused"], state
+
+
+def test_book_filter_apply_keeps_a_typed_verse_reference_on_the_results(desktop_context):
+    """「적용」이 친 검색어를 함께 찾아도 구절 표기로 장을 바로 열지 않는다. 장으로 바로 가는 것은 Enter뿐이다(ADR-033 D3).
+    요한 7:16은 읽는 전례일이 없어 Enter면 장을 연다(`test_verse_reference_navigates_to_chapter`)."""
+    page = desktop_context.new_page()
+    _apply_books_to_typed_query(page, "desktop_context", "요한 7:16", "john")
+    page.wait_for_selector(".search-result-ref-card", timeout=20_000)
+    assert page.evaluate("location.pathname") == "/search"
+
+
 @pytest.mark.only_browser("chromium")
 def test_page_size_counts_the_status_bar_in_the_top_bar(mobile_context):
     """한 쪽의 결과 수는 상단 바 아래에 남는 화면 높이로 어림한다(결과 하나에 80px). 상단 바의 아래쪽은 잰다(helpers.js `barBottom`).
