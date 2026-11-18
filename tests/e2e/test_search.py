@@ -750,9 +750,17 @@ def test_search_phrase_across_cite_and_closing_quote_is_highlighted_in_chapter(p
 
 # ── 전례독서 검색(ADR-044) ───────────────────────────────────────────────────
 
+def _wait_search_done(page):
+    """검색이 끝날 때까지 기다린다. 신약 색인을 먼저 받으면 구약과 외경 색인을 받는 동안 「"…" 검색 중… (현재 N건)」
+    제목으로 먼저 그리고, 다 받으면 화면을 다시 그린다. 그 전에 읽거나 누르면 바뀌기 전의 화면을 본다."""
+    page.wait_for_function("() => !document.querySelector('h2.search-count')?.textContent.includes('검색 중')",
+                           timeout=15_000)
+
+
 def _goto_search(page, query, extra=""):
     page.goto(f"{BASE_URL}/search?q={quote(query)}{extra}")
     page.wait_for_selector(".search-count, .empty-state, .search-alert, .search-note", timeout=10_000)
+    _wait_search_done(page)
 
 
 # 줄이 여는 날은 오늘에 따라 바뀐다(ADR-044 §1). 날짜를 보는 시험은 시안과 같은 날로 시계를 고정한다. 2026 전례년(가해)의 끝이다
@@ -981,7 +989,7 @@ def _row_labels(page):
 
 
 def _goto_year_search(page, query):
-    """연도를 붙인 검색은 그해의 날을 계산한 뒤에 줄을 그린다. 성서 묶음을 받는 동안의 「검색 중…」 제목이 아니라 줄이나 결과 없음 화면을 기다린다."""
+    """연도를 붙인 검색은 그해의 날을 계산한 뒤에 줄을 그린다. 검색이 끝난 뒤에도 줄이나 결과 없음 화면을 기다린다."""
     _goto_search(page, query)
     page.wait_for_selector(".lect-rows a.cal-row, .empty-state", timeout=15_000)
 
@@ -1078,6 +1086,7 @@ def _goto_local_search(page, query):
     """지역 축일은 성서 결과와 함께 나올 수 있어(`용인`) 전례일 알약을 고른 주소로 연다."""
     page.goto(f"{BASE_URL}/search?q={quote(query)}&group=lectionary")
     page.wait_for_selector(".lect-rows a.cal-row, .search-local-note, .empty-state", timeout=15_000)
+    _wait_search_done(page)
 
 
 def test_local_days_of_my_parish(browser):
@@ -1444,6 +1453,7 @@ def test_page_past_the_end_still_shows_the_count(page):
     """쪽 번호가 끝을 넘은 주소(더 긴 화면에서 만든 링크)도 「결과 없음」이 아니라 결과 수와 쪽 이동을 보인다."""
     page.goto(f"{BASE_URL}/search?q={quote('사랑')}&page=999")
     page.wait_for_selector("h2.search-count", timeout=10_000)
+    _wait_search_done(page)
     assert page.inner_text("h2.search-count").startswith("성서 본문 ")
     assert page.locator(".empty-state").count() == 0
     assert page.locator(".search-pagination").count() == 1
