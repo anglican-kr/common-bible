@@ -17,11 +17,17 @@ title: "feat: 전례독서 화면의 날짜로도 날짜 고르기 판을 엶"
   - 판은 캘린더 모듈(`calendar.js`)에 그대로 두고, 전례독서 화면은 날짜를 누를 때 그 모듈을 불러온다(lectionary.js `openDatePicker`, calendar.js `openLectionaryDatePicker`). 전례독서 화면을 여는 데는 캘린더 모듈이 필요 없어 첫 화면은 그대로다. 서비스 워커가 설치 때 교회력 모듈 셋을 미리 받으므로 오프라인에서도 열린다(`sw.test.js` 통과). 판을 새 모듈로 나누면 서비스 워커의 미리 받기 목록과 라우터의 묶음도 고쳐야 한다.
   - 판의 상태에 보기 「전례독서」(`lectionary`)를 더했다. 지금 보는 날은 날짜 단추의 `data-date`이고, 날의 링크는 `lectionaryPathOf`(오늘은 `/lectionary`)다. 해와 달은 목록처럼 판 안에서 내려가는 단추다.
   - 날짜 단추는 캘린더의 달 제목과 같은 클래스(`.title-picker-btn`, `.cal-title-btn`)라 펼침 표시가 없고, 터치 기기의 호버 색도 같다. 안의 `<time>`은 그대로 두어 시험과 스크린 리더의 전체 날짜가 바뀌지 않는다. 단추의 이름은 「2027년 5월 2일 (일), 날짜 고르기」다. 판의 링크와 같은 포커스 열쇠(`month-title`)를 달아, 날을 고르면 새 화면의 날짜 단추로 포커스가 돌아온다.
+- 코드 검토에서 고친 것(2026-11-18):
+  - 판을 불러오는 사이 날짜를 두 번 누르면 판을 두 번 열어 상태와 칸을 다시 만들었다. 열린 판은 다시 열지 않는다(`openCalendarPicker`). 두 번의 누름은 같은 모듈을 기다려 한꺼번에 이어지므로 포커스를 잃지는 않았다.
+  - 판을 불러오지 못하면 아무 일도 없었다. 「날짜 고르기를 열지 못했습니다. 네트워크 연결을 확인한 뒤 날짜를 다시 눌러 주세요.」를 스낵바와 라이브 영역에 알린다.
+  - 제목 단추를 만드는 코드와 포커스 열쇠가 두 모듈에 겹쳐 있었다. helpers.js의 `datePickerTrigger`와 `DATE_PICKER_FOCUS_KEY`(값 `date-picker-title`, 전에는 `month-title`)로 모았다. 주석이 가리키던 함수 이름(`openLectionaryDatePicker`)을 lectionary.js의 실제 이름(`openDatePicker`)으로 고쳤다. 좌표로 누르는 e2e 도우미는 `conftest.py`의 `press_center` 하나로 모았다.
+  - 판이 열린 채 전례독서의 상단 바를 다시 그리면 제목 단추를 잃는다는 지적은 고치지 않았다. 전례독서의 상단 바는 라우터만 다시 그리고, 라우터는 먼저 열린 판을 닫는다.
 
 ## 검증
 
 - 유닛 전체 `node --test tests/unit/*.test.js` 1,911개 통과(`lectionaryPathOf` 시험을 더했다), 타입 검사 `npm run typecheck` 통과.
 - e2e(작업 폴더 서버 8096): `test_lectionary_view.py`에 둘을 더했다. 휴대폰에서 날짜를 누르면 「2027년 5월」 날 판이 시트로 열리고 2일이 골라져 있으며, 10일을 누르면 `/lectionary/2027-05-10`이 열리고 포커스가 날짜 단추로 돌아오는지, 오늘(2026-11-17로 고정) 링크가 `/lectionary`인지 본다. 데스크톱에서는 키보드로 열어 날짜 아래 팝오버로 뜨고 Esc로 닫으면 포커스가 날짜 단추로 돌아오는지 본다. 그 뒤 `test_lectionary_view.py`, `test_calendar_view.py`, `test_top_bar.py`, `test_a11y_axe.py`, `test_a11y_keyboard.py` 272개 통과(8분 8초).
+- 코드 검토 뒤: 유닛 1,911개와 타입 검사 통과. `test_title_date_says_so_when_the_picker_cannot_load`를 더했다(서비스 워커를 막고 캘린더 모듈 요청을 끊은 뒤 날짜를 누르면 라이브 영역에 알림이 들어오는지). 알림을 지우면 이 시험이 실패했다. 그 뒤 같은 다섯 파일 273개 통과(8분 4초).
 - 화면으로 확인: 휴대폰의 상단 바(날짜가 전과 같은 모양, 펼침 표시 없음)와 열린 시트.
 
 ## 갱신한 문서

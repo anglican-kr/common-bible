@@ -41,7 +41,7 @@ import {
 // barBottom: 상단 바의 아래쪽(화면 위에서 잰 값).
 const {
   _$, el, clearNode, HEADER_ICON_PATHS, SCROLL_ANCHORING, focusSpotOf, restoreFocusSpot, barBottom, scrollUnderBar, headerIcon,
-  isModifiedClick, DESKTOP_LAYOUT_QUERY, SHEET_INERT_SELECTORS,
+  isModifiedClick, DESKTOP_LAYOUT_QUERY, SHEET_INERT_SELECTORS, DATE_PICKER_FOCUS_KEY, datePickerTrigger,
 } = window.appHelpers;
 
 const $app = _$("app");
@@ -596,11 +596,7 @@ function commitMonthBar(model, view) {
   const month = el("span", { className: "cal-month" });
   month.appendChild(el("span", { className: "cal-month-full" }, model.title));
   month.appendChild(el("span", { className: "cal-month-short", "aria-hidden": "true" }, model.shortTitle));
-  const trigger = el("button", {
-    type: "button", className: "title-picker-btn cal-title-btn", "aria-haspopup": "dialog", "aria-expanded": "false",
-    "data-focus-key": PICKER_FOCUS_KEY,
-  });
-  trigger.appendChild(month);
+  const trigger = datePickerTrigger(month);
   setPickerTrigger(trigger, model, view);
   trigger.addEventListener("click", (e) => openCalendarPicker(trigger, view, e.detail > 0));
   // 판이 열린 채 바를 다시 그리면(데스크톱 목록에서 팝오버 아래로 스크롤해 계산 범위 끝에 이른 때) 새 제목 단추를 판의 제목 단추로 삼는다.
@@ -623,13 +619,11 @@ function commitMonthBar(model, view) {
 }
 
 // ── 날짜 고르기(ADR-038 §2 「날짜 고르기」, DESIGN.md §6) ──
-// 상단 바의 달 제목이 여는 판이다. 전례독서 화면의 날짜도 같은 판을 연다(`openLectionaryDatePicker`, 2026-11-18). 휴대폰과 터치 기기에서는
+// 상단 바의 달 제목이 여는 판이다. 전례독서 화면의 날짜도 같은 판을 연다(lectionary.js `openDatePicker`가 이 모듈의 `openLectionaryDatePicker`를 부른다, 2026-11-18). 휴대폰과 터치 기기에서는
 // 바텀 시트, 마우스를 쓰는 넓은 화면에서는 제목 아래 팝오버이고, 같은 요소를 CSS가 바꾼다. 판은 한 번에 한 단계만 보인다. 날과 월간의 달은
 // 링크라 고르면 라우터가 그 화면을 그리고(route()가 열린 판을 닫는다), 해와 목록, 전례독서의 달은 단추라 판 안에서 한 단계 아래로 내려간다. 판은 body 끝에 한 번 만들어 두고 다시 쓴다. 제목 칸(#page-title)은 `container-type`이 있어,
 // 그 안에 두면 고정 위치(position: fixed)가 화면이 아니라 그 칸을 기준으로 잡힌다.
 
-/** 제목 단추와 판의 링크가 함께 다는 포커스 열쇠. 고른 곳으로 간 뒤 라우터가 새 화면의 제목 단추로 포커스를 돌려준다(helpers.js `restoreFocusSpot`). */
-const PICKER_FOCUS_KEY = "month-title";
 /** 시트를 이만큼(px) 넘게 아래로 끌어 놓으면 닫는다. 시트 높이의 3할이 이보다 작으면 그것을 쓴다. */
 const PICKER_DRAG_CLOSE_PX = 120;
 /** 팝오버와 제목 사이, 팝오버와 화면 가장자리 사이(px). */
@@ -720,7 +714,7 @@ function buildPickerDay(c, m, today, view) {
   if (c.isToday) cls.push("is-today");
   const label = [c.isToday ? "오늘" : null, `${m}월 ${c.day}일 ${CAL_WEEKDAY_FULL[c.weekday]}`, c.colors.length ? colorNames(c.colors) : null]
     .filter(Boolean).join(", ");
-  const a = el("a", { className: cls.join(" "), href: view === "lectionary" ? lectionaryPathOf(c.date, today) : listPathOf(c.date, today), "aria-label": label, "data-focus-key": PICKER_FOCUS_KEY });
+  const a = el("a", { className: cls.join(" "), href: view === "lectionary" ? lectionaryPathOf(c.date, today) : listPathOf(c.date, today), "aria-label": label, "data-focus-key": DATE_PICKER_FOCUS_KEY });
   if (c.isCurrent) a.setAttribute("aria-current", "true");
   a.appendChild(el("span", { className: "cal-picker-num" }, String(c.day)));
   const dots = el("span", { className: "cal-picker-dots", "aria-hidden": "true" });
@@ -761,7 +755,7 @@ function buildPickerCells(page, kind, today) {
     /** @type {HTMLElement} */
     let node;
     if (kind === "link") {
-      node = el("a", { className: cls.join(" "), href: monthPathOf(c.y, c.m, today), "aria-label": label, "data-focus-key": PICKER_FOCUS_KEY }, c.label);
+      node = el("a", { className: cls.join(" "), href: monthPathOf(c.y, c.m, today), "aria-label": label, "data-focus-key": DATE_PICKER_FOCUS_KEY }, c.label);
     } else {
       node = el("button", { type: "button", className: cls.join(" "), "aria-label": label }, c.label);
       node.dataset[kind] = String(kind === "year" ? c.y : c.m);
@@ -1040,6 +1034,8 @@ function ensurePicker() {
  */
 function openCalendarPicker(trigger, view, pointer) {
   const p = ensurePicker();
+  // 전례독서 화면은 판을 불러오는 사이 날짜를 두 번 누를 수 있다. 열린 판의 상태와 칸을 다시 만들지 않는다(코드 리뷰 2026-11-18)
+  if (p.overlay.isOpen) return;
   const listRoot = view === "list" ? $app.querySelector(".cal-list") : null;
   const current = view === "lectionary" ? trigger.dataset.date || null
     : listRoot instanceof HTMLElement ? rowUnderBar(listRoot)?.dataset.date ?? null : null;
@@ -1062,7 +1058,7 @@ function openCalendarPicker(trigger, view, pointer) {
 
 /**
  * 전례독서 화면의 날짜를 누르면 같은 판을 날 판으로 연다(ADR-038 §2 「날짜 고르기」, 사용자 결정 2026-11-18). 전례독서 화면은 이 모듈을
- * 부팅 때 받지 않고, 날짜를 누를 때 불러온다(lectionary.js `openLectionaryDatePicker`).
+ * 부팅 때 받지 않고, 날짜를 누를 때 불러온다(lectionary.js `openDatePicker`).
  * @param {HTMLElement} trigger  `data-date`가 그 화면의 날이다 @param {boolean} pointer
  */
 function openLectionaryDatePicker(trigger, pointer) {

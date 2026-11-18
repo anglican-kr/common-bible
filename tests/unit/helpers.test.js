@@ -933,10 +933,10 @@ test("restoreFocusSpot: 새 화면에서 같은 키를 값으로 찾는다 — �
 
 test("restoreFocusSpot: 그려지지 않은 요소(닫힌 날짜 고르기 판의 링크)는 같은 키여도 고르지 않고 대체 키로 간다", () => {
   const h = loadHelpers();
-  const { root, byKey } = viewWith(h.helpers, 0, [["month-title", 0], ["today", 40]]);
-  byKey["month-title"]._rendered = false;   // 판은 닫혀 있고(hidden) 새 화면에는 제목 단추가 없다
+  const { root, byKey } = viewWith(h.helpers, 0, [["date-picker-title", 0], ["today", 40]]);
+  byKey["date-picker-title"]._rendered = false;   // 판은 닫혀 있고(hidden) 새 화면에는 제목 단추가 없다
   h.dom.setActive(null);
-  assert.equal(h.helpers.restoreFocusSpot(spotOf({ key: "month-title", fallback: "today", top: 0, offset: 0 }), root), byKey.today);
+  assert.equal(h.helpers.restoreFocusSpot(spotOf({ key: "date-picker-title", fallback: "today", top: 0, offset: 0 }), root), byKey.today);
   assert.equal(h.dom.getActive(), byKey.today);
 });
 

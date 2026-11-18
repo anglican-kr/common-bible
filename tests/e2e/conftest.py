@@ -145,6 +145,13 @@ def open_settings(page):
     return popover
 
 
+def press_center(page, selector) -> None:
+    """좌표로 누른다. Playwright의 click은 누르기 전에 요소를 화면 안으로 스크롤하는데, 목록 화면의 위쪽 여백(scroll-padding-top) 때문에
+    상단 바 안의 단추에서도 페이지를 스크롤한다. 사람이 누를 때는 그런 스크롤이 없다."""
+    box = page.locator(selector).first.bounding_box()
+    page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+
+
 def assert_sheet_close_button(page, selector) -> None:
     """시트 머리의 닫기 단추는 모든 시트에서 같은 「닫기」 글자 단추다(DESIGN.md 「시트 vs 모달」, 사용자 결정 2026-11-17).
     보이는 글자가 이름이라 aria-label이 없고, 공용 클래스(.sheet-close)의 작은 글자(--font-sm)이며, 44px 이상이다."""

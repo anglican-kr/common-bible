@@ -1000,6 +1000,10 @@ export interface AppHelpers {
   isDesktopLayout: () => boolean;
   /** 바텀 시트가 열린 동안 막아 두는(inert) 뒤 화면. 책 고르기 시트와 캘린더 날짜 고르기 판이 같이 쓴다. */
   SHEET_INERT_SELECTORS: string;
+  /** 날짜 고르기 판의 제목 단추와 판의 링크가 함께 다는 포커스 열쇠. 고른 뒤 새 화면의 제목 단추로 포커스가 돌아온다. */
+  DATE_PICKER_FOCUS_KEY: string;
+  /** 날짜 고르기 판을 여는 상단 바의 제목 단추(캘린더의 달, 전례독서의 날짜). */
+  datePickerTrigger: (content: Node, label?: string) => HTMLButtonElement;
   /** 상단 바의 높이를 `:root`의 `--top-bar-h`에 넣고, 높이가 바뀔 때마다 고친다(CSS용). app.js가 시작할 때 한 번 호출한다. */
   publishBarHeight: () => void;
 }

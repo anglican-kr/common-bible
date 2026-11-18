@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, SHOW_ALT_READINGS, emulate_status_bar, open_settings
+from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, SHOW_ALT_READINGS, emulate_status_bar, open_settings, press_center
 
 BASE = "http://localhost:8080"
 
@@ -2521,12 +2521,6 @@ def test_date_step_leaves_no_hover_circle_after_a_tap(browser, touch):
 
 # ── 날짜 고르기(ADR-038 §2 「날짜 고르기」, 사용자 결정 2026-11-18) ──
 
-def _press_center(page, selector):
-    """좌표로 누른다(test_calendar_view.py `_press`와 같다. Playwright의 click은 누르기 전에 스크롤한다)."""
-    box = page.locator(selector).first.bounding_box()
-    page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-
-
 def _picker_state(page):
     return page.evaluate("""() => {
       const p = document.querySelector('.cal-picker');
@@ -2550,13 +2544,13 @@ def test_title_date_opens_the_day_picker_and_a_day_opens_its_lectionary(mobile_c
     assert page.get_attribute(btn, "aria-haspopup") == "dialog"
     assert page.locator(f"{btn} time[datetime='2027-05-02']").count() == 1
     assert page.evaluate("s => getComputedStyle(document.querySelector(s), '::after').content", btn) == "none"
-    _press_center(page, btn)
+    press_center(page, btn)
     page.wait_for_selector(".cal-picker:not([hidden])")
     page.wait_for_timeout(400)   # 시트가 올라오고 판을 불러와 포커스가 옮겨 간다
     assert _picker_state(page) == {"name": "날짜 고르기", "title": "2027년 5월", "current": "/lectionary/2027-05-02",
                                    "focus": "/lectionary/2027-05-02"}, _picker_state(page)
     assert page.get_attribute(btn, "aria-expanded") == "true"
-    _press_center(page, ".cal-picker a[href='/lectionary/2027-05-10']")
+    press_center(page, ".cal-picker a[href='/lectionary/2027-05-10']")
     page.wait_for_url(f"{BASE}/lectionary/2027-05-10")
     page.wait_for_selector("#page-title .lect-date time[datetime='2027-05-10']")
     page.wait_for_timeout(300)
@@ -2565,7 +2559,7 @@ def test_title_date_opens_the_day_picker_and_a_day_opens_its_lectionary(mobile_c
     assert page.get_attribute(btn, "aria-expanded") == "false"
     # 오늘은 날짜 없는 주소다
     _open(page, "lectionary/2026-11-20")
-    _press_center(page, btn)
+    press_center(page, btn)
     page.wait_for_selector(".cal-picker:not([hidden])")
     page.wait_for_timeout(400)
     assert page.locator(".cal-picker a[href='/lectionary']").get_attribute("aria-label").startswith("오늘, 11월 17일")
@@ -2591,4 +2585,21 @@ def test_title_date_opens_the_picker_as_a_popover_on_desktop(desktop_context):
     page.wait_for_timeout(200)
     assert _picker_state(page) is None
     assert page.evaluate("s => document.activeElement === document.querySelector(s)", btn)
+
+
+def test_title_date_says_so_when_the_picker_cannot_load(browser):
+    """판을 불러오지 못하면(서비스 워커가 아직 없는 첫 방문에 연결이 끊긴 때) 날짜를 눌러도 아무 일이 없는 것처럼 보이지 않게 알리고, 알림은
+    라이브 영역에도 들어간다(코드 리뷰 2026-11-18)."""
+    ctx = browser.new_context(service_workers="block")
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        page.route("**/js/app/calendar.js*", lambda route: route.abort())
+        _open(page, "lectionary/2027-05-02")
+        press_center(page, "#page-title .lect-date > .cal-title-btn")
+        page.wait_for_function(
+            "() => document.getElementById('a11y-announce').textContent.includes('날짜 고르기를 열지 못했습니다')", timeout=8_000)
+        assert page.locator(".cal-picker:not([hidden])").count() == 0
+    finally:
+        ctx.close()
 

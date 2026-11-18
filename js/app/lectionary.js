@@ -50,7 +50,7 @@ import {
 
 const {
   _$, el, clearNode, emptyState, isModifiedClick, headerIcon, HEADER_ICON_PATHS, isFormerNorthChurch,
-  DESKTOP_LAYOUT_QUERY, isDesktopLayout,
+  DESKTOP_LAYOUT_QUERY, isDesktopLayout, datePickerTrigger,
 } = window.appHelpers;
 const { loadLectionaryTrack, saveLectionaryTrack, loadLectionaryCardsFolded, saveLectionaryCardsFolded, loadLectionaryAltShow, loadParish, loadBaptismalSaint } = window.appStorage;
 
@@ -1391,11 +1391,9 @@ function commitTitleDateNav(m) {
   const label = el("time", { className: "lect-date-label", datetime: m.date });
   label.appendChild(el("span", { className: "sr-only" }, dateLabel(m.date)));
   label.appendChild(el("span", { "aria-hidden": "true" }, titleDateText(p)));
-  // 판에서 날을 고르면 새 화면의 이 단추로 포커스가 돌아온다. 판의 링크와 같은 포커스 열쇠다(calendar.js `PICKER_FOCUS_KEY`)
-  const trigger = el("button", {
-    type: "button", className: "title-picker-btn cal-title-btn", "aria-haspopup": "dialog", "aria-expanded": "false",
-    "aria-label": `${dateLabel(m.date)}, 날짜 고르기`, "data-focus-key": "month-title", "data-date": m.date,
-  }, label);
+  // 캘린더의 달 제목과 같은 단추다(helpers.js `datePickerTrigger`). 판에서 날을 고르면 새 화면의 이 단추로 포커스가 돌아온다
+  const trigger = datePickerTrigger(label, `${dateLabel(m.date)}, 날짜 고르기`);
+  trigger.dataset.date = m.date;
   trigger.addEventListener("click", (e) => openDatePicker(trigger, e.detail > 0));
   const history = window.tabHistory;
   const toList = !!history && history.isCalendarListPath(history.lastCalendarView());
@@ -1421,7 +1419,11 @@ async function openDatePicker(trigger, pointer) {
     // 불러오는 사이에 다른 화면으로 갔으면 열지 않는다
     if (trigger.isConnected) mod.openLectionaryDatePicker(trigger, pointer);
   } catch (err) {
+    // 단추를 눌렀는데 아무 일도 없으면 고장 난 것처럼 보인다. 알림은 라이브 영역에도 들어간다(drive-sync.js `_showSyncSnackbar`, 코드 리뷰 2026-11-18)
     console.error("날짜 고르기를 열지 못했습니다", err);
+    const msg = "날짜 고르기를 열지 못했습니다. 네트워크 연결을 확인한 뒤 날짜를 다시 눌러 주세요.";
+    if (window._showSyncSnackbar) window._showSyncSnackbar(msg);
+    else window.announce?.(msg);
   }
 }
 
