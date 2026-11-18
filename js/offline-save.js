@@ -65,23 +65,19 @@ window.offlineSave = (() => {
    */
   function parseSizeList(data) {
     if (!data || typeof data !== "object") return null;
-    const { sizes, gzip_sizes: gzipSizes } = /** @type {{ sizes?: unknown, gzip_sizes?: unknown }} */ (data);
+    const { sizes } = /** @type {{ sizes?: unknown }} */ (data);
     if (!sizes || typeof sizes !== "object") return null;
     /** @type {Map<string, number>} */
     const files = new Map();
-    const groups = { bible: 0, search: 0, lectionary: 0 };
-    let gzipTotal = 0;
+    let total = 0;
     for (const [key, size] of Object.entries(sizes)) {
       const group = groupOf(key);
       if (!group || typeof size !== "number" || !(size > 0)) continue;
       files.set(key, size);
-      groups[group] += size;
-      const gz = gzipSizes && typeof gzipSizes === "object" ? /** @type {Record<string, unknown>} */ (gzipSizes)[key] : undefined;
-      gzipTotal += typeof gz === "number" && gz > 0 ? gz : size;
+      total += size;
     }
     if (!files.size) return null;
-    const total = groups.bible + groups.search + groups.lectionary;
-    return { files, summary: { groups, total, gzipTotal } };
+    return { files, summary: { total } };
   }
 
   /** @type {Promise<SizeList | null> | null} */

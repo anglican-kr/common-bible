@@ -15,7 +15,7 @@
 ### 오프라인 저장 (ADR-045)
 
 - 설정 「시스템」 섹션의 「백업 & 동기화」 위에 스위치 한 줄이 있다(`settings-ui.js`의 `makeOfflineRows`). 켜면 `js/offline-save.js`(`window.offlineSave`)가 성서 본문, 검색 자료, 교회력 자료를 DATA_CACHE에 받는다. 성서 본문에는 전례시편(`lps`)과 성무일과 송가(`cant`)의 장 파일이, 검색 자료에는 성시 색인(`search-lit.json`, ADR-046 §6)이 들어 있다. 성무일과 독서표(`office-readings.json`)는 뺀다.
-- 받을 파일과 크기는 데이터 저장소의 크기 목록 `/data/bible-sizes.json`에서 읽는다. 파일마다 저장 크기(`sizes`)와 gzip 크기(`gzip_sizes`)가 있다. 서비스 워커는 이 파일을 네트워크에서 먼저 받아 DATA_CACHE에 두고, 받지 못하면 그 사본을 낸다. 셸에 미리 받지 않으므로 이 기능을 쓰지 않는 기기는 받지 않는다.
+- 받을 파일과 크기는 데이터 저장소의 크기 목록 `/data/bible-sizes.json`에서 읽는다. 파일마다 저장 크기(`sizes`)와 gzip 크기(`gzip_sizes`)가 있고, 앱은 저장 크기만 읽는다. 서비스 워커는 이 파일을 네트워크에서 먼저 받아 DATA_CACHE에 두고, 받지 못하면 그 사본을 낸다. 셸에 미리 받지 않으므로 이 기능을 쓰지 않는 기기는 받지 않는다.
 - DATA_CACHE에 이미 있는 파일은 다시 받지 않는다. 한 번에 6개씩 받고, 요청에 머리글 `X-Offline-Save`를 붙인다. 서비스 워커는 이 머리글이 있으면 캐시를 보지도 저장하지도 않고 네트워크로만 보내고, 페이지가 `cache.put`을 기다려 저장한다. 그래야 공간 부족(`QuotaExceededError`)을 페이지가 안다.
 - 받기 전에 `navigator.storage.estimate()`의 남은 공간이 받을 크기의 1.05배보다 작으면 받지 않는다. 공간 부족이면 스위치를 끄고 그때까지 받은 파일은 남긴다. 켤 때 `navigator.storage.persist()`를 요청한다.
 - 상태는 꺼짐, 확인 중, 저장 중, 모두 저장됨, 인터넷 연결이 없음, 서버에서 받지 못함, 공간이 모자람이다(`OfflineSaveStatus`). 인터넷이 없으면 `online` 이벤트에 이어 받고, 서버 오류는 다음에 앱을 열 때 이어 받는다.
@@ -31,7 +31,7 @@
   | 교회력 자료(`office-readings.json` 뺌) | 11 | 2,143,935바이트(2.1MB) | 약 0.17MB |
   | 모두 | 1,507 | 17,539,132바이트(17.5MB) | 4,953,769바이트 |
 
-  - 운영 서버는 이 파일들을 gzip 수준 6으로 압축해 보낸다(`common-bible-server`의 nginx 설정 예시). `gzip_sizes`는 같은 수준으로 잰 값이고, `bible/gen-1.json`은 서버가 실제로 보낸 크기(1,727바이트)와 같았다(2026-11-18). 설명의 「약 5MB」는 이 합을 반올림한 값이다.
+  - 운영 서버는 이 파일들을 gzip 수준 6으로 압축해 보낸다(`common-bible-server`의 nginx 설정 예시). `gzip_sizes`는 같은 수준으로 잰 값이고, `bible/gen-1.json`은 서버가 실제로 보낸 크기(1,727바이트)와 같았다(2026-11-18). ⓘ 설명은 2026-11-19부터 크기를 적지 않는다(ADR-045 §2). 크기는 줄 아래의 글에 모두의 크기로만 보인다.
 - **브라우저의 저장 규칙**(2026-11-18 조사)
   - 아이폰 Safari는 Safari를 쓰는 7일 동안 이 사이트를 한 번도 열지 않으면, 서비스 워커의 캐시를 포함해 사이트가 저장한 자료를 지운다. 홈 화면 앱은 Safari와 따로 날을 세고, WebKit은 그 자료가 지워질 것으로 보지 않는다([WebKit 블로그 2020-03-24](https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/)). 그래서 설명에 Safari 탭에서만 안내 한 문장을 넣는다(`detectPlatform()`이 `ios-safari`일 때).
   - Safari 17부터 사이트 하나가 디스크의 약 60%까지 쓸 수 있고 홈 화면 앱도 같다. 자료를 지우는 때는 전체 한도를 넘을 때, 기기의 공간이 모자랄 때, 오래 쓰지 않았을 때다. 오래 보관 모드인 사이트는 지우는 대상에서 빠질 수 있고, 그 모드는 홈 화면 앱인지 같은 기준으로 허락한다. `navigator.storage.estimate()`는 Safari 17부터 있다([WebKit 블로그 2023-08-10](https://webkit.org/blog/14403/updates-to-storage-policy/)).
