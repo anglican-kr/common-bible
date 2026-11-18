@@ -2030,15 +2030,26 @@ function ensureBookSheet() {
     updateApplyLabel();
   });
   applyBtn.addEventListener("click", () => {
-    navigateSearch({ filterBooks: Array.from(working) });
-    overlay.close();
-    // Focus the originating field's query input so the user can type the term
-    // immediately (keyboard up on mobile). Persistent fields (header/pill)
-    // survive the re-render, so focus synchronously within this click gesture
-    // (iOS needs that for the soft keyboard). The rebuilt in-page bar autofocuses
-    // itself on render, so skip it here.
+    const filterBooks = Array.from(working);
+    // 「적용」은 시트를 연 입력 칸에 보이는 검색어를 고른 책 안에서 찾는다(ADR-033 D3, 사용자 보고 2026-11-18). Enter를 누르지 않고
+    // 친 검색어는 주소에 없으므로 칸에서 읽는다. 읽기는 이동보다 먼저다: route()가 시트를 닫기 전에 칸을 주소의 검색어로 다시 채운다
+    // (routing.js의 상단 바 칸, tabbar.js `syncInputFromUrl`의 탭 바 칸).
     const field = _bookSheetReturnField;
-    if (field && field.container.id !== "search-inpage-bar" && field.input.isConnected) {
+    const typed = field && field.input.isConnected ? field.input.value.trim() : null;
+    if (typed && typed !== currentSearchState().q) {
+      commitTopSearch(typed, { filterBooks, autoNavigate: false });
+    } else {
+      navigateSearch(typed === "" ? { q: "", filterBooks } : { filterBooks });
+    }
+    overlay.close();
+    // With no query, focus the originating field's input so the user can type
+    // the term immediately (keyboard up on mobile). Persistent fields (header/
+    // pill) survive the re-render, so focus synchronously within this click
+    // gesture (iOS needs that for the soft keyboard). The rebuilt in-page bar
+    // autofocuses itself on render, so skip it here. With a query, focus stays
+    // on the funnel (the overlay restored it) so the keyboard doesn't cover the
+    // results — like Enter in the pill, which blurs the input.
+    if (!typed && field && field.container.id !== "search-inpage-bar" && field.input.isConnected) {
       field.input.focus();
     }
   });
@@ -2597,8 +2608,13 @@ function autoNavigateTarget(result, screen) {
 // to verse references) from URL-triggered ones (show clickable card).
 let searchAutoNavigate = false;
 
-/** @param {string} rawQuery */
-function commitTopSearch(rawQuery) {
+/**
+ * @param {string} rawQuery
+ * @param {{ filterBooks?: string[], autoNavigate?: boolean }} [opts]
+ *   filterBooks — the book scope to search in, in place of the URL's (the book sheet's 「적용」, ADR-033 D3).
+ *   autoNavigate — false keeps a verse reference on the results (only Enter may jump to the chapter, ADR-033 D3).
+ */
+function commitTopSearch(rawQuery, opts = {}) {
   const raw = (rawQuery || "").trim();
   if (!raw) return;
   // Absorb typed/example `in:<alias>` operators into book-scope chips so the
@@ -2619,12 +2635,12 @@ function commitTopSearch(rawQuery) {
   if (topSearchHistory) topSearchHistory.refresh();
   // Keep the book-picker scope across a fresh query (union in: tokens), but
   // reset pagination (ADR-033).
-  const cur = currentSearchState();
-  const filterBooks = ids.length ? Array.from(new Set(cur.filterBooks.concat(ids))) : cur.filterBooks;
+  const scope = opts.filterBooks || currentSearchState().filterBooks;
+  const filterBooks = ids.length ? Array.from(new Set(scope.concat(ids))) : scope;
   // Arm verse-ref auto-navigate only when there's a keyword to search; a
   // scope-only commit (in: absorbed → empty keyword) lands on the empty-query
   // view, which never consumes the flag (would leave it stale — Bugbot).
-  searchAutoNavigate = !!keyword;
+  searchAutoNavigate = opts.autoNavigate !== false && !!keyword;
   const newPath = buildSearchUrl({ q: keyword, page: 1, filterBooks });
   // If path is unchanged, popstate won't fire — call route() directly.
   if (location.pathname + location.search === newPath) {
