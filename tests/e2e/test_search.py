@@ -455,6 +455,26 @@ def test_in_operator_restricts_to_single_book(page, base_url):
     assert all(b == "john" for b in book_ids), f"Expected only 'john', got: {set(book_ids)}"
 
 
+@pytest.mark.parametrize("alias", ["마르", "막", "마가복음", "mark"])
+def test_in_operator_alias_becomes_a_chip(alias, page, base_url):
+    """입력 칸에 친 `in:<별칭>`은 검색이 알아보는 별칭이면 모두 책 칩이 되고, 입력 칸에는 낱말만 남는다(ADR-033). 그전에는 책의 짧은
+    이름과 전체 이름만 칩이 되고, 다른 별칭(`막`, `마가복음`, 책 id)은 결과는 맞지만 입력 칸에 글로 남았다(사용자 결정 2026-11-18)."""
+    page.goto(base_url)
+    wait_app_ready(page)
+
+    page.fill("#search-input", f"사랑 in:{alias}")
+    page.press("#search-input", "Enter")
+    page.wait_for_selector("#search-bar .field-token", timeout=20_000)
+    state = page.evaluate("""() => ({
+        q: new URLSearchParams(location.search).get('q'),
+        books: new URLSearchParams(location.search).getAll('in'),
+        field: document.querySelector('#search-input').value,
+        chips: [...document.querySelectorAll('#search-bar .field-token')].map((n) => n.textContent),
+    })""")
+    assert state["q"] == "사랑" and state["books"] == ["mark"] and state["field"] == "사랑", state
+    assert len(state["chips"]) == 1 and "마르" in state["chips"][0], state
+
+
 def test_in_operator_whitespace_tolerated(page, base_url):
     """`사랑 in: 요한`(콜론 뒤 공백)도 동일하게 동작."""
     page.goto(base_url)

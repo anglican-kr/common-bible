@@ -1670,9 +1670,11 @@ function wireLocalNotice(target, query) {
 }
 
 // alias(소문자) → book id, for absorbing typed/example `in:<alias>` operators
-// into book-scope chips at commit time. Built from book short + full Korean
-// names (covers the common cases); the worker still resolves any alias we miss
-// from search-meta, so an unresolved token simply stays as text in `q`.
+// into book-scope chips at commit time. Built from the worker's alias table
+// (search-meta.json: 막, 마가복음, …) plus each book's id, short and full Korean
+// name, so every `in:` the search reads becomes a chip (ADR-033). Until the map
+// loads, or for an alias neither knows, the token stays as text in `q` and the
+// worker reports or resolves it.
 /** @type {Map<string, string> | null} */
 let _aliasMap = null;
 // book id → short name (the chip label), in canon order: the `in:` aliases a
@@ -1686,6 +1688,13 @@ async function ensureAliasMap() {
   const map = new Map();
   /** @type {Map<string, string>} */
   const byId = new Map();
+  // Fetched alongside the books; it is precached with the app shell (sw.js).
+  // Without it the books' own names and ids still work.
+  /** @type {Promise<Record<string, unknown>>} */
+  const metaAliases = fetch(`${DATA_DIR}/search-meta.json`)
+    .then((res) => (res.ok ? res.json() : null))
+    .then((meta) => (meta && meta.aliases) || {})
+    .catch(() => ({}));
   try {
     // window.loadBooks (data-fetch.js) is defined by a module that loads AFTER
     // search.js in index.html, so the boot-time preload kick can fire before it
@@ -1697,7 +1706,12 @@ async function ensureAliasMap() {
     }
     if (typeof window.loadBooks !== "function") return map;
     const books = await window.loadBooks();
+    const ids = new Set(books.map((b) => b.id));
+    for (const [alias, id] of Object.entries(await metaAliases)) {
+      if (typeof id === "string" && ids.has(id)) map.set(alias.toLowerCase(), id);
+    }
     for (const b of books) {
+      map.set(b.id.toLowerCase(), b.id);
       if (b.short_name_ko) map.set(b.short_name_ko.toLowerCase(), b.id);
       if (b.name_ko) map.set(b.name_ko.toLowerCase(), b.id);
       const alias = b.short_name_ko || b.name_ko;
@@ -1748,9 +1762,10 @@ function extractInScope(raw, aliasMap) {
  * @returns {string}
  */
 function historyLabel(keyword, ids, aliasById) {
-  const order = aliasById ? Array.from(aliasById.keys()) : [];
+  /** @type {Map<string, number>} */
+  const order = new Map(Array.from(aliasById ? aliasById.keys() : [], (id, i) => [id, i]));
   /** @param {string} id */
-  const rank = (id) => { const i = order.indexOf(id); return i < 0 ? order.length : i; };
+  const rank = (id) => order.get(id) ?? order.size;
   const books = Array.from(new Set(ids)).sort((a, b) => rank(a) - rank(b));
   const scope = books.map((id) => "in:" + ((aliasById && aliasById.get(id)) || id));
   return [keyword, ...scope].filter(Boolean).join(" ");
