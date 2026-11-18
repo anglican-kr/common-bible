@@ -1670,15 +1670,31 @@ function wireLocalNotice(target, query) {
 }
 
 // alias(소문자) → book id, for absorbing typed/example `in:<alias>` operators
-// into book-scope chips at commit time. Built from book short + full Korean
-// names (covers the common cases); the worker still resolves any alias we miss
-// from search-meta, so an unresolved token simply stays as text in `q`.
+// into book-scope chips at commit time. Built from the worker's alias table
+// (search-meta.json: 막, 마가복음, …) plus each book's id, short and full Korean
+// name, so every `in:` the search reads becomes a chip (ADR-033). Until the map
+// loads, or for an alias neither knows, the token stays as text in `q` and the
+// worker reports or resolves it.
 /** @type {Map<string, string> | null} */
 let _aliasMap = null;
+// book id → short name (the chip label), in canon order: the `in:` aliases a
+// recent-search label is written with (`historyLabel`, ADR-014 D1). Built with
+// _aliasMap, so the labels replay through it.
+/** @type {Map<string, string> | null} */
+let _aliasById = null;
 async function ensureAliasMap() {
   if (_aliasMap) return _aliasMap;
   /** @type {Map<string, string>} */
   const map = new Map();
+  /** @type {Map<string, string>} */
+  const byId = new Map();
+  // Fetched alongside the books; it is precached with the app shell (sw.js).
+  // Without it the books' own names and ids still work.
+  /** @type {Promise<Record<string, unknown>>} */
+  const metaAliases = fetch(`${DATA_DIR}/search-meta.json`)
+    .then((res) => (res.ok ? res.json() : null))
+    .then((meta) => (meta && meta.aliases) || {})
+    .catch(() => ({}));
   try {
     // window.loadBooks (data-fetch.js) is defined by a module that loads AFTER
     // search.js in index.html, so the boot-time preload kick can fire before it
@@ -1690,11 +1706,19 @@ async function ensureAliasMap() {
     }
     if (typeof window.loadBooks !== "function") return map;
     const books = await window.loadBooks();
+    const ids = new Set(books.map((b) => b.id));
+    for (const [alias, id] of Object.entries(await metaAliases)) {
+      if (typeof id === "string" && ids.has(id)) map.set(alias.toLowerCase(), id);
+    }
     for (const b of books) {
+      map.set(b.id.toLowerCase(), b.id);
       if (b.short_name_ko) map.set(b.short_name_ko.toLowerCase(), b.id);
       if (b.name_ko) map.set(b.name_ko.toLowerCase(), b.id);
+      const alias = b.short_name_ko || b.name_ko;
+      if (alias) byId.set(b.id, alias);
     }
     _aliasMap = map;
+    _aliasById = byId;
   } catch { /* leave _aliasMap null so a later call retries */ }
   return _aliasMap || map;
 }
@@ -1723,6 +1747,28 @@ function extractInScope(raw, aliasMap) {
     return whole;
   }).replace(/\s+/g, " ").trim();
   return { keyword, ids };
+}
+
+/**
+ * The recent-search label of a committed search (ADR-014 D1): the keyword, then
+ * `in:<short name>` for each book of the scope in canon order. extractInScope
+ * reads the label back into the same keyword and books, so a recent search
+ * replays its own scope, and one scope is one label whether its books were
+ * picked in another order or typed as `in:`.
+ * @param {string} keyword
+ * @param {string[]} ids  book ids of the scope
+ * @param {Map<string, string> | null} aliasById  book id → short name in canon
+ *   order; null before the books load, when ids are written as they are
+ * @returns {string}
+ */
+function historyLabel(keyword, ids, aliasById) {
+  /** @type {Map<string, number>} */
+  const order = new Map(Array.from(aliasById ? aliasById.keys() : [], (id, i) => [id, i]));
+  /** @param {string} id */
+  const rank = (id) => order.get(id) ?? order.size;
+  const books = Array.from(new Set(ids)).sort((a, b) => rank(a) - rank(b));
+  const scope = books.map((id) => "in:" + ((aliasById && aliasById.get(id)) || id));
+  return [keyword, ...scope].filter(Boolean).join(" ");
 }
 
 /** @param {string} id */
@@ -2044,8 +2090,10 @@ function ensureBookSheet() {
     const typed = field && field.input.isConnected ? field.input.value.trim() : null;
     // `searched`: a keyword reached the URL. A typed `in:<alias>` alone is absorbed into
     // chips and lands on the empty-query view, so it counts as no query for focus.
+    // A typed query is committed even when it is the URL's: the search with the
+    // new scope goes into the recents with that scope (ADR-014 D1).
     let searched = !!typed;
-    if (typed && typed !== currentSearchState().q) {
+    if (typed) {
       searched = !!commitTopSearch(typed, { filterBooks, autoNavigate: false });
     } else {
       navigateSearch(typed === "" ? { q: "", filterBooks } : { filterBooks });
@@ -2184,7 +2232,7 @@ function buildRecentSearches() {
     select.appendChild(el("span", { className: "search-recent-text" }, q));
     const dateLabel = formatSearchDate(ts);
     if (dateLabel) select.appendChild(el("span", { className: "search-recent-date" }, dateLabel));
-    select.addEventListener("click", () => commitTopSearch(q));
+    select.addEventListener("click", () => commitTopSearch(q, { fromHistory: true }));
     const remove = el("button", {
       type: "button",
       className: "search-recent-remove",
@@ -2631,9 +2679,10 @@ let searchAutoNavigate = false;
 
 /**
  * @param {string} rawQuery
- * @param {{ filterBooks?: string[], autoNavigate?: boolean }} [opts]
+ * @param {{ filterBooks?: string[], autoNavigate?: boolean, fromHistory?: boolean }} [opts]
  *   filterBooks — the book scope to search in, in place of the URL's (the book sheet's 「적용」, ADR-033 D3).
  *   autoNavigate — false keeps a verse reference on the results (only Enter may jump to the chapter, ADR-033 D3).
+ *   fromHistory — `rawQuery` is a recent-search label: search its own `in:` scope in place of the chips (ADR-014 D2).
  * @returns {string} the committed keyword (empty when nothing was committed or only `in:` scope remained)
  */
 function commitTopSearch(rawQuery, opts = {}) {
@@ -2652,13 +2701,20 @@ function commitTopSearch(rawQuery, opts = {}) {
   if (_aliasMap && /(?:^|\s)in:/.test(raw)) {
     ({ keyword, ids } = extractInScope(raw, _aliasMap));
   }
-  // Recents keep the raw typed form (incl. in:<alias>) as the history label.
-  pushSearchHistory(raw);
-  if (topSearchHistory) topSearchHistory.refresh();
-  // Keep the book-picker scope across a fresh query (union in: tokens), but
-  // reset pagination (ADR-033).
-  const scope = opts.filterBooks || currentSearchState().filterBooks;
+  // A fresh query keeps the book-picker scope (union in: tokens) but resets
+  // pagination (ADR-033). A recent search carries its own scope: its in: tokens
+  // replace the chips, and one without any searches the whole Bible (ADR-014 D2).
+  /** @type {string[]} */
+  const scope = opts.fromHistory ? [] : (opts.filterBooks || currentSearchState().filterBooks);
   const filterBooks = ids.length ? Array.from(new Set(scope.concat(ids))) : scope;
+  // The recent-search label holds the scope searched, chips included (ADR-014
+  // D1). A scope-only commit has nothing to search and is not kept. A replayed
+  // label written another way (an older `in:요한복음`) gives way to the new one.
+  if (keyword) {
+    if (opts.fromHistory) removeSearchHistory(raw);
+    pushSearchHistory(historyLabel(keyword, filterBooks, _aliasById));
+    if (topSearchHistory) topSearchHistory.refresh();
+  }
   // Arm verse-ref auto-navigate only when there's a keyword to search; a
   // scope-only commit (in: absorbed → empty keyword) lands on the empty-query
   // view, which never consumes the flag (would leave it stale — Bugbot).
@@ -2984,7 +3040,7 @@ const topSearchHistory = createSearchHistoryController({
   panel: $searchHistoryPanel,
   clearBtn: $searchClear,
   syncClearHidden: (hidden) => { $searchBar.dataset.clearHidden = String(hidden); },
-  onSelect: (q) => commitTopSearch(q),
+  onSelect: (q) => commitTopSearch(q, { fromHistory: true }),
   // Header-dropdown deletes/clear should also refresh the on-page /search
   // recents list when it's mounted (ADR-033, Bugbot).
   onChange: () => refreshRecents(),

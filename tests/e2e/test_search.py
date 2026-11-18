@@ -71,7 +71,7 @@ def _apply_books_to_typed_query(page, ctx_name, typed, book_id):
 @pytest.mark.parametrize("ctx_name", ["mobile_context", "desktop_context"])
 def test_book_filter_apply_searches_the_typed_query(ctx_name, request):
     """책 선택 시트의 「적용」은 입력 칸에 보이는 검색어를 고른 책 안에서 찾는다(ADR-033 D3). Enter를 누르지 않고 친 검색어도
-    찾고, Enter처럼 최근 검색에 넣는다. 포커스는 깔때기로 돌아가 휴대폰에서 키보드가 결과를 가리지 않는다.
+    찾고, Enter처럼 고른 책과 함께 최근 검색에 넣는다(ADR-014 D1). 포커스는 깔때기로 돌아가 휴대폰에서 키보드가 결과를 가리지 않는다.
     범위만 주소에 넣던 때는 친 검색어가 지워지고 최근 검색 화면이 나왔다(사용자 보고 2026-11-18)."""
     page = request.getfixturevalue(ctx_name).new_page()
     field = _apply_books_to_typed_query(page, ctx_name, "사랑", "mark")
@@ -87,8 +87,48 @@ def test_book_filter_apply_searches_the_typed_query(ctx_name, request):
     assert state["q"] == ["사랑"] and state["books"] == ["mark"], state
     assert state["refs"] and all(r.startswith("마르코의 복음서 ") for r in state["refs"]), state
     assert state["field"] == "사랑", state
-    assert state["recent"] == "사랑", state
+    assert state["recent"] == "사랑 in:마르", state
     assert state["funnelFocused"], state
+
+
+def _recent_queries(page):
+    return page.evaluate("JSON.parse(localStorage.getItem('bible-search-history') || '[]').map((e) => e.q)")
+
+
+def _search_params(page):
+    return page.evaluate("({ q: new URLSearchParams(location.search).get('q'), books: new URLSearchParams(location.search).getAll('in') })")
+
+
+def test_recent_search_keeps_and_replays_its_book_scope(mobile_context):
+    """최근 검색은 찾은 낱말과 그때 고른 책을 `세리 in:마르`처럼 함께 저장하고, 누르면 검색창의 칩을 그 범위로 바꿔 찾는다. 범위 없이
+    저장된 기록은 칩을 지우고 성경 전체에서 찾는다(ADR-014 D1, D2). 깔때기로 마르코를 고르고 찾은 「세리」가 「세리」로만 남아, 칩을
+    지운 뒤 누르면 성경 전체에서 찾던 때가 있었다(사용자 보고 2026-11-18)."""
+    page = mobile_context.new_page()
+    page.goto(BASE_URL)
+    wait_app_ready(page)
+    page.evaluate("localStorage.setItem('bible-search-history', JSON.stringify([{ q: '사랑', ts: Date.now() }]))")
+
+    # 마르코를 골라 둔 검색 화면에서 「세리」를 Enter로 찾는다
+    page.goto(f"{BASE_URL}/search?in=mark")
+    field = page.locator("#search-inpage-input")
+    field.wait_for(timeout=20_000)
+    field.fill("세리")
+    field.press("Enter")
+    page.wait_for_selector(".search-count", timeout=20_000)
+    assert _recent_queries(page) == ["세리 in:마르", "사랑"]
+
+    # 칩이 없는 검색 화면에서 그 기록을 누르면 마르코 안에서 찾는다
+    page.goto(f"{BASE_URL}/search")
+    page.locator(".search-recent-text", has_text="세리 in:마르").click()
+    page.wait_for_function("new URLSearchParams(location.search).get('q') === '세리'", timeout=20_000)
+    assert _search_params(page) == {"q": "세리", "books": ["mark"]}
+
+    # 마태오를 골라 둔 채 범위 없는 기록 「사랑」을 누르면 칩을 지우고 성경 전체에서 찾는다
+    page.goto(f"{BASE_URL}/search?in=matt")
+    page.locator(".search-recent-text").get_by_text("사랑", exact=True).click()
+    page.wait_for_function("new URLSearchParams(location.search).get('q') === '사랑'", timeout=20_000)
+    assert _search_params(page) == {"q": "사랑", "books": []}
+    assert _recent_queries(page) == ["사랑", "세리 in:마르"]
 
 
 @pytest.mark.parametrize("ctx_name", ["mobile_context", "desktop_context"])
@@ -413,6 +453,26 @@ def test_in_operator_restricts_to_single_book(page, base_url):
     book_ids = _result_book_ids(page)
     assert book_ids, "expected at least one match"
     assert all(b == "john" for b in book_ids), f"Expected only 'john', got: {set(book_ids)}"
+
+
+@pytest.mark.parametrize("alias", ["마르", "막", "마가복음", "mark"])
+def test_in_operator_alias_becomes_a_chip(alias, page, base_url):
+    """입력 칸에 친 `in:<별칭>`은 검색이 알아보는 별칭이면 모두 책 칩이 되고, 입력 칸에는 낱말만 남는다(ADR-033). 그전에는 책의 짧은
+    이름과 전체 이름만 칩이 되고, 다른 별칭(`막`, `마가복음`, 책 id)은 결과는 맞지만 입력 칸에 글로 남았다(사용자 결정 2026-11-18)."""
+    page.goto(base_url)
+    wait_app_ready(page)
+
+    page.fill("#search-input", f"사랑 in:{alias}")
+    page.press("#search-input", "Enter")
+    page.wait_for_selector("#search-bar .field-token", timeout=20_000)
+    state = page.evaluate("""() => ({
+        q: new URLSearchParams(location.search).get('q'),
+        books: new URLSearchParams(location.search).getAll('in'),
+        field: document.querySelector('#search-input').value,
+        chips: [...document.querySelectorAll('#search-bar .field-token')].map((n) => n.textContent),
+    })""")
+    assert state["q"] == "사랑" and state["books"] == ["mark"] and state["field"] == "사랑", state
+    assert len(state["chips"]) == 1 and "마르" in state["chips"][0], state
 
 
 def test_in_operator_whitespace_tolerated(page, base_url):
