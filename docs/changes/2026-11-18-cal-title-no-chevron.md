@@ -1,4 +1,5 @@
 ---
+pr: 588
 date: 2026-11-18
 branch: style/cal-title-no-chevron
 title: "style: 캘린더 제목의 펼침 표시와 탭 뒤에 남는 호버 바탕을 뺌"
