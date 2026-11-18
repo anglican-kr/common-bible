@@ -1432,6 +1432,33 @@ test("bookName: _bookMap이 null이어도 id 폴백(안전)", () => {
   assert.equal(scope.bookName("john"), "john");
 });
 
+// 최근 검색의 글은 찾은 낱말 뒤에 그때의 책 범위를 `in:<짧은 이름>`으로 붙인다(ADR-014 D1). 깔때기로 마르코를 고르고 「세리」를
+// 찾은 기록이 「세리」로만 남아, 칩을 지운 뒤 누르면 성경 전체에서 찾던 때가 있었다(사용자 보고 2026-11-18).
+const ALIAS_BY_ID = new Map([["genesis", "창세"], ["matt", "마태"], ["mark", "마르"], ["john", "요한"]]);
+
+test("historyLabel: 범위가 없으면 낱말만", () => {
+  assert.equal(scope.historyLabel("세리", [], ALIAS_BY_ID), "세리");
+});
+
+test("historyLabel: 고른 책을 in:<짧은 이름>으로 붙인다", () => {
+  assert.equal(scope.historyLabel("세리", ["mark"], ALIAS_BY_ID), "세리 in:마르");
+});
+
+test("historyLabel: 고른 차례와 상관없이 성경의 차례로, 겹친 책은 한 번", () => {
+  assert.equal(scope.historyLabel("사랑", ["john", "matt", "john"], ALIAS_BY_ID), "사랑 in:마태 in:요한");
+});
+
+test("historyLabel: 책 목록을 아직 못 받았거나 모르는 책은 id 그대로 뒤에", () => {
+  assert.equal(scope.historyLabel("사랑", ["mark"], null), "사랑 in:mark");
+  assert.equal(scope.historyLabel("사랑", ["xyz", "mark"], ALIAS_BY_ID), "사랑 in:마르 in:xyz");
+});
+
+test("historyLabel: extractInScope가 같은 낱말과 범위로 되읽는다", () => {
+  const aliasMap = new Map(Array.from(ALIAS_BY_ID, ([id, alias]) => [alias, id]));
+  const label = scope.historyLabel("세리와 죄인", ["mark", "matt"], ALIAS_BY_ID);
+  assert.deepEqual(scope.extractInScope(label, aliasMap), { keyword: "세리와 죄인", ids: ["matt", "mark"] });
+});
+
 // ── 전례일 줄의 값 — 전례독서 화면과 엔진에서 옮겨 둔 값 ─────────────────────
 
 test("전례일 줄의 해, 색 이름, 요일, 성탄 평일 식별자는 전례독서 화면과 엔진의 값과 같다(코드 리뷰 2026-11-16)", () => {
