@@ -1,4 +1,5 @@
 ---
+pr: 592
 date: 2026-11-18
 branch: fix/search-history-scope
 title: "fix: 최근 검색에 고른 책 범위를 함께 저장"
