@@ -1,4 +1,5 @@
 ---
+pr: 593
 date: 2026-11-18
 branch: fix/search-unknown-alias
 title: "fix: 모르는 책 이름의 in: 검색 안내"
