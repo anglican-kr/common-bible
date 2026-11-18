@@ -4,9 +4,9 @@
 // audio-player.js builds the player DOM at module top level (window.appHelpers, #audio-bar), so the player UI is e2e's
 // job (tests/e2e/test_audio.py). What IS unit-testable is two blocks: AUDIO_BOOKS, which books get an audio bar at all,
 // and AUDIO_ERROR_NOTICE, which notice the audio bar shows when a chapter's mp3 fails to load (ADR-016 D4, known-issues
-// §26). Each block is sliced out (BEGIN/END markers,
-// as in tab-history.test.js) and run in a vm whose Cache Storage, fetch, navigator and timers are stubs, so each case
-// states what the device has saved and how the network answers, and checks which requests were sent.
+// §26). Each block is sliced out (BEGIN/END markers, as in tab-history.test.js) and run in a vm; for AUDIO_ERROR_NOTICE
+// the vm's Cache Storage, fetch, navigator and timers are stubs, so each case states what the device has saved and how
+// the network answers, and checks which requests were sent.
 //
 // Coverage:
 //   - 전례시편과 송가는 오디오 바를 보이지 않는다(2026-11-19, ADR-016 D4). 다른 책과 책 목록에 없는 책은 보인다
