@@ -1173,12 +1173,12 @@ function appendLectGroup(container, lect, screen) {
 
 /**
  * 결과 화면에 무엇을 그리는가(ADR-044 §1, ADR-046 §3). `lect`는 그릴 수 있는 전례일 결과, `psalter`는 성시의 결과이고,
- * `groups`는 결과가 있는 묶음을 알약의 차례로 둔 것이다. `group`은 목록으로 보이는 묶음으로, 고른 알약의 묶음에 결과가
- * 없으면 결과가 있는 첫 묶음이다.
+ * `groups`는 결과가 있는 묶음을 알약의 차례로 둔 것이고, `counts`는 그 묶음마다 알약에 적는 결과 수다. `group`은 목록으로
+ * 보이는 묶음으로, 고른 알약의 묶음에 결과가 없으면 결과가 있는 첫 묶음이다.
  * @param {any} result
  * @param {SearchScreen} screen
  * @returns {{ isPending: boolean, lect: any, psalter: { results: any[], total: number } | null, hasBible: boolean,
- *   groups: SearchGroup[], group: SearchGroup }}
+ *   groups: SearchGroup[], counts: Partial<Record<SearchGroup, number>>, group: SearchGroup }}
  */
 function resultGroups(result, screen) {
   const isPending = !!(result.pendingChunks && result.pendingChunks.length > 0);
@@ -1194,8 +1194,9 @@ function resultGroups(result, screen) {
   if (hasBible) groups.push("bible");
   if (psalter) groups.push("psalter");
   if (lect) groups.push("lectionary");
+  const counts = { bible: hasBible ? result.total : undefined, psalter: psalter?.total, lectionary: lect?.items.length };
   const group = groups.includes(screen.group) ? screen.group : groups[0] || "bible";
-  return { isPending, lect, psalter, hasBible, groups, group };
+  return { isPending, lect, psalter, hasBible, groups, counts, group };
 }
 
 /**
@@ -1251,7 +1252,7 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
     return `"${query}" 검색 결과 0건. ${SCOPE_LIMIT_NOTE}`;
   }
 
-  const { isPending, lect, psalter, hasBible, groups, group } = resultGroups(result, screen);
+  const { isPending, lect, psalter, hasBible, groups, counts, group } = resultGroups(result, screen);
   const answer = buildAnswer(result, screen);
 
   // 연도를 붙여 찾았는데 줄이 없으면 그 사정(ADR-044 §4)
@@ -1294,9 +1295,7 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
   const paged = !!verses && !isPending && totalPages > 1 && !!paginationBuilder;
   const pageWords = paged ? `, 전체 ${totalPages}쪽 중 ${page}쪽` : "";
   if (groups.length > 1) {
-    container.appendChild(buildSearchPills(group, {
-      bible: hasBible ? result.total : undefined, psalter: psalter?.total, lectionary: lect?.items.length,
-    }, screen.groupHref));
+    container.appendChild(buildSearchPills(group, counts, screen.groupHref));
   }
   if (hasBible) said.push(isPending ? `검색 중… 현재 ${result.total}건` : `성서 본문 ${result.total}건${group === "bible" ? pageWords : ""}`);
   if (psalter) said.push(`성시 ${psalter.total}건${group === "psalter" ? pageWords : ""}`);
@@ -2698,8 +2697,10 @@ async function addLateLectionary(result, query, screen, target, isStale, draw) {
   const late = result.lectionary && result.lectionary.localNotice ? localNoticeOf(result.lectionary.localNotice, churchName) : null;
   if (!lect) {
     // 연도를 붙여 찾은 전례일을 그해에 지키지 않으면 결과 없음 화면에 그 사정을, 지역 축일을 찾지 못했으면 그 안내를 적는다(ADR-044 §3, §4)
-    if ((lectNotes(result).length || late) && !result.total && !target.querySelector(".search-answer")) window.announce(draw(result));
-    else if (late) {
+    // 성서 본문이나 성시의 목록이 있으면 다시 그리지 않는다. 다시 그리면 목록에 있던 포커스를 잃는다(WCAG 2.4.3)
+    if ((lectNotes(result).length || late) && !result.total && !shownPsalter(result) && !target.querySelector(".search-answer")) {
+      window.announce(draw(result));
+    } else if (late) {
       target.prepend(buildLocalNotice(late));
       window.announce(`"${query}" ${late.text}`);
     }
@@ -2721,12 +2722,10 @@ async function addLateLectionary(result, query, screen, target, isStale, draw) {
   }).catch((err) => console.warn("전례일 줄에 날짜를 넣지 못했습니다", err));
   const heading = target.querySelector("h2.search-count");
   if (heading) {
-    const { psalter, groups, group } = resultGroups(result, screen);
+    const { groups, counts, group } = resultGroups(result, screen);
     // 그려 둔 목록의 묶음. 주소가 전례일을 골랐으면 전례일이 오기 전에는 결과가 있는 첫 묶음을 그렸다
     const shown = group === "lectionary" ? groups[0] : group;
-    const pills = buildSearchPills(shown, {
-      bible: groups.includes("bible") ? result.total : undefined, psalter: psalter?.total, lectionary: lect.items.length,
-    }, screen.groupHref);
+    const pills = buildSearchPills(shown, counts, screen.groupHref);
     // 성서 본문과 성시의 알약이 이미 있으면 그 끝에 전례일 알약만 더한다. 알약에 있던 포커스가 남는다
     const drawn = target.querySelector(".search-pills");
     const lectPill = pills.querySelector(".search-pills")?.lastElementChild;
