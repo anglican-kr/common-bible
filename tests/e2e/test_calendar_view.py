@@ -1577,6 +1577,8 @@ def test_list_title_opens_the_day_picker_and_a_day_opens_its_row(mobile_context)
     page = mobile_context.new_page()
     _freeze_today(page)
     _open_list(page, "calendar/list/2027-02-01")
+    # 상단 바의 달 제목에는 펼침 표시(⌄)가 없다(사용자 결정 2026-11-18). 판 안의 머리에는 있다
+    assert page.evaluate("getComputedStyle(document.querySelector('.cal-title-btn'), '::after').content") == "none"
     y = page.evaluate("scrollY")
     _open_picker(page)
     state = _picker(page)
