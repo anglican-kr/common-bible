@@ -1608,7 +1608,7 @@ def test_psalter_verse_reference_and_book_name(page):
     assert page.locator(".search-result-ref-card").get_attribute("href") == "/cant/11/1-3"
 
     _goto_search(page, "전례시편 23")
-    assert page.inner_text(".search-result-ref-title") == "전례시편 23장"
+    assert page.inner_text(".search-result-ref-title") == "전례시편 23편"
     page.wait_for_selector(".lect-rows a", timeout=10_000)
     lps_days = page.inner_text("h2.search-count")
     _goto_search(page, "시편 23")

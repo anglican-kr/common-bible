@@ -9,7 +9,7 @@
 //
 // Sections:
 //   - _$ (getElementById wrapper)
-//   - chUnit (psalm vs everything else)
+//   - chUnit (psalms and 전례시편 vs everything else)
 //   - el (createElement + attrs + children)
 //   - clearNode (firstChild loop)
 //   - hangingQuoteClass (leading quote → gutter class, straight + curly)
@@ -339,6 +339,11 @@ test("_$: returns null when no element matches", () => {
 test("chUnit: 'ps' returns '편'", () => {
   const h = loadHelpers();
   assert.equal(h.helpers.chUnit("ps"), "편");
+});
+
+test("chUnit: 전례시편 'lps'도 '편'이다(ADR-046 §4)", () => {
+  const h = loadHelpers();
+  assert.equal(h.helpers.chUnit("lps"), "편");
 });
 
 test("chUnit: any other book id returns '장'", () => {

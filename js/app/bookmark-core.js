@@ -404,7 +404,7 @@ function _hasActiveDescendant(folder, pathname = _renderPathname) {
 
 // ── BEGIN BOOKMARK_LABEL ──
 // Exercised by tests/unit/bookmark.test.js, with helpers.js's chUnit. A bookmark's default name is its reference with
-// the short book name: 「이사 7:14」, a whole chapter 「이사 7장」(시편은 「시편 23편」). The save dialog fills it in, the
+// the short book name: 「이사 7:14」, a whole chapter 「이사 7장」(시편과 전례시편은 「시편 23편」). The save dialog fills it in, the
 // list shows it under the name (bookmark-tree.js), and a range change makes it again only where the name still is it.
 // One function makes it, so the check and the name it checks against cannot drift apart (the formula sat in four
 // places before known-issues §19.1 was fixed).
