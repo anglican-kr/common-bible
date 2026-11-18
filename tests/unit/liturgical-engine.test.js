@@ -2337,6 +2337,9 @@ test("findReadingDay: 화면을 떠났으면 표를 더 세지 않고, 표 밖�
   // 떠나지 않았으면 표의 끝까지 센다
   assert.strictEqual(await e.findReadingDay(["nope"], "2026-11-16", "2026-11-16"), null);
   assert.strictEqual(tableTo(), "2055-12-31");
+  // 표의 끝 가까이의 from도 그해부터 30년을 찾는다. 표의 끝(2055년) 뒤의 날은 표 없이 이어 찾는다(코드 리뷰 2026-11-18)
+  assert.strictEqual((await e.findReadingDay(["d0125-paul-s1"], "2026-11-16", "2055-12-01")).date, "2056-01-25");
+  assert.strictEqual(tableTo(), "2055-12-31", "표를 끝 너머로 늘리지 않는다");
 });
 
 test("지키는 날의 표: 전례년이 표의 끝을 넘어도 답을 낸다 — 표의 끝에서 멈추지 않고, 캘린더의 마지막 해(9999년)에서도 끝난다(코드 리뷰 2026-11-16)", { timeout: 20_000 }, async () => {

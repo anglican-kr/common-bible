@@ -652,12 +652,12 @@ function yearRowsOf(found, perYear, years, lunarSpan = null) {
   const lunar = found.filter((item) => item.obs.key.startsWith(LECT_LUNAR_PREFIX));
   const lunarNames = [...new Set(lunar.map((item) => item.obs.name))];
   const noLunar = lunarNames.length ? perYear.filter((x) => !x.lunar).map((x) => x.year) : [];
-  if (noLunar.length) {
-    const names = lunarNames.reduce((acc, name) => (acc ? `${acc}${hasBatchim(acc) ? "과" : "와"} ${name}` : name), "");
+  if (noLunar.length && lunarSpan) {
     // 어느 하나만 찾았어도 둘을 함께 알린다. 둘 다 같은 음력 자료로 계산하기 때문이다(사용자 결정 2026-11-18)
-    notes.push(lunarSpan
-      ? `설날과 추석은 ${lunarSpan.from}-${lunarSpan.to}년만 찾습니다.`
-      : `${yearsText(noLunar)}의 ${names} 날짜는 아직 앱에 없습니다.`);
+    notes.push(`설날과 추석은 ${lunarSpan.from}-${lunarSpan.to}년만 찾습니다.`);
+  } else if (noLunar.length) {
+    const names = lunarNames.reduce((acc, name) => (acc ? `${acc}${hasBatchim(acc) ? "과" : "와"} ${name}` : name), "");
+    notes.push(`${yearsText(noLunar)}의 ${names} 날짜는 아직 앱에 없습니다.`);
   }
   // 음력으로 지키는 전례일만 찾았으면 음력 자료가 없는 해는 위에서 알렸다. 지키지 않는 것이 아니라 모르는 것이다
   const unkept = lunar.length === found.length ? empty.filter((y) => !noLunar.includes(y)) : empty;

@@ -2918,31 +2918,42 @@ async function askKeptDays(today, firstTo, ask, none, isStale = () => false) {
  * 검색 결과의 줄과 보조 주소가 여는 날(ADR-044 §1). 주소의 독서 세트 가운데 해에 따라 다른 독서가 있으면 이번 전례년의 날
  * (`openDayIn`)이고, 없으면(해마다 같은 독서, 고유 독서가 없는 전례일) 오늘부터 처음 지키는 날이다(사용자 결정 2026-11-17). `from`을
  * 주면 그날부터 처음 지키는 날이다(`/lectionary/d/<slug>?from=`). 표는 이번 전례년의 첫날부터 그 해의 30년 뒤까지 센다. 그 밖의 `from`
- * (지난날, 연도를 붙인 검색이 여는 먼 해)은 표 없이 그해부터 30년 뒤까지 한 해씩 찾는다(`keptLastFrom`, ADR-044 §4). 어느 쪽이든 해
- * 사이마다 `isStale`이 참이면(화면을 떠났으면) 그친다. 찾는 끝까지 없거나 그쳤으면 null.
+ * (지난날, 연도를 붙인 검색이 여는 먼 해)은 표 없이 그해부터 30년 뒤까지 한 해씩 찾는다(`keptLastFrom`, ADR-044 §4). 표 안의 `from`도
+ * 그해부터 30년을 찾는다. 표의 끝까지 없으면 그 뒤를 표 없이 이어 찾는다. 어느 쪽이든 해 사이마다 `isStale`이 참이면(화면을 떠났으면)
+ * 그친다. 찾는 끝까지 없거나 그쳤으면 null.
  * @param {string[]} ids @param {string} today @param {string | null} [from] @param {() => boolean} [isStale]
  * @returns {Promise<KeptDay | null>}
  */
 async function findReadingDay(ids, today, from = null, isStale = () => false) {
-  const lyFrom = liturgicalYearSpan(today).from;
-  if (from && (from < lyFrom || from > keptLastFrom(lyFrom))) {
-    const last = keptLastFrom(from);
-    for (let start = from; start <= last; start = `${Number(start.slice(0, 4)) + 1}-01-01`) {
-      const found = firstKeptDay(ids, start, `${start.slice(0, 4)}-12-31`);
-      // 표 없이 찾은 날(`firstKeptDay`)의 답에는 이름과 색이 없다. 보조 주소는 날짜, 전례일, 세트, 트랙만 쓴다
-      if (found) return { ...found, name: "", colors: [] };
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      if (isStale()) return null;
-    }
-    return null;
-  }
   const ly = liturgicalYearSpan(today);
+  const tableLast = keptLastFrom(ly.from);
+  if (from && (from < ly.from || from > tableLast)) return firstKeptDayByYear(ids, from, keptLastFrom(from), isStale);
   const ask = (/** @type {KeptDayTable} */ table) => {
     if (from) return nextDayIn(table, ids, from);
     const known = cyclicSetIds();
     return ids.some((id) => known.has(id)) ? openDayIn(table, ids, today) : nextDayIn(table, ids, today);
   };
-  return askKeptDays(today, ly.to, ask, null, isStale);
+  const found = await askKeptDays(today, ly.to, ask, null, isStale);
+  if (found || !from || isStale()) return found;
+  // 표의 끝 가까이의 `from`(`?from=2055-12-01`)도 그해부터 30년을 찾는다. 표 밖의 `from`과 같은 끝이다
+  const last = keptLastFrom(from);
+  return last > tableLast ? firstKeptDayByYear(ids, `${Number(tableLast.slice(0, 4)) + 1}-01-01`, last, isStale) : null;
+}
+
+/**
+ * 표 없이 `from`부터 `last`까지 한 해씩 처음 지키는 날을 찾는다(`firstKeptDay`). 해 사이마다 차례를 넘기고, `isStale`이 참이면 null.
+ * @param {string[]} ids @param {string} from @param {string} last @param {() => boolean} isStale
+ * @returns {Promise<KeptDay | null>}
+ */
+async function firstKeptDayByYear(ids, from, last, isStale) {
+  for (let start = from; start <= last; start = `${Number(start.slice(0, 4)) + 1}-01-01`) {
+    const found = firstKeptDay(ids, start, `${start.slice(0, 4)}-12-31`);
+    // 표 없이 찾은 날(`firstKeptDay`)의 답에는 이름과 색이 없다. 보조 주소는 날짜, 전례일, 세트, 트랙만 쓴다
+    if (found) return { ...found, name: "", colors: [] };
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (isStale()) return null;
+  }
+  return null;
 }
 
 /**
