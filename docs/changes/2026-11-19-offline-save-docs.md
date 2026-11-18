@@ -1,4 +1,5 @@
 ---
+pr: 597
 date: 2026-11-19
 branch: docs/offline-save-docs
 title: "docs: 오프라인 저장 문서를 지금 동작에 맞춤"
