@@ -91,6 +91,22 @@ def test_book_filter_apply_searches_the_typed_query(ctx_name, request):
     assert state["funnelFocused"], state
 
 
+@pytest.mark.parametrize("ctx_name", ["mobile_context", "desktop_context"])
+def test_book_filter_apply_with_only_a_typed_scope_focuses_the_field(ctx_name, request):
+    """입력 칸에 `in:<별칭>`만 치고 「적용」을 누르면 별칭은 칩이 되고 찾을 낱말이 없어 최근 검색 화면에 간다. 검색어가 없을 때와
+    같이 포커스를 입력 칸에 두어 바로 칠 수 있게 한다(ADR-033 D3). 칸에 글이 있었다고 검색한 것으로 보면 포커스가 깔때기에 남는다."""
+    page = request.getfixturevalue(ctx_name).new_page()
+    field = _apply_books_to_typed_query(page, ctx_name, "in:마르", "matt")
+    page.wait_for_selector(".search-empty-dynamic", timeout=20_000)
+    state = page.evaluate(f"""() => ({{
+        q: new URLSearchParams(location.search).get('q'),
+        books: new URLSearchParams(location.search).getAll('in').sort(),
+        focused: document.activeElement === document.querySelector('{field}'),
+    }})""")
+    assert state["q"] is None and state["books"] == ["mark", "matt"], state
+    assert state["focused"], state
+
+
 def test_book_filter_apply_keeps_a_typed_verse_reference_on_the_results(desktop_context):
     """「적용」이 친 검색어를 함께 찾아도 구절 표기로 장을 바로 열지 않는다. 장으로 바로 가는 것은 Enter뿐이다(ADR-033 D3).
     요한 7:16은 읽는 전례일이 없어 Enter면 장을 연다(`test_verse_reference_navigates_to_chapter`)."""

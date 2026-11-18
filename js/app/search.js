@@ -2036,8 +2036,11 @@ function ensureBookSheet() {
     // (routing.js의 상단 바 칸, tabbar.js `syncInputFromUrl`의 탭 바 칸).
     const field = _bookSheetReturnField;
     const typed = field && field.input.isConnected ? field.input.value.trim() : null;
+    // `searched`: a keyword reached the URL. A typed `in:<alias>` alone is absorbed into
+    // chips and lands on the empty-query view, so it counts as no query for focus.
+    let searched = !!typed;
     if (typed && typed !== currentSearchState().q) {
-      commitTopSearch(typed, { filterBooks, autoNavigate: false });
+      searched = !!commitTopSearch(typed, { filterBooks, autoNavigate: false });
     } else {
       navigateSearch(typed === "" ? { q: "", filterBooks } : { filterBooks });
     }
@@ -2046,10 +2049,12 @@ function ensureBookSheet() {
     // the term immediately (keyboard up on mobile). Persistent fields (header/
     // pill) survive the re-render, so focus synchronously within this click
     // gesture (iOS needs that for the soft keyboard). The rebuilt in-page bar
-    // autofocuses itself on render, so skip it here. With a query, focus stays
-    // on the funnel (the overlay restored it) so the keyboard doesn't cover the
-    // results — like Enter in the pill, which blurs the input.
-    if (!typed && field && field.container.id !== "search-inpage-bar" && field.input.isConnected) {
+    // autofocuses itself on render, so skip it here. With a query, the input is
+    // left unfocused so the keyboard doesn't cover the results — like Enter in
+    // the pill, which blurs the input. The overlay hands focus back to the
+    // funnel; on the header and pill it stays there, but the in-page bar is
+    // rebuilt by the results render and its old funnel goes with it.
+    if (!searched && field && field.container.id !== "search-inpage-bar" && field.input.isConnected) {
       field.input.focus();
     }
   });
@@ -2613,10 +2618,11 @@ let searchAutoNavigate = false;
  * @param {{ filterBooks?: string[], autoNavigate?: boolean }} [opts]
  *   filterBooks — the book scope to search in, in place of the URL's (the book sheet's 「적용」, ADR-033 D3).
  *   autoNavigate — false keeps a verse reference on the results (only Enter may jump to the chapter, ADR-033 D3).
+ * @returns {string} the committed keyword (empty when nothing was committed or only `in:` scope remained)
  */
 function commitTopSearch(rawQuery, opts = {}) {
   const raw = (rawQuery || "").trim();
-  if (!raw) return;
+  if (!raw) return "";
   // Absorb typed/example `in:<alias>` operators into book-scope chips so the
   // operator doesn't linger as raw text in the field (token UI). The alias map
   // is preloaded at boot (ensureAliasMap kick at module init), so this stays
@@ -2648,6 +2654,7 @@ function commitTopSearch(rawQuery, opts = {}) {
   } else {
     window.navigate(newPath);
   }
+  return keyword;
 }
 
 $searchInput.addEventListener("keydown", (e) => {
