@@ -314,11 +314,12 @@ document
 $searchInput?.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
-    W.commitTopSearch?.($searchInput.value);
+    const searched = W.commitTopSearch?.($searchInput.value);
     // 검색 실행 → 키보드를 내려 dock 을 키보드 위 모핑(stage 2)에서 접지(grounded)
     // 상태로 복귀. 검색 세션은 유지(결과 화면). 키보드가 내려가므로 닫기(X)는 접힌다
     // (X 는 키보드 표시 중에만 노출 — 결과 화면에선 홈 버튼으로 종료).
-    $searchInput.blur();
+    // 찾을 낱말이 없었으면(「검색어를 입력해주세요.」, ADR-033) 키보드를 두어 바로 치게 한다.
+    if (searched) $searchInput.blur();
   }
 });
 

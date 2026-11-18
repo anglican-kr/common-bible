@@ -1208,10 +1208,9 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
     return `"${query}" 검색 결과 0건. ${note}`;
   }
   // More books than one search takes (ADR-033 「책은 5권까지」): the worker searched none. The chips stay in the field
-  // so the user picks which to remove.
+  // so the user picks which to remove. No examples: they search within the same chips and would hit this again.
   if (result.tooManyBooks) {
     container.appendChild(buildSearchEmptyState("검색 결과가 없습니다", SCOPE_LIMIT_NOTE));
-    container.appendChild(buildSearchExamples(true, screen.scoped));
     return `"${query}" 검색 결과 0건. ${SCOPE_LIMIT_NOTE}`;
   }
 
@@ -2078,6 +2077,9 @@ function ensureBookSheet() {
     applyBtn.textContent = working.size ? `적용 (${working.size})` : "적용";
     const full = working.size >= MAX_SCOPE_BOOKS;
     limitNote.textContent = full ? SCOPE_LIMIT_NOTE : "";
+    // More than the limit (an old or hand-made address): no applying until some are taken out (ADR-033).
+    if (working.size > MAX_SCOPE_BOOKS) applyBtn.setAttribute("aria-disabled", "true");
+    else applyBtn.removeAttribute("aria-disabled");
     body.querySelectorAll(".book-filter-option").forEach((o) => {
       if (full && o.getAttribute("aria-selected") !== "true") o.setAttribute("aria-disabled", "true");
       else o.removeAttribute("aria-disabled");
@@ -2122,6 +2124,7 @@ function ensureBookSheet() {
     syncSelection();
   });
   applyBtn.addEventListener("click", () => {
+    if (applyBtn.getAttribute("aria-disabled") === "true") return;
     const filterBooks = Array.from(working);
     // 「적용」은 시트를 연 입력 칸에 보이는 검색어를 고른 책 안에서 찾는다(ADR-033 D3, 사용자 보고 2026-11-18). Enter를 누르지 않고
     // 친 검색어는 주소에 없으므로 칸에서 읽는다. 읽기는 이동보다 먼저다: route()가 시트를 닫기 전에 칸을 주소의 검색어로 다시 채운다
@@ -2229,7 +2232,10 @@ async function openBookFilterSheet(returnFocusEl) {
   const panel = document.getElementById("book-filter-sheet");
   if (panel) { panel.style.height = ""; panel.style.width = ""; }
   sheet.working.clear();
-  for (const id of currentSearchState().filterBooks) sheet.working.add(id);
+  // Only books the sheet shows: an id with no option (a stale or hand-made `?in=`) would count toward the limit
+  // with nothing to unselect. When the book list failed to load, keep the scope as it is.
+  const shown = new Set(books.map((b) => b.id));
+  for (const id of currentSearchState().filterBooks) if (!books.length || shown.has(id)) sheet.working.add(id);
   renderBookFilterList(sheet.body, books, sheet.working);
   sheet.syncSelection();
   sheet.overlay.open(returnFocusEl || undefined);
@@ -2404,9 +2410,14 @@ async function renderSearchView(state) {
     const morphing = document.body.classList.contains("tabbar-searching");
     view.appendChild(buildInPageSearchInput("", !morphing));
   }
+  // Searched with books but no word (ADR-033 「책은 5권까지」): say what is missing above the recents.
+  const askKeyword = _askKeyword;
+  _askKeyword = false;
+  if (askKeyword) view.appendChild(el("p", { className: "search-note search-keyword-note" }, KEYWORD_NOTE));
   const dyn = el("div", { className: "search-empty-dynamic" });
   view.appendChild(dyn);
   $app.appendChild(view);
+  if (askKeyword) window.announce(KEYWORD_NOTE);
   // Filters surface as in-field tokens now (ADR-033 개정 B) — the book scope is
   // visible/removable in the mobile in-page bar or the desktop header field.
   // Sync after the view is connected so a deep-linked scope resolves names.
@@ -2730,6 +2741,11 @@ function autoNavigateTarget(result, screen) {
 // to verse references) from URL-triggered ones (show clickable card).
 let searchAutoNavigate = false;
 
+// The empty search view the next route draws asks for a word to search: a
+// search with books but none (`goSearch`). Taken once by renderSearchView.
+let _askKeyword = false;
+const KEYWORD_NOTE = "검색어를 입력해주세요.";
+
 // The recent-search line the last commit kept, with the search it ran
 // (`commitTopSearch`). The results of that search take it once.
 /** @type {{ q: string, books: string, label: string } | null} */
@@ -2758,7 +2774,16 @@ function takeCommittedSearch(query, filterBooks) {
  */
 function commitTopSearch(rawQuery, opts = {}) {
   const raw = (rawQuery || "").trim();
-  if (!raw) return "";
+  // A fresh query keeps the book-picker scope (union in: tokens) but resets
+  // pagination (ADR-033). A recent search carries its own scope: its in: tokens
+  // replace the chips, and one without any searches the whole Bible (ADR-014 D2).
+  /** @type {string[]} */
+  const scope = opts.fromHistory ? [] : (opts.filterBooks || currentSearchState().filterBooks);
+  if (!raw) {
+    // Enter on an empty field with books chosen: ask for a word (ADR-033 「책은 5권까지」).
+    if (scope.length) goSearch("", scope, true);
+    return "";
+  }
   // Absorb typed/example `in:<alias>` operators into book-scope chips so the
   // operator doesn't linger as raw text in the field (token UI). The alias map
   // is preloaded at boot (ensureAliasMap kick at module init), so this stays
@@ -2772,12 +2797,14 @@ function commitTopSearch(rawQuery, opts = {}) {
   if (_aliasMap && /(?:^|\s)in:/.test(raw)) {
     ({ keyword, ids } = extractInScope(raw, _aliasMap));
   }
-  // A fresh query keeps the book-picker scope (union in: tokens) but resets
-  // pagination (ADR-033). A recent search carries its own scope: its in: tokens
-  // replace the chips, and one without any searches the whole Bible (ADR-014 D2).
-  /** @type {string[]} */
-  const scope = opts.fromHistory ? [] : (opts.filterBooks || currentSearchState().filterBooks);
-  const filterBooks = ids.length ? Array.from(new Set(scope.concat(ids))) : scope;
+  let filterBooks = ids.length ? Array.from(new Set(scope.concat(ids))) : scope;
+  // No sixth chip from a typed `in:` (ADR-033 「책은 5권까지」): past the limit the
+  // tokens stay text in the query, the worker counts them with the chips,
+  // searches nothing and says so.
+  if (filterBooks.length > MAX_SCOPE_BOOKS && ids.length) {
+    keyword = raw;
+    filterBooks = scope;
+  }
   // The recent-search label holds the scope searched, chips included (ADR-014
   // D1). A scope-only commit has nothing to search and is not kept. A replayed
   // label written another way (an older `in:요한복음`) gives way to the new one.
@@ -2794,14 +2821,25 @@ function commitTopSearch(rawQuery, opts = {}) {
   // scope-only commit (in: absorbed → empty keyword) lands on the empty-query
   // view, which never consumes the flag (would leave it stale — Bugbot).
   searchAutoNavigate = opts.autoNavigate !== false && !!keyword;
-  const newPath = buildSearchUrl({ q: keyword, page: 1, filterBooks });
+  // Books but no word to search (`in:마르` alone): ask for one (ADR-033 「책은 5권까지」).
+  goSearch(keyword, filterBooks, !keyword && filterBooks.length > 0);
+  return keyword;
+}
+
+/**
+ * Go to the search for `q` within `filterBooks`, page 1. `askKeyword`: the empty
+ * view says 「검색어를 입력해주세요.」 (renderSearchView takes it once).
+ * @param {string} q @param {string[]} filterBooks @param {boolean} askKeyword
+ */
+function goSearch(q, filterBooks, askKeyword) {
+  _askKeyword = askKeyword;
+  const newPath = buildSearchUrl({ q, page: 1, filterBooks });
   // If path is unchanged, popstate won't fire — call route() directly.
   if (location.pathname + location.search === newPath) {
     window.route();
   } else {
     window.navigate(newPath);
   }
-  return keyword;
 }
 
 $searchInput.addEventListener("keydown", (e) => {

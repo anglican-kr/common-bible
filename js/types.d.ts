@@ -1351,7 +1351,7 @@ declare global {
 
     // ADR-030 P2: 탭 바 검색 모핑 — search.js 가 commitTopSearch 노출, tabbar.js 가
     // exitTabSearch 노출(views 의 syncTabBarActive 가 라우트 변경 시 호출).
-    commitTopSearch?: (rawQuery: string) => void;
+    commitTopSearch?: (rawQuery: string) => string;
     exitTabSearch?: () => void;
     syncTabSearchQuery?: () => void;
     resetTabCollapse?: () => void;

@@ -104,9 +104,10 @@ def test_book_filter_sheet_takes_five_books(desktop_context):
     assert opt("matt").get_attribute("aria-selected") == "true"
 
 
-def test_more_than_five_books_searches_nothing(page, base_url):
-    """책 칩과 입력 칸의 `in:`을 합쳐 다섯 권을 넘으면 찾지 않고, 결과 없음 화면에 「책은 5권까지 고를 수 있습니다.」를 보인다. 칩은 그대로
-    남아 뺄 책을 고를 수 있고, 이런 검색은 최근 검색에 남지 않는다(ADR-033 「책은 5권까지」, ADR-014 D1, 사용자 결정 2026-11-18)."""
+def test_typed_in_cannot_add_a_sixth_book(page, base_url):
+    """칩이 다섯 권이면 입력 칸의 `in:`은 여섯째 칩이 되지 않고 입력 칸에 글로 남는다. 검색 워커는 칩과 `in:`을 합쳐 세므로 찾지 않고,
+    결과 없음 화면에 「책은 5권까지 고를 수 있습니다.」를 보인다. 이런 검색은 최근 검색에 남지 않는다(ADR-033 「책은 5권까지」, ADR-014 D1,
+    사용자 결정 2026-11-18). 처음에는 여섯째 칩을 만들고 결과 화면에서만 알렸다."""
     page.goto(f"{base_url}/search?" + "&".join(f"in={b}" for b in FIVE_BOOKS))
     page.wait_for_selector("#search-bar .field-token", timeout=20_000)
     page.fill("#search-input", "사랑 in:요한")
@@ -115,12 +116,57 @@ def test_more_than_five_books_searches_nothing(page, base_url):
     state = page.evaluate("""() => ({
         text: document.querySelector('.empty-state').innerText,
         chips: document.querySelectorAll('#search-bar .field-token').length,
+        q: new URLSearchParams(location.search).get('q'),
         books: new URLSearchParams(location.search).getAll('in'),
+        field: document.querySelector('#search-input').value,
         recent: JSON.parse(localStorage.getItem('bible-search-history') || '[]').map((e) => e.q),
     })""")
     assert "책은 5권까지 고를 수 있습니다." in state["text"], state
-    assert state["chips"] == 6 and state["books"] == FIVE_BOOKS + ["john"], state
+    assert state["chips"] == 5 and state["books"] == FIVE_BOOKS, state
+    assert state["q"] == "사랑 in:요한" and state["field"] == "사랑 in:요한", state
     assert state["recent"] == [], state
+
+
+def test_book_filter_apply_is_blocked_past_five(desktop_context):
+    """주소로 다섯 권을 넘긴 채 책 선택 시트를 열면, 다섯 권 이하로 뺄 때까지 「적용」을 누를 수 없고 안내가 보인다(ADR-033 「책은 5권까지」)."""
+    page = desktop_context.new_page()
+    page.goto(f"{BASE_URL}/search?q={quote('사랑')}&" + "&".join(f"in={b}" for b in FIVE_BOOKS + ["matt"]))
+    page.wait_for_selector(".empty-state", timeout=20_000)
+    assert "책은 5권까지 고를 수 있습니다." in page.locator(".empty-state").inner_text()
+    page.locator("#search-bar .token-funnel").click()
+    apply = page.locator("#book-filter-sheet .book-filter-apply")
+    apply.wait_for(timeout=20_000)
+    assert apply.get_attribute("aria-disabled") == "true"
+    assert page.locator("#book-filter-sheet .book-filter-limit").text_content() == "책은 5권까지 고를 수 있습니다."
+    url = page.url
+    # Playwright는 aria-disabled인 요소를 누르지 않는다. 사람은 누를 수 있으므로 force로 누른다
+    apply.click(force=True)
+    assert page.url == url and page.locator("#book-filter-sheet").is_visible()
+    page.locator('#book-filter-sheet .book-filter-option[data-book-id="matt"]').click()
+    assert apply.get_attribute("aria-disabled") is None
+    apply.click()
+    page.wait_for_selector(".search-count", timeout=20_000)
+    assert page.evaluate("new URLSearchParams(location.search).getAll('in')") == FIVE_BOOKS
+
+
+@pytest.mark.parametrize("typed", ["", "in:마르"])
+def test_scope_without_a_word_asks_for_one(typed, page, base_url):
+    """책 칩만 두고 빈 입력 칸에서 Enter를 누르거나 `in:마르`처럼 범위만 쳐서 찾으면, 검색 화면에 「검색어를 입력해주세요.」를 보인다
+    (ADR-033 「책은 5권까지」, 사용자 결정 2026-11-18). 그전에는 아무 안내 없이 최근 검색 화면이 나왔다."""
+    page.goto(f"{base_url}/search?in=matt")
+    page.wait_for_selector("#search-bar .field-token", timeout=20_000)
+    page.fill("#search-input", typed)
+    page.press("#search-input", "Enter")
+    page.wait_for_selector(".search-keyword-note", timeout=20_000)
+    state = page.evaluate("""() => ({
+        note: document.querySelector('.search-keyword-note').textContent,
+        q: new URLSearchParams(location.search).get('q'),
+        books: new URLSearchParams(location.search).getAll('in'),
+        recent: JSON.parse(localStorage.getItem('bible-search-history') || '[]').length,
+    })""")
+    assert state["note"] == "검색어를 입력해주세요.", state
+    assert state["q"] is None and state["books"] == (["matt", "mark"] if typed else ["matt"]), state
+    assert state["recent"] == 0, state
 
 
 @pytest.mark.parametrize("ctx_name", ["mobile_context", "desktop_context"])
@@ -200,6 +246,7 @@ def test_book_filter_apply_with_only_a_typed_scope_focuses_the_field(ctx_name, r
     }})""")
     assert state["q"] is None and state["books"] == ["mark", "matt"], state
     assert state["focused"], state
+    assert page.locator(".search-keyword-note").text_content() == "검색어를 입력해주세요."
 
 
 @pytest.mark.parametrize("typed", ["아들", None])

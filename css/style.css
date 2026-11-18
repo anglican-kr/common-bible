@@ -3146,6 +3146,13 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
 
 .book-filter-apply:hover { opacity: 0.88; }
 
+/* 다섯 권을 넘긴 채 연 시트(ADR-033 「책은 5권까지」) */
+.book-filter-apply[aria-disabled="true"],
+.book-filter-apply[aria-disabled="true"]:hover {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .book-filter-apply:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent);
@@ -3706,6 +3713,13 @@ mark.search-highlight {
   line-height: var(--leading-snug);
   color: var(--text-secondary);
   word-break: keep-all;
+}
+
+/* 책만 두고 검색어 없이 찾았을 때의 안내(ADR-033 「책은 5권까지」). 최근 검색 위에 본문 색으로 둔다 */
+.search-keyword-note {
+  margin: var(--space-3) 0;
+  font-size: var(--font-sm);
+  color: var(--text);
 }
 
 /* 전례일 줄: 캘린더 목록의 줄(.cal-row)에서 날짜 칸을 뺐다. 찾은 독서는 본문 색으로 한 단계 크게 적는다. */
