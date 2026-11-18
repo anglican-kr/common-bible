@@ -2518,3 +2518,77 @@ def test_date_step_leaves_no_hover_circle_after_a_tap(browser, touch):
     finally:
         ctx.close()
 
+
+# ── 날짜 고르기(ADR-038 §2 「날짜 고르기」, 사용자 결정 2026-11-18) ──
+
+def _press_center(page, selector):
+    """좌표로 누른다(test_calendar_view.py `_press`와 같다. Playwright의 click은 누르기 전에 스크롤한다)."""
+    box = page.locator(selector).first.bounding_box()
+    page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+
+
+def _picker_state(page):
+    return page.evaluate("""() => {
+      const p = document.querySelector('.cal-picker');
+      if (!p || p.hidden || p.classList.contains('cal-picker-closing')) return null;
+      const a = document.activeElement;
+      return { name: p.getAttribute('aria-label'), title: p.querySelector('.cal-picker-title:not([hidden])').textContent,
+               current: p.querySelector('.cal-picker-body [aria-current="true"]')?.getAttribute('href') ?? null,
+               focus: p.contains(a) ? a.getAttribute('href') : null };
+    }""")
+
+
+def test_title_date_opens_the_day_picker_and_a_day_opens_its_lectionary(mobile_context):
+    """전례독서 상단 바의 날짜는 날짜 고르기 판을 여는 단추다. 펼침 표시는 없다. 그달의 날 판이 시트로 열리고 지금 보는 날이 골라져 있다.
+    날을 고르면 그날의 전례독서가 열리고(고른 전례일과 독서 세트는 남기지 않는다), 포커스는 새 화면의 날짜 단추로 돌아온다. 오늘은 날짜 없이
+    /lectionary다."""
+    page = mobile_context.new_page()
+    page.clock.set_fixed_time(datetime.datetime(2026, 11, 17, 12))
+    _open(page, "lectionary/2027-05-02")
+    btn = "#page-title .lect-date > .cal-title-btn"
+    assert page.get_attribute(btn, "aria-label") == "2027년 5월 2일 (일), 날짜 고르기"
+    assert page.get_attribute(btn, "aria-haspopup") == "dialog"
+    assert page.locator(f"{btn} time[datetime='2027-05-02']").count() == 1
+    assert page.evaluate("s => getComputedStyle(document.querySelector(s), '::after').content", btn) == "none"
+    _press_center(page, btn)
+    page.wait_for_selector(".cal-picker:not([hidden])")
+    page.wait_for_timeout(400)   # 시트가 올라오고 판을 불러와 포커스가 옮겨 간다
+    assert _picker_state(page) == {"name": "날짜 고르기", "title": "2027년 5월", "current": "/lectionary/2027-05-02",
+                                   "focus": "/lectionary/2027-05-02"}, _picker_state(page)
+    assert page.get_attribute(btn, "aria-expanded") == "true"
+    _press_center(page, ".cal-picker a[href='/lectionary/2027-05-10']")
+    page.wait_for_url(f"{BASE}/lectionary/2027-05-10")
+    page.wait_for_selector("#page-title .lect-date time[datetime='2027-05-10']")
+    page.wait_for_timeout(300)
+    assert _picker_state(page) is None
+    assert page.evaluate("document.activeElement.matches('#page-title .cal-title-btn')")
+    assert page.get_attribute(btn, "aria-expanded") == "false"
+    # 오늘은 날짜 없는 주소다
+    _open(page, "lectionary/2026-11-20")
+    _press_center(page, btn)
+    page.wait_for_selector(".cal-picker:not([hidden])")
+    page.wait_for_timeout(400)
+    assert page.locator(".cal-picker a[href='/lectionary']").get_attribute("aria-label").startswith("오늘, 11월 17일")
+
+
+def test_title_date_opens_the_picker_as_a_popover_on_desktop(desktop_context):
+    """마우스를 쓰는 넓은 화면에서는 날짜 아래 팝오버다. 키보드로도 열고, Esc로 닫으면 포커스가 날짜 단추로 돌아온다."""
+    page = desktop_context.new_page()
+    page.clock.set_fixed_time(datetime.datetime(2026, 11, 17, 12))
+    _open(page, "lectionary/2027-05-02")
+    btn = "#page-title .lect-date > .cal-title-btn"
+    page.evaluate("s => document.querySelector(s).focus({ preventScroll: true })", btn)
+    page.keyboard.press("Enter")
+    page.wait_for_selector(".cal-picker:not([hidden])")
+    page.wait_for_timeout(300)
+    assert _picker_state(page)["focus"] == "/lectionary/2027-05-02"
+    box = page.evaluate("""s => { const p = document.querySelector('.cal-picker').getBoundingClientRect();
+        const t = document.querySelector(s).getBoundingClientRect();
+        return { gap: p.top - t.bottom, mid: (p.left + p.right) / 2 - (t.left + t.right) / 2 }; }""", btn)
+    assert 0 < box["gap"] <= 12 and abs(box["mid"]) <= 1, box
+    assert page.locator(".cal-picker-scrim").is_hidden()
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(200)
+    assert _picker_state(page) is None
+    assert page.evaluate("s => document.activeElement === document.querySelector(s)", btn)
+

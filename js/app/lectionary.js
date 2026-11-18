@@ -1383,6 +1383,7 @@ function titleDateText(p) {
  * 전례독서의 머리 — 제목 자리에 날짜 이동 줄을 그린다(사용자 결정 2026-11-03: 스크롤해도 날짜와 「오늘」이 보이고 하루씩 옮길
  * 수 있게. 그전엔 본문 맨 위 줄이었고, 머리에는 「전례독서」가 있었다). 「전례독서」는 문서 제목(setTitle)에 남는다. 보이는 날짜는
  * 짧은 표기이고(`titleDateText`), 스크린 리더는 숨긴 전체 날짜를 읽는다. 오른쪽 단추는 마지막으로 쓴 보기의 그 날짜로 간다(ADR-038 §2).
+ * 날짜는 날짜 고르기 판을 여는 단추다(ADR-038 §2 「날짜 고르기」, 사용자 결정 2026-11-18). 캘린더의 달 제목과 같은 단추이고 펼침 표시는 없다.
  * @param {LectionaryModel} m
  */
 function commitTitleDateNav(m) {
@@ -1390,10 +1391,16 @@ function commitTitleDateNav(m) {
   const label = el("time", { className: "lect-date-label", datetime: m.date });
   label.appendChild(el("span", { className: "sr-only" }, dateLabel(m.date)));
   label.appendChild(el("span", { "aria-hidden": "true" }, titleDateText(p)));
+  // 판에서 날을 고르면 새 화면의 이 단추로 포커스가 돌아온다. 판의 링크와 같은 포커스 열쇠다(calendar.js `PICKER_FOCUS_KEY`)
+  const trigger = el("button", {
+    type: "button", className: "title-picker-btn cal-title-btn", "aria-haspopup": "dialog", "aria-expanded": "false",
+    "aria-label": `${dateLabel(m.date)}, 날짜 고르기`, "data-focus-key": "month-title", "data-date": m.date,
+  }, label);
+  trigger.addEventListener("click", (e) => openDatePicker(trigger, e.detail > 0));
   const history = window.tabHistory;
   const toList = !!history && history.isCalendarListPath(history.lastCalendarView());
   commitDateBar({
-    title: label,
+    title: trigger,
     todayHref: m.hrefs.today,
     prev: { href: m.hrefs.prev, label: "전날" },
     next: { href: m.hrefs.next, label: "다음날" },
@@ -1401,6 +1408,21 @@ function commitTitleDateNav(m) {
       ? { href: `/calendar/list/${m.date}`, label: "목록으로 보기", icon: HEADER_ICON_PATHS.viewList }
       : { href: `/calendar/${m.date.slice(0, 7)}`, label: "월간으로 보기", icon: HEADER_ICON_PATHS.viewMonth },
   });
+}
+
+/**
+ * 날짜 고르기 판을 연다. 판은 캘린더 모듈(calendar.js)에 있어 날짜를 누를 때 불러온다. 전례독서 화면을 여는 데는 그 모듈이 필요 없어 부팅과
+ * 첫 화면은 그대로이고, 서비스 워커가 설치 때 미리 받아 두므로 오프라인에서도 열린다.
+ * @param {HTMLElement} trigger @param {boolean} pointer  손가락이나 마우스로 눌렀다
+ */
+async function openDatePicker(trigger, pointer) {
+  try {
+    const mod = await import("./calendar.js");
+    // 불러오는 사이에 다른 화면으로 갔으면 열지 않는다
+    if (trigger.isConnected) mod.openLectionaryDatePicker(trigger, pointer);
+  } catch (err) {
+    console.error("날짜 고르기를 열지 못했습니다", err);
+  }
 }
 
 /** 색 점 + 라벨 하나. */

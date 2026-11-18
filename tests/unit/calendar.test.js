@@ -527,6 +527,11 @@ test("listPathOf: 오늘 줄에는 날짜를 적지 않고, 다른 날은 날짜
   assert.strictEqual(ctx.listPathOf("2027-01-01", "2026-10-15"), "/calendar/list/2027-01-01");
 });
 
+test("lectionaryPathOf: 전례독서 화면의 날짜 고르기 — 오늘은 날짜 없이 /lectionary, 다른 날은 그 날짜(ADR-038 §2, 2026-11-18)", () => {
+  assert.strictEqual(ctx.lectionaryPathOf("2026-11-18", "2026-11-18"), "/lectionary");
+  assert.strictEqual(ctx.lectionaryPathOf("2027-05-10", "2026-11-18"), "/lectionary/2027-05-10");
+});
+
 test("monthPathOf: 이번 달에는 날짜를 적지 않고, 다른 달은 그 달을 적는다", () => {
   assert.strictEqual(ctx.monthPathOf(2026, 11, "2026-11-17"), "/calendar");
   assert.strictEqual(ctx.monthPathOf(2026, 12, "2026-11-17"), "/calendar/2026-12");

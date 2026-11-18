@@ -324,6 +324,16 @@ function listPathOf(date, today) {
 }
 
 /**
+ * 그날의 전례독서 주소. 오늘은 날짜 없이 `/lectionary`라 다음 날 다시 열면 그날의 독서다(`listPathOf`와 같은 규칙). 전례독서 화면의 날짜
+ * 고르기가 쓴다(ADR-038 §2 「날짜 고르기」, 사용자 결정 2026-11-18). 고른 전례일과 독서 세트(`?obs=` 등)는 붙이지 않아 그날의 기본 독서다.
+ * @param {string} date  "YYYY-MM-DD"
+ * @param {string} today  "YYYY-MM-DD"
+ */
+function lectionaryPathOf(date, today) {
+  return date === today ? "/lectionary" : `/lectionary/${date}`;
+}
+
+/**
  * 그 달의 월간 주소. 이번 달에는 날짜를 적지 않아, 다음 달에 다시 열면 그달이다(`listPathOf`와 같은 규칙). 목록의 월간 단추와 날짜 고르기 판의
  * 달이 쓴다.
  * @param {number} y @param {number} m  1-12
@@ -613,9 +623,9 @@ function commitMonthBar(model, view) {
 }
 
 // ── 날짜 고르기(ADR-038 §2 「날짜 고르기」, DESIGN.md §6) ──
-// 상단 바의 달 제목이 여는 판이다. 휴대폰과 터치 기기에서는 바텀 시트, 마우스를 쓰는 넓은 화면에서는 제목 아래 팝오버이고, 같은 요소를 CSS가
-// 바꾼다. 판은 한 번에 한 단계만 보인다. 날과 월간의 달은 링크라 고르면 라우터가 그 화면을 그리고(route()가 열린 판을 닫는다), 해와 목록의 달은
-// 단추라 판 안에서 한 단계 아래로 내려간다. 판은 body 끝에 한 번 만들어 두고 다시 쓴다. 제목 칸(#page-title)은 `container-type`이 있어,
+// 상단 바의 달 제목이 여는 판이다. 전례독서 화면의 날짜도 같은 판을 연다(`openLectionaryDatePicker`, 2026-11-18). 휴대폰과 터치 기기에서는
+// 바텀 시트, 마우스를 쓰는 넓은 화면에서는 제목 아래 팝오버이고, 같은 요소를 CSS가 바꾼다. 판은 한 번에 한 단계만 보인다. 날과 월간의 달은
+// 링크라 고르면 라우터가 그 화면을 그리고(route()가 열린 판을 닫는다), 해와 목록, 전례독서의 달은 단추라 판 안에서 한 단계 아래로 내려간다. 판은 body 끝에 한 번 만들어 두고 다시 쓴다. 제목 칸(#page-title)은 `container-type`이 있어,
 // 그 안에 두면 고정 위치(position: fixed)가 화면이 아니라 그 칸을 기준으로 잡힌다.
 
 /** 제목 단추와 판의 링크가 함께 다는 포커스 열쇠. 고른 곳으로 간 뒤 라우터가 새 화면의 제목 단추로 포커스를 돌려준다(helpers.js `restoreFocusSpot`). */
@@ -628,14 +638,15 @@ const PICKER_POPOVER_GAP = 8;
 const PICKER_ICON = { down: "m6 9 6 6 6-6", prev: "m15 18-6-6 6-6", next: "m9 18 6-6-6-6" };
 
 /**
- * 판의 상태. `view`는 판을 연 보기, `mode`는 지금 단계다. `y`와 `m`은 날 판과 달 판이 보이는 해와 달이고, `yearStart`는 해 판의 첫 해다.
- * `current`는 지금 보는 날(목록의 맨 위 줄)이라 월간은 null이고, `currentMonth`는 지금 보는 달이다. `pointer`는 마지막 입력이 손가락이나 마우스였는지다. 열 때 정하고, 판이 열린 동안
+ * 판의 상태. `view`는 판을 연 화면(월간, 목록, 전례독서), `mode`는 지금 단계다. `y`와 `m`은 날 판과 달 판이 보이는 해와 달이고, `yearStart`는 해 판의 첫 해다.
+ * `current`는 지금 보는 날(목록의 맨 위 줄, 전례독서의 그날)이라 월간은 null이고, `currentMonth`는 지금 보는 달이다. `pointer`는 마지막 입력이 손가락이나 마우스였는지다. 열 때 정하고, 판이 열린 동안
  * 누르거나 키를 칠 때마다 바꾼다(`ensurePicker`). 그래서 탭으로 열고 Esc로 닫으면 제목 단추에 포커스 테두리를 그린다.
  * @typedef {{
- *   view: "month" | "list", mode: "day" | "month" | "year", y: number, m: number, yearStart: number,
+ *   view: PickerView, mode: "day" | "month" | "year", y: number, m: number, yearStart: number,
  *   current: string | null, currentMonth: { y: number, m: number }, today: string, trigger: HTMLElement, pointer: boolean,
  * }} PickerState
  */
+/** 판을 연 화면. 월간은 해와 달까지, 목록과 전례독서는 날까지 고른다(ADR-038 §2 「날짜 고르기」). @typedef {"month" | "list" | "lectionary"} PickerView */
 /** @type {PickerState | null} */
 let pickerState = null;
 /**
@@ -699,16 +710,17 @@ function announcePicker() {
 }
 
 /**
- * 날 판의 날 하나. 그날의 줄을 맨 위에 두는 목록으로 가는 링크이고, 이름은 월간 칸처럼 오늘, 날짜와 요일, 색이다.
- * @param {PickerDay} c @param {number} m @param {string} today  "YYYY-MM-DD"
+ * 날 판의 날 하나. 목록에서 열었으면 그날의 줄을 맨 위에 두는 목록으로, 전례독서에서 열었으면 그날의 전례독서로 가는 링크다. 이름은 월간 칸처럼
+ * 오늘, 날짜와 요일, 색이다.
+ * @param {PickerDay} c @param {number} m @param {string} today  "YYYY-MM-DD" @param {PickerView} view
  */
-function buildPickerDay(c, m, today) {
+function buildPickerDay(c, m, today, view) {
   const cls = ["cal-picker-day"];
   if (c.isCurrent) cls.push("is-selected");
   if (c.isToday) cls.push("is-today");
   const label = [c.isToday ? "오늘" : null, `${m}월 ${c.day}일 ${CAL_WEEKDAY_FULL[c.weekday]}`, c.colors.length ? colorNames(c.colors) : null]
     .filter(Boolean).join(", ");
-  const a = el("a", { className: cls.join(" "), href: listPathOf(c.date, today), "aria-label": label, "data-focus-key": PICKER_FOCUS_KEY });
+  const a = el("a", { className: cls.join(" "), href: view === "lectionary" ? lectionaryPathOf(c.date, today) : listPathOf(c.date, today), "aria-label": label, "data-focus-key": PICKER_FOCUS_KEY });
   if (c.isCurrent) a.setAttribute("aria-current", "true");
   a.appendChild(el("span", { className: "cal-picker-num" }, String(c.day)));
   const dots = el("span", { className: "cal-picker-dots", "aria-hidden": "true" });
@@ -717,8 +729,8 @@ function buildPickerDay(c, m, today) {
   return a;
 }
 
-/** 날 판: 요일 머리가 있는 표. 다른 달의 날은 빈 칸이다. @param {PickerDays} days @param {string} today  "YYYY-MM-DD" */
-function buildPickerDays(days, today) {
+/** 날 판: 요일 머리가 있는 표. 다른 달의 날은 빈 칸이다. @param {PickerDays} days @param {string} today  "YYYY-MM-DD" @param {PickerView} view */
+function buildPickerDays(days, today, view) {
   const table = el("table", { className: "cal-picker-days" });
   table.appendChild(el("caption", { className: "sr-only" }, days.title));
   const head = el("tr");
@@ -727,7 +739,7 @@ function buildPickerDays(days, today) {
   const rows = el("tbody");
   for (let i = 0; i < days.cells.length; i += 7) {
     const tr = el("tr");
-    for (const c of days.cells.slice(i, i + 7)) tr.appendChild(el("td", null, c ? buildPickerDay(c, days.m, today) : null));
+    for (const c of days.cells.slice(i, i + 7)) tr.appendChild(el("td", null, c ? buildPickerDay(c, days.m, today, view) : null));
     rows.appendChild(tr);
   }
   table.appendChild(rows);
@@ -774,7 +786,7 @@ function renderPicker() {
   if (s.mode === "day") {
     page = pickerDays(s.y, s.m, s.today, s.current, pickerColorsOf);
     stepLabels = ["이전 달", "다음 달"];
-    p.body.appendChild(buildPickerDays(page, s.today));
+    p.body.appendChild(buildPickerDays(page, s.today, s.view));
     p.title.setAttribute("aria-label", `${page.title}, 달 고르기`);
   } else if (s.mode === "month") {
     page = pickerMonths(s.y, s.today, s.currentMonth);
@@ -1021,14 +1033,16 @@ function ensurePicker() {
 }
 
 /**
- * 제목 단추를 누르면 판을 연다. 월간은 달 판, 목록은 날 판으로 연다. 목록에서 지금 보는 날은 상단 바 바로 아래 줄이다.
- * @param {HTMLElement} trigger @param {"month" | "list"} view
+ * 제목 단추를 누르면 판을 연다. 월간은 달 판, 목록과 전례독서는 날 판으로 연다. 목록에서 지금 보는 날은 상단 바 바로 아래 줄이고,
+ * 전례독서에서는 그 화면의 날(제목 단추의 `data-date`)이다.
+ * @param {HTMLElement} trigger @param {PickerView} view
  * @param {boolean} pointer  손가락이나 마우스로 눌렀다(키보드면 false)
  */
 function openCalendarPicker(trigger, view, pointer) {
   const p = ensurePicker();
   const listRoot = view === "list" ? $app.querySelector(".cal-list") : null;
-  const current = listRoot instanceof HTMLElement ? rowUnderBar(listRoot)?.dataset.date ?? null : null;
+  const current = view === "lectionary" ? trigger.dataset.date || null
+    : listRoot instanceof HTMLElement ? rowUnderBar(listRoot)?.dataset.date ?? null : null;
   const cp = current ? parseDate(current) : null;
   // 목록은 판의 달과 지금 보는 날을 같은 줄(맨 위 줄)에서 정한다. 상단 바의 달은 스크롤 뒤 다음 화면을 그릴 때 그 줄을 따라가므로(`followTopMonth`),
   // 그 사이에 누르면 앞의 달일 수 있다
@@ -1044,6 +1058,15 @@ function openCalendarPicker(trigger, view, pointer) {
   p.panel.setAttribute("aria-label", view === "month" ? "해와 달 고르기" : "날짜 고르기");
   renderPicker();
   p.overlay.open(null);
+}
+
+/**
+ * 전례독서 화면의 날짜를 누르면 같은 판을 날 판으로 연다(ADR-038 §2 「날짜 고르기」, 사용자 결정 2026-11-18). 전례독서 화면은 이 모듈을
+ * 부팅 때 받지 않고, 날짜를 누를 때 불러온다(lectionary.js `openLectionaryDatePicker`).
+ * @param {HTMLElement} trigger  `data-date`가 그 화면의 날이다 @param {boolean} pointer
+ */
+function openLectionaryDatePicker(trigger, pointer) {
+  openCalendarPicker(trigger, "lectionary", pointer);
 }
 
 // 앱 전체의 Esc 처리(app.js)가 열린 판을 먼저 닫는다. 닫았으면 true다. 판이 없거나 닫히는 움직임 중이면 이미 닫혔으므로 false라 Esc가 다음 단계로 간다
@@ -1574,4 +1597,4 @@ async function renderCalendarView(parsed) {
   return `${model.title} ${PAGE_TITLE}`;
 }
 
-export { renderCalendarView, buildMonthGrid, calendarDay };
+export { renderCalendarView, buildMonthGrid, calendarDay, openLectionaryDatePicker };
