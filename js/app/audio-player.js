@@ -7,12 +7,17 @@
 // the mp3 cannot load).
 //
 // Dependencies point downward only: appHelpers (el / clearNode / _$),
-// appStorage (audio time + show flag + persist hint), window.bibleAudioCache
+// appStorage (audio time + show flag + persist hint), data-fetch.js (the books
+// list, to leave out the books that have no recordings), window.bibleAudioCache
 // (ADR-016 LRU), and the bare `announce` global (app.js Phase 8 owner). The one
 // upward edge — applyAudioShow() needs the current route — reads `window.parsePath`
 // via the facade rather than importing views.js, which would create an
 // import cycle. ADR-034 PR5 (routing extraction) replaces that with a direct
 // downward import of parsePath.
+
+import { getBooksCache } from "./data-fetch.js";
+
+/** @typedef {import("../types.js").BookEntry} BookEntry */
 
 const { _$, el, clearNode } = window.appHelpers;
 const {
@@ -40,6 +45,22 @@ function formatTime(sec) {
   const s = Math.floor(sec % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
+
+// ── BEGIN AUDIO_BOOKS ── (tests/unit/audio-player.test.js가 이 블록을 잘라 내어 검증한다)
+// 전례시편과 송가(`division: "liturgical"`)는 녹음이 없어 「오디오 파일을 준비 중입니다.」를 보이지 않는다. 곧 들을 수
+// 있다는 뜻으로 읽히기 때문이다(사용자 결정 2026-11-19). 안내만 지우면 재생되지 않는 플레이어가 남으므로 오디오 바를 아예
+// 보이지 않는다(구현하며 정함, ADR-016 D4).
+/**
+ * Does this book get an audio bar? A book the list does not know (or no list yet) keeps the bar, as every book did
+ * before; its mp3 request then decides the notice (AUDIO_ERROR_NOTICE).
+ * @param {string} bookId @param {readonly BookEntry[] | null} books
+ * @returns {boolean}
+ */
+function bookHasAudio(bookId, books) {
+  const book = books ? books.find((b) => b.id === bookId) : undefined;
+  return !book || book.division !== "liturgical";
+}
+// ── END AUDIO_BOOKS ──
 
 // ── BEGIN AUDIO_ERROR_NOTICE ── (tests/unit/audio-player.test.js가 이 블록을 잘라 내어 검증한다)
 // Which notice the audio bar shows when a chapter's mp3 fails to load (ADR-016 D4). The media error cannot say why:
@@ -175,7 +196,7 @@ function hideAudioBar() {
 
 /** @param {string} bookId @param {number} chapter */
 function showAudioPlayer(bookId, chapter) {
-  if (!loadAudioShow()) { hideAudioBar(); return; }
+  if (!loadAudioShow() || !bookHasAudio(bookId, getBooksCache())) { hideAudioBar(); return; }
   _teardownAudio();
   _audioController = new AbortController();
   const { signal } = _audioController;

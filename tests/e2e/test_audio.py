@@ -12,6 +12,9 @@ and the notice when the mp3 cannot load (ADR-016 D4, known-issues §26):
   - offline, a chapter with no audio (Tobit 1): 「오디오 파일을 준비 중입니다.」
   - a Wi-Fi with no internet (navigator.onLine stays true): the offline notice
   - a check still waiting when the user moves on does not cover the next chapter's bar
+
+and the books with no recordings (ADR-016 D4, 2026-11-19):
+  - 전례시편 and 송가 show no audio bar and request no mp3, even when the player setting is switched on there
 """
 
 import json
@@ -98,6 +101,36 @@ def test_rapid_chapter_changes_no_errors(browser):
 
     page.wait_for_timeout(300)
     assert not errors, f"JS errors during rapid chapter changes: {errors}"
+    ctx.close()
+
+
+def test_liturgical_books_show_no_audio_bar(browser):
+    """전례시편과 송가는 녹음이 없어 오디오 바를 보이지 않고, mp3도 요청하지 않는다(2026-11-19, ADR-016 D4).
+
+    The 「준비 중」 notice must not appear there either. Switching the player setting on while on such a chapter
+    (applyAudioShow) keeps the bar hidden, and a chapter with audio brings the bar back.
+    """
+    ctx = browser.new_context(service_workers="block")
+    ctx.add_init_script("localStorage.clear();")
+    page = ctx.new_page()
+    audio_requests = []
+    page.on("request", lambda r: audio_requests.append(r.url) if "/data/audio/" in r.url else None)
+    page.route("**/data/audio/**", lambda route: route.fulfill(status=404))
+
+    for path in ("lps/23", "cant/1"):
+        page.goto(f"{BASE}/{path}")
+        page.wait_for_selector("article.chapter-text .verse")
+        page.wait_for_timeout(300)
+        assert not _is_visible(page, "#audio-bar"), f"{path}: the audio bar must stay hidden"
+        expect(page.locator(".audio-unavailable")).to_have_count(0)
+
+    page.evaluate("() => applyAudioShow(true)")
+    page.wait_for_timeout(300)
+    assert not _is_visible(page, "#audio-bar"), "turning the player on must not bring the bar to a 송가 chapter"
+    assert audio_requests == [], f"no mp3 may be requested for 전례시편 or 송가: {audio_requests}"
+
+    page.evaluate("() => navigate('/gen/1')")
+    page.wait_for_function("() => document.getElementById('audio-bar')?.hidden === false")
     ctx.close()
 
 

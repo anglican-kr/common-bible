@@ -2,12 +2,14 @@
 // Run with: node --test tests/unit/audio-player.test.js
 //
 // audio-player.js builds the player DOM at module top level (window.appHelpers, #audio-bar), so the player UI is e2e's
-// job (tests/e2e/test_audio.py). What IS unit-testable is the AUDIO_ERROR_NOTICE block: which notice the audio bar
-// shows when a chapter's mp3 fails to load (ADR-016 D4, known-issues §26). The block is sliced out (BEGIN/END markers,
+// job (tests/e2e/test_audio.py). What IS unit-testable is two blocks: AUDIO_BOOKS, which books get an audio bar at all,
+// and AUDIO_ERROR_NOTICE, which notice the audio bar shows when a chapter's mp3 fails to load (ADR-016 D4, known-issues
+// §26). Each block is sliced out (BEGIN/END markers,
 // as in tab-history.test.js) and run in a vm whose Cache Storage, fetch, navigator and timers are stubs, so each case
 // states what the device has saved and how the network answers, and checks which requests were sent.
 //
 // Coverage:
+//   - 전례시편과 송가는 오디오 바를 보이지 않는다(2026-11-19, ADR-016 D4). 다른 책과 책 목록에 없는 책은 보인다
 //   - 안내 문구 둘(사용자 결정 2026-11-07)과 오디오 목록의 키(머리말은 0장)
 //   - 오프라인 안내는 세 조건이 모두 맞을 때만 보인다: 목록에 있는 장, 이 기기에 없는 mp3, 서버에 연결할 수 없음
 //   - 오프라인 판단: navigator.onLine이 거짓이면 서버에 묻지 않는다. 참이면 HEAD 요청이 실패하거나
@@ -110,6 +112,29 @@ function noticeFor(device, src, key) {
 
 /** Let pending promise callbacks run (the stubs answer in microtasks). */
 const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+// ── 오디오 바를 보이는 책 ──
+
+test("전례시편과 송가는 오디오 바를 보이지 않는다(2026-11-19, ADR-016 D4)", () => {
+  const ctx = { module: { exports: {} } };
+  vm.createContext(ctx);
+  vm.runInContext(`${extractBlock("AUDIO_BOOKS")}\nmodule.exports = { bookHasAudio };`, ctx);
+  const { bookHasAudio } = ctx.module.exports;
+  // books.json의 해당 항목(공개 CI는 data/ 서브모듈을 받지 않는다)
+  const books = [
+    { id: "gen", division: "old_testament" },
+    { id: "ps", division: "old_testament" },
+    { id: "tob", division: "deuterocanon" },
+    { id: "lps", division: "liturgical" },
+    { id: "cant", division: "liturgical" },
+  ];
+  assert.equal(bookHasAudio("lps", books), false, "전례시편");
+  assert.equal(bookHasAudio("cant", books), false, "송가");
+  assert.equal(bookHasAudio("ps", books), true, "공동번역 시편은 녹음이 있다");
+  assert.equal(bookHasAudio("tob", books), true, "토비트는 녹음이 없어도 오디오 바를 두고 「준비 중」 안내를 보인다");
+  assert.equal(bookHasAudio("gen", null), true, "책 목록이 아직 없으면 전처럼 보인다");
+  assert.equal(bookHasAudio("xyz", books), true, "책 목록에 없는 책도 전처럼 보인다");
+});
 
 // ── 문구와 키 ──
 
