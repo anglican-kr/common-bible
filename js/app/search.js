@@ -1943,6 +1943,12 @@ let _bookSheetReturnField = null;
 // Fallback timer for the animated close (cleared on animationend / reopen).
 /** @type {ReturnType<typeof setTimeout> | null} */
 let _bookSheetCloseTimer = null;
+// The route whose results render must focus the rebuilt in-page bar's funnel: the sheet was opened from that bar and
+// its 「적용」 searched. The redraw drops the old bar with the funnel the sheet handed focus back to, so focus fell to
+// <body> (WCAG 2.4.3, ADR-033 D3). Matched against the route sequence, so a route that never drew the results (the
+// user moved on) leaves nothing behind for a later screen.
+/** @type {number | null} */
+let _inpageFunnelFocusSeq = null;
 
 function ensureBookSheet() {
   if (_bookSheet) return _bookSheet;
@@ -2052,8 +2058,12 @@ function ensureBookSheet() {
     // autofocuses itself on render, so skip it here. With a query, the input is
     // left unfocused so the keyboard doesn't cover the results — like Enter in
     // the pill, which blurs the input. The overlay hands focus back to the
-    // funnel; on the header and pill it stays there, but the in-page bar is
-    // rebuilt by the results render and its old funnel goes with it.
+    // funnel; on the header and pill it stays there, but the results render
+    // rebuilds the in-page bar and its old funnel goes with it, so that render
+    // focuses the new bar's funnel (`_inpageFunnelFocusSeq`).
+    if (searched && field && field.container.id === "search-inpage-bar") {
+      _inpageFunnelFocusSeq = window.routeSeq?.() ?? null;
+    }
     if (!searched && field && field.container.id !== "search-inpage-bar" && field.input.isConnected) {
       field.input.focus();
     }
@@ -2362,6 +2372,12 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   // Book/AND filters surface as in-field tokens (ADR-033 개정 B); sync the
   // header/pill/in-page fields for this query + scope (after view is connected).
   syncSearchFields();
+  // The book sheet's 「적용」 searched from this bar: focus its new funnel (after the sync above shows the token zone).
+  if (_inpageFunnelFocusSeq === seq) {
+    _inpageFunnelFocusSeq = null;
+    const funnel = /** @type {HTMLElement | null} */ (view.querySelector("#search-inpage-bar .token-funnel"));
+    if (funnel && document.activeElement === document.body) funnel.focus();
+  }
 
   resultsTarget.appendChild(el("div", { className: "loading", "aria-live": "polite" }, "검색 중…"));
 

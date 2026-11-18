@@ -107,6 +107,35 @@ def test_book_filter_apply_with_only_a_typed_scope_focuses_the_field(ctx_name, r
     assert state["focused"], state
 
 
+@pytest.mark.parametrize("typed", ["아들", None])
+def test_book_filter_apply_from_the_in_page_bar_focuses_its_new_funnel(typed, mobile_context):
+    """휴대폰의 페이지 안 검색창(탭 바 검색을 열지 않고 들어온 검색 화면)에서 연 시트로 찾으면, 결과 화면이 그 검색창을 새로 그린다.
+    포커스는 새 검색창의 깔때기로 간다(ADR-033 D3, WCAG 2.4.3). 옛 깔때기와 함께 사라져 문서 본문에 남던 때가 있었다(코드 리뷰
+    2026-11-18). 새로 친 검색어(「아들」)와, 검색어는 그대로 두고 책만 고른 경우(None)를 본다."""
+    page = mobile_context.new_page()
+    page.goto(f"{BASE_URL}/search?q={quote('사랑')}")
+    page.wait_for_selector(".search-count", timeout=20_000)
+    bar = "#search-inpage-bar"
+    if typed is not None:
+        page.locator(f"{bar} #search-inpage-input").fill(typed)
+    page.locator(f"{bar} .token-funnel").click()
+    page.wait_for_selector('#book-filter-sheet:not([hidden]) .book-filter-option[data-book-id="mark"]', timeout=20_000)
+    page.locator('#book-filter-sheet .book-filter-option[data-book-id="mark"]').click()
+    page.locator("#book-filter-sheet .book-filter-apply").click()
+    # 새 결과(모두 마르코의 복음서)가 그려질 때까지 기다린다. 옛 결과의 머리(.search-count)가 남아 있을 수 있다
+    page.wait_for_function("""() => {
+        const refs = [...document.querySelectorAll('.search-result-ref')].map((n) => n.textContent);
+        return refs.length > 0 && refs.every((r) => r.startsWith('마르코의 복음서 '));
+    }""", timeout=20_000)
+    state = page.evaluate("""() => ({
+        q: new URLSearchParams(location.search).get('q'),
+        funnelFocused: document.activeElement === document.querySelector('#search-inpage-bar .token-funnel'),
+        active: document.activeElement.id || document.activeElement.className || document.activeElement.tagName,
+    })""")
+    assert state["q"] == (typed or "사랑"), state
+    assert state["funnelFocused"], state
+
+
 def test_book_filter_apply_keeps_a_typed_verse_reference_on_the_results(desktop_context):
     """「적용」이 친 검색어를 함께 찾아도 구절 표기로 장을 바로 열지 않는다. 장으로 바로 가는 것은 Enter뿐이다(ADR-033 D3).
     요한 7:16은 읽는 전례일이 없어 Enter면 장을 연다(`test_verse_reference_navigates_to_chapter`)."""
