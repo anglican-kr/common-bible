@@ -1,4 +1,5 @@
 ---
+pr: 595
 date: 2026-11-18
 branch: feat/psalter-search
 title: "feat: 성시 검색"
