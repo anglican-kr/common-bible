@@ -1694,9 +1694,6 @@ let _aliasMap = null;
 // _aliasMap, so the labels replay through it.
 /** @type {Map<string, string> | null} */
 let _aliasById = null;
-// Whether _aliasMap holds the worker's alias table. Only then does an `in:` it
-// cannot resolve name a book the search does not know (commitTopSearch).
-let _aliasMapHasMeta = false;
 async function ensureAliasMap() {
   if (_aliasMap) return _aliasMap;
   /** @type {Map<string, string>} */
@@ -1738,7 +1735,6 @@ async function ensureAliasMap() {
     }
     _aliasMap = map;
     _aliasById = byId;
-    _aliasMapHasMeta = !!meta;
   } catch { /* leave _aliasMap null so a later call retries */ }
   return _aliasMap || map;
 }
@@ -2515,6 +2511,16 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
 
   const result = await doSearch(query, page, pageSize, onPartial, { scopeBooks: filterBooks });
 
+  // A book after `in:` the worker does not know only gets a notice (ADR-005), so
+  // the line the commit kept for this search goes again (ADR-014 D1). The worker
+  // decides, so this holds before the app's alias map loads and without
+  // search-meta.json too. Before the stale check: it is about the search run.
+  const committed = takeCommittedSearch(query, filterBooks);
+  if (committed && result && result.unmatchedScopes && result.unmatchedScopes.length > 0) {
+    removeSearchHistory(committed);
+    if (topSearchHistory) topSearchHistory.refresh();
+  }
+
   // Bail if the user navigated away while the search was running — the captured
   // resultsTarget is stale and #app belongs to a newer view now (ADR-033, Bugbot).
   if (isStale()) return;
@@ -2697,6 +2703,24 @@ function autoNavigateTarget(result, screen) {
 // to verse references) from URL-triggered ones (show clickable card).
 let searchAutoNavigate = false;
 
+// The recent-search line the last commit kept, with the search it ran
+// (`commitTopSearch`). The results of that search take it once.
+/** @type {{ q: string, books: string, label: string } | null} */
+let _committedSearch = null;
+
+/**
+ * The recent-search line kept for this search by the commit that ran it, or
+ * null (a search from the URL, back navigation, a later commit). Taken once.
+ * @param {string} query @param {string[]} filterBooks
+ * @returns {string | null}
+ */
+function takeCommittedSearch(query, filterBooks) {
+  const c = _committedSearch;
+  if (!c || c.q !== query || c.books !== filterBooks.join(" ")) return null;
+  _committedSearch = null;
+  return c.label;
+}
+
 /**
  * @param {string} rawQuery
  * @param {{ filterBooks?: string[], autoNavigate?: boolean, fromHistory?: boolean }} [opts]
@@ -2730,15 +2754,13 @@ function commitTopSearch(rawQuery, opts = {}) {
   // The recent-search label holds the scope searched, chips included (ADR-014
   // D1). A scope-only commit has nothing to search and is not kept. A replayed
   // label written another way (an older `in:요한복음`) gives way to the new one.
-  // An `in:` left in the keyword once the alias map is loaded names a book the
-  // search does not know: the results only say so (ADR-005), so it is not kept,
-  // and a recent search like that is dropped when tapped (ADR-014 D1).
-  // Without the worker's table (search-meta.json failed to load) the map may
-  // miss an alias the worker resolves, so the search is kept.
-  const unknownBook = _aliasMapHasMeta && keyword.search(IN_TOKEN_RE) !== -1;
+  // The worker may still answer that a book after `in:` is unknown: the results
+  // then drop this line again (`takeCommittedSearch`, ADR-014 D1).
   if (keyword) {
     if (opts.fromHistory) removeSearchHistory(raw);
-    if (!unknownBook) pushSearchHistory(historyLabel(keyword, filterBooks, _aliasById));
+    const label = historyLabel(keyword, filterBooks, _aliasById);
+    pushSearchHistory(label);
+    _committedSearch = { q: keyword, books: filterBooks.join(" "), label };
     if (topSearchHistory) topSearchHistory.refresh();
   }
   // Arm verse-ref auto-navigate only when there's a keyword to search; a

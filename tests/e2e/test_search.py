@@ -455,6 +455,22 @@ def test_in_operator_restricts_to_single_book(page, base_url):
     assert all(b == "john" for b in book_ids), f"Expected only 'john', got: {set(book_ids)}"
 
 
+def test_unknown_book_leaves_no_recent_before_the_alias_map_loads(page, base_url):
+    """앱의 별칭 맵을 읽기 전(앱을 켠 직후)에 모르는 책 이름으로 찾아도 최근 검색에 남지 않는다. 검색을 실행할 때 넣은 줄을 검색 워커가
+    모르는 책 이름이라고 답하면 다시 뺀다(ADR-014 D1). 앱이 별칭 맵으로 가려내던 때는 이때 기록에 남았다(사용자 결정 2026-11-18).
+    책 목록(`books.json`)을 받지 못하게 해 별칭 맵이 없는 상태를 만든다. 검색 워커는 책 목록 없이 찾는다."""
+    page.route("**/data/books.json", lambda route: route.abort())
+    page.goto(base_url)
+    page.wait_for_selector("#search-input", state="attached")
+
+    page.fill("#search-input", "사랑 in:없는책")
+    page.press("#search-input", "Enter")
+    page.wait_for_selector(".empty-state", timeout=20_000)
+    assert "‘없는책’이라는 책을 찾지 못했어요." in page.locator(".empty-state").inner_text()
+    recent = page.evaluate("JSON.parse(localStorage.getItem('bible-search-history') || '[]').map((e) => e.q)")
+    assert recent == [], recent
+
+
 @pytest.mark.parametrize("alias", ["마르", "막", "마가복음", "mark"])
 def test_in_operator_alias_becomes_a_chip(alias, page, base_url):
     """입력 칸에 친 `in:<별칭>`은 검색이 알아보는 별칭이면 모두 책 칩이 되고, 입력 칸에는 낱말만 남는다(ADR-033). 그전에는 책의 짧은
