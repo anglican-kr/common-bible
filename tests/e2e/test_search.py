@@ -503,23 +503,26 @@ def test_in_operator_multiple_aliases_or(page, base_url):
     assert book_ids <= {"john", "matt"}, f"Expected subset of {{john, matt}}, got: {book_ids}"
 
 
-def test_in_operator_unmatched_alias_blocks_search(page, base_url):
+@pytest.mark.parametrize("name, particle", [("없는책", "이라는"), ("송가", "라는")])
+def test_in_operator_unmatched_alias_blocks_search(name, particle, page, base_url):
     """`사랑 in:없는책`은 찾지 않고, 다른 결과 없음 화면과 같은 모양으로 그 책을 찾지 못했다고 알리며 고치는 방법을 적는다. 검색 예시에는
     책 범위 예시(`사랑 in:요한`)도 있다. 최근 검색에는 넣지 않는다(ADR-005 「검색 연산자 `in:`」, ADR-014 D1). 결과 위에 「in:없는책 —
-    알 수 없는 책 별칭입니다」 한 줄만 보이던 때가 있었다(사용자 결정 2026-11-18)."""
+    알 수 없는 책 별칭입니다」 한 줄만 보이던 때가 있었다(사용자 결정 2026-11-18). 검색 색인에 없는 송가(기도서 번역)도 칩이 되지 않고
+    같은 안내가 나온다. 칩이 되면 아무것도 찾지 않고 결과 없음만 나왔다(ADR-033, 코드 리뷰 2026-11-18)."""
     page.goto(base_url)
     wait_app_ready(page)
 
     page.fill("#search-input", "사랑")
     page.press("#search-input", "Enter")
     page.wait_for_selector(".search-count", timeout=20_000)
-    page.fill("#search-input", "사랑 in:없는책")
+    page.fill("#search-input", f"사랑 in:{name}")
     page.press("#search-input", "Enter")
     page.wait_for_selector(".empty-state", timeout=20_000)
     assert page.locator(".search-result-item:not(.ref-match-item)").count() == 0
     empty_text = page.locator(".empty-state").inner_text()
     assert "검색 결과가 없습니다" in empty_text, empty_text
-    assert "‘없는책’이라는 책을 찾지 못했어요. in: 뒤에는 마르, 마르코처럼 책 이름을 적어 주세요." in empty_text, empty_text
+    assert f"‘{name}’{particle} 책을 찾지 못했어요. in: 뒤에는 마르, 마르코처럼 책 이름을 적어 주세요." in empty_text, empty_text
+    assert page.locator("#search-bar .field-token").count() == 0
     examples = page.locator(".search-example-q").all_inner_texts()
     assert "사랑 in:요한" in examples, examples
     recent = page.evaluate("JSON.parse(localStorage.getItem('bible-search-history') || '[]').map((e) => e.q)")

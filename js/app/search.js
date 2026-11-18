@@ -1694,6 +1694,9 @@ let _aliasMap = null;
 // _aliasMap, so the labels replay through it.
 /** @type {Map<string, string> | null} */
 let _aliasById = null;
+// Whether _aliasMap holds the worker's alias table. Only then does an `in:` it
+// cannot resolve name a book the search does not know (commitTopSearch).
+let _aliasMapHasMeta = false;
 async function ensureAliasMap() {
   if (_aliasMap) return _aliasMap;
   /** @type {Map<string, string>} */
@@ -1702,11 +1705,11 @@ async function ensureAliasMap() {
   const byId = new Map();
   // Fetched alongside the books; it is precached with the app shell (sw.js).
   // Without it the books' own names and ids still work.
-  /** @type {Promise<Record<string, unknown>>} */
-  const metaAliases = fetch(`${DATA_DIR}/search-meta.json`)
+  /** @type {Promise<{ aliases?: Record<string, unknown>, books?: Record<string, unknown> } | null>} */
+  const metaPromise = fetch(`${DATA_DIR}/search-meta.json`)
     .then((res) => (res.ok ? res.json() : null))
-    .then((meta) => (meta && meta.aliases) || {})
-    .catch(() => ({}));
+    .then((meta) => (meta && meta.aliases && meta.books ? meta : null))
+    .catch(() => null);
   try {
     // window.loadBooks (data-fetch.js) is defined by a module that loads AFTER
     // search.js in index.html, so the boot-time preload kick can fire before it
@@ -1718,11 +1721,15 @@ async function ensureAliasMap() {
     }
     if (typeof window.loadBooks !== "function") return map;
     const books = await window.loadBooks();
-    const ids = new Set(books.map((b) => b.id));
-    for (const [alias, id] of Object.entries(await metaAliases)) {
+    const meta = await metaPromise;
+    // With the worker's table, only the books it searches become chips: a book
+    // outside its index (전례시편, 송가) would search nothing without a word.
+    const ids = new Set(books.map((b) => b.id).filter((id) => !meta || Object.hasOwn(meta.books || {}, id)));
+    for (const [alias, id] of Object.entries((meta && meta.aliases) || {})) {
       if (typeof id === "string" && ids.has(id)) map.set(alias.toLowerCase(), id);
     }
     for (const b of books) {
+      if (!ids.has(b.id)) continue;
       map.set(b.id.toLowerCase(), b.id);
       if (b.short_name_ko) map.set(b.short_name_ko.toLowerCase(), b.id);
       if (b.name_ko) map.set(b.name_ko.toLowerCase(), b.id);
@@ -1731,6 +1738,7 @@ async function ensureAliasMap() {
     }
     _aliasMap = map;
     _aliasById = byId;
+    _aliasMapHasMeta = !!meta;
   } catch { /* leave _aliasMap null so a later call retries */ }
   return _aliasMap || map;
 }
@@ -2725,7 +2733,9 @@ function commitTopSearch(rawQuery, opts = {}) {
   // An `in:` left in the keyword once the alias map is loaded names a book the
   // search does not know: the results only say so (ADR-005), so it is not kept,
   // and a recent search like that is dropped when tapped (ADR-014 D1).
-  const unknownBook = !!_aliasMap && /(?:^|\s)in:\s*\S/.test(keyword);
+  // Without the worker's table (search-meta.json failed to load) the map may
+  // miss an alias the worker resolves, so the search is kept.
+  const unknownBook = _aliasMapHasMeta && keyword.search(IN_TOKEN_RE) !== -1;
   if (keyword) {
     if (opts.fromHistory) removeSearchHistory(raw);
     if (!unknownBook) pushSearchHistory(historyLabel(keyword, filterBooks, _aliasById));
