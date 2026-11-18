@@ -489,6 +489,10 @@ const REF_MAX_SEGMENTS = 200;
 // alias is ignored (`사랑 in: 요한` works the same as `사랑 in:요한`).
 const IN_RE = /(?:^|\s)in:\s*(\S+)/g;
 
+// 한 번에 고를 수 있는 책의 수(ADR-033 「책은 5권까지」). 책 칩과 `in:`을 합쳐 센다. js/app/search.js에도
+// 같은 값이 있고(책 선택 시트), tests/unit/search.test.js가 둘이 같은지 본다.
+const MAX_SCOPE_BOOKS = 5;
+
 // ── BEGIN QUOTE_MATCH ──
 // Two identical copies: js/search-worker.js (a classic worker script, which
 // cannot import a module) and js/app/search.js. tests/unit/search.test.js
@@ -1406,6 +1410,13 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       if (unmatched.length > 0) {
         post("results", { searchId, q: trimmed, refMatch: null, bookOnly: null, ...NO_LECTIONARY,
           results: [], total: 0, page, pageSize, unmatchedScopes: unmatched });
+        return;
+      }
+
+      // More books than one search may take: search none and say so, rather than drop some the user chose (ADR-033).
+      if (restrictBooks.size > MAX_SCOPE_BOOKS) {
+        post("results", { searchId, q: trimmed, refMatch: null, bookOnly: null, ...NO_LECTIONARY,
+          results: [], total: 0, page, pageSize, unmatchedScopes: [], tooManyBooks: true });
         return;
       }
 

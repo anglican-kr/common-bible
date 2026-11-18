@@ -68,6 +68,61 @@ def _apply_books_to_typed_query(page, ctx_name, typed, book_id):
     return field
 
 
+FIVE_BOOKS = ["gen", "exod", "lev", "num", "deut"]
+
+
+def test_book_filter_sheet_takes_five_books(desktop_context):
+    """책 선택 시트에서는 다섯 권까지 고른다. 다섯 권을 고르면 고르지 않은 책은 흐려지고 누를 수 없으며, 「적용」 위에 「책은 5권까지 고를 수
+    있습니다.」가 보인다. 한 권을 빼면 다시 고를 수 있다(ADR-033 「책은 5권까지」, 사용자 결정 2026-11-18)."""
+    page = desktop_context.new_page()
+    page.goto(f"{BASE_URL}/search?q={quote('사랑')}")
+    page.wait_for_selector(".search-count", timeout=20_000)
+    page.locator("#search-bar .token-funnel").click()
+    opt = lambda book: page.locator(f'#book-filter-sheet .book-filter-option[data-book-id="{book}"]')
+    opt("gen").wait_for(timeout=20_000)
+    for book in FIVE_BOOKS:
+        opt(book).click()
+    state = page.evaluate("""() => ({
+        note: document.querySelector('#book-filter-sheet .book-filter-limit').textContent,
+        disabled: document.querySelectorAll('#book-filter-sheet .book-filter-option[aria-disabled="true"]').length,
+        options: document.querySelectorAll('#book-filter-sheet .book-filter-option').length,
+        apply: document.querySelector('#book-filter-sheet .book-filter-apply').textContent,
+    })""")
+    assert state["note"] == "책은 5권까지 고를 수 있습니다.", state
+    assert state["disabled"] == state["options"] - 5, state
+    assert state["apply"] == "적용 (5)", state
+
+    # Playwright는 aria-disabled인 요소를 누르지 않는다. 사람은 누를 수 있으므로 force로 누른다
+    opt("matt").click(force=True)
+    assert opt("matt").get_attribute("aria-selected") == "false"
+    assert page.locator("#book-filter-sheet .book-filter-apply").text_content() == "적용 (5)"
+
+    opt("deut").click()
+    assert page.locator("#book-filter-sheet .book-filter-limit").text_content() == ""
+    assert page.locator('#book-filter-sheet .book-filter-option[aria-disabled="true"]').count() == 0
+    opt("matt").click()
+    assert opt("matt").get_attribute("aria-selected") == "true"
+
+
+def test_more_than_five_books_searches_nothing(page, base_url):
+    """책 칩과 입력 칸의 `in:`을 합쳐 다섯 권을 넘으면 찾지 않고, 결과 없음 화면에 「책은 5권까지 고를 수 있습니다.」를 보인다. 칩은 그대로
+    남아 뺄 책을 고를 수 있고, 이런 검색은 최근 검색에 남지 않는다(ADR-033 「책은 5권까지」, ADR-014 D1, 사용자 결정 2026-11-18)."""
+    page.goto(f"{base_url}/search?" + "&".join(f"in={b}" for b in FIVE_BOOKS))
+    page.wait_for_selector("#search-bar .field-token", timeout=20_000)
+    page.fill("#search-input", "사랑 in:요한")
+    page.press("#search-input", "Enter")
+    page.wait_for_selector(".empty-state", timeout=20_000)
+    state = page.evaluate("""() => ({
+        text: document.querySelector('.empty-state').innerText,
+        chips: document.querySelectorAll('#search-bar .field-token').length,
+        books: new URLSearchParams(location.search).getAll('in'),
+        recent: JSON.parse(localStorage.getItem('bible-search-history') || '[]').map((e) => e.q),
+    })""")
+    assert "책은 5권까지 고를 수 있습니다." in state["text"], state
+    assert state["chips"] == 6 and state["books"] == FIVE_BOOKS + ["john"], state
+    assert state["recent"] == [], state
+
+
 @pytest.mark.parametrize("ctx_name", ["mobile_context", "desktop_context"])
 def test_book_filter_apply_searches_the_typed_query(ctx_name, request):
     """책 선택 시트의 「적용」은 입력 칸에 보이는 검색어를 고른 책 안에서 찾는다(ADR-033 D3). Enter를 누르지 않고 친 검색어도

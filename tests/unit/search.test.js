@@ -1499,6 +1499,13 @@ test("QUOTE_MATCH: 검색 워커와 화면 코드의 두 사본이 같다", () =
   assert.strictEqual(extractBlock("QUOTE_MATCH"), inWorker);
 });
 
+test("MAX_SCOPE_BOOKS: 책 선택 시트와 검색 워커가 같은 한도를 쓴다(ADR-033 「책은 5권까지」)", () => {
+  const workerSource = fs.readFileSync(path.resolve(__dirname, "../../js/search-worker.js"), "utf8");
+  const limitOf = (src) => (src.match(/^const MAX_SCOPE_BOOKS = (\d+);$/m) || [])[1];
+  assert.strictEqual(limitOf(SEARCH_SOURCE), "5");
+  assert.strictEqual(limitOf(workerSource), "5");
+});
+
 test("normalizeForMatch: 따옴표 여섯 가지를 지우고 소문자로 바꾼다", () => {
   const q = loadQuoteMatch();
   assert.strictEqual(q.normalizeForMatch(`"빛이" '생겨라' “Amen” ‘x’`), "빛이 생겨라 amen x");

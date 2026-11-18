@@ -1207,6 +1207,13 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
     container.appendChild(buildSearchExamples(false, screen.scoped));
     return `"${query}" 검색 결과 0건. ${note}`;
   }
+  // More books than one search takes (ADR-033 「책은 5권까지」): the worker searched none. The chips stay in the field
+  // so the user picks which to remove.
+  if (result.tooManyBooks) {
+    container.appendChild(buildSearchEmptyState("검색 결과가 없습니다", SCOPE_LIMIT_NOTE));
+    container.appendChild(buildSearchExamples(true, screen.scoped));
+    return `"${query}" 검색 결과 0건. ${SCOPE_LIMIT_NOTE}`;
+  }
 
   const { isPending, lect, hasBible, group } = resultGroups(result, screen);
   const answer = buildAnswer(result, screen);
@@ -1740,6 +1747,11 @@ async function ensureAliasMap() {
 }
 
 // ── BEGIN SCOPE_HELPERS ──
+// 한 번에 고를 수 있는 책의 수(ADR-033 「책은 5권까지」). 책 칩과 `in:`을 합쳐 센다. 검색 워커(js/search-worker.js)에도
+// 같은 값이 있고, tests/unit/search.test.js가 둘이 같은지 본다.
+const MAX_SCOPE_BOOKS = 5;
+const SCOPE_LIMIT_NOTE = `책은 ${MAX_SCOPE_BOOKS}권까지 고를 수 있습니다.`;
+
 // Pure query-scope helpers — `in:<book>` extraction (client-side mirror of the
 // worker's parseQuery) + book-name lookup. Sliced + unit-tested in
 // tests/unit/search.test.js with a stubbed aliasMap / _bookMap.
@@ -1995,7 +2007,7 @@ function syncSearchFields() {
 // driven by the shared overlay controller (ADR-032).
 
 
-/** @type {{ overlay: any, body: HTMLElement, working: Set<string>, updateApplyLabel: () => void } | null} */
+/** @type {{ overlay: any, body: HTMLElement, working: Set<string>, syncSelection: () => void } | null} */
 let _bookSheet = null;
 // The field whose funnel opened the sheet — "적용" focuses its query input so the
 // user can type the term right away (keyboard up) instead of focus returning to
@@ -2043,7 +2055,11 @@ function ensureBookSheet() {
 
   const body = el("div", { className: "book-filter-body" });
   const foot = el("div", { className: "book-filter-foot" });
+  // 다섯 권을 고르면 보이는 안내(ADR-033 「책은 5권까지」). 대화 상자 안의 상태 줄이라 화면 낭독기가 읽는다. 늘 두고 글만 바꾼다:
+  // 숨겼다가 보이면 읽지 않는 낭독기가 있다.
+  const limitNote = el("p", { className: "book-filter-limit", role: "status" });
   const applyBtn = el("button", { type: "button", className: "book-filter-apply" }, "적용");
+  foot.appendChild(limitNote);
   foot.appendChild(applyBtn);
 
   panel.appendChild(resize);
@@ -2056,8 +2072,16 @@ function ensureBookSheet() {
 
   /** @type {Set<string>} */
   const working = new Set();
-  function updateApplyLabel() {
+  // The apply label, and at the limit the notice plus every unchosen book
+  // dimmed and unpressable (`aria-disabled` keeps it focusable and read).
+  function syncSelection() {
     applyBtn.textContent = working.size ? `적용 (${working.size})` : "적용";
+    const full = working.size >= MAX_SCOPE_BOOKS;
+    limitNote.textContent = full ? SCOPE_LIMIT_NOTE : "";
+    body.querySelectorAll(".book-filter-option").forEach((o) => {
+      if (full && o.getAttribute("aria-selected") !== "true") o.setAttribute("aria-disabled", "true");
+      else o.removeAttribute("aria-disabled");
+    });
   }
 
   const overlay = window.appOverlay.createOverlay({
@@ -2095,7 +2119,7 @@ function ensureBookSheet() {
   resetBtn.addEventListener("click", () => {
     working.clear();
     body.querySelectorAll(".book-filter-option").forEach((o) => o.setAttribute("aria-selected", "false"));
-    updateApplyLabel();
+    syncSelection();
   });
   applyBtn.addEventListener("click", () => {
     const filterBooks = Array.from(working);
@@ -2138,11 +2162,12 @@ function ensureBookSheet() {
     if (!row) return;
     const id = /** @type {HTMLElement} */ (row).dataset.bookId || "";
     if (working.has(id)) { working.delete(id); row.setAttribute("aria-selected", "false"); }
+    else if (working.size >= MAX_SCOPE_BOOKS) return;
     else { working.add(id); row.setAttribute("aria-selected", "true"); }
-    updateApplyLabel();
+    syncSelection();
   });
 
-  _bookSheet = { overlay, body, working, updateApplyLabel };
+  _bookSheet = { overlay, body, working, syncSelection };
   return _bookSheet;
 }
 
@@ -2206,7 +2231,7 @@ async function openBookFilterSheet(returnFocusEl) {
   sheet.working.clear();
   for (const id of currentSearchState().filterBooks) sheet.working.add(id);
   renderBookFilterList(sheet.body, books, sheet.working);
-  sheet.updateApplyLabel();
+  sheet.syncSelection();
   sheet.overlay.open(returnFocusEl || undefined);
 }
 
@@ -2511,12 +2536,14 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
 
   const result = await doSearch(query, page, pageSize, onPartial, { scopeBooks: filterBooks });
 
-  // A book after `in:` the worker does not know only gets a notice (ADR-005), so
-  // the line the commit kept for this search goes again (ADR-014 D1). The worker
-  // decides, so this holds before the app's alias map loads and without
-  // search-meta.json too. Before the stale check: it is about the search run.
+  // A book after `in:` the worker does not know, or more books than one search
+  // takes, only gets a notice (ADR-005, ADR-033), so the line the commit kept for
+  // this search goes again (ADR-014 D1). The worker decides, so this holds before
+  // the app's alias map loads and without search-meta.json too. Before the stale
+  // check: it is about the search run.
   const committed = takeCommittedSearch(query, filterBooks);
-  if (committed && result && result.unmatchedScopes && result.unmatchedScopes.length > 0) {
+  const searchedNothing = !!result && ((result.unmatchedScopes && result.unmatchedScopes.length > 0) || !!result.tooManyBooks);
+  if (committed && searchedNothing) {
     removeSearchHistory(committed);
     if (topSearchHistory) topSearchHistory.refresh();
   }

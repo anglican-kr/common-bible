@@ -3105,9 +3105,29 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
+/* 다섯 권을 고른 뒤의 나머지 책(ADR-033 「책은 5권까지」) */
+.book-filter-option[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: default;
+}
+.book-filter-option[aria-disabled="true"]:hover {
+  border-color: var(--border);
+}
+
 .book-filter-foot {
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--border);
+}
+
+/* 늘 두고 글만 바꾸는 상태 줄이라, 비었을 때는 자리를 차지하지 않는다 */
+.book-filter-limit {
+  margin: 0;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  text-align: center;
+}
+.book-filter-limit:not(:empty) {
+  margin-bottom: var(--space-2);
 }
 
 .book-filter-apply {
