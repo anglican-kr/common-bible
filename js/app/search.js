@@ -618,14 +618,15 @@ const LECT_LUNAR_PREFIX = "lunar";
  * `found`와 같은 차례)과 그해의 음력 날짜 자료가 있는지다. 줄은 전례일마다, 해마다 하나이고 날짜 차례다. 해가 날짜의 앞자리라 해의
  * 차례로 묶이고, 같은 날이면 이름 결과의 차례를 지킨다(`Array.prototype.sort`는 안정 정렬이다). 그해에 지키지 않는 전례일은 줄을
  * 두지 않는다. 성탄 평일을 그해의 이름으로만 찾았으면(`yearNames`) 그해의 이름이 맞는 날만 둔다. `notes`는 결과 위나 결과 없음 화면에
- * 적는 문장이다: 2050년에서 자르거나 10년으로 자른 것, 음력 날짜 자료가 없는 해, 줄이 하나도 없는 해(「2027, 2032년에는 검색하신
- * 전례일을 지키지 않습니다.」).
+ * 적는 문장이다: 10년으로 자른 것, 음력 날짜 자료가 없는 해(「설날과 추석은 2025-2050년만 찾습니다.」, 사용자 결정 2026-11-18), 줄이 하나도
+ * 없는 해(「2027, 2032년에는 검색하신 전례일을 지키지 않습니다.」).
  * @param {any[]} found  LectItem[]
  * @param {Array<{ year: number, days: Array<any | null>, lunar: boolean }>} perYear  YearDay | null. 찾을 해가 없으면 비었다
- * @param {{ from: number, to: number, capped: boolean, over?: boolean, last?: number }} years  워커의 LectYears
+ * @param {{ from: number, to: number, capped: boolean }} years  워커의 LectYears
+ * @param {{ from: number, to: number } | null} [lunarSpan]  음력 날짜 자료가 있는 해(엔진 `lunarYearSpan`)
  * @returns {{ items: any[], notes: string[] }}
  */
-function yearRowsOf(found, perYear, years) {
+function yearRowsOf(found, perYear, years, lunarSpan = null) {
   // 찾은 전례일이 없으면 알릴 것도 없다. 결과 없음 화면은 「찾지 못했어요」다(코드 리뷰 2026-11-17)
   if (!found.length) return { items: [], notes: [] };
   /** @type {any[]} */
@@ -645,14 +646,16 @@ function yearRowsOf(found, perYear, years) {
   const notes = [];
   /** 자른 것을 알리는 문장 @type {string[]} */
   const cut = [];
-  if (years.over) cut.push(`연도는 ${years.last}년까지 찾습니다.`);
   if (years.capped) cut.push(`연도 범위는 ${years.to - years.from + 1}년까지 찾습니다.`);
   if (cut.length && perYear.length) cut.push(`${yearsText(perYear.map((x) => x.year))}의 날을 보입니다.`);
   if (cut.length) notes.push(cut.join(" "));
   const lunar = found.filter((item) => item.obs.key.startsWith(LECT_LUNAR_PREFIX));
   const lunarNames = [...new Set(lunar.map((item) => item.obs.name))];
   const noLunar = lunarNames.length ? perYear.filter((x) => !x.lunar).map((x) => x.year) : [];
-  if (noLunar.length) {
+  if (noLunar.length && lunarSpan) {
+    // 어느 하나만 찾았어도 둘을 함께 알린다. 둘 다 같은 음력 자료로 계산하기 때문이다(사용자 결정 2026-11-18)
+    notes.push(`설날과 추석은 ${lunarSpan.from}-${lunarSpan.to}년만 찾습니다.`);
+  } else if (noLunar.length) {
     const names = lunarNames.reduce((acc, name) => (acc ? `${acc}${hasBatchim(acc) ? "과" : "와"} ${name}` : name), "");
     notes.push(`${yearsText(noLunar)}의 ${names} 날짜는 아직 앱에 없습니다.`);
   }
@@ -1567,9 +1570,8 @@ function patchLectDays(target, lect, screen, labelOf) {
 async function withYearRows(result, screen, isStale) {
   const lect = result.lectionary;
   if (!lect || !lect.years || lect.yearRows) return;
-  // 이름으로 찾은 전례일이 없거나(`사랑 2000`, 코드 리뷰 2026-11-17) 찾을 해가 없으면(2050년보다 늦은 해만 쳤다) 교회력 자료를
-  // 받지도, 해를 세지도 않는다
-  if (!lect.items.length || lect.years.from > lect.years.to) {
+  // 이름으로 찾은 전례일이 없으면(`사랑 2000`, 코드 리뷰 2026-11-17) 교회력 자료를 받지도, 해를 세지도 않는다
+  if (!lect.items.length) {
     const { items, notes } = yearRowsOf(lect.items, [], lect.years);
     lect.items = items;
     lect.notes = notes;
@@ -1609,7 +1611,7 @@ async function withYearRows(result, screen, isStale) {
       return;
     }
   }
-  const { items, notes } = yearRowsOf(found, perYear, lect.years);
+  const { items, notes } = yearRowsOf(found, perYear, lect.years, mod.lunarYearSpan());
   lect.items = items;
   lect.notes = notes;
   lect.yearRows = true;

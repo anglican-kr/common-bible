@@ -2004,17 +2004,16 @@ test("yearRowsOf: 줄은 날짜 차례라 해의 차례로 묶이고, 그해에 
   assert.deepStrictEqual(JSON.parse(JSON.stringify(notes)), []);
 });
 
-test("yearRowsOf: 2050년보다 늦은 해를 쳤으면 2050년까지 찾았다고 알린다(ADR-044 §4)", () => {
+test("yearRowsOf: 2050년보다 늦은 해도 자르지 않고 그해의 날을 보인다(ADR-044 §4, 2026-11-18)", () => {
   const h = loadPureHelpers();
   const nicola = { obs: OBS({ key: "d1206", name: "성 니콜라" }), sets: [] };
-  const notes = (perYear, years) => JSON.parse(JSON.stringify(h.yearRowsOf([nicola], perYear, { last: 2050, ...years }).notes));
-  // 찾을 해가 없다
-  assert.deepStrictEqual(notes([], { from: 2060, to: 2050, capped: false, over: true }), ["연도는 2050년까지 찾습니다."]);
-  const years = (from, to) => Array.from({ length: to - from + 1 }, (_, i) => ({ year: from + i, days: [YDAY(`${from + i}-12-06`)], lunar: true }));
-  assert.deepStrictEqual(notes(years(2045, 2050), { from: 2045, to: 2050, capped: false, over: true }),
-    ["연도는 2050년까지 찾습니다. 2045~2050년의 날을 보입니다."]);
-  assert.deepStrictEqual(notes(years(2030, 2039), { from: 2030, to: 2039, capped: true, over: true }),
-    ["연도는 2050년까지 찾습니다. 연도 범위는 10년까지 찾습니다. 2030~2039년의 날을 보입니다."]);
+  const rows = (perYear, years) => JSON.parse(JSON.stringify(h.yearRowsOf([nicola], perYear, years, { from: 2025, to: 2050 })));
+  const years = (from, to) => Array.from({ length: to - from + 1 }, (_, i) => ({ year: from + i, days: [YDAY(`${from + i}-12-06`)], lunar: from + i <= 2050 }));
+  const late = rows(years(2058, 2062), { from: 2058, to: 2062, capped: false });
+  assert.deepStrictEqual(late.items.map((it) => it.yearDay.date), ["2058-12-06", "2059-12-06", "2060-12-06", "2061-12-06", "2062-12-06"]);
+  assert.deepStrictEqual(late.notes, [], "음력으로 지키는 전례일이 아니면 음력 자료를 알리지 않는다");
+  assert.deepStrictEqual(rows(years(2045, 2054), { from: 2045, to: 2054, capped: true }).notes,
+    ["연도 범위는 10년까지 찾습니다. 2045~2054년의 날을 보입니다."]);
 });
 
 test("yearRowsOf: 찾은 전례일이 없으면 줄도 알림도 없다(범위를 잘랐어도, 코드 리뷰 2026-11-17)", () => {
@@ -2043,7 +2042,7 @@ test("yearRowsOf: 그해의 이름으로만 찾은 성탄 평일은 그해의 �
 
 test("yearRowsOf: 범위를 자른 것, 음력 날짜 자료가 없는 해, 줄이 하나도 없는 해를 적는다", () => {
   const h = loadPureHelpers();
-  const notes = (found, perYear, years) => JSON.parse(JSON.stringify(h.yearRowsOf(found, perYear, years).notes));
+  const notes = (found, perYear, years, span = null) => JSON.parse(JSON.stringify(h.yearRowsOf(found, perYear, years, span).notes));
   const plainObs = { obs: OBS({ key: "ordinary-6-sun", name: "연중6주일" }), sets: [] };
   assert.deepStrictEqual(notes([plainObs], [{ year: 2027, days: [null], lunar: true }], { from: 2027, to: 2027, capped: false }),
     ["2027년에는 검색하신 전례일을 지키지 않습니다."]);
@@ -2063,13 +2062,20 @@ test("yearRowsOf: 범위를 자른 것, 음력 날짜 자료가 없는 해, 줄�
     ["연도 범위는 10년까지 찾습니다. 2000~2009년의 날을 보입니다."], "음력으로 지키는 전례일이 없으면 음력 자료를 알리지 않는다");
   const seol = { obs: OBS({ key: "lunar11-설날", name: "설날" }), sets: [] };
   const chuseok = { obs: OBS({ key: "lunar815-추석-명절", name: "추석 명절" }), sets: [] };
+  // 음력 자료가 없는 해를 찾았으면 자료가 있는 해를 알린다. 어느 하나만 찾았어도 둘을 함께 적는다(사용자 결정 2026-11-18)
+  const span = { from: 2025, to: 2050 };
   assert.deepStrictEqual(notes([seol, chuseok], [2050, 2051, 2052].map((year) => ({ year, days: [year === 2050 ? YDAY("2050-01-23") : null, null], lunar: year === 2050 })),
-    { from: 2050, to: 2052, capped: false }), ["2051~2052년의 설날과 추석 명절 날짜는 아직 앱에 없습니다."]);
-  assert.deepStrictEqual(notes([seol], [{ year: 2060, days: [null], lunar: false }], { from: 2060, to: 2060, capped: false }),
-    ["2060년의 설날 날짜는 아직 앱에 없습니다."], "음력 자료가 없어 없는 것이면 「지키지 않습니다」를 적지 않는다");
+    { from: 2050, to: 2052, capped: false }, span), ["설날과 추석은 2025-2050년만 찾습니다."]);
+  assert.deepStrictEqual(notes([seol], [{ year: 2060, days: [null], lunar: false }], { from: 2060, to: 2060, capped: false }, span),
+    ["설날과 추석은 2025-2050년만 찾습니다."], "음력 자료가 없어 없는 것이면 「지키지 않습니다」를 적지 않는다");
+  assert.deepStrictEqual(notes([chuseok], [{ year: 2020, days: [null], lunar: false }], { from: 2020, to: 2020, capped: false }, span),
+    ["설날과 추석은 2025-2050년만 찾습니다."], "2025년보다 이른 해도 같다");
   // 음력이 아닌 전례일도 함께 찾았으면 줄이 없는 해는 지키지 않는 해로 적는다
-  assert.deepStrictEqual(notes([seol, plainObs], [{ year: 2060, days: [null, null], lunar: false }], { from: 2060, to: 2060, capped: false }),
-    ["2060년의 설날 날짜는 아직 앱에 없습니다.", "2060년에는 검색하신 전례일을 지키지 않습니다."]);
+  assert.deepStrictEqual(notes([seol, plainObs], [{ year: 2060, days: [null, null], lunar: false }], { from: 2060, to: 2060, capped: false }, span),
+    ["설날과 추석은 2025-2050년만 찾습니다.", "2060년에는 검색하신 전례일을 지키지 않습니다."]);
+  // 음력 자료가 하나도 없으면(엔진이 범위를 내지 못하면) 그해의 날짜가 없다고 적는다
+  assert.deepStrictEqual(notes([seol], [{ year: 2060, days: [null], lunar: false }], { from: 2060, to: 2060, capped: false }),
+    ["2060년의 설날 날짜는 아직 앱에 없습니다."]);
 });
 
 // 지역 축일(ADR-044 §3): 워커가 넘기는 줄

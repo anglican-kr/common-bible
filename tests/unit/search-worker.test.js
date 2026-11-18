@@ -569,7 +569,7 @@ test("searchLectionaryNames: 비슷한 말은 긴 낱말부터 바꾼다", () =>
 
 test("parseLectYear: 이름의 앞이나 뒤에 붙인 연도와 범위를 읽는다(ADR-044 §4)", () => {
   const year = (q) => plain(ctx.parseLectYear(q));
-  const nicola = (from, to = from, capped = false) => ({ name: "성 니콜라", from, to, capped, over: false, last: 2050 });
+  const nicola = (from, to = from, capped = false) => ({ name: "성 니콜라", from, to, capped });
   assert.deepStrictEqual(year("2027년 성 니콜라"), nicola(2027));
   assert.deepStrictEqual(year("2027 성 니콜라"), nicola(2027), "「년」 없이 네 자리 숫자만");
   assert.deepStrictEqual(year("성 니콜라 2027년"), nicola(2027), "이름 뒤");
@@ -582,15 +582,15 @@ test("parseLectYear: 이름의 앞이나 뒤에 붙인 연도와 범위를 읽�
   assert.deepStrictEqual(year("성 니콜라 2026-2024"), nicola(2024, 2026), "거꾸로 쓴 범위는 작은 해부터");
 });
 
-test("parseLectYear: 범위는 앞의 10년까지이고, 찾는 해는 1583년부터 2050년까지다(ADR-044 §4)", () => {
-  const nicola = (from, to, capped, over) => ({ name: "성 니콜라", from, to, capped, over, last: 2050 });
-  assert.deepStrictEqual(plain(ctx.parseLectYear("2000-2050 성 니콜라")), nicola(2000, 2009, true, false));
-  assert.deepStrictEqual(plain(ctx.parseLectYear("2000-2009 성 니콜라")), nicola(2000, 2009, false, false));
-  assert.deepStrictEqual(plain(ctx.parseLectYear("1583 성 니콜라")), nicola(1583, 1583, false, false));
-  // 2050년보다 늦은 해는 연도로 읽되 2050년에서 자른다. 처음부터 늦으면 찾을 해가 없다(from이 to보다 늦다)
-  assert.deepStrictEqual(plain(ctx.parseLectYear("2045-2060 성 니콜라")), nicola(2045, 2050, false, true));
-  assert.deepStrictEqual(plain(ctx.parseLectYear("2030-2060 성 니콜라")), nicola(2030, 2039, true, true), "2050년에서 자른 뒤 10년");
-  assert.deepStrictEqual(plain(ctx.parseLectYear("2060 성 니콜라")), nicola(2060, 2050, false, true));
+test("parseLectYear: 범위는 앞의 10년까지이고, 찾는 해는 캘린더와 같은 1583년부터 9999년까지다(ADR-044 §4, 2026-11-18)", () => {
+  const nicola = (from, to, capped) => ({ name: "성 니콜라", from, to, capped });
+  assert.deepStrictEqual(plain(ctx.parseLectYear("2000-2050 성 니콜라")), nicola(2000, 2009, true));
+  assert.deepStrictEqual(plain(ctx.parseLectYear("2000-2009 성 니콜라")), nicola(2000, 2009, false));
+  assert.deepStrictEqual(plain(ctx.parseLectYear("1583 성 니콜라")), nicola(1583, 1583, false));
+  // 2050년보다 늦은 해도 자르지 않는다(2050년에서 자르던 것을 2026-11-18에 풀었다)
+  assert.deepStrictEqual(plain(ctx.parseLectYear("2045-2060 성 니콜라")), nicola(2045, 2054, true));
+  assert.deepStrictEqual(plain(ctx.parseLectYear("2060 성 니콜라")), nicola(2060, 2060, false));
+  assert.deepStrictEqual(plain(ctx.parseLectYear("9999년 성 니콜라")), nicola(9999, 9999, false));
   // 성인 칭호의 해(「1556년」)는 받는 해 밖이라 이름의 일부로 찾는다
   assert.equal(ctx.parseLectYear("1556년 크랜머"), null);
   assert.equal(ctx.parseLectYear("1580-1590 성 니콜라"), null);
@@ -622,7 +622,7 @@ const LECT_XMAS = ctx.buildLectionarySearchIndex({
 
 test("searchLectionaryYears: 연도를 뗀 이름으로 찾고 해를 함께 넘긴다(ADR-044 §4)", () => {
   const r = plain(ctx.searchLectionaryYears(LECT_XMAS, ctx.parseLectYear("2024-2026 대림1주일")));
-  assert.deepStrictEqual(r.years, { from: 2024, to: 2026, capped: false, over: false, last: 2050 });
+  assert.deepStrictEqual(r.years, { from: 2024, to: 2026, capped: false });
   assert.deepStrictEqual(r.items.map((it) => [it.obs.name, it.yearNames]), [["대림1주일", undefined], ["대림1주 월요일", undefined]]);
 });
 
@@ -965,7 +965,7 @@ test("메시지: 이름에 연도를 붙이면 연도를 뗀 이름으로 찾고
   await w.send({ type: "lect-names", names: [["advent-1-mon-t1-s1", "성탄 1주 화요일"]] });
   await w.send(search("2027년 고난주일"));
   const [byYear] = w.results();
-  assert.deepStrictEqual(plain(byYear.lectionary.years), { from: 2027, to: 2027, capped: false, over: false, last: 2050 });
+  assert.deepStrictEqual(plain(byYear.lectionary.years), { from: 2027, to: 2027, capped: false });
   assert.deepStrictEqual(byYear.lectionary.items.map((it) => [it.obs.name, it.matched]), [["성지주일", "고난주일"]]);
   assert.equal(byYear.keyword, "2027년 고난주일", "성서 본문은 친 그대로 찾는다");
   // 오늘부터 한 해의 이름(lect-names)은 다른 해에는 맞지 않는다
