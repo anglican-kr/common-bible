@@ -271,6 +271,7 @@ function loadPureHelpers() {
     formatSearchDate: ctx.formatSearchDate,
     hasBatchim: ctx.hasBatchim,
     synonymNote: ctx.synonymNote,
+    unknownBookNote: ctx.unknownBookNote,
     fixedDateText: ctx.fixedDateText,
     lectCyclesText: ctx.lectCyclesText,
     lectSlugHref: ctx.lectSlugHref,
@@ -1816,6 +1817,17 @@ test("synonymNote: 받침에 따라 을과 를, 으로와 로를 고른다(ㄹ �
   assert.strictEqual(h.synonymNote([{ from: "바오로", to: "바울로" }]), "‘바오로’를 ‘바울로’로 찾았습니다.");
   assert.strictEqual(h.synonymNote([{ from: "주현절", to: "공현" }]), "‘주현절’을 ‘공현’으로 찾았습니다.");
   assert.strictEqual(h.synonymNote([{ from: "가", to: "나" }, { from: "다", to: "라" }]), "‘가’를 ‘나’로, ‘다’를 ‘라’로 찾았습니다.");
+});
+
+// 검색이 모르는 책 이름을 in: 뒤에 쳤을 때의 설명(ADR-005 「검색 연산자 `in:`」). 결과 위의 한 줄 「in:없는책 — 알 수 없는 책
+// 별칭입니다」가 고치는 방법을 알려 주지 않던 때가 있었다(사용자 결정 2026-11-18).
+test("unknownBookNote: 받침에 따라 이라는과 라는을 고르고, 여러 이름은 쉼표로 잇는다", () => {
+  const h = loadPureHelpers();
+  const tail = " 책을 찾지 못했어요. in: 뒤에는 마르, 마르코처럼 책 이름을 적어 주세요.";
+  assert.strictEqual(h.unknownBookNote(["없는책"]), `‘없는책’이라는${tail}`);
+  assert.strictEqual(h.unknownBookNote(["마가"]), `‘마가’라는${tail}`);
+  assert.strictEqual(h.unknownBookNote(["foo"]), `‘foo’라는${tail}`);
+  assert.strictEqual(h.unknownBookNote(["없는책", "마가"]), `‘없는책’, ‘마가’라는${tail}`);
 });
 
 test("fixedDateText: 색인의 「MM.DD」를 「M월 D일」로", () => {

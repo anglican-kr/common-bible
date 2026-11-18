@@ -455,6 +455,22 @@ def test_in_operator_restricts_to_single_book(page, base_url):
     assert all(b == "john" for b in book_ids), f"Expected only 'john', got: {set(book_ids)}"
 
 
+def test_unknown_book_leaves_no_recent_before_the_alias_map_loads(page, base_url):
+    """앱의 별칭 맵을 읽기 전(앱을 켠 직후)에 모르는 책 이름으로 찾아도 최근 검색에 남지 않는다. 검색을 실행할 때 넣은 줄을 검색 워커가
+    모르는 책 이름이라고 답하면 다시 뺀다(ADR-014 D1). 앱이 별칭 맵으로 가려내던 때는 이때 기록에 남았다(사용자 결정 2026-11-18).
+    책 목록(`books.json`)을 받지 못하게 해 별칭 맵이 없는 상태를 만든다. 검색 워커는 책 목록 없이 찾는다."""
+    page.route("**/data/books.json", lambda route: route.abort())
+    page.goto(base_url)
+    page.wait_for_selector("#search-input", state="attached")
+
+    page.fill("#search-input", "사랑 in:없는책")
+    page.press("#search-input", "Enter")
+    page.wait_for_selector(".empty-state", timeout=20_000)
+    assert "‘없는책’이라는 책을 찾지 못했어요." in page.locator(".empty-state").inner_text()
+    recent = page.evaluate("JSON.parse(localStorage.getItem('bible-search-history') || '[]').map((e) => e.q)")
+    assert recent == [], recent
+
+
 @pytest.mark.parametrize("alias", ["마르", "막", "마가복음", "mark"])
 def test_in_operator_alias_becomes_a_chip(alias, page, base_url):
     """입력 칸에 친 `in:<별칭>`은 검색이 알아보는 별칭이면 모두 책 칩이 되고, 입력 칸에는 낱말만 남는다(ADR-033). 그전에는 책의 짧은
@@ -503,17 +519,30 @@ def test_in_operator_multiple_aliases_or(page, base_url):
     assert book_ids <= {"john", "matt"}, f"Expected subset of {{john, matt}}, got: {book_ids}"
 
 
-def test_in_operator_unmatched_alias_blocks_search(page, base_url):
-    """`사랑 in:없는책` → 결과 없음 + 안내 메시지 표시."""
+@pytest.mark.parametrize("name, particle", [("없는책", "이라는"), ("송가", "라는")])
+def test_in_operator_unmatched_alias_blocks_search(name, particle, page, base_url):
+    """`사랑 in:없는책`은 찾지 않고, 다른 결과 없음 화면과 같은 모양으로 그 책을 찾지 못했다고 알리며 고치는 방법을 적는다. 검색 예시에는
+    책 범위 예시(`사랑 in:요한`)도 있다. 최근 검색에는 넣지 않는다(ADR-005 「검색 연산자 `in:`」, ADR-014 D1). 결과 위에 「in:없는책 —
+    알 수 없는 책 별칭입니다」 한 줄만 보이던 때가 있었다(사용자 결정 2026-11-18). 검색 색인에 없는 송가(기도서 번역)도 칩이 되지 않고
+    같은 안내가 나온다. 칩이 되면 아무것도 찾지 않고 결과 없음만 나왔다(ADR-033, 코드 리뷰 2026-11-18)."""
     page.goto(base_url)
     wait_app_ready(page)
 
-    page.fill("#search-input", "사랑 in:없는책")
+    page.fill("#search-input", "사랑")
     page.press("#search-input", "Enter")
-    page.wait_for_selector(".search-notice", timeout=8_000)
+    page.wait_for_selector(".search-count", timeout=20_000)
+    page.fill("#search-input", f"사랑 in:{name}")
+    page.press("#search-input", "Enter")
+    page.wait_for_selector(".empty-state", timeout=20_000)
     assert page.locator(".search-result-item:not(.ref-match-item)").count() == 0
-    notice_text = page.locator(".search-notice").inner_text()
-    assert "in:없는책" in notice_text and "알 수 없는" in notice_text
+    empty_text = page.locator(".empty-state").inner_text()
+    assert "검색 결과가 없습니다" in empty_text, empty_text
+    assert f"‘{name}’{particle} 책을 찾지 못했어요. in: 뒤에는 마르, 마르코처럼 책 이름을 적어 주세요." in empty_text, empty_text
+    assert page.locator("#search-bar .field-token").count() == 0
+    examples = page.locator(".search-example-q").all_inner_texts()
+    assert "사랑 in:요한" in examples, examples
+    recent = page.evaluate("JSON.parse(localStorage.getItem('bible-search-history') || '[]').map((e) => e.q)")
+    assert recent == ["사랑"], recent
 
 
 def test_search_result_hl_strips_in_operator(page, base_url):

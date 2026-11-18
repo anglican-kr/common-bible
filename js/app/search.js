@@ -460,6 +460,18 @@ function synonymNote(synonyms) {
   return `${parts.join(", ")} 찾았습니다.`;
 }
 
+/**
+ * 검색이 모르는 책 이름을 `in:` 뒤에 쳤을 때의 설명(ADR-005 「검색 연산자 `in:`」, 사용자 결정 2026-11-18):
+ * 「‘없는책’이라는 책을 찾지 못했어요. in: 뒤에는 마르, 마르코처럼 책 이름을 적어 주세요.」 조사는 마지막 이름의 받침으로 고른다.
+ * @param {string[]} names
+ * @returns {string}
+ */
+function unknownBookNote(names) {
+  const last = names[names.length - 1] || "";
+  const listed = names.map((n) => `‘${n}’`).join(", ");
+  return `${listed}${hasBatchim(last) ? "이라는" : "라는"} 책을 찾지 못했어요. in: 뒤에는 마르, 마르코처럼 책 이름을 적어 주세요.`;
+}
+
 /** 「12.29」를 「12월 29일」로. @param {string | null} date */
 function fixedDateText(date) {
   const m = /^(\d\d)\.(\d\d)$/.exec(date || "");
@@ -1185,13 +1197,15 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
   // search term highlighted (the raw query would never match the verse text).
   const highlightTerm = result.keyword || query;
 
-  // Unrecognized in:<alias> notice. Worker blocks search in this case
-  // (results = 0) so the notice replaces what would otherwise be a silent
-  // empty state.
-  const unmatched = result.unmatchedScopes && result.unmatchedScopes.length > 0;
-  if (unmatched) {
-    const aliasList = result.unmatchedScopes.map((/** @type {string} */ a) => `in:${a}`).join(", ");
-    container.appendChild(el("p", { className: "search-notice" }, `${aliasList} — 알 수 없는 책 별칭입니다`));
+  // A book name after `in:` the search does not know: the worker searched
+  // nothing, so this is the zero-result screen with what to fix (ADR-005
+  // 「검색 연산자 `in:`」). Unlike the other zero-result screens it keeps the
+  // book-scope example, which shows how to write the scope.
+  if (result.unmatchedScopes && result.unmatchedScopes.length > 0) {
+    const note = unknownBookNote(result.unmatchedScopes);
+    container.appendChild(buildSearchEmptyState("검색 결과가 없습니다", note));
+    container.appendChild(buildSearchExamples(false, screen.scoped));
+    return `"${query}" 검색 결과 0건. ${note}`;
   }
 
   const { isPending, lect, hasBible, group } = resultGroups(result, screen);
@@ -1207,14 +1221,12 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
   if (notice) container.appendChild(buildLocalNotice(notice));
   if (notice && !answer.node && !hasBible && !lect) return `"${query}" ${[picked, notice.text].filter(Boolean).join(" ")}`;
   if (!answer.node && !hasBible && !lect) {
-    if (!unmatched) {
-      container.appendChild(
-        // 책을 골라 두었으면 전례일은 찾지 않았다(ADR-044 §1)
-        buildSearchEmptyState("검색 결과가 없습니다", notes.length ? notes.join(" ")
-          : `‘${query}’에 해당하는 ${screen.scoped ? "구절을" : "구절과 전례일을"} 찾지 못했어요.`)
-      );
-      container.appendChild(buildSearchExamples(true, screen.scoped));
-    }
+    container.appendChild(
+      // 책을 골라 두었으면 전례일은 찾지 않았다(ADR-044 §1)
+      buildSearchEmptyState("검색 결과가 없습니다", notes.length ? notes.join(" ")
+        : `‘${query}’에 해당하는 ${screen.scoped ? "구절을" : "구절과 전례일을"} 찾지 못했어요.`)
+    );
+    container.appendChild(buildSearchExamples(true, screen.scoped));
     return `"${query}" 검색 결과 0건${notes.length ? `. ${notes.join(" ")}` : ""}`;
   }
 
@@ -1690,11 +1702,11 @@ async function ensureAliasMap() {
   const byId = new Map();
   // Fetched alongside the books; it is precached with the app shell (sw.js).
   // Without it the books' own names and ids still work.
-  /** @type {Promise<Record<string, unknown>>} */
-  const metaAliases = fetch(`${DATA_DIR}/search-meta.json`)
+  /** @type {Promise<{ aliases?: Record<string, unknown>, books?: Record<string, unknown> } | null>} */
+  const metaPromise = fetch(`${DATA_DIR}/search-meta.json`)
     .then((res) => (res.ok ? res.json() : null))
-    .then((meta) => (meta && meta.aliases) || {})
-    .catch(() => ({}));
+    .then((meta) => (meta && meta.aliases && meta.books ? meta : null))
+    .catch(() => null);
   try {
     // window.loadBooks (data-fetch.js) is defined by a module that loads AFTER
     // search.js in index.html, so the boot-time preload kick can fire before it
@@ -1706,11 +1718,15 @@ async function ensureAliasMap() {
     }
     if (typeof window.loadBooks !== "function") return map;
     const books = await window.loadBooks();
-    const ids = new Set(books.map((b) => b.id));
-    for (const [alias, id] of Object.entries(await metaAliases)) {
+    const meta = await metaPromise;
+    // With the worker's table, only the books it searches become chips: a book
+    // outside its index (전례시편, 송가) would search nothing without a word.
+    const ids = new Set(books.map((b) => b.id).filter((id) => !meta || Object.hasOwn(meta.books || {}, id)));
+    for (const [alias, id] of Object.entries((meta && meta.aliases) || {})) {
       if (typeof id === "string" && ids.has(id)) map.set(alias.toLowerCase(), id);
     }
     for (const b of books) {
+      if (!ids.has(b.id)) continue;
       map.set(b.id.toLowerCase(), b.id);
       if (b.short_name_ko) map.set(b.short_name_ko.toLowerCase(), b.id);
       if (b.name_ko) map.set(b.name_ko.toLowerCase(), b.id);
@@ -2495,6 +2511,16 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
 
   const result = await doSearch(query, page, pageSize, onPartial, { scopeBooks: filterBooks });
 
+  // A book after `in:` the worker does not know only gets a notice (ADR-005), so
+  // the line the commit kept for this search goes again (ADR-014 D1). The worker
+  // decides, so this holds before the app's alias map loads and without
+  // search-meta.json too. Before the stale check: it is about the search run.
+  const committed = takeCommittedSearch(query, filterBooks);
+  if (committed && result && result.unmatchedScopes && result.unmatchedScopes.length > 0) {
+    removeSearchHistory(committed);
+    if (topSearchHistory) topSearchHistory.refresh();
+  }
+
   // Bail if the user navigated away while the search was running — the captured
   // resultsTarget is stale and #app belongs to a newer view now (ADR-033, Bugbot).
   if (isStale()) return;
@@ -2677,6 +2703,24 @@ function autoNavigateTarget(result, screen) {
 // to verse references) from URL-triggered ones (show clickable card).
 let searchAutoNavigate = false;
 
+// The recent-search line the last commit kept, with the search it ran
+// (`commitTopSearch`). The results of that search take it once.
+/** @type {{ q: string, books: string, label: string } | null} */
+let _committedSearch = null;
+
+/**
+ * The recent-search line kept for this search by the commit that ran it, or
+ * null (a search from the URL, back navigation, a later commit). Taken once.
+ * @param {string} query @param {string[]} filterBooks
+ * @returns {string | null}
+ */
+function takeCommittedSearch(query, filterBooks) {
+  const c = _committedSearch;
+  if (!c || c.q !== query || c.books !== filterBooks.join(" ")) return null;
+  _committedSearch = null;
+  return c.label;
+}
+
 /**
  * @param {string} rawQuery
  * @param {{ filterBooks?: string[], autoNavigate?: boolean, fromHistory?: boolean }} [opts]
@@ -2710,9 +2754,13 @@ function commitTopSearch(rawQuery, opts = {}) {
   // The recent-search label holds the scope searched, chips included (ADR-014
   // D1). A scope-only commit has nothing to search and is not kept. A replayed
   // label written another way (an older `in:요한복음`) gives way to the new one.
+  // The worker may still answer that a book after `in:` is unknown: the results
+  // then drop this line again (`takeCommittedSearch`, ADR-014 D1).
   if (keyword) {
     if (opts.fromHistory) removeSearchHistory(raw);
-    pushSearchHistory(historyLabel(keyword, filterBooks, _aliasById));
+    const label = historyLabel(keyword, filterBooks, _aliasById);
+    pushSearchHistory(label);
+    _committedSearch = { q: keyword, books: filterBooks.join(" "), label };
     if (topSearchHistory) topSearchHistory.refresh();
   }
   // Arm verse-ref auto-navigate only when there's a keyword to search; a
