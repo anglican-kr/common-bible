@@ -380,10 +380,8 @@ export interface OfflineSaveState {
 }
 
 export interface OfflineSaveSummary {
-  groups: { bible: number; search: number; lectionary: number };
+  /** Bytes the device stores for the whole set. */
   total: number;
-  /** Bytes on the wire (gzip at the server's level). */
-  gzipTotal: number;
 }
 
 export interface OfflineSave {

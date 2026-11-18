@@ -1186,7 +1186,7 @@ def _offline_ctx(browser, **options):
 
 
 def _small_size_list(page, per_group=3):
-    """크기 목록을 묶음마다 앞의 몇 파일로 줄인다. 받는 시험이 1,506개를 다 받지 않게 한다."""
+    """크기 목록을 묶음마다 앞의 몇 파일로 줄인다. 받는 시험이 1,500개가 넘는 파일을 다 받지 않게 한다."""
     def handle(route):
         data = route.fetch().json()
         counts, keep = {}, []
@@ -1223,7 +1223,7 @@ def test_offline_save_row_sits_above_backup_and_shows_the_total(browser):
 
 
 def test_offline_save_saves_every_file_of_the_size_list(browser):
-    """실제 크기 목록대로 1,506개를 모두 받고, 시작과 끝을 스크린 리더에 알린다."""
+    """실제 크기 목록의 파일을 모두 받고, 시작과 끝을 스크린 리더에 알린다."""
     ctx = _offline_ctx(browser)
     page = ctx.new_page()
     try:
@@ -1340,11 +1340,11 @@ def test_offline_save_stops_and_turns_off_when_space_runs_out(browser):
         ctx.close()
 
 
-def test_offline_save_info_gives_the_sizes_and_the_safari_sentence_only_in_a_safari_tab(browser):
-    pattern = (r"성서 본문과 검색 자료, 캘린더와 전례독서에 쓰는 교회력 자료를 기기에 저장해 인터넷에 연결되지 않아도 모든 장과 "
-               r"모든 날을 볼 수 있게 합니다\. 성서 본문 \d+\.\dMB, 검색 자료 \d+\.\dMB, 교회력 자료 \d+\.\dMB이고, "
-               r"받을 때는 압축되어 약 \d+MB입니다\. {safari}오디오 파일은 재생할 때 다운로드됩니다\.")
-    safari = r"Safari에서 7일 넘게 열지 않으면 저장한 자료가 지워질 수 있습니다\. 홈 화면에 추가한 앱에서 켜면 오래 보관됩니다\. "
+def test_offline_save_info_gives_the_safari_sentence_only_in_a_safari_tab(browser):
+    """설명에는 크기를 적지 않는다. 크기는 줄 아래의 글에만 있다(ADR-045 §2)."""
+    text = ("성서 본문과 검색 자료, 캘린더와 전례독서에 쓰는 교회력 자료를 기기에 저장해 인터넷에 연결되지 않아도 "
+            "모두 볼 수 있게 합니다. {safari}오디오 파일은 재생할 때 다운로드됩니다.")
+    safari = "Safari에서 7일 넘게 열지 않으면 저장한 자료가 지워질 수 있습니다. 홈 화면에 추가한 앱에서 켜면 오래 보관됩니다. "
     for options, expect_safari in (({}, False), ({"viewport": MOBILE_VIEWPORT, "user_agent": IPHONE_UA}, True)):
         ctx = _offline_ctx(browser, **options)
         page = ctx.new_page()
@@ -1357,8 +1357,7 @@ def test_offline_save_info_gives_the_sizes_and_the_safari_sentence_only_in_a_saf
                 root = open_settings(page)
             root.get_by_role("button", name="오프라인 저장 안내").click()
             desc = root.locator(".settings-drive-info-row:not([hidden]) .settings-drive-info-desc")
-            page.wait_for_function("(el) => /MB입니다/.test(el.textContent)", arg=desc.element_handle())
-            assert re.fullmatch(pattern.format(safari=safari if expect_safari else ""), desc.inner_text()), desc.inner_text()
+            assert desc.inner_text() == text.format(safari=safari if expect_safari else "")
         finally:
             ctx.close()
 

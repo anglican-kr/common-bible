@@ -469,17 +469,12 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
   }
 
   /**
-   * The ⓘ text. Sizes come from the size list once it is read; the Safari sentence is for an iPhone Safari tab
-   * only — the home-screen app keeps its data, a Safari tab loses it after 7 days unopened (ADR-045 §5).
-   * @param {import("../types.js").OfflineSaveSummary | null} sum
+   * The ⓘ text (ADR-045 §2). The sizes stay in the caption under the switch. The Safari sentence is for an iPhone
+   * Safari tab only — the home-screen app keeps its data, a Safari tab loses it after 7 days unopened (ADR-045 §5).
    * @returns {string}
    */
-  function offlineInfoText(sum) {
-    const parts = ["성서 본문과 검색 자료, 캘린더와 전례독서에 쓰는 교회력 자료를 기기에 저장해 인터넷에 연결되지 않아도 모든 장과 모든 날을 볼 수 있게 합니다."];
-    if (sum) {
-      const gz = Math.max(1, Math.round(sum.gzipTotal / 1e6));
-      parts.push(`성서 본문 ${formatMB(sum.groups.bible)}, 검색 자료 ${formatMB(sum.groups.search)}, 교회력 자료 ${formatMB(sum.groups.lectionary)}이고, 받을 때는 압축되어 약 ${gz}MB입니다.`);
-    }
+  function offlineInfoText() {
+    const parts = ["성서 본문과 검색 자료, 캘린더와 전례독서에 쓰는 교회력 자료를 기기에 저장해 인터넷에 연결되지 않아도 모두 볼 수 있게 합니다."];
     if (window.install?.detectPlatform() === "ios-safari") {
       parts.push("Safari에서 7일 넘게 열지 않으면 저장한 자료가 지워질 수 있습니다. 홈 화면에 추가한 앱에서 켜면 오래 보관됩니다.");
     }
@@ -532,11 +527,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     const progress = /** @type {HTMLProgressElement} */ (el("progress", { className: "offline-progress", "aria-labelledby": `${id}-label` }));
     row.appendChild(progress);
 
-    const infoRow = makeInfoRow(infoBtn, offlineInfoText(null));
-    os.summary().then((sum) => {
-      const desc = infoRow.querySelector(".settings-drive-info-desc");
-      if (sum && desc) desc.textContent = offlineInfoText(sum);
-    });
+    const infoRow = makeInfoRow(infoBtn, offlineInfoText());
 
     /** @param {import("../types.js").OfflineSaveState} s */
     const render = (s) => {

@@ -130,14 +130,12 @@ function load(opts = {}) {
   return { os, storage, caches, calls, navigator, fire, statuses, settle, until };
 }
 
-test("크기 목록을 묶음별로 더하고, 앱이 쓰지 않는 성무일과 독서표는 뺀다", () => {
+test("크기 목록의 저장할 파일을 더하고, 앱이 쓰지 않는 성무일과 독서표는 뺀다", () => {
   const { os } = load();
   const list = os._parseSizeList(SIZES);
   assert.deepEqual([...list.files.keys()].sort(),
     ["bible/gen-1.json", "bible/gen-2.json", "lectionary/sanctoral.json", "search-ot.json"]);
-  assert.deepEqual({ ...list.summary.groups }, { bible: 300, search: 300, lectionary: 50 });
   assert.equal(list.summary.total, 650);
-  assert.equal(list.summary.gzipTotal, 190);
 });
 
 test("형식이 맞지 않는 크기 목록은 쓰지 않는다", () => {
