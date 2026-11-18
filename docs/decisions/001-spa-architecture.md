@@ -82,7 +82,7 @@ History API SPA 라우팅에서는 모든 탐색 요청(`/bible/gen/1` 등)에 �
 
 ### 성경과 검색 데이터 — `DATA_CACHE`
 
-`/data/bible/*.json`과 `/data/search-{ot,nt,dc}.json`은 따로 `DATA_CACHE`에 쌓인다. **캐시 우선**(cache-first) 전략으로, 캐시에 있으면 바로 돌려주고 없으면 네트워크에서 받아 저장한다.
+`/data/bible/*.json`과 `/data/search-{ot,nt,dc,lit}.json`은 따로 `DATA_CACHE`에 쌓인다. **캐시 우선**(cache-first) 전략으로, 캐시에 있으면 바로 돌려주고 없으면 네트워크에서 받아 저장한다.
 
 처음에는 stale-while-revalidate를 썼으나, 다음 문제가 확인돼 캐시 우선으로 바꿨다.
 - 백그라운드 재검증 요청이 대량으로 생겨 쓸데없는 네트워크 트래픽을 일으켰다.

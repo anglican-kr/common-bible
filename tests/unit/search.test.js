@@ -288,6 +288,8 @@ function loadPureHelpers() {
     fillLectRow: ctx.fillLectRow,
     lectDayText: ctx.lectDayText,
     buildSearchPills: ctx.buildSearchPills,
+    partialAnnouncement: ctx.partialAnnouncement,
+    SEARCHED_GROUPS: vm.runInContext("SEARCHED_GROUPS", ctx),
   };
 }
 
@@ -600,6 +602,13 @@ test("buildSearchUrl: book filter (in=) repeated per book", () => {
   );
 });
 
+test("buildSearchUrl: group writes 성시 and 전례일, not 성서 본문 (ADR-044 §1, ADR-046 §3)", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.buildSearchUrl({ q: "x", group: "psalter" }), "/search?q=x&group=psalter");
+  assert.strictEqual(h.buildSearchUrl({ q: "x", page: 2, group: "lectionary" }), "/search?q=x&page=2&group=lectionary");
+  assert.strictEqual(h.buildSearchUrl({ q: "x", group: "bible" }), "/search?q=x");
+});
+
 test("buildSearchUrl: empty state → bare /search", () => {
   const h = loadPureHelpers();
   assert.strictEqual(h.buildSearchUrl({}), "/search");
@@ -665,6 +674,13 @@ test("buildSearchPagination: carries book filter into page links", () => {
     nav.children[2].getAttribute("href"),
     "/search?q=%EC%82%AC%EB%9E%91&page=3&in=john",
   );
+});
+
+test("buildSearchPagination: 성시의 쪽 링크는 성시에 머문다(ADR-046 §3)", () => {
+  const h = loadPureHelpers();
+  const nav = h.buildSearchPagination({ q: "x", group: "psalter" }, 2, 5);
+  assert.strictEqual(nav.children[0].getAttribute("href"), "/search?q=x&group=psalter");
+  assert.strictEqual(nav.children[2].getAttribute("href"), "/search?q=x&page=3&group=psalter");
 });
 
 test("buildSearchPagination: first page → placeholder span instead of prev link", () => {
@@ -762,7 +778,7 @@ test("ensureSearchWorker: first call creates Worker at /js/search-worker.js", ()
   assert.strictEqual(w, m.workerInstances[0]);
 });
 
-test("ensureSearchWorker: posts init message with metaUrl + 3 chunks (nt/dc/ot)", () => {
+test("ensureSearchWorker: posts init message with metaUrl + 4 chunks (nt/dc/ot, then 성시 lit)", () => {
   const m = loadWorkerBlock();
   m.ensureSearchWorker();
   const w = m.workerInstances[0];
@@ -770,14 +786,18 @@ test("ensureSearchWorker: posts init message with metaUrl + 3 chunks (nt/dc/ot)"
   const init = w.posts[0];
   assert.strictEqual(init.type, "init");
   assert.strictEqual(init.metaUrl, "/data/search-meta.json");
-  assert.strictEqual(init.chunks.length, 3);
-  // Order: nt → dc → ot (NT first to prioritise; matches search.js).
+  assert.strictEqual(init.chunks.length, 4);
+  // Order: nt → dc → ot (NT first to prioritise; matches search.js), then the 성시 chunk (ADR-046), which the worker
+  // counts apart from the Bible by this name (js/search-worker.js PSALTER_CHUNKS).
   // Rehydrate via JSON so the cross-realm Array prototype doesn't trip
   // deepStrictEqual.
-  assert.deepStrictEqual(JSON.parse(JSON.stringify(init.chunks.map((c) => c.name))), ["nt", "dc", "ot"]);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(init.chunks.map((c) => c.name))), ["nt", "dc", "ot", "lit"]);
   assert.strictEqual(init.chunks[0].url, "/data/search-nt.json");
   assert.strictEqual(init.chunks[1].url, "/data/search-dc.json");
   assert.strictEqual(init.chunks[2].url, "/data/search-ot.json");
+  assert.strictEqual(init.chunks[3].url, "/data/search-lit.json");
+  const worker = fs.readFileSync(path.resolve(__dirname, "../../js/search-worker.js"), "utf8");
+  assert.match(worker, /const PSALTER_CHUNKS = new Set\(\["lit"\]\);/);
 });
 
 test("ensureSearchWorker: second call returns cached instance, does not re-init", () => {
@@ -2344,13 +2364,40 @@ test("fillLectRow: 링크를 한 줄에 하나씩 더하고 빼며, 있던 링�
   assert.strictEqual(li.className, "");
 });
 
+test("partialAnnouncement: 검색 중 알림은 묶음마다 알약의 이름과 차례로 읽고, 성시는 결과가 있을 때만 읽는다", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.partialAnnouncement("사랑", { total: 12, psalter: { total: 3 } }), "\"사랑\" 검색 중… 현재 성서 본문 12건, 성시 3건");
+  // 성시에만 결과가 있어도 「현재 0건」으로 끝나지 않는다
+  assert.strictEqual(h.partialAnnouncement("목자", { total: 0, psalter: { total: 4 } }), "\"목자\" 검색 중… 현재 성서 본문 0건, 성시 4건");
+  assert.strictEqual(h.partialAnnouncement("사랑", { total: 12, psalter: { total: 0 } }), "\"사랑\" 검색 중… 현재 성서 본문 12건");
+  // 옛 워커나 성시 색인을 아직 받지 못한 결과에는 `psalter`가 없다
+  assert.strictEqual(h.partialAnnouncement("사랑", { total: 12 }), "\"사랑\" 검색 중… 현재 성서 본문 12건");
+});
+
+test("SEARCHED_GROUPS: 결과 없음과 책 이름만 친 안내는 알약의 세 묶음을 그 차례로 적는다", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.SEARCHED_GROUPS, "성서 본문, 성시, 전례일");
+});
+
 test("buildSearchPills: 고른 알약에 aria-current, 알약마다 주소와 포커스 키, 스크린 리더에는 「건」", () => {
   const h = loadPureHelpers();
-  const nav = h.buildSearchPills("lectionary", 198, 3, (g) => `/search?q=x${g === "lectionary" ? "&group=lectionary" : ""}`);
+  const nav = h.buildSearchPills("lectionary", { bible: 198, lectionary: 3 }, (g) => h.buildSearchUrl({ q: "x", group: g }));
   assert.strictEqual(nav.getAttribute("aria-label"), "검색 결과 묶음");
   const links = nav.children[0].children.map((li) => li.children[0]);
   assert.deepStrictEqual(links.map((a) => a.getAttribute("href")), ["/search?q=x", "/search?q=x&group=lectionary"]);
   assert.deepStrictEqual(links.map((a) => a.getAttribute("aria-current")), [null, "true"]);
   assert.deepStrictEqual(links.map((a) => a.getAttribute("data-focus-key")), ["group:bible", "group:lectionary"]);
   assert.deepStrictEqual(links.map((a) => recursiveText(a)), ["성서 본문 198건", "전례일 3건"]);
+});
+
+test("buildSearchPills: 결과가 있는 묶음만 「성서 본문, 성시, 전례일」의 차례로 둔다(ADR-046 §3)", () => {
+  const h = loadPureHelpers();
+  const href = (g) => h.buildSearchUrl({ q: "x", group: g });
+  const all = h.buildSearchPills("psalter", { lectionary: 3, psalter: 12, bible: 198 }, href);
+  const links = all.children[0].children.map((li) => li.children[0]);
+  assert.deepStrictEqual(links.map((a) => recursiveText(a)), ["성서 본문 198건", "성시 12건", "전례일 3건"]);
+  assert.deepStrictEqual(links.map((a) => a.getAttribute("aria-current")), [null, "true", null]);
+  assert.deepStrictEqual(links.map((a) => a.getAttribute("href")), ["/search?q=x", "/search?q=x&group=psalter", "/search?q=x&group=lectionary"]);
+  const two = h.buildSearchPills("psalter", { psalter: 12, lectionary: 3 }, href);
+  assert.deepStrictEqual(two.children[0].children.map((li) => recursiveText(li.children[0])), ["성시 12건", "전례일 3건"]);
 });

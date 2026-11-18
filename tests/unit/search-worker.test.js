@@ -356,6 +356,71 @@ test("paginate: 범위 밖 페이지는 빈 결과(total은 유지)", () => {
   assert.equal(r.total, 25);
 });
 
+// ── 성시: 전례시편과 송가는 성서 본문과 따로 센다(ADR-046) ──
+
+const PSALTER_META = {
+  aliases: { "시편": "ps", "전례시편": "lps", "송가": "cant", "lps": "lps", "cant": "cant" },
+  books: {
+    ps: { ko: "시편" },
+    lps: { ko: "전례시편" },
+    cant: { ko: "성무일과 송가", titles: { "1": "모세송가", "11": "즈가리야 송가" } },
+  },
+};
+const PSALTER_CHUNKS_DATA = {
+  ot: { books: ["ps"], bArr: [0, 0], cArr: [23, 23], vArr: [1, 2], tArr: ["야훼는 나의 목자", "푸른 풀밭에 누워 놀게 하시고"] },
+  lit: {
+    books: ["lps", "cant"], bArr: [0, 0, 1], cArr: [23, 23, 11], vArr: [1, 2, 1],
+    tArr: ["주님은 나의 목자시니 아쉬울 것 없어라.", "푸른 풀밭에 놀게 하시고", "주 이스라엘의 하느님을 찬미하여라."],
+  },
+};
+
+test("groupedResults: 성시 색인의 결과는 psalter에 따로 담고 같은 쪽으로 자른다", () => {
+  ctx._setMeta(PSALTER_META);
+  ctx._setChunks(PSALTER_CHUNKS_DATA);
+  const r = plain(ctx.groupedResults("풀밭", ["ot", "lit"], new Set(), 1, 10));
+  assert.deepEqual(r.results.map((x) => [x.b, x.c, x.v]), [["ps", 23, 2]]);
+  assert.equal(r.total, 1);
+  assert.deepEqual(r.psalter.results.map((x) => [x.b, x.c, x.v]), [["lps", 23, 2]]);
+  assert.equal(r.psalter.total, 1);
+  // 쪽은 보이는 묶음의 쪽이다. 다른 묶음은 결과 수만 쓴다
+  const page2 = plain(ctx.groupedResults("목자", ["ot", "lit"], new Set(), 2, 1));
+  assert.deepEqual([page2.total, page2.results.length, page2.psalter.total, page2.psalter.results.length], [1, 0, 1, 0]);
+  ctx._setMeta(META);
+});
+
+test("groupedResults: 책 범위가 성시의 책뿐이면 성서 본문은 없고, 받지 않은 성시 색인은 건너뛴다", () => {
+  ctx._setMeta(PSALTER_META);
+  ctx._setChunks(PSALTER_CHUNKS_DATA);
+  const scoped = plain(ctx.groupedResults("목자", ["ot", "lit"], new Set(["lps"]), 1, 10));
+  assert.deepEqual([scoped.total, scoped.psalter.total], [0, 1]);
+  const partial = plain(ctx.groupedResults("목자", ["ot"], new Set(), 1, 10));
+  assert.deepEqual([partial.total, partial.psalter.total], [1, 0]);
+  ctx._setMeta(META);
+});
+
+test("paginate: 송가는 송가 이름(title)을 함께 넘긴다(ADR-046 §4)", () => {
+  ctx._setMeta(PSALTER_META);
+  const r = plain(ctx.paginate([
+    { b: "cant", c: 11, v: 1, t: "주 이스라엘의" }, { b: "lps", c: 23, v: 1, t: "주님은" },
+  ], 1, 10));
+  assert.deepEqual(r.results, [
+    { b: "cant", c: 11, v: 1, t: "주 이스라엘의", bookNameKo: "성무일과 송가", title: "즈가리야 송가" },
+    { b: "lps", c: 23, v: 1, t: "주님은", bookNameKo: "전례시편" },
+  ]);
+  ctx._setMeta(META);
+});
+
+test("tryVerseRef, tryBookOnly: 전례시편과 송가도 책 이름으로 읽고, 송가는 장마다 이름을 붙인다(ADR-046 §4, §5)", () => {
+  ctx._setMeta(PSALTER_META);
+  assert.deepEqual(plain(ctx.tryVerseRef("전례시편 23:1")), { bookId: "lps", bookNameKo: "전례시편", parts: [{ chapter: 23, verses: "1" }] });
+  assert.deepEqual(plain(ctx.tryVerseRef("송가 11:1-3")),
+    { bookId: "cant", bookNameKo: "성무일과 송가", parts: [{ chapter: 11, verses: "1-3", title: "즈가리야 송가" }] });
+  assert.deepEqual(plain(ctx.tryVerseRef("시편 23")).bookId, "ps", "시편은 공동번역 시편이다");
+  assert.deepEqual(plain(ctx.tryBookOnly("송가")), { bookId: "cant", bookNameKo: "성무일과 송가", title: "모세송가" });
+  assert.deepEqual(plain(ctx.tryBookOnly("전례시편")), { bookId: "lps", bookNameKo: "전례시편" });
+  ctx._setMeta(META);
+});
+
 // ── tryBookOnly: 책 이름만 친 검색어(ADR-044 §2) ──
 
 const BOOK_META = {
@@ -956,6 +1021,31 @@ test("메시지: 색인을 받아 두었으면 구절과 이름으로 찾은 전
   assert.deepEqual(byBook.bookOnly, { bookId: "isa", bookNameKo: "이사야" });
   assert.deepEqual(byBook.lectionary.items, []);
   assert.deepEqual(w.lects(), [], "따로 보낼 것이 없다");
+});
+
+// 성시 색인(ADR-046)은 받지 못해도 성서 검색을 막지 않고, 다음 검색이 다시 받는다.
+test("메시지: 성시 색인을 받지 못해도 성서 본문을 찾고, 다음 검색에서 다시 받아 성시를 따로 넘긴다", async () => {
+  let litTries = 0;
+  const LIT = { books: ["isa"], b: [[0, 1]], c: [1], v: [1], t: ["보습을 만들어라"] };
+  // 앱을 켤 때(init)와 첫 검색이 받기에 실패하고, 둘째 검색이 받는다
+  const w = startWorker({ ...WORKER_FILES, lit: () => (++litTries <= 2 ? "fail" : LIT) });
+  await w.send({ ...INIT, chunks: [{ name: "nt", url: "nt" }, { name: "lit", url: "lit" }] });
+  await flush();
+  await w.send(search("보습"));
+  await flush();
+  const [first] = w.results();
+  assert.equal(first.total, 1, "성서 본문은 찾는다");
+  assert.deepEqual(plain(first.psalter), { results: [], total: 0 });
+  assert.ok(w.warned.some((m) => m.includes("성시 색인을 받지 못했습니다")));
+  assert.equal(w.posted.filter((m) => m.type === "error").length, 0);
+
+  await w.send(search("보습"));
+  await flush();
+  const second = w.results()[1];
+  assert.equal(litTries, 3, "검색마다 다시 받는다");
+  assert.equal(second.total, 1);
+  assert.deepEqual(second.psalter.results.map((r) => [r.b, r.c, r.v]), [["isa", 1, 1]]);
+  assert.equal(second.psalter.total, 1);
 });
 
 // 책은 5권까지(ADR-033 「책은 5권까지」). 책 칩과 in:을 합쳐 세고, 넘으면 일부만 찾지 않고 아무것도 찾지 않는다(사용자 결정 2026-11-18).

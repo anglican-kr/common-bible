@@ -129,8 +129,9 @@
 | `data/search-nt.json` | 신약 7,940절 | 약 1.3MB |
 | `data/search-dc.json` | 외경 4,114절 | 약 700KB |
 | `data/search-ot.json` | 구약 23,430절 | 약 3.8MB |
+| `data/search-lit.json` | 성시(전례시편과 송가) 2,672절 | 약 280KB |
 
-받는 순서는 NT, DC, OT다. NT를 받는 즉시 첫 검색을 할 수 있다(progressive search). 앞으로 교회력 텍스트는 `search-lectionary.json` 같은 청크를 더하는 것만으로 넓힌다.
+받는 순서는 NT, DC, OT, 성시다. NT를 받는 즉시 첫 검색을 할 수 있다(progressive search). 앞으로 교회력 텍스트는 `search-lectionary.json` 같은 청크를 더하는 것만으로 넓힌다. 성시 청크는 ADR-046이 더했다. 그 결과는 성서 본문과 따로 세고, 받지 못해도 성서 검색은 한다.
 
 #### 컬럼형 형식과 RLE
 

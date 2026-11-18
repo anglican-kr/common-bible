@@ -31,9 +31,10 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   }
 
   // Psalms use "편" instead of "장" as the chapter unit.
+  // 전례시편(`lps`)도 시편이라 「편」이다(「전례시편 23편」, 사용자 결정 2026-11-18, ADR-046 §4).
   /** @param {string} bookId */
   function chUnit(bookId) {
-    return bookId === "ps" ? "편" : "장";
+    return bookId === "ps" || bookId === "lps" ? "편" : "장";
   }
 
   /**

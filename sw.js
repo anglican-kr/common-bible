@@ -112,7 +112,8 @@ function cacheNameFor(pathname) {
   if (pathname.startsWith("/data/lectionary/")) return DATA_CACHE;
   if (pathname === "/data/search-ot.json" ||
       pathname === "/data/search-nt.json" ||
-      pathname === "/data/search-dc.json") {
+      pathname === "/data/search-dc.json" ||
+      pathname === "/data/search-lit.json") {
     return DATA_CACHE;
   }
   return SHELL_CACHE;

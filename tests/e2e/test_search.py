@@ -621,12 +621,12 @@ def test_in_operator_multiple_aliases_or(page, base_url):
     assert book_ids <= {"john", "matt"}, f"Expected subset of {{john, matt}}, got: {book_ids}"
 
 
-@pytest.mark.parametrize("name, particle", [("없는책", "이라는"), ("송가", "라는")])
+@pytest.mark.parametrize("name, particle", [("없는책", "이라는"), ("없는송가", "라는")])
 def test_in_operator_unmatched_alias_blocks_search(name, particle, page, base_url):
     """`사랑 in:없는책`은 찾지 않고, 다른 결과 없음 화면과 같은 모양으로 그 책을 찾지 못했다고 알리며 고치는 방법을 적는다. 검색 예시에는
     책 범위 예시(`사랑 in:요한`)도 있다. 최근 검색에는 넣지 않는다(ADR-005 「검색 연산자 `in:`」, ADR-014 D1). 결과 위에 「in:없는책 —
-    알 수 없는 책 별칭입니다」 한 줄만 보이던 때가 있었다(사용자 결정 2026-11-18). 검색 색인에 없는 송가(기도서 번역)도 칩이 되지 않고
-    같은 안내가 나온다. 칩이 되면 아무것도 찾지 않고 결과 없음만 나왔다(ADR-033, 코드 리뷰 2026-11-18)."""
+    알 수 없는 책 별칭입니다」 한 줄만 보이던 때가 있었다(사용자 결정 2026-11-18). 받침이 없는 이름은 「라는」이다. 송가는 성시 색인에
+    들어가 이제 칩이 된다(ADR-046 §2, `test_psalter_book_filter_group_and_chips`)."""
     page.goto(base_url)
     wait_app_ready(page)
 
@@ -835,8 +835,8 @@ def test_lectionary_only_results_have_no_pills(page):
 
 
 def test_word_without_lectionary_days_names_the_bible_group(page):
-    """성서 본문에만 결과가 있으면 알약 없이 「성서 본문 N건」이다(ADR-044 §1)."""
-    _goto_search(page, "사랑")
+    """성서 본문에만 결과가 있으면 알약 없이 「성서 본문 N건」이다(ADR-044 §1). 세리는 성시에도 전례일에도 없다."""
+    _goto_search(page, "세리")
     assert page.locator(".search-pill").count() == 0
     assert page.inner_text("h2.search-count").startswith("성서 본문 ")
 
@@ -1469,7 +1469,7 @@ def test_book_scope_leaves_out_the_lectionary_example(page):
     page.goto(f"{BASE_URL}/search?q={quote('부활절 달걀')}")
     page.wait_for_selector(".search-examples", timeout=10_000)
     assert "성령강림" in page.locator(".search-example-q").all_inner_texts()
-    assert page.inner_text(".empty-state-subtitle") == "‘부활절 달걀’에 해당하는 구절과 전례일을 찾지 못했어요."
+    assert page.inner_text(".empty-state-subtitle") == "‘부활절 달걀’에 해당하는 성서 본문, 성시, 전례일을 찾지 못했어요."
 
 
 def test_saint_with_common_readings_only_shows_its_rank_and_opens_the_day(page):
@@ -1549,4 +1549,153 @@ def test_lectionary_days_wait_while_bible_chunks_load_with_nothing_found(browser
     held["ot"].continue_()
     page.wait_for_selector(".lect-rows a", timeout=15_000)
     assert page.inner_text("h2.search-count") == "전례일 1건"
+    ctx.close()
+
+
+# ── 성시 검색(ADR-046) ───────────────────────────────────────────────────────
+
+def test_psalter_results_are_a_pill_apart_from_the_bible(page):
+    """전례시편과 송가의 결과는 「성시」 알약으로 성서 본문과 따로 보인다. 알약은 「성서 본문, 성시, 전례일」의 차례이고 처음에는 성서 본문이다.
+    「성시」를 고르면 주소에 `group=psalter`를 적고 포커스가 그 알약에 남는다. 결과를 누르면 전례시편의 장을 열고 찾은 말을 강조한다(ADR-046 §3).
+    「나의 목자」는 공동번역에 3절(창세 48:15, 시편 23:1, 즈가 13:7), 전례시편에 23편 1절이 있다."""
+    _goto_search(page, "나의 목자")
+    pills = page.locator(".search-pill")
+    assert pills.all_text_contents() == ["성서 본문 3건", "성시 1건"]
+    assert pills.nth(0).get_attribute("aria-current") == "true"
+    refs = page.locator(".search-result-ref").all_inner_texts()
+    assert "시편 23:1" in refs and not any(r.startswith("전례시편") for r in refs), refs
+
+    pills.nth(1).click()
+    page.wait_for_url("**group=psalter")
+    page.wait_for_function("() => document.querySelector('h2.search-count')?.textContent === '성시 1건 (1/1쪽)'")
+    page.wait_for_function("() => document.activeElement?.dataset.focusKey === 'group:psalter'")
+    assert page.locator(".search-result-ref").all_inner_texts() == ["전례시편 23:1"]
+    page.wait_for_function("() => document.getElementById('a11y-announce').textContent.includes('성서 본문 3건, 성시 1건')")
+
+    page.locator(".search-result-item a").first.click()
+    page.wait_for_function("() => location.pathname.startsWith('/lps/23')")
+    page.wait_for_selector("mark", timeout=10_000)
+    assert "나의 목자" in "".join(page.locator("mark").all_inner_texts())
+
+
+def test_psalter_pages_stay_in_the_psalter(page):
+    """성시의 쪽 넘기기는 성시에 머문다. 쪽 번호는 고른 묶음의 쪽이다(ADR-046 §3)."""
+    _goto_search(page, "주님", "&group=psalter")
+    heading = page.inner_text("h2.search-count")
+    assert heading.startswith("성시 391건 (1/"), heading
+    page.locator(".search-pagination a", has_text="다음").click()
+    page.wait_for_url("**page=2&group=psalter")
+    page.wait_for_function("() => document.querySelector('h2.search-count')?.textContent.startsWith('성시 391건 (2/')")
+    assert page.locator(".search-pill[aria-current='true']").text_content().startswith("성시")
+    assert ", 2쪽" in page.title()
+
+
+def test_canticle_results_show_the_canticle_name(page):
+    """송가의 결과는 송가 이름과 절로 적는다(「즈가리야 송가 1」, ADR-046 §4). 책을 성시의 책만 골랐으면 성서 본문이 없어 알약도 없다."""
+    _goto_search(page, "이스라엘의 주 하느님", "&in=lps&in=cant")
+    assert page.locator(".search-pill").count() == 0
+    assert page.inner_text("h2.search-count") == "성시 2건 (1/1쪽)"
+    assert page.locator(".search-result-ref").all_inner_texts() == ["전례시편 106:48", "즈가리야 송가 1"]
+    assert page.locator(".search-result-item a").nth(1).get_attribute("href").startswith("/cant/11/1?hl=")
+
+
+def test_psalter_verse_reference_and_book_name(page):
+    """전례시편과 송가의 책 이름도 구절로 읽는다. 송가의 카드는 송가 이름이다. `전례시편 23`은 `시편 23`과 같이 그 시편을 읽는 전례일을
+    찾는다. 책 이름만 치면 첫 편의 카드이고, 송가는 첫 송가의 이름이다(ADR-046 §4, §5). 「송가」라는 낱말은 공동번역(에페 5:19, 골로
+    3:16)에 있어 결과도 함께 나온다. 결과가 없는 「성무일과 송가」는 Enter로 첫 송가를 연다고 알린다."""
+    _goto_search(page, "송가 11:1-3")
+    assert page.inner_text(".search-result-ref-title") == "즈가리야 송가 1-3절"
+    assert page.locator(".search-result-ref-card").get_attribute("href") == "/cant/11/1-3"
+
+    _goto_search(page, "전례시편 23")
+    assert page.inner_text(".search-result-ref-title") == "전례시편 23편"
+    page.wait_for_selector(".lect-rows a", timeout=10_000)
+    lps_days = page.inner_text("h2.search-count")
+    _goto_search(page, "시편 23")
+    page.wait_for_selector(".lect-rows a", timeout=10_000)
+    assert page.inner_text("h2.search-count") == lps_days
+    assert page.inner_text(".search-result-ref-title") == "시편 23편"
+
+    _goto_search(page, "송가")
+    assert page.inner_text(".search-result-ref-title") == "모세송가"
+    assert page.locator(".search-result-ref-card").get_attribute("href") == "/cant/1"
+    assert page.inner_text("h2.search-count") == "성서 본문 2건 (1/1쪽)"
+
+    _goto_search(page, "성무일과 송가")
+    assert page.inner_text(".search-result-ref-title") == "모세송가"
+    assert page.inner_text(".search-note") == (
+        "‘성무일과 송가’가 들어간 성서 본문, 성시, 전례일은 없습니다. 검색창에서 Enter를 누르면 모세송가를 바로 엽니다."
+    )
+
+
+@pytest.mark.parametrize("ctx_name", ["mobile_context", "desktop_context"])
+def test_psalter_book_filter_group_and_chips(ctx_name, request):
+    """책 선택 시트의 마지막 묶음은 「성시」(전례시편, 송가)다. 고르면 다른 책과 같이 칩이 되고 최근 검색에 범위와 함께 남는다. 입력 칸의
+    `in:송가`도 칩이 된다(ADR-046 §2)."""
+    page = request.getfixturevalue(ctx_name).new_page()
+    _apply_books_to_typed_query(page, ctx_name, "목자", "lps")
+    page.wait_for_selector(".search-count", timeout=20_000)
+    _wait_search_done(page)
+    titles = page.locator("#book-filter-sheet .book-filter-section-title").all_text_contents()
+    assert titles[-1] == "성시", titles
+    last = page.locator("#book-filter-sheet .book-filter-section").last
+    assert last.locator(".book-filter-name").all_text_contents() == ["전례시편", "송가"]
+    state = page.evaluate("""() => ({
+        books: new URLSearchParams(location.search).getAll('in'),
+        heading: document.querySelector('h2.search-count').textContent,
+        refs: [...document.querySelectorAll('.search-result-ref')].map((n) => n.textContent),
+        pills: document.querySelectorAll('.search-pill').length,
+        chips: [...document.querySelectorAll('.field-token')].filter((n) => n.offsetParent).map((n) => n.textContent),
+        recent: (JSON.parse(localStorage.getItem('bible-search-history') || '[]')[0] || {}).q,
+    })""")
+    assert state["books"] == ["lps"], state
+    assert state["heading"].startswith("성시 5건"), state
+    assert state["refs"] and all(r.startswith("전례시편 ") for r in state["refs"]), state
+    assert state["pills"] == 0, state
+    assert any("전례시편" in c for c in state["chips"]), state
+    assert state["recent"] == "목자 in:전례시편", state
+
+
+def test_typed_in_canticles_becomes_a_chip(page, base_url):
+    """입력 칸의 `in:송가`는 칩이 되고 송가에서만 찾는다(ADR-046 §2)."""
+    page.goto(base_url)
+    wait_app_ready(page)
+    page.fill("#search-input", "구원 in:송가")
+    page.press("#search-input", "Enter")
+    page.wait_for_selector("#search-bar .field-token", timeout=20_000)
+    page.wait_for_selector("h2.search-count", timeout=20_000)
+    _wait_search_done(page)
+    assert page.evaluate("new URLSearchParams(location.search).getAll('in')") == ["cant"]
+    assert page.inner_text("h2.search-count").startswith("성시 12건 (1/")
+    assert page.locator("#search-bar .field-token").inner_text().startswith("송가")
+    refs = page.locator(".search-result-ref").all_inner_texts()
+    assert refs and all(not r.startswith("전례시편") and ":" not in r for r in refs), refs
+
+
+def test_three_pills_in_order(page):
+    """성서 본문, 성시, 전례일에 모두 결과가 있으면 알약 셋을 그 차례로 둔다(ADR-046 §3). 「성령」은 성시에 3절, 전례일에 성령강림대축일이 있다."""
+    _goto_search(page, "성령")
+    names = [t.split(" ")[0] for t in page.locator(".search-pill").all_text_contents()]
+    assert names == ["성서", "성시", "전례일"], names
+    assert page.locator(".search-pill").nth(1).text_content() == "성시 3건"
+    page.locator(".search-pill").nth(2).click()
+    page.wait_for_url("**group=lectionary")
+    page.wait_for_selector(".lect-rows a")
+    assert page.inner_text("h2.search-count") == "전례일 1건"
+
+
+def test_late_lectionary_pill_joins_the_psalter_pills_and_keeps_focus(browser):
+    """성서 본문과 성시의 알약을 그린 뒤 3초가 지나 전례일이 오면 그 끝에 전례일 알약만 더하고, 알약에 있던 포커스가 남는다(ADR-046 §3)."""
+    ctx, held = _held_lectionary_index(browser)
+    page = ctx.new_page()
+    page.goto(f"{BASE_URL}/search?q={quote('성령')}")
+    page.wait_for_function("() => document.querySelectorAll('.search-pill').length === 2", timeout=20_000)
+    _wait_search_done(page)
+    pill = page.locator(".search-pill").nth(1)
+    pill.focus()
+    held[0].continue_()
+    page.wait_for_function("() => document.querySelectorAll('.search-pill').length === 3", timeout=10_000)
+    assert page.evaluate("document.activeElement.dataset.focusKey") == "group:psalter"
+    assert [t.split(" ")[0] for t in page.locator(".search-pill").all_text_contents()] == ["성서", "성시", "전례일"]
+    assert page.locator(".search-pill[aria-current='true']").text_content().startswith("성서 본문")
     ctx.close()

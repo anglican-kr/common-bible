@@ -631,3 +631,40 @@ test("검색 결과의 굵기: 이름이 「주일」로 끝나는 이동 축일
   assert.ok(onSunday > 26 * 50, `일요일에 지킨 주일 독서 ${onSunday}`);
   assert.deepStrictEqual([...notSunday], []);
 });
+
+// ── 성시(전례시편과 송가) 검색(ADR-046) ──
+
+test("성시: 실제 성시 색인으로 성서 본문과 따로 찾고, 송가는 이름을 붙이며, 전례시편의 구절로 그 시편을 읽는 날을 찾는다", { skip: !haveData }, () => {
+  const { ctx, index } = loadLectionarySearch();
+  const chunk = (name) => {
+    const raw = readJson(path.join(DATA, `search-${name}.json`));
+    const bArr = raw.b.flatMap(([idx, n]) => Array(n).fill(idx));
+    return { books: raw.books, bArr, cArr: raw.c, vArr: raw.v, tArr: raw.t };
+  };
+  vm.runInContext("function _setChunks(c) { loadedChunks = c; }", ctx);
+  ctx._setChunks({ ot: chunk("ot"), lit: chunk("lit") });
+  const plain = (x) => JSON.parse(JSON.stringify(x));
+
+  // 시편 23편 1절: 공동번역은 「야훼는 나의 목자」, 전례시편은 「주님은 나의 목자시니」
+  const found = plain(ctx.groupedResults("나의 목자", ["ot", "lit"], new Set(), 1, 50));
+  assert.ok(found.results.some((r) => r.b === "ps" && r.c === 23 && r.v === 1), "공동번역 시편 23:1");
+  assert.ok(found.psalter.results.some((r) => r.b === "lps" && r.c === 23 && r.v === 1), "전례시편 23:1");
+  assert.ok(found.results.every((r) => r.b !== "lps" && r.b !== "cant"), "성서 본문에 성시가 섞이지 않는다");
+
+  // 송가의 결과는 송가 이름을 함께 넘긴다
+  const zechariah = plain(ctx.groupedResults("이스라엘의 주 하느님", ["lit"], new Set(["cant"]), 1, 50)).psalter.results;
+  assert.ok(zechariah.length > 0);
+  assert.deepStrictEqual(zechariah.map((r) => [r.c, r.v, r.title]), [[11, 1, "즈가리야 송가"]]);
+
+  // 책 이름: 전례시편과 송가를 구절과 책 이름으로 읽고, 시편은 공동번역 시편이다
+  assert.deepStrictEqual(plain(ctx.tryVerseRef("전례시편 23:1")).bookId, "lps");
+  assert.deepStrictEqual(plain(ctx.tryVerseRef("송가 11")).parts, [{ chapter: 11, verses: "1-999", title: "즈가리야 송가" }]);
+  assert.deepStrictEqual(plain(ctx.tryVerseRef("시편 23")).bookId, "ps");
+  assert.deepStrictEqual(plain(ctx.tryBookOnly("송가")), { bookId: "cant", bookNameKo: "성무일과 송가", title: "모세송가" });
+  assert.deepStrictEqual([...ctx.parseQuery("목자 in:전례시편 in:송가").restrictBooks], ["lps", "cant"]);
+
+  // 전례시편 23편을 읽는 날은 시편 23편을 읽는 날과 같다(전례독서의 시편은 전례시편이다)
+  const days = (q) => plain(ctx.searchLectionaryPassage(index, ctx.tryVerseRef(q))).items.map((it) => it.obs.key).sort();
+  assert.ok(days("시편 23").length > 0);
+  assert.deepStrictEqual(days("전례시편 23"), days("시편 23"));
+});
