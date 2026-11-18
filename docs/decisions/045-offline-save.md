@@ -25,7 +25,7 @@
 
 ### 1. 저장하는 자료
 
-- 성서 본문(`/data/bible/`), 성서 검색 자료(`search-ot.json`, `search-nt.json`, `search-dc.json`), 교회력 자료(`/data/lectionary/`)를 함께 저장한다. 받을 파일 목록은 콘텐츠 해시 매니페스트(`bible-manifest.json`)에서 얻는다.
+- 성서 본문(`/data/bible/`), 성서 검색 자료(`search-ot.json`, `search-nt.json`, `search-dc.json`, 성시의 `search-lit.json`, ADR-046 §6), 교회력 자료(`/data/lectionary/`)를 함께 저장한다. 받을 파일 목록은 콘텐츠 해시 매니페스트(`bible-manifest.json`)에서 얻는다.
 - 성무일과 독서표(`office-readings.json`)는 앱이 아직 쓰지 않아 빼고, 성무일과 화면을 만들 때 더한다.
 - 오디오는 넣지 않는다. 지금처럼 재생할 때 받는다.
 - 까닭: 전례독서 화면은 독서 본문을 성서 장 파일에서 읽는다. 교회력 자료만 저장하면 오프라인에서 날은 열려도 독서 본문이 없다. 검색 자료를 함께 저장해야 인터넷 없이도 성서를 찾는다. 전례독서 검색의 색인은 교회력 자료에 있다. 오디오는 따로 저장 한도를 두고 오래 듣지 않은 파일부터 지우므로(오디오 캐시), 모두 받아 두는 일과 맞지 않는다.
