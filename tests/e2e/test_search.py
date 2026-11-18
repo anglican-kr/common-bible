@@ -1469,7 +1469,7 @@ def test_book_scope_leaves_out_the_lectionary_example(page):
     page.goto(f"{BASE_URL}/search?q={quote('부활절 달걀')}")
     page.wait_for_selector(".search-examples", timeout=10_000)
     assert "성령강림" in page.locator(".search-example-q").all_inner_texts()
-    assert page.inner_text(".empty-state-subtitle") == "‘부활절 달걀’에 해당하는 구절과 전례일을 찾지 못했어요."
+    assert page.inner_text(".empty-state-subtitle") == "‘부활절 달걀’에 해당하는 성서 본문, 성시, 전례일을 찾지 못했어요."
 
 
 def test_saint_with_common_readings_only_shows_its_rank_and_opens_the_day(page):
@@ -1623,7 +1623,9 @@ def test_psalter_verse_reference_and_book_name(page):
 
     _goto_search(page, "성무일과 송가")
     assert page.inner_text(".search-result-ref-title") == "모세송가"
-    assert "검색창에서 Enter를 누르면 모세송가를 바로 엽니다." in page.inner_text(".search-note")
+    assert page.inner_text(".search-note") == (
+        "‘성무일과 송가’가 들어간 성서 본문, 성시, 전례일은 없습니다. 검색창에서 Enter를 누르면 모세송가를 바로 엽니다."
+    )
 
 
 @pytest.mark.parametrize("ctx_name", ["mobile_context", "desktop_context"])

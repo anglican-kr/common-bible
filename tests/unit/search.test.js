@@ -288,6 +288,8 @@ function loadPureHelpers() {
     fillLectRow: ctx.fillLectRow,
     lectDayText: ctx.lectDayText,
     buildSearchPills: ctx.buildSearchPills,
+    partialAnnouncement: ctx.partialAnnouncement,
+    SEARCHED_GROUPS: vm.runInContext("SEARCHED_GROUPS", ctx),
   };
 }
 
@@ -2360,6 +2362,21 @@ test("fillLectRow: 링크를 한 줄에 하나씩 더하고 빼며, 있던 링�
   h.fillLectRow(li, row([]));
   assert.strictEqual(li.children.length, 1);
   assert.strictEqual(li.className, "");
+});
+
+test("partialAnnouncement: 검색 중 알림은 묶음마다 알약의 이름과 차례로 읽고, 성시는 결과가 있을 때만 읽는다", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.partialAnnouncement("사랑", { total: 12, psalter: { total: 3 } }), "\"사랑\" 검색 중… 현재 성서 본문 12건, 성시 3건");
+  // 성시에만 결과가 있어도 「현재 0건」으로 끝나지 않는다
+  assert.strictEqual(h.partialAnnouncement("목자", { total: 0, psalter: { total: 4 } }), "\"목자\" 검색 중… 현재 성서 본문 0건, 성시 4건");
+  assert.strictEqual(h.partialAnnouncement("사랑", { total: 12, psalter: { total: 0 } }), "\"사랑\" 검색 중… 현재 성서 본문 12건");
+  // 옛 워커나 성시 색인을 아직 받지 못한 결과에는 `psalter`가 없다
+  assert.strictEqual(h.partialAnnouncement("사랑", { total: 12 }), "\"사랑\" 검색 중… 현재 성서 본문 12건");
+});
+
+test("SEARCHED_GROUPS: 결과 없음과 책 이름만 친 안내는 알약의 세 묶음을 그 차례로 적는다", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.SEARCHED_GROUPS, "성서 본문, 성시, 전례일");
 });
 
 test("buildSearchPills: 고른 알약에 aria-current, 알약마다 주소와 포커스 키, 스크린 리더에는 「건」", () => {

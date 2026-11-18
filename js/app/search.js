@@ -967,6 +967,8 @@ function fillLectRow(li, row) {
 
 /** 결과 묶음의 차례와 알약의 이름(ADR-044 §1, ADR-046 §3). 본문을 찾는 묶음 둘 다음에 날을 찾는 묶음이다. */
 const SEARCH_GROUPS = /** @type {const} */ ([["bible", "성서 본문"], ["psalter", "성시"], ["lectionary", "전례일"]]);
+/** 책을 고르지 않은 검색이 찾는 묶음(「성서 본문, 성시, 전례일」). 결과 없음과 책 이름만 친 검색의 안내에 쓴다(사용자 결정 2026-11-19). */
+const SEARCHED_GROUPS = SEARCH_GROUPS.map(([, name]) => name).join(", ");
 
 /**
  * 결과 묶음의 알약(「성서 본문」, 「성시」, 「전례일」, ADR-044 §1, ADR-046 §3). 결과가 있는 묶음만 `counts`에 둔다. 고른
@@ -1043,6 +1045,18 @@ function buildSearchPagination(state, currentPage, totalPages) {
   }
 
   return nav;
+}
+
+/**
+ * 성서 색인을 받는 동안 라이브 영역이 읽는 문장(사용자 결정 2026-11-19). 묶음마다 결과 수를 알약의 이름과 차례로 읽는다.
+ * 성시는 결과가 있을 때만 읽는다. 그전에는 성서 본문의 수만 읽어, 성시에만 결과가 있으면 「현재 0건」이었다.
+ * @param {string} query
+ * @param {{ total: number, psalter?: { total: number } | null }} partial
+ * @returns {string}
+ */
+function partialAnnouncement(query, partial) {
+  const psalter = partial.psalter && partial.psalter.total > 0 ? `, 성시 ${partial.psalter.total}건` : "";
+  return `"${query}" 검색 중… 현재 성서 본문 ${partial.total}건${psalter}`;
 }
 // ── END PURE HELPERS ──
 
@@ -1266,9 +1280,9 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
   if (notice && !answer.node && !groups.length) return `"${query}" ${[picked, notice.text].filter(Boolean).join(" ")}`;
   if (!answer.node && !groups.length) {
     container.appendChild(
-      // 책을 골라 두었으면 전례일은 찾지 않았다(ADR-044 §1)
+      // 책을 골라 두었으면 전례일은 찾지 않았다(ADR-044 §1). 고르지 않았으면 알약의 세 묶음을 모두 찾았다(사용자 결정 2026-11-19)
       buildSearchEmptyState("검색 결과가 없습니다", notes.length ? notes.join(" ")
-        : `‘${query}’에 해당하는 ${screen.scoped ? "구절을" : "구절과 전례일을"} 찾지 못했어요.`)
+        : `‘${query}’에 해당하는 ${screen.scoped ? "구절을" : `${SEARCHED_GROUPS}을`} 찾지 못했어요.`)
     );
     container.appendChild(buildSearchExamples(true, screen.scoped));
     return `"${query}" 검색 결과 0건${notes.length ? `. ${notes.join(" ")}` : ""}`;
@@ -1286,7 +1300,7 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
   if (answer.firstChapter && !groups.length) {
     const first = answer.firstChapter;
     container.appendChild(el("p", { className: "search-note" },
-      `‘${query}’${hasBatchim(query) ? "이" : "가"} 들어간 구절과 전례일은 없습니다. 검색창에서 Enter를 누르면 ${first}${hasBatchim(first) ? "을" : "를"} 바로 엽니다.`));
+      `‘${query}’${hasBatchim(query) ? "이" : "가"} 들어간 ${SEARCHED_GROUPS}은 없습니다. 검색창에서 Enter를 누르면 ${first}${hasBatchim(first) ? "을" : "를"} 바로 엽니다.`));
   }
 
   // The verse list shown — 성서 본문 or 성시 (ADR-046 §3) — and its pages. 「2/5」 may be read as a fraction — say it in words.
@@ -1297,7 +1311,7 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
   if (groups.length > 1) {
     container.appendChild(buildSearchPills(group, counts, screen.groupHref));
   }
-  if (hasBible) said.push(isPending ? `검색 중… 현재 ${result.total}건` : `성서 본문 ${result.total}건${group === "bible" ? pageWords : ""}`);
+  if (hasBible) said.push(isPending ? `검색 중… 현재 성서 본문 ${result.total}건` : `성서 본문 ${result.total}건${group === "bible" ? pageWords : ""}`);
   if (psalter) said.push(`성시 ${psalter.total}건${group === "psalter" ? pageWords : ""}`);
   if (lect) said.push(`${lectGroupName(lect)} ${lect.items.length}건`);
 
@@ -2564,7 +2578,7 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
     draw(partial);
     // 성서 묶음을 받는 동안에도 안내 카드의 단추가 동작하게 한다
     wireLocalNotice(resultsTarget, query);
-    window.announce(`"${query}" 검색 중… 현재 ${partial.total}건`);
+    window.announce(partialAnnouncement(query, partial));
   }
 
   // 성탄 평일의 화면 이름(「성탄 1주 수요일」)은 해마다 바뀌어 색인에 없다. 이런 검색어를 받았는데 워커가 오늘 계산한 이름을 모르면
@@ -2732,7 +2746,7 @@ async function addLateLectionary(result, query, screen, target, isStale, draw) {
     if (drawn && lectPill) drawn.appendChild(lectPill);
     else heading.before(pills);
   } else if (target.querySelector(".search-answer")) {
-    // 책 이름만 친 검색어의 「…구절과 전례일은 없습니다」는 이제 사실이 아니다
+    // 책 이름만 친 검색어의 「…성서 본문, 성시, 전례일은 없습니다」는 이제 사실이 아니다
     for (const note of target.querySelectorAll(".search-note")) note.remove();
     appendLectGroup(target, lect, screen);
   } else {
