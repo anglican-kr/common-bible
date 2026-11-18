@@ -432,7 +432,8 @@ let keptTableCache = null;
 function keptTable() {
   if (keptTableCache) return keptTableCache;
   const { e, cal, lec } = realEngine();
-  const table = { from: e.liturgicalYearSpan(TODAY).from, to: "", byId: new Map(), byName: new Map() };
+  // 실데이터를 확인하는 범위(2025-2050년)까지 센 표다. 앱의 표는 시작하는 해부터 30년 뒤까지 센다(엔진 `keptLastFrom`)
+  const table = { from: e.liturgicalYearSpan(TODAY).from, to: "", last: "2050-12-31", byId: new Map(), byName: new Map() };
   e.extendKeptDaysIn(lec, cal, table, "2050-12-31");
   return (keptTableCache = table);
 }

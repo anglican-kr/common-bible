@@ -722,12 +722,20 @@ def test_year_name_search_shows_a_row_for_each_year(page):
     _goto_year_search(page, "대림1주일 2027년")
     assert _row_labels(page)[0] == "대림1주일, 자색, 다해, 다음 2027년 11월 28일 일요일"
 
-    # 찾는 해는 2050년까지다. 그보다 늦은 해만 쳤으면 그렇다고 알린다(사용자 결정 2026-11-17)
+    # 2050년보다 늦은 해도 그해의 날을 보이고, 줄을 누르면 그날이 열린다(2050년에서 자르던 것을 2026-11-18에 풀었다)
     _goto_year_search(page, "2060 성 니콜라")
-    assert "연도는 2050년까지 찾습니다." in page.inner_text(".empty-state")
+    assert _row_labels(page) == [f"{NICOLA}, 백색, 다음 2060년 12월 6일 월요일"]
+    page.locator(".lect-rows a.cal-row").first.click()
+    page.wait_for_function("() => location.pathname === '/lectionary/2060-12-06'", timeout=15_000)
+    page.wait_for_selector(".lect-day", timeout=15_000)
+    assert "성 니콜라" in page.inner_text(".lect-head")
     _goto_year_search(page, "2049-2060 성 니콜라")
-    assert page.inner_text(".search-note") == "연도는 2050년까지 찾습니다. 2049~2050년의 날을 보입니다."
-    assert len(_row_labels(page)) == 2
+    assert page.inner_text(".search-note") == "연도 범위는 10년까지 찾습니다. 2049~2058년의 날을 보입니다."
+    assert len(_row_labels(page)) == 10
+
+    # 설날과 추석은 음력 날짜 자료가 있는 해만 찾는다고 알린다(사용자 결정 2026-11-18)
+    _goto_year_search(page, "2060 설날")
+    assert "설날과 추석은 2025-2050년만 찾습니다." in page.inner_text(".empty-state")
 
 
 def test_year_search_that_finds_no_lectionary_day_does_not_load_the_engine(page):

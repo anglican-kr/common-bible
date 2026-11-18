@@ -2253,7 +2253,7 @@ test("liturgicalYearSpan: 대림 1주일부터 다음 대림 1주일 전날까�
 test("openDayIn · nextDayIn: 이번 전례년의 첫날, 없으면 오늘부터의 첫날 — 표가 아직 거기까지 세지 않았으면 undefined, 끝까지 없으면 null", () => {
   const e = loadEngine(fakeFetch([]));
   const table = {
-    from: "2025-11-30", to: "2028-12-31",
+    from: "2025-11-30", to: "2028-12-31", last: "2055-12-31",
     byId: new Map([
       ["a", [KD("2026-03-01", { setId: "a" }), KD("2029-02-25", { setId: "a" })]],
       ["b", [KD("2027-03-07", { setId: "b" })]],
@@ -2274,8 +2274,8 @@ test("openDayIn · nextDayIn: 이번 전례년의 첫날, 없으면 오늘부터
   assert.strictEqual(e.nextDayIn(table, ["c"], "2026-01-01").date, "2026-04-15");
   // 이번 전례년을 다 세지 않았으면 모른다
   assert.strictEqual(e.openDayIn({ ...table, to: "2026-06-30" }, ["a"], today), undefined);
-  // 마지막 날까지 셌는데 없으면 null
-  const full = { ...table, to: "2050-12-31" };
+  // 표의 끝(표가 시작하는 해부터 30년 뒤, 2026-11-18)까지 셌는데 없으면 null
+  const full = { ...table, to: "2055-12-31" };
   assert.strictEqual(e.nextDayIn(full, ["nope"], today), null);
   assert.strictEqual(e.openDayIn(full, ["nope"], today), null);
 });
@@ -2284,7 +2284,7 @@ test("christmasNamesIn: 성탄 평일의 화면 이름은 오늘부터 한 해 �
   const e = loadEngine(fakeFetch([]));
   const wed = (date, setId) => KD(date, { obs: "grid:christmas-x-weekday-wed", setId, name: "성탄 1주 수요일" });
   const table = {
-    from: "2025-11-30", to: "2050-12-31", byId: new Map(),
+    from: "2025-11-30", to: "2050-12-31", last: "2055-12-31", byId: new Map(),
     byName: new Map([["성탄 1주 수요일", [wed("2025-12-31", "d1231"), wed("2026-12-30", "d1230")]]]),
   };
   // 지난 2025-12-31이 아니라 다가오는 2026-12-30이다
@@ -2323,33 +2323,34 @@ test("findReadingDay · findChristmasNames · readingLabel: 프리로드 뒤에 
   assert.strictEqual(e.readingLabel("nope", "first"), null);
 });
 
-test("findReadingDay: 화면을 떠났으면 표를 더 세지 않고, 표의 끝(2050년)보다 늦은 `from`은 세지 않고 null(코드 리뷰 2026-11-16)", async () => {
+test("findReadingDay: 화면을 떠났으면 표를 더 세지 않고, 표 밖의 먼 `from`은 표를 늘리지 않고 그해부터 찾는다(ADR-044 §4, 2026-11-18)", { timeout: 20_000 }, async () => {
   const e = loadEngine(fakeFetch([]));
   await Promise.all([e.preloadCalendar(), e.preloadLectionary()]);
   const tableTo = () => vm.runInContext("keptDayTable ? keptDayTable.to : ''", e);
-  // 없는 독서는 2050년까지 세야 없다는 것을 안다. 화면을 떠났으면 처음 센 데서 그친다
+  // 없는 독서는 표의 끝(이번 전례년의 첫 해 2025년부터 30년 뒤, 2055년 끝)까지 세야 없다는 것을 안다. 화면을 떠났으면 처음 센 데서 그친다
   assert.strictEqual(await e.findReadingDay(["nope"], "2026-11-16", "2026-11-16", () => true), null);
   const first = tableTo();
   assert.ok(first < "2030-01-01", first);
-  assert.strictEqual(await e.findReadingDay(["d0125-paul-s1"], "2026-11-16", "2051-01-01"), null);
-  assert.strictEqual(tableTo(), first, "표 끝 뒤의 from은 세지 않는다");
-  // 떠나지 않았으면 끝까지 센다
+  // 표의 끝 뒤의 from(연도를 붙인 검색이 여는 먼 해)은 표를 늘리지 않고 그해부터 한 해씩 찾는다. 2050년 뒤의 날도 찾는다
+  assert.strictEqual((await e.findReadingDay(["d0125-paul-s1"], "2026-11-16", "2060-01-01")).date, "2060-01-25");
+  assert.strictEqual(tableTo(), first, "표 밖의 from은 표를 늘리지 않는다");
+  // 떠나지 않았으면 표의 끝까지 센다
   assert.strictEqual(await e.findReadingDay(["nope"], "2026-11-16", "2026-11-16"), null);
-  assert.strictEqual(tableTo(), "2050-12-31");
+  assert.strictEqual(tableTo(), "2055-12-31");
 });
 
-test("지키는 날의 표: 전례년이 2050년 끝을 넘어도 답을 낸다 — 2050년 대림 뒤에 멈추지 않는다(코드 리뷰 2026-11-16)", { timeout: 10_000 }, async () => {
+test("지키는 날의 표: 전례년이 표의 끝을 넘어도 답을 낸다 — 표의 끝에서 멈추지 않고, 캘린더의 마지막 해(9999년)에서도 끝난다(코드 리뷰 2026-11-16)", { timeout: 20_000 }, async () => {
   const e = loadEngine(fakeFetch([]));
-  // 2050년 대림 1주일(11.27) 뒤의 전례년은 2051년 12월에 끝나 표의 끝(2050-12-31)보다 늦다
-  const table = { from: "2050-11-27", to: "2050-12-31", byId: new Map([["a", [KD("2050-12-25", { setId: "a" })]]]), byName: new Map() };
+  // 전례년이 대림 1주일(11.27)부터 이듬해 12월까지라 표의 끝(그해 12-31)보다 늦은 경우
+  const table = { from: "2050-11-27", to: "2050-12-31", last: "2050-12-31", byId: new Map([["a", [KD("2050-12-25", { setId: "a" })]]]), byName: new Map() };
   assert.strictEqual(e.openDayIn(table, ["nope"], "2050-12-01"), null);
   assert.strictEqual(e.openDayIn(table, ["a"], "2050-12-01").date, "2050-12-25");
   same(plain([...e.christmasNamesIn(table, "2050-12-01")]), []);
-  // 프리로드를 거친 공개 함수도 끝난다. 표가 시작하는 날이 표의 끝보다 늦어도 그렇다
+  // 프리로드를 거친 공개 함수: 2050년 뒤의 날도 찾고(2026-11-18), 캘린더의 마지막 해에서는 그 뒤를 찾지 않고 끝난다
   await Promise.all([e.preloadCalendar(), e.preloadLectionary()]);
-  assert.strictEqual(await e.findReadingDay(["d0125-paul-s1"], "2050-12-01"), null, "2051-01-25는 표 밖이다");
-  assert.strictEqual(await e.findReadingDay(["d0125-paul-s1"], "2052-03-01"), null);
-  assert.strictEqual((await e.findChristmasNames("2052-03-01")).size, 0);
+  assert.strictEqual((await e.findReadingDay(["d0125-paul-s1"], "2050-12-01")).date, "2051-01-25");
+  assert.strictEqual(await e.findReadingDay(["d0125-paul-s1"], "9999-12-01"), null, "10000-01-25는 계산 범위 밖이다");
+  assert.ok((await e.findChristmasNames("9999-12-01")) instanceof Map);
 });
 
 test("findReadingDay: 표보다 이른 `from`을 한 해씩 찾다가 화면을 떠났으면 그친다(코드 리뷰 2026-11-16)", async () => {
