@@ -19,7 +19,8 @@ window.offlineSave = (() => {
   const CONCURRENCY = 6;
   // 앱이 아직 쓰지 않는 파일(ADR-045 §1). 성무일과 화면을 만들 때 뺀다.
   const UNUSED = new Set(["lectionary/office-readings.json"]);
-  const SEARCH_FILES = new Set(["search-ot.json", "search-nt.json", "search-dc.json"]);
+  // 성서 색인 셋과 성시 색인(ADR-046 §6)
+  const SEARCH_FILES = new Set(["search-ot.json", "search-nt.json", "search-dc.json", "search-lit.json"]);
   // sw.js passes a request carrying this header straight to the network without caching it, so the
   // page's awaited cache.put is the only write.
   const BYPASS_HEADER = "X-Offline-Save";

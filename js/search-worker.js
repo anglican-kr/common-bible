@@ -27,16 +27,20 @@
  *
  *   Worker → Main:
  *     { type: "ready" }
- *     { type: "partial-results", searchId, q, results, total, page, pageSize,
+ *     { type: "partial-results", searchId, q, results, total, psalter, page, pageSize,
  *       loadedChunks: [...names], pendingChunks: [...names],
  *       bookOnly, lectionary }
- *     { type: "results", searchId, q, refMatch, results, total, page, pageSize,
+ *     { type: "results", searchId, q, refMatch, results, total, psalter, page, pageSize,
  *       bookOnly, lectionary, lectionaryPending }
  *     { type: "lectionary", searchId, q, lectionary }
  *     { type: "error", message }
  *       — bookOnly: the query is a book name alone ({ bookId, bookNameKo }) or null,
  *         book scope or not. A verse reference comes first: `요1` alone is John 1,
  *         not 1 John (ADR-044 §2).
+ *       — results / total: the Bible's verses. psalter: { results, total }, the verses of
+ *         the 성시 chunk (전례시편, 송가), cut to the same page — the page is the one of the
+ *         group the app shows (ADR-046 §3). The 성시 chunk is optional: when it fails to
+ *         load the Bible is searched alone and the next search fetches it again.
  *       — lectionary: the lectionary days found (LectResult) or null — no index, a
  *         book scope is set (ADR-044 §1), nothing to search for, or searching the
  *         index failed. A search never waits for the index: while it is still
@@ -48,6 +52,7 @@
 /**
  * @typedef BookMeta
  * @property {string} ko
+ * @property {{ [chapter: string]: string }} [titles]  a chapter's own name — 송가 (「모세송가」, ADR-046 §4)
  *
  * @typedef SearchMeta
  * @property {{ [alias: string]: string }} aliases
@@ -76,6 +81,7 @@
  * @property {number} chapter
  * @property {string} verses  as typed, spaces and half-verse marks dropped: "16", "18-19,16".
  *   An end of 999 runs to the end of the chapter: "10-999", the whole chapter "1-999".
+ * @property {string} [title]  the chapter's own name — a 송가 (「즈가리야 송가」, ADR-046 §4)
  *
  * @typedef VerseRef
  * @property {string} bookId
@@ -94,7 +100,7 @@
  * @property {string} t
  *
  * @typedef PaginatedResult
- * @property {Array<MatchedRow & { bookNameKo: string }>} results
+ * @property {Array<MatchedRow & { bookNameKo: string, title?: string }>} results  title: the chapter's own name (송가)
  * @property {number} total
  *
  * @typedef InitMessage
@@ -348,7 +354,20 @@ function loadChunk(name, url) {
         tArr: data.t,
       };
     });
+  // 성시 색인(ADR-046)은 받지 못해도 성서 검색을 막지 않는다. 앱을 고친 뒤 처음 하는 오프라인 검색에는 이 색인이
+  // 아직 기기에 없다. 다음 검색이 다시 받는다(`ensureChunks`).
+  if (PSALTER_CHUNKS.has(name)) {
+    loadingPromises[name] = loadingPromises[name].catch((err) => {
+      console.warn("성시 색인을 받지 못했습니다", err);
+      delete loadingPromises[name];
+    });
+  }
   return loadingPromises[name];
+}
+
+/** Starts loading every chunk not loaded or loading — the first time, and again for an optional chunk that failed. */
+function ensureChunks() {
+  for (const { name, url } of chunkConfig) loadChunk(name, url);
 }
 
 // ── Lectionary index loading ──
@@ -492,6 +511,10 @@ const IN_RE = /(?:^|\s)in:\s*(\S+)/g;
 // 한 번에 고를 수 있는 책의 수(ADR-033 「책은 5권까지」). 책 칩과 `in:`을 합쳐 센다. js/app/search.js에도
 // 같은 값이 있고(책 선택 시트), tests/unit/search.test.js가 둘이 같은지 본다.
 const MAX_SCOPE_BOOKS = 5;
+
+// 성시(전례시편과 송가)의 색인. 그 결과는 성서 본문과 따로 센다(ADR-046 §3). js/app/search.js가 `init` 메시지에
+// 이 이름으로 보낸다.
+const PSALTER_CHUNKS = new Set(["lit"]);
 
 // ── BEGIN QUOTE_MATCH ──
 // Two identical copies: js/search-worker.js (a classic worker script, which
@@ -657,7 +680,30 @@ function tryVerseRef(query) {
 
   const parts = refParts(match[2]);
   const m = /** @type {SearchMeta} */ (meta);
-  return parts && { bookId, bookNameKo: m.books[bookId].ko, parts };
+  return parts && { bookId, bookNameKo: m.books[bookId].ko, parts: parts.map((p) => withChapterTitle(bookId, p)) };
+}
+
+/**
+ * The chapter's own name, for a book whose chapters are named rather than numbered — 송가 (「즈가리야 송가」, ADR-046
+ * §4; search-meta.json `books.cant.titles`). null for every other book.
+ * @param {string} bookId
+ * @param {number} chapter
+ * @returns {string | null}
+ */
+function chapterTitle(bookId, chapter) {
+  const titles = /** @type {SearchMeta} */ (meta).books[bookId]?.titles;
+  return titles && Object.hasOwn(titles, String(chapter)) ? titles[String(chapter)] : null;
+}
+
+/**
+ * @template {{ chapter: number }} T
+ * @param {string} bookId
+ * @param {T} part
+ * @returns {T & { title?: string }}
+ */
+function withChapterTitle(bookId, part) {
+  const title = chapterTitle(bookId, part.chapter);
+  return title ? { ...part, title } : part;
 }
 
 /**
@@ -685,14 +731,17 @@ function lookupBook(name) {
  * 검색어 전체가 책 이름 하나인가(`창세기`, `요한`, `요한 1서`). 앱은 결과 맨 위에 그 책의 첫 장 바로가기를 둔다
  * (ADR-044 §2). 한 글자 약칭(`말`, `신`, `나`)은 책 이름으로 읽지 않는다. 낱말로 더 자주 쓰이기 때문이다. 워커는
  * 구절 표기를 먼저 판별하므로, 숫자로 끝나는 약칭(`요1`)을 혼자 치면 여기까지 오지 않고 요한 복음 1장이 된다.
+ * 송가는 첫 송가의 이름(`title`)을 함께 넘긴다(ADR-046 §4).
  * @param {string} query  the keyword, `in:<alias>` tokens already stripped
- * @returns {{ bookId: string, bookNameKo: string } | null}
+ * @returns {{ bookId: string, bookNameKo: string, title?: string } | null}
  */
 function tryBookOnly(query) {
   if (Array.from(query.trim().replace(/\s+/g, " ")).length < 2) return null;
   const bookId = lookupBook(query);
   const m = /** @type {SearchMeta} */ (meta);
-  return bookId ? { bookId, bookNameKo: m.books[bookId].ko } : null;
+  if (!bookId) return null;
+  const title = chapterTitle(bookId, 1);
+  return title ? { bookId, bookNameKo: m.books[bookId].ko, title } : { bookId, bookNameKo: m.books[bookId].ko };
 }
 
 /**
@@ -741,14 +790,28 @@ function paginate(allMatched, page, pageSize) {
   const start = (page - 1) * pageSize;
   const end = Math.min(total, start + pageSize);
   const m = /** @type {SearchMeta} */ (meta);
-  const results = allMatched.slice(start, end).map((e) => ({
-    b: e.b,
-    c: e.c,
-    v: e.v,
-    t: e.t,
-    bookNameKo: m.books[e.b].ko,
-  }));
+  const results = allMatched.slice(start, end).map((e) => {
+    const row = { b: e.b, c: e.c, v: e.v, t: e.t, bookNameKo: m.books[e.b].ko };
+    const title = chapterTitle(e.b, e.c);
+    return title ? { ...row, title } : row;
+  });
   return { results, total };
+}
+
+/**
+ * 성서 본문과 성시의 결과를 따로 모아 같은 쪽으로 자른다(ADR-046 §3). 쪽은 앱이 보이는 묶음의 쪽이라, 다른 묶음은
+ * 결과 수만 쓴다. `results`와 `total`은 지금처럼 성서 본문이다.
+ * @param {string} q
+ * @param {string[]} chunkNames  the chunks to search: all of them, or those loaded so far
+ * @param {Set<string>} restrictBooks
+ * @param {number} page
+ * @param {number} pageSize
+ * @returns {PaginatedResult & { psalter: PaginatedResult }}
+ */
+function groupedResults(q, chunkNames, restrictBooks, page, pageSize) {
+  const bible = paginate(gatherResults(q, chunkNames.filter((n) => !PSALTER_CHUNKS.has(n)), restrictBooks), page, pageSize);
+  const psalter = paginate(gatherResults(q, chunkNames.filter((n) => PSALTER_CHUNKS.has(n)), restrictBooks), page, pageSize);
+  return { results: bible.results, total: bible.total, psalter };
 }
 // ── END SEARCH_PURE ──
 
@@ -1353,10 +1416,8 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
 
     try {
       await loadMeta();
-      // Start loading all chunks in parallel (priority order: NT, DC, OT)
-      for (const { name, url } of chunkConfig) {
-        loadChunk(name, url);
-      }
+      // Start loading all chunks in parallel (priority order: NT, DC, OT, then 성시)
+      ensureChunks();
       // The lectionary index after the bible chunks; a failure only leaves `lectionary` null.
       loadLectionary();
       post("ready", {});
@@ -1449,6 +1510,8 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
         return names;
       };
 
+      // A 성시 chunk that failed to load is fetched again (loadChunk).
+      ensureChunks();
       // Wait for first chunk (NT) if nothing is loaded yet
       const firstChunk = chunkConfig[0];
       if (!loadedChunks[firstChunk.name]) {
@@ -1463,28 +1526,26 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
 
       // Send partial results if some chunks are still loading
       if (pendingNames.length > 0) {
-        const partial = gatherResults(keyword, loadedNames, restrictBooks);
-        const { results, total } = paginate(partial, page, pageSize);
+        const { results, total, psalter } = groupedResults(keyword, loadedNames, restrictBooks, page, pageSize);
         post("partial-results", {
-          searchId, q: trimmed, keyword, results, total, page, pageSize,
+          searchId, q: trimmed, keyword, results, total, psalter, page, pageSize,
           loadedChunks: loadedNames, pendingChunks: pendingNames,
           unmatchedScopes: unmatched,
           // Only what is loaded already — a partial result never waits for the lectionary index.
           bookOnly, lectionary: !scoped && lectionary ? findLectionary(findNames, lectionary) : null,
         });
 
-        // Wait for remaining chunks
+        // Wait for remaining chunks. A 성시 chunk that fails resolves without loading (loadChunk).
         await Promise.all(pendingNames.map((n) => loadingPromises[n]));
         if (searchId !== currentSearchId) return;
       }
 
       // Full search across all chunks
-      const allMatched = gatherResults(keyword, chunkConfig.map((c) => c.name), restrictBooks);
-      const { results, total } = paginate(allMatched, page, pageSize);
+      const { results, total, psalter } = groupedResults(keyword, chunkConfig.map((c) => c.name), restrictBooks, page, pageSize);
       // `keyword` is the query stripped of in:<alias> tokens — used by the UI
       // for snippet highlighting and the ?hl= chapter-view param.
       post("results", { searchId, q: trimmed, keyword, refMatch: null,
-        results, total, page, pageSize, unmatchedScopes: unmatched,
+        results, total, psalter, page, pageSize, unmatchedScopes: unmatched,
         bookOnly, ...(scoped ? NO_LECTIONARY : lectionaryFields(searchId, trimmed, findNames)) });
 
     } catch (err) {

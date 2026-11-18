@@ -97,6 +97,8 @@ function ensureSearchWorker() {
       { name: "nt", url: `${DATA_DIR}/search-nt.json` },
       { name: "dc", url: `${DATA_DIR}/search-dc.json` },
       { name: "ot", url: `${DATA_DIR}/search-ot.json` },
+      // 성시(전례시편과 송가, ADR-046). 워커가 이 이름으로 성서 본문과 따로 센다
+      { name: "lit", url: `${DATA_DIR}/search-lit.json` },
     ],
     lectionaryUrl: `${DATA_DIR}/lectionary/search-lectionary.json`,
     // 지역 축일(ADR-044 §3)을 찾는 본당 표. 전례독서 색인과 함께 받는다
@@ -384,7 +386,7 @@ function verseRefTargets(ref) {
  * Build a /search URL from structured state (ADR-033). Pure — uses only
  * encodeURIComponent — so the book-picker scope (`in=`) round-trips through the
  * URL (mirrors parsePath). `page` is dropped when 1; empty params are omitted.
- * `group` is the result pill (ADR-044 §1): only 전례일 is written, 성서 본문 is the default.
+ * `group` is the result pill (ADR-044 §1, ADR-046 §3): 성시 and 전례일 are written, 성서 본문 is the default.
  * @param {{ q?: string, page?: number, filterBooks?: string[], group?: string | null }} state
  * @returns {string}
  */
@@ -393,7 +395,7 @@ function buildSearchUrl(state) {
   if (state.q) parts.push("q=" + encodeURIComponent(state.q));
   if (state.page && state.page > 1) parts.push("page=" + state.page);
   for (const b of state.filterBooks || []) parts.push("in=" + encodeURIComponent(b));
-  if (state.group === "lectionary") parts.push("group=lectionary");
+  if (state.group === "psalter" || state.group === "lectionary") parts.push("group=" + state.group);
   return "/search" + (parts.length ? "?" + parts.join("&") : "");
 }
 
@@ -961,20 +963,24 @@ function fillLectRow(li, row) {
   li.className = row.nexts.length ? "lect-row-pair" : "";
 }
 
+/** @typedef {"bible" | "psalter" | "lectionary"} SearchGroup */
+
+/** 결과 묶음의 차례와 알약의 이름(ADR-044 §1, ADR-046 §3). 본문을 찾는 묶음 둘 다음에 날을 찾는 묶음이다. */
+const SEARCH_GROUPS = /** @type {const} */ ([["bible", "성서 본문"], ["psalter", "성시"], ["lectionary", "전례일"]]);
+
 /**
- * 「성서 본문」과 「전례일」 알약(ADR-044 §1). 고른 알약에 `aria-current`를 달고, 누른 뒤 다시 그려도 포커스가 그 알약에
- * 남는다(`data-focus-key`, routing.js).
- * @param {"bible" | "lectionary"} group
- * @param {number} bibleCount
- * @param {number} lectCount
- * @param {(g: "bible" | "lectionary") => string} hrefOf
+ * 결과 묶음의 알약(「성서 본문」, 「성시」, 「전례일」, ADR-044 §1, ADR-046 §3). 결과가 있는 묶음만 `counts`에 둔다. 고른
+ * 알약에 `aria-current`를 달고, 누른 뒤 다시 그려도 포커스가 그 알약에 남는다(`data-focus-key`, routing.js).
+ * @param {SearchGroup} group
+ * @param {Partial<Record<SearchGroup, number>>} counts
+ * @param {(g: SearchGroup) => string} hrefOf
  */
-function buildSearchPills(group, bibleCount, lectCount, hrefOf) {
+function buildSearchPills(group, counts, hrefOf) {
   const nav = el("nav", { "aria-label": "검색 결과 묶음" });
   const list = el("ul", { className: "search-pills", role: "list" });
-  for (const [g, name, count] of /** @type {Array<["bible" | "lectionary", string, number]>} */ ([
-    ["bible", "성서 본문", bibleCount], ["lectionary", "전례일", lectCount],
-  ])) {
+  for (const [g, name] of SEARCH_GROUPS) {
+    const count = counts[g];
+    if (count === undefined) continue;
     const a = el("a", { className: "search-pill", href: hrefOf(g), "data-focus-key": `group:${g}` });
     if (g === group) a.setAttribute("aria-current", "true");
     a.appendChild(document.createTextNode(`${name} `));
@@ -1006,7 +1012,8 @@ function formatSearchDate(ts) {
  * user decision 2026-10-17: the pressed link, not the top of the results). On
  * the first / last page that link is gone and the other one takes over
  * (`data-focus-fallback`).
- * @param {{ q?: string, filterBooks?: string[] }} state
+ * The links stay in the group shown (`group`, ADR-046 §3): its pages, not the other's.
+ * @param {{ q?: string, filterBooks?: string[], group?: string | null }} state
  * @param {number} currentPage
  * @param {number} totalPages
  */
@@ -1014,7 +1021,7 @@ function buildSearchPagination(state, currentPage, totalPages) {
   const nav = el("nav", { className: "search-pagination", "aria-label": "검색 결과 페이지" });
   /** @param {number} p */
   const pageUrl = (p) => buildSearchUrl({
-    q: state.q, page: p, filterBooks: state.filterBooks,
+    q: state.q, page: p, filterBooks: state.filterBooks, group: state.group,
   });
 
   if (currentPage > 1) {
@@ -1043,8 +1050,8 @@ function buildSearchPagination(state, currentPage, totalPages) {
 /**
  * What the results screen needs beyond the worker's result (ADR-044 §1).
  * @typedef SearchScreen
- * @property {"bible" | "lectionary"} group  the chosen pill
- * @property {(g: "bible" | "lectionary") => string} groupHref
+ * @property {SearchGroup} group  the chosen pill
+ * @property {(g: SearchGroup) => string} groupHref
  * @property {(bookId: string) => number | null} chapterCount  from books.json; null when unknown
  * @property {(setId: string, slot: string) => string | null} readingLabel  the reading's notation in eucharist-readings.json
  * @property {boolean} scoped  a book scope is set: no lectionary days, so no lectionary example either
@@ -1077,8 +1084,10 @@ function buildAnswer(result, screen) {
     /** @type {string[]} */
     const said = [];
     let missing = 0;
-    for (const { chapter, path, verses } of targets) {
-      let label = `${ref.bookNameKo} ${chapter}${unit}`;
+    for (const [i, { chapter, path, verses }] of targets.entries()) {
+      // 송가는 장 번호 대신 송가 이름이다(「즈가리야 송가 1-3절」, ADR-046 §4)
+      const title = ref.parts[i].title;
+      let label = title || `${ref.bookNameKo} ${chapter}${unit}`;
       if (verses) label += ` ${verses}`;
       if (count !== null && chapter > count) {
         // 장 화면이 없는 장에서 보이는 문장과 같다(views.js). 다른 장이나 절로 가는 링크는 두지 않는다(ADR-044 §2).
@@ -1106,7 +1115,8 @@ function buildAnswer(result, screen) {
   }
   if (result.bookOnly) {
     const { bookId, bookNameKo } = result.bookOnly;
-    const title = `${bookNameKo} 1${chUnit(bookId)}`;
+    // 송가는 첫 송가의 이름이다(「모세송가」, ADR-046 §4)
+    const title = result.bookOnly.title || `${bookNameKo} 1${chUnit(bookId)}`;
     const wrap = el("div", { className: "search-answer" });
     const list = el("ul", { className: "search-results", role: "list" });
     const li = el("li", { className: "search-result-item ref-match-item" });
@@ -1162,21 +1172,48 @@ function appendLectGroup(container, lect, screen) {
 }
 
 /**
- * 결과 화면에 무엇을 그리는가(ADR-044 §1). `lect`는 그릴 수 있는 전례일 결과이고, `group`은 목록으로 보이는 묶음이다. 성서 본문과
- * 전례일에 모두 결과가 있으면 고른 알약의 묶음이다.
+ * 결과 화면에 무엇을 그리는가(ADR-044 §1, ADR-046 §3). `lect`는 그릴 수 있는 전례일 결과, `psalter`는 성시의 결과이고,
+ * `groups`는 결과가 있는 묶음을 알약의 차례로 둔 것이다. `group`은 목록으로 보이는 묶음으로, 고른 알약의 묶음에 결과가
+ * 없으면 결과가 있는 첫 묶음이다.
  * @param {any} result
  * @param {SearchScreen} screen
- * @returns {{ isPending: boolean, lect: any, hasBible: boolean, group: "bible" | "lectionary" }}
+ * @returns {{ isPending: boolean, lect: any, psalter: { results: any[], total: number } | null, hasBible: boolean,
+ *   groups: SearchGroup[], group: SearchGroup }}
  */
 function resultGroups(result, screen) {
   const isPending = !!(result.pendingChunks && result.pendingChunks.length > 0);
-  // While the bible chunks load with nothing found yet, the lectionary days wait for the whole result: bible results
+  // While the bible chunks load with nothing found yet, the other groups wait for the whole result: bible results
   // still to come would take the screen back to 성서 본문, the first pill (ADR-044 §1). 「검색 중…」 shows meanwhile.
-  const lect = isPending && result.total === 0 ? null : shownLectionary(result);
+  const held = isPending && result.total === 0;
+  const lect = held ? null : shownLectionary(result);
+  const psalter = held ? null : shownPsalter(result);
   // By the whole count, not this page: a page past the end (a link made on a taller screen) still has results.
   const hasBible = result.total > 0 || isPending;
-  const group = hasBible && lect ? screen.group : lect ? "lectionary" : "bible";
-  return { isPending, lect, hasBible, group };
+  /** @type {SearchGroup[]} */
+  const groups = [];
+  if (hasBible) groups.push("bible");
+  if (psalter) groups.push("psalter");
+  if (lect) groups.push("lectionary");
+  const group = groups.includes(screen.group) ? screen.group : groups[0] || "bible";
+  return { isPending, lect, psalter, hasBible, groups, group };
+}
+
+/**
+ * 성시(전례시편과 송가)의 결과(ADR-046 §3). 찾은 것이 없거나 옛 워커의 결과라 `psalter`가 없으면 null이다.
+ * @param {any} result
+ * @returns {{ results: any[], total: number } | null}
+ */
+function shownPsalter(result) {
+  const psalter = result.psalter;
+  return psalter && psalter.total > 0 ? psalter : null;
+}
+
+/**
+ * 결과 줄의 위치(ADR-046 §4). 송가는 송가 이름과 절(「모세송가 1」)이고, 다른 책은 「전례시편 23:1」처럼 장과 절이다.
+ * @param {{ bookNameKo: string, c: number, v: number, title?: string }} r
+ */
+function resultRefLabel(r) {
+  return r.title ? `${r.title} ${r.v}` : `${r.bookNameKo} ${r.c}:${r.v}`;
 }
 
 /**
@@ -1185,7 +1222,7 @@ function resultGroups(result, screen) {
  * @param {string} query
  * @param {number} page
  * @param {number} pageSize
- * @param {((q: string, p: number, t: number) => HTMLElement) | null} paginationBuilder
+ * @param {((q: string, p: number, t: number, group: SearchGroup) => HTMLElement) | null} paginationBuilder
  * @param {SearchScreen} [screen]
  * @returns {string}  the status message for the live region (design §9): the answer card, then the counts in screen order
  */
@@ -1214,7 +1251,7 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
     return `"${query}" 검색 결과 0건. ${SCOPE_LIMIT_NOTE}`;
   }
 
-  const { isPending, lect, hasBible, group } = resultGroups(result, screen);
+  const { isPending, lect, psalter, hasBible, groups, group } = resultGroups(result, screen);
   const answer = buildAnswer(result, screen);
 
   // 연도를 붙여 찾았는데 줄이 없으면 그 사정(ADR-044 §4)
@@ -1225,8 +1262,8 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
   const picked = screen.picked ? pickedParishNote(screen.picked) : null;
   if (picked) container.appendChild(el("p", { className: "search-note" }, picked));
   if (notice) container.appendChild(buildLocalNotice(notice));
-  if (notice && !answer.node && !hasBible && !lect) return `"${query}" ${[picked, notice.text].filter(Boolean).join(" ")}`;
-  if (!answer.node && !hasBible && !lect) {
+  if (notice && !answer.node && !groups.length) return `"${query}" ${[picked, notice.text].filter(Boolean).join(" ")}`;
+  if (!answer.node && !groups.length) {
     container.appendChild(
       // 책을 골라 두었으면 전례일은 찾지 않았다(ADR-044 §1)
       buildSearchEmptyState("검색 결과가 없습니다", notes.length ? notes.join(" ")
@@ -1245,19 +1282,24 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
     if (answer.text) said.push(answer.text);
   }
   // 책 이름만 쳤고 찾은 것이 없으면 Enter로 첫 장을 연다고 알린다(ADR-044 §2). Enter를 쳤으면 이미 그 장이 열렸다.
-  if (answer.firstChapter && !hasBible && !lect) {
+  if (answer.firstChapter && !groups.length) {
+    const first = answer.firstChapter;
     container.appendChild(el("p", { className: "search-note" },
-      `‘${query}’${hasBatchim(query) ? "이" : "가"} 들어간 구절과 전례일은 없습니다. 검색창에서 Enter를 누르면 ${answer.firstChapter}을 바로 엽니다.`));
+      `‘${query}’${hasBatchim(query) ? "이" : "가"} 들어간 구절과 전례일은 없습니다. 검색창에서 Enter를 누르면 ${first}${hasBatchim(first) ? "을" : "를"} 바로 엽니다.`));
   }
 
-  const totalPages = Math.ceil(result.total / pageSize);
-  const paged = group === "bible" && !isPending && totalPages > 1 && !!paginationBuilder;
-  if (hasBible && lect) container.appendChild(buildSearchPills(group, result.total, lect.items.length, screen.groupHref));
-  // 「2/5」 may be read as a fraction — say it in words.
-  if (hasBible) {
-    said.push(isPending ? `검색 중… 현재 ${result.total}건`
-      : `성서 본문 ${result.total}건${paged ? `, 전체 ${totalPages}쪽 중 ${page}쪽` : ""}`);
+  // The verse list shown — 성서 본문 or 성시 (ADR-046 §3) — and its pages. 「2/5」 may be read as a fraction — say it in words.
+  const verses = group === "psalter" && psalter ? psalter : group === "bible" && hasBible ? result : null;
+  const totalPages = verses ? Math.ceil(verses.total / pageSize) : 0;
+  const paged = !!verses && !isPending && totalPages > 1 && !!paginationBuilder;
+  const pageWords = paged ? `, 전체 ${totalPages}쪽 중 ${page}쪽` : "";
+  if (groups.length > 1) {
+    container.appendChild(buildSearchPills(group, {
+      bible: hasBible ? result.total : undefined, psalter: psalter?.total, lectionary: lect?.items.length,
+    }, screen.groupHref));
   }
+  if (hasBible) said.push(isPending ? `검색 중… 현재 ${result.total}건` : `성서 본문 ${result.total}건${group === "bible" ? pageWords : ""}`);
+  if (psalter) said.push(`성시 ${psalter.total}건${group === "psalter" ? pageWords : ""}`);
   if (lect) said.push(`${lectGroupName(lect)} ${lect.items.length}건`);
 
   if (group === "lectionary" && lect) {
@@ -1265,27 +1307,27 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
     return `"${query}" ${lead ? `${lead} ` : ""}${said.join(", ")}`;
   }
 
-  if (hasBible) {
+  if (verses) {
     for (const note of notes) container.appendChild(el("p", { className: "search-note" }, note));
-    const countLabel = isPending
+    const countLabel = group === "bible" && isPending
       ? `"${query}" 검색 중… (현재 ${result.total}건)`
-      : `성서 본문 ${result.total}건 (${page}/${totalPages}쪽)`;
+      : `${group === "psalter" ? "성시" : "성서 본문"} ${verses.total}건 (${page}/${totalPages}쪽)`;
     // A heading, so a screen-reader user whose focus stayed on the pressed page link (routing.js) reaches the new
     // page's results in one move — VoiceOver rotor / TalkBack headings. Looks the same as the old <p> (style.css).
     container.appendChild(el("h2", { className: "search-count" }, countLabel));
 
     const list = el("ul", { className: "search-results", role: "list" });
-    for (const r of result.results) {
+    for (const r of verses.results) {
       const li = el("li", { className: "search-result-item" });
       const link = el("a", { href: `/${r.b}/${r.c}/${r.v}?hl=${encodeURIComponent(highlightTerm)}` });
-      link.appendChild(el("span", { className: "search-result-ref" }, `${r.bookNameKo} ${r.c}:${r.v}`));
+      link.appendChild(el("span", { className: "search-result-ref" }, resultRefLabel(r)));
       link.appendChild(buildSnippet(r.t, highlightTerm));
       li.appendChild(link);
       list.appendChild(li);
     }
     container.appendChild(list);
 
-    if (paged && paginationBuilder) container.appendChild(paginationBuilder(query, page, totalPages));
+    if (paged && paginationBuilder) container.appendChild(paginationBuilder(query, page, totalPages, group));
   }
   return `"${query}" ${lead ? `${lead} ` : ""}${said.join(", ")}`;
 }
@@ -1726,7 +1768,8 @@ async function ensureAliasMap() {
     const books = await window.loadBooks();
     const meta = await metaPromise;
     // With the worker's table, only the books it searches become chips: a book
-    // outside its index (전례시편, 송가) would search nothing without a word.
+    // outside its index would search nothing. 전례시편 and 송가 are in it, in the
+    // 성시 chunk (ADR-046 §2).
     const ids = new Set(books.map((b) => b.id).filter((id) => !meta || Object.hasOwn(meta.books || {}, id)));
     for (const [alias, id] of Object.entries((meta && meta.aliases) || {})) {
       if (typeof id === "string" && ids.has(id)) map.set(alias.toLowerCase(), id);
@@ -2174,6 +2217,9 @@ function ensureBookSheet() {
   return _bookSheet;
 }
 
+/** 성시의 책(전례시편과 송가)이 `books.json`에서 가진 구분. 성서 목록의 구분 탭에는 없다(ADR-037 §3). */
+const PSALTER_DIVISION = "liturgical";
+
 /**
  * @param {HTMLElement} body
  * @param {BooksData} books
@@ -2181,8 +2227,10 @@ function ensureBookSheet() {
  */
 function renderBookFilterList(body, books, working) {
   clearNode(body);
-  const order = window.divisionOrder();
-  const labels = window.divisionLabels();
+  // 성서 목록의 구분 탭 다음, 외경 차례 설정과 상관없이 맨 끝에 성시(전례시편과 송가)다(ADR-046 §2)
+  const order = [...window.divisionOrder(), PSALTER_DIVISION];
+  /** @type {Record<string, string>} */
+  const labels = { ...window.divisionLabels(), [PSALTER_DIVISION]: "성시" };
   for (const div of order) {
     const inDiv = books.filter((b) => window.effectiveDivision(b) === div);
     if (!inDiv.length) continue;
@@ -2435,9 +2483,9 @@ const LECTIONARY_WAIT_MS = 3000;
  * @param {string} query
  * @param {number} page
  * @param {boolean} [autoNavigate]
- * @param {{ filterBooks?: string[], group?: "lectionary" | null }} [opts]
+ * @param {{ filterBooks?: string[], group?: "psalter" | "lectionary" | null }} [opts]
  *   filterBooks — book-picker scope (book ids), from the URL via parsePath (ADR-033).
- *   group — the chosen result pill (ADR-044 §1); 성서 본문 when absent.
+ *   group — the chosen result pill (ADR-044 §1, ADR-046 §3); 성서 본문 when absent.
  */
 async function renderSearchResults(query, page, autoNavigate = false, opts = {}) {
   const filterBooks = opts.filterBooks || [];
@@ -2488,14 +2536,14 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   const itemH = 80;
   const pageSize = Math.max(5, Math.floor(availH / itemH));
 
-  // Pagination links must carry the active book/AND filters (ADR-033); the
+  // Pagination links must carry the active book filters (ADR-033) and stay in the group shown (ADR-046 §3); the
   // closure binds the current state so renderSearchResultList stays filter-agnostic.
-  const paginationBuilder = (/** @type {string} */ _q, /** @type {number} */ p, /** @type {number} */ t) =>
-    buildSearchPagination(state, p, t);
+  const paginationBuilder = (/** @type {string} */ _q, /** @type {number} */ p, /** @type {number} */ t,
+    /** @type {SearchGroup} */ group) => buildSearchPagination({ ...state, group }, p, t);
 
   /** @type {SearchScreen} */
   const screen = {
-    group: opts.group === "lectionary" ? "lectionary" : "bible",
+    group: opts.group === "psalter" || opts.group === "lectionary" ? opts.group : "bible",
     groupHref: (g) => buildSearchUrl({ q: query, filterBooks, group: g }),
     chapterCount: (id) => _chapterCounts.get(id) ?? null,
     readingLabel: () => null,
@@ -2633,8 +2681,8 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
 
 /**
  * 3초가 지나 온 전례일을 결과에 더하고, 찾은 것이 있을 때만 알린다(ADR-044 §1). 이미 그린 결과는 지우지 않는다. 결과를 옮겨 다니던
- * 키보드 포커스와 읽던 자리를 지키려는 것이다(WCAG 2.4.3). 성서 결과가 있으면 그 위에 알약만 더하고(성서 본문을 고른 채다), 답 카드만
- * 있으면 그 아래에 전례일 묶음을 단다. 결과 없음 화면이었으면 다시 그린다.
+ * 키보드 포커스와 읽던 자리를 지키려는 것이다(WCAG 2.4.3). 성서 본문이나 성시의 목록이 있으면 그 위의 알약만 바꾸고(보던 묶음을 고른
+ * 채다, ADR-046 §3), 답 카드만 있으면 그 아래에 전례일 묶음을 단다. 결과 없음 화면이었으면 다시 그린다.
  * @param {any} result
  * @param {string} query
  * @param {SearchScreen} screen
@@ -2672,8 +2720,18 @@ async function addLateLectionary(result, query, screen, target, isStale, draw) {
     if (!isStale() && target.isConnected) patchLectDays(target, lect, screen, labelOf);
   }).catch((err) => console.warn("전례일 줄에 날짜를 넣지 못했습니다", err));
   const heading = target.querySelector("h2.search-count");
-  if (heading && result.total > 0) {
-    heading.before(buildSearchPills("bible", result.total, lect.items.length, screen.groupHref));
+  if (heading) {
+    const { psalter, groups, group } = resultGroups(result, screen);
+    // 그려 둔 목록의 묶음. 주소가 전례일을 골랐으면 전례일이 오기 전에는 결과가 있는 첫 묶음을 그렸다
+    const shown = group === "lectionary" ? groups[0] : group;
+    const pills = buildSearchPills(shown, {
+      bible: groups.includes("bible") ? result.total : undefined, psalter: psalter?.total, lectionary: lect.items.length,
+    }, screen.groupHref);
+    // 성서 본문과 성시의 알약이 이미 있으면 그 끝에 전례일 알약만 더한다. 알약에 있던 포커스가 남는다
+    const drawn = target.querySelector(".search-pills");
+    const lectPill = pills.querySelector(".search-pills")?.lastElementChild;
+    if (drawn && lectPill) drawn.appendChild(lectPill);
+    else heading.before(pills);
   } else if (target.querySelector(".search-answer")) {
     // 책 이름만 친 검색어의 「…구절과 전례일은 없습니다」는 이제 사실이 아니다
     for (const note of target.querySelectorAll(".search-note")) note.remove();
@@ -2729,7 +2787,7 @@ function autoNavigateTarget(result, screen) {
     const count = screen.chapterCount(result.refMatch.bookId);
     return count !== null && targets[0].chapter > count ? null : targets[0].path;
   }
-  if (result.bookOnly && result.total === 0) return `/${result.bookOnly.bookId}/1`;
+  if (result.bookOnly && result.total === 0 && !shownPsalter(result)) return `/${result.bookOnly.bookId}/1`;
   return null;
 }
 

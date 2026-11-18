@@ -131,7 +131,7 @@ function parsePath() {
   /** @param {string} s */
   const decodeOrRaw = (s) => { try { return decodeURIComponent(s); } catch { return s; } };
 
-  // Search route: /search?q=...&page=...&in=<bookId>&group=lectionary (ADR-033, ADR-044 §1).
+  // Search route: /search?q=...&page=...&in=<bookId>&group=psalter|lectionary (ADR-033, ADR-044 §1, ADR-046 §3).
   // `in` (book-picker scope, repeatable) lives in the URL so it survives
   // history/back-forward and tab restore (ADR-031), and so paginated/filtered
   // links stay shareable. `group` is the chosen result pill; 성서 본문 when absent.
@@ -141,7 +141,8 @@ function parsePath() {
       query: query.get("q") || "",
       page: parseInt(query.get("page") ?? "", 10) || 1,
       filterBooks: query.getAll("in").filter(Boolean),
-      group: query.get("group") === "lectionary" ? "lectionary" : null,
+      group: query.get("group") === "psalter" || query.get("group") === "lectionary"
+        ? /** @type {"psalter" | "lectionary"} */ (query.get("group")) : null,
     };
   }
 
@@ -523,9 +524,9 @@ async function route() {
         // _routeSeq가 올라가므로 이 검사로 알 수 있다 — inner route()가 챕터의 meta·분석을 이미
         // 처리했으니 여기서 덮어쓰지 않는다. (예전 parsePath().view 체크와 동치.)
         if (isStale()) return;
-        // 쪽 번호를 문서 제목에 넣는다(설계서 §9, GOV.UK 쪽 나누기 요소)
+        // 쪽 번호를 문서 제목에 넣는다(설계서 §9, GOV.UK 쪽 나누기 요소). 전례일 묶음은 쪽이 없다
         updatePageMeta({
-          title: `"${parsed.query}" 검색${parsed.page > 1 && !parsed.group ? `, ${parsed.page}쪽` : ""}`,
+          title: `"${parsed.query}" 검색${parsed.page > 1 && parsed.group !== "lectionary" ? `, ${parsed.page}쪽` : ""}`,
           description: `공동번역성서에서 "${parsed.query}" 검색 결과`,
         });
       } else if (isMobile() || parsed.filterBooks.length) {
