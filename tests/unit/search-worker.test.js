@@ -958,6 +958,29 @@ test("메시지: 색인을 받아 두었으면 구절과 이름으로 찾은 전
   assert.deepEqual(w.lects(), [], "따로 보낼 것이 없다");
 });
 
+// 책은 5권까지(ADR-033 「책은 5권까지」). 책 칩과 in:을 합쳐 세고, 넘으면 일부만 찾지 않고 아무것도 찾지 않는다(사용자 결정 2026-11-18).
+test("메시지: 책 칩과 in:을 합쳐 다섯 권을 넘으면 찾지 않고 tooManyBooks를 알린다", async () => {
+  const w = startWorker(WORKER_FILES);
+  await w.send(INIT);
+  await flush();
+  await w.send(search("보습", ["isa", "b2", "b3", "b4", "b5"]));
+  const [five] = w.results();
+  assert.equal(five.tooManyBooks, undefined, "다섯 권은 찾는다");
+  assert.equal(five.total, 1);
+  await w.send(search("보습", ["isa", "b2", "b3", "b4", "b5", "b6"]));
+  const six = w.results()[1];
+  assert.equal(six.tooManyBooks, true);
+  assert.equal(six.total, 0);
+  await w.send(search("보습 in:이사야", ["b2", "b3", "b4", "b5", "b6"]));
+  assert.equal(w.results()[2].tooManyBooks, true, "in:으로 고른 책도 센다");
+  await w.send(search("보습 in:이사야", ["isa", "b3", "b4", "b5", "b6"]));
+  assert.equal(w.results()[3].tooManyBooks, undefined, "칩과 in:이 같은 책이면 한 번 센다");
+  await w.send(search("보습 in:없는책", ["b1", "b2", "b3", "b4", "b5", "b6"]));
+  const unknown = w.results()[4];
+  assert.deepEqual(unknown.unmatchedScopes, ["없는책"], "모르는 책 이름을 먼저 알린다");
+  assert.equal(unknown.tooManyBooks, undefined);
+});
+
 test("메시지: 이름에 연도를 붙이면 연도를 뗀 이름으로 찾고 해를 넘긴다. 앱이 보낸 성탄 평일 이름은 쓰지 않는다(ADR-044 §4)", async () => {
   const w = startWorker(WORKER_FILES);
   await w.send(INIT);

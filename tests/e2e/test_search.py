@@ -68,6 +68,107 @@ def _apply_books_to_typed_query(page, ctx_name, typed, book_id):
     return field
 
 
+FIVE_BOOKS = ["gen", "exod", "lev", "num", "deut"]
+
+
+def test_book_filter_sheet_takes_five_books(desktop_context):
+    """책 선택 시트에서는 다섯 권까지 고른다. 다섯 권을 고르면 고르지 않은 책은 흐려지고 누를 수 없으며, 「적용」 위에 「책은 5권까지 고를 수
+    있습니다.」가 보인다. 한 권을 빼면 다시 고를 수 있다(ADR-033 「책은 5권까지」, 사용자 결정 2026-11-18)."""
+    page = desktop_context.new_page()
+    page.goto(f"{BASE_URL}/search?q={quote('사랑')}")
+    page.wait_for_selector(".search-count", timeout=20_000)
+    page.locator("#search-bar .token-funnel").click()
+    opt = lambda book: page.locator(f'#book-filter-sheet .book-filter-option[data-book-id="{book}"]')
+    opt("gen").wait_for(timeout=20_000)
+    for book in FIVE_BOOKS:
+        opt(book).click()
+    state = page.evaluate("""() => ({
+        note: document.querySelector('#book-filter-sheet .book-filter-limit').textContent,
+        disabled: document.querySelectorAll('#book-filter-sheet .book-filter-option[aria-disabled="true"]').length,
+        options: document.querySelectorAll('#book-filter-sheet .book-filter-option').length,
+        apply: document.querySelector('#book-filter-sheet .book-filter-apply').textContent,
+    })""")
+    assert state["note"] == "책은 5권까지 고를 수 있습니다.", state
+    assert state["disabled"] == state["options"] - 5, state
+    assert state["apply"] == "적용 (5)", state
+
+    # Playwright는 aria-disabled인 요소를 누르지 않는다. 사람은 누를 수 있으므로 force로 누른다
+    opt("matt").click(force=True)
+    assert opt("matt").get_attribute("aria-selected") == "false"
+    assert page.locator("#book-filter-sheet .book-filter-apply").text_content() == "적용 (5)"
+
+    opt("deut").click()
+    assert page.locator("#book-filter-sheet .book-filter-limit").text_content() == ""
+    assert page.locator('#book-filter-sheet .book-filter-option[aria-disabled="true"]').count() == 0
+    opt("matt").click()
+    assert opt("matt").get_attribute("aria-selected") == "true"
+
+
+def test_typed_in_cannot_add_a_sixth_book(page, base_url):
+    """칩이 다섯 권이면 입력 칸의 `in:`은 여섯째 칩이 되지 않고 입력 칸에 글로 남는다. 검색 워커는 칩과 `in:`을 합쳐 세므로 찾지 않고,
+    결과 없음 화면에 「책은 5권까지 고를 수 있습니다.」를 보인다. 이런 검색은 최근 검색에 남지 않는다(ADR-033 「책은 5권까지」, ADR-014 D1,
+    사용자 결정 2026-11-18). 처음에는 여섯째 칩을 만들고 결과 화면에서만 알렸다."""
+    page.goto(f"{base_url}/search?" + "&".join(f"in={b}" for b in FIVE_BOOKS))
+    page.wait_for_selector("#search-bar .field-token", timeout=20_000)
+    page.fill("#search-input", "사랑 in:요한")
+    page.press("#search-input", "Enter")
+    page.wait_for_selector(".empty-state", timeout=20_000)
+    state = page.evaluate("""() => ({
+        text: document.querySelector('.empty-state').innerText,
+        chips: document.querySelectorAll('#search-bar .field-token').length,
+        q: new URLSearchParams(location.search).get('q'),
+        books: new URLSearchParams(location.search).getAll('in'),
+        field: document.querySelector('#search-input').value,
+        recent: JSON.parse(localStorage.getItem('bible-search-history') || '[]').map((e) => e.q),
+    })""")
+    assert "책은 5권까지 고를 수 있습니다." in state["text"], state
+    assert state["chips"] == 5 and state["books"] == FIVE_BOOKS, state
+    assert state["q"] == "사랑 in:요한" and state["field"] == "사랑 in:요한", state
+    assert state["recent"] == [], state
+
+
+def test_book_filter_apply_is_blocked_past_five(desktop_context):
+    """주소로 다섯 권을 넘긴 채 책 선택 시트를 열면, 다섯 권 이하로 뺄 때까지 「적용」을 누를 수 없고 안내가 보인다(ADR-033 「책은 5권까지」)."""
+    page = desktop_context.new_page()
+    page.goto(f"{BASE_URL}/search?q={quote('사랑')}&" + "&".join(f"in={b}" for b in FIVE_BOOKS + ["matt"]))
+    page.wait_for_selector(".empty-state", timeout=20_000)
+    assert "책은 5권까지 고를 수 있습니다." in page.locator(".empty-state").inner_text()
+    page.locator("#search-bar .token-funnel").click()
+    apply = page.locator("#book-filter-sheet .book-filter-apply")
+    apply.wait_for(timeout=20_000)
+    assert apply.get_attribute("aria-disabled") == "true"
+    assert page.locator("#book-filter-sheet .book-filter-limit").text_content() == "책은 5권까지 고를 수 있습니다."
+    url = page.url
+    # Playwright는 aria-disabled인 요소를 누르지 않는다. 사람은 누를 수 있으므로 force로 누른다
+    apply.click(force=True)
+    assert page.url == url and page.locator("#book-filter-sheet").is_visible()
+    page.locator('#book-filter-sheet .book-filter-option[data-book-id="matt"]').click()
+    assert apply.get_attribute("aria-disabled") is None
+    apply.click()
+    page.wait_for_selector(".search-count", timeout=20_000)
+    assert page.evaluate("new URLSearchParams(location.search).getAll('in')") == FIVE_BOOKS
+
+
+@pytest.mark.parametrize("typed", ["", "in:마르"])
+def test_scope_without_a_word_asks_for_one(typed, page, base_url):
+    """책 칩만 두고 빈 입력 칸에서 Enter를 누르거나 `in:마르`처럼 범위만 쳐서 찾으면, 검색 화면에 「검색어를 입력해주세요.」를 보인다
+    (ADR-033 「책은 5권까지」, 사용자 결정 2026-11-18). 그전에는 아무 안내 없이 최근 검색 화면이 나왔다."""
+    page.goto(f"{base_url}/search?in=matt")
+    page.wait_for_selector("#search-bar .field-token", timeout=20_000)
+    page.fill("#search-input", typed)
+    page.press("#search-input", "Enter")
+    page.wait_for_selector(".search-keyword-note", timeout=20_000)
+    state = page.evaluate("""() => ({
+        note: document.querySelector('.search-keyword-note').textContent,
+        q: new URLSearchParams(location.search).get('q'),
+        books: new URLSearchParams(location.search).getAll('in'),
+        recent: JSON.parse(localStorage.getItem('bible-search-history') || '[]').length,
+    })""")
+    assert state["note"] == "검색어를 입력해주세요.", state
+    assert state["q"] is None and state["books"] == (["matt", "mark"] if typed else ["matt"]), state
+    assert state["recent"] == 0, state
+
+
 @pytest.mark.parametrize("ctx_name", ["mobile_context", "desktop_context"])
 def test_book_filter_apply_searches_the_typed_query(ctx_name, request):
     """책 선택 시트의 「적용」은 입력 칸에 보이는 검색어를 고른 책 안에서 찾는다(ADR-033 D3). Enter를 누르지 않고 친 검색어도
@@ -145,6 +246,7 @@ def test_book_filter_apply_with_only_a_typed_scope_focuses_the_field(ctx_name, r
     }})""")
     assert state["q"] is None and state["books"] == ["mark", "matt"], state
     assert state["focused"], state
+    assert page.locator(".search-keyword-note").text_content() == "검색어를 입력해주세요."
 
 
 @pytest.mark.parametrize("typed", ["아들", None])
@@ -648,9 +750,17 @@ def test_search_phrase_across_cite_and_closing_quote_is_highlighted_in_chapter(p
 
 # ── 전례독서 검색(ADR-044) ───────────────────────────────────────────────────
 
+def _wait_search_done(page):
+    """검색이 끝날 때까지 기다린다. 신약 색인을 먼저 받으면 구약과 외경 색인을 받는 동안 「"…" 검색 중… (현재 N건)」
+    제목으로 먼저 그리고, 다 받으면 화면을 다시 그린다. 그 전에 읽거나 누르면 바뀌기 전의 화면을 본다."""
+    page.wait_for_function("() => !document.querySelector('h2.search-count')?.textContent.includes('검색 중')",
+                           timeout=15_000)
+
+
 def _goto_search(page, query, extra=""):
     page.goto(f"{BASE_URL}/search?q={quote(query)}{extra}")
     page.wait_for_selector(".search-count, .empty-state, .search-alert, .search-note", timeout=10_000)
+    _wait_search_done(page)
 
 
 # 줄이 여는 날은 오늘에 따라 바뀐다(ADR-044 §1). 날짜를 보는 시험은 시안과 같은 날로 시계를 고정한다. 2026 전례년(가해)의 끝이다
@@ -879,7 +989,7 @@ def _row_labels(page):
 
 
 def _goto_year_search(page, query):
-    """연도를 붙인 검색은 그해의 날을 계산한 뒤에 줄을 그린다. 성서 묶음을 받는 동안의 「검색 중…」 제목이 아니라 줄이나 결과 없음 화면을 기다린다."""
+    """연도를 붙인 검색은 그해의 날을 계산한 뒤에 줄을 그린다. 검색이 끝난 뒤에도 줄이나 결과 없음 화면을 기다린다."""
     _goto_search(page, query)
     page.wait_for_selector(".lect-rows a.cal-row, .empty-state", timeout=15_000)
 
@@ -976,6 +1086,7 @@ def _goto_local_search(page, query):
     """지역 축일은 성서 결과와 함께 나올 수 있어(`용인`) 전례일 알약을 고른 주소로 연다."""
     page.goto(f"{BASE_URL}/search?q={quote(query)}&group=lectionary")
     page.wait_for_selector(".lect-rows a.cal-row, .search-local-note, .empty-state", timeout=15_000)
+    _wait_search_done(page)
 
 
 def test_local_days_of_my_parish(browser):
@@ -1342,6 +1453,7 @@ def test_page_past_the_end_still_shows_the_count(page):
     """쪽 번호가 끝을 넘은 주소(더 긴 화면에서 만든 링크)도 「결과 없음」이 아니라 결과 수와 쪽 이동을 보인다."""
     page.goto(f"{BASE_URL}/search?q={quote('사랑')}&page=999")
     page.wait_for_selector("h2.search-count", timeout=10_000)
+    _wait_search_done(page)
     assert page.inner_text("h2.search-count").startswith("성서 본문 ")
     assert page.locator(".empty-state").count() == 0
     assert page.locator(".search-pagination").count() == 1
