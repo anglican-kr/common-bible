@@ -130,21 +130,22 @@ src/split_bible.py        ← 장별로 분리, 시락 머리말 별도 추출
         │  bible/sir-prologue.json          (ADR-002)
         │  books.json                       (메타데이터)
         ▼
-src/search_indexer.py     ← 절 단위 인덱스를 구약/신약/외경으로 분할 (전례 책은 넣지 않는다)
-        │  search-meta.json   (~10 KB, 책 별칭)
-        │  search-ot.json     (~3.8 MB)
-        │  search-nt.json     (~1.3 MB)
-        │  search-dc.json     (~700 KB)
-        ▼
 src/liturgical_psalter.py ← 전례시편 · 송가 — liturgical/psalter · canticles의 마크다운 (계응 구조라 별도 파서, data 저장소 ADR-039)
         │  bible/lps-{n}.json (150) · bible/cant-{n}.json (13)
         │  books.json에 lps · cant 추가 (→ 75권, division "liturgical")
+        ▼
+src/search_indexer.py     ← 절 단위 인덱스를 구약/신약/외경/성시로 분할 (성시는 전례시편과 송가, ADR-046)
+        │  search-meta.json   (~12 KB, 책 별칭과 송가 이름)
+        │  search-ot.json     (~3.8 MB)
+        │  search-nt.json     (~1.3 MB)
+        │  search-dc.json     (~700 KB)
+        │  search-lit.json    (~280 KB)
         ▼
 liturgical/*.py           ← 전례독서 · 연중 주간 · 본기도 · 교회력 정의 표 · 설·추석 · 성인 공통 · 반절 경계 (ADR-036 · 037)
         │  lectionary/*.json (12개 — 캘린더 묶음 다섯 · 전례독서 묶음 다섯 · 지역 축일 · 전례독서 검색 색인)
         ▼
 scripts/gen_manifests.py  ← 콘텐츠 해시 매니페스트 (ADR-021)
-           bible-manifest.json (bible/ · 검색 청크 셋 · lectionary/)
+           bible-manifest.json (bible/ · 검색 청크 넷 · lectionary/)
            audio-manifest.json (mp3 — LFS 포인터 OID)
 ```
 
@@ -271,8 +272,9 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
                                        │
                                        ├─ data/search-meta.json  (init — 먼저)
                                        ├─ data/search-nt.json    ┐
-                                       ├─ data/search-dc.json    ├ init에서 셋을 한꺼번에 받기 시작
-                                       └─ data/search-ot.json    ┘ (신약 · 외경 · 구약 순)
+                                       ├─ data/search-dc.json    │ init에서 넷을 한꺼번에 받기 시작
+                                       ├─ data/search-ot.json    │ (신약 · 외경 · 구약 · 성시 순)
+                                       └─ data/search-lit.json   ┘ 성시는 성서 본문과 따로 센다(ADR-046)
                                        │
             partial-results / results  ◀──── 신약 청크만 기다린 뒤, 남은 청크가 있으면 부분 결과 한 번 · 다 받으면 최종 결과
 ```
@@ -371,14 +373,14 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | OAuth/Drive 4개 호스트                                                  | **항상 네트워크 직행**, 서비스 워커 우회                          | 캐시하면 토큰과 동기화 데이터가 깨진다                             |
 | 페이지 이동 요청 (HTML)                                                 | `/index.html`로 대체(단, `/privacy.html`은 통과). 운영은 캐시 우선, 개발 도메인과 localhost는 네트워크 우선 | SPA 라우팅                                                      |
 | 셸(JS, CSS, HTML, 아이콘, `books.json`, `search-meta.json`, 매니페스트 2종) | 캐시 우선, `SHELL_CACHE`에 저장(개발 도메인과 localhost는 네트워크 우선이고 캐시는 오프라인 폴백) | 코드와 강하게 묶여 있어 릴리스마다 함께 갱신한다                              |
-| 본문, 검색, 교회력(`/data/bible/*`, `/data/search-{ot,nt,dc}.json`, `/data/lectionary/*`) | 캐시 우선, `DATA_CACHE`에 저장(이름은 `"data"`로 고정)                     | 누적 캐시이고, 콘텐츠 해시 매니페스트를 비교해 항목 단위로 갱신한다        |
+| 본문, 검색, 교회력(`/data/bible/*`, `/data/search-{ot,nt,dc,lit}.json`, `/data/lectionary/*`) | 캐시 우선, `DATA_CACHE`에 저장(이름은 `"data"`로 고정)                     | 누적 캐시이고, 콘텐츠 해시 매니페스트를 비교해 항목 단위로 갱신한다        |
 | 오디오 (`/data/audio/*`)                                                | 캐시 우선, `AUDIO_CACHE`에 저장(이름은 `"audio"`로 고정). 넣을 때 용량 상한을 적용한다([ADR-016](decisions/016-audio-cache-lru.md)) | 필요할 때 내려받고, 콘텐츠 해시 매니페스트를 비교해 항목 단위로 갱신한다 |
 | 매니페스트 (`/data/{bible,audio}-manifest.json`)                        | **네트워크 우선**. 실패하면 `SHELL_CACHE`에 미리 받아 둔 사본으로 폴백 | 최신 상태가 핵심이다                                               |
 
 캐시는 네 가지 이름으로 나뉜다(`sw.js`):
 
 - `SHELL_CACHE`(예: `shell-2.0.0`): 셸과 부팅에 필요한 메타 정보, 그리고 부팅할 때 싣지 않는 교회력 모듈 셋을 담는다. 교회력 모듈 셋은 설치할 때 미리 받는다. 교회력 표는 처음 쓸 때 `DATA_CACHE`에 들어가므로, 오프라인에서 열리는 캘린더와 전례독서는 온라인에서 한 번 연 화면이다. 이름은 `importScripts('/sw-version.js')`로 `self.APP_VERSION`을 읽어 `"shell-" + APP_VERSION`으로 정한다. 릴리스마다 갱신한다.
-- `DATA_CACHE`(`"data"`): 본문 장 JSON(73권 1328장, 머리말, 전례시편 150, 송가 13), 검색 청크 셋, 교회력 표, 전례독서 표, 크기 목록(`bible-sizes.json`)을 담는다. 이름은 고정이고, 항목별 무효화는 `js/manifest-sync.js`가 맡는다(ADR-021). 설정의 「오프라인 저장」을 켜면 `js/offline-save.js`가 이 캐시에 모두 받아 둔다(ADR-045).
+- `DATA_CACHE`(`"data"`): 본문 장 JSON(73권 1328장, 머리말, 전례시편 150, 송가 13), 검색 청크 넷, 교회력 표, 전례독서 표, 크기 목록(`bible-sizes.json`)을 담는다. 이름은 고정이고, 항목별 무효화는 `js/manifest-sync.js`가 맡는다(ADR-021). 설정의 「오프라인 저장」을 켜면 `js/offline-save.js`가 이 캐시에 모두 받아 둔다(ADR-045).
 - `AUDIO_CACHE`(`"audio"`): 장별 mp3를 담는다. 무효화 방식은 `DATA_CACHE`와 같다.
 - `FONT_CACHE`(`"fonts"`): Google Font 파일을 담는다. 콘텐츠 주소를 기준으로 하므로 사실상 영구하다.
 
@@ -413,7 +415,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | `IndexedDB` | `bible-audio-cache` / `entries` | 오디오 LRU 기록([ADR-016](decisions/016-audio-cache-lru.md)) | 로컬 전용 |
 | `IndexedDB` | `bible-manifest-sync` / `snapshots` | 직전 매니페스트 스냅샷(비교 기준) | 로컬 전용 |
 | Cache Storage | `shell-X.Y.Z` (SHELL_CACHE) | 앱 셸, `books.json`, `search-meta.json`, 매니페스트 2종 | (배포물) |
-| Cache Storage | `data` (DATA_CACHE) | 본문 장 JSON(전례시편과 송가 포함), 검색 청크 셋, 교회력 표와 전례독서 표, 크기 목록 | (누적. 오프라인 저장을 켜면 모두) |
+| Cache Storage | `data` (DATA_CACHE) | 본문 장 JSON(전례시편과 송가 포함), 검색 청크 넷, 교회력 표와 전례독서 표, 크기 목록 | (누적. 오프라인 저장을 켜면 모두) |
 | Cache Storage | `audio` (AUDIO_CACHE) | 장별 mp3 (필요 시 다운로드) | (누적) |
 | Cache Storage | `fonts` (FONT_CACHE) | Google Font 파일 | (영구) |
 | Google Drive (`appDataFolder`) | `sync.json` | 동기화 페이로드(v2 문서, `schemaVersion`, `deviceId`)와 ETag | ☁️ 원격 |
@@ -581,6 +583,7 @@ Phase 1(성경 읽기 PWA)은 완성됐고, Phase 3(교회력)은 일부 구현�
 | [043](decisions/043-desktop-top-bar.md) | 데스크톱 헤더를 늘 보이는 한 줄 상단 바로 개편. 왼쪽에 목적지 탭, 가운데에 제목, 오른쪽에 검색창과 설정. 북마크와 설정은 본문 옆 패널 **(1단계 구현 2026-11-14, 2-4단계 남음)** |
 | [044](decisions/044-lectionary-search-single-box.md) | 전례독서 검색은 성서 검색과 같은 검색창에서 한다. 두 자료에 모두 결과가 있으면 결과 화면의 「성서 본문」과 「전례일」 알약으로 골라 보고, 전례일이 있는 구절은 Enter를 쳐도 결과 화면에서 고른다. 구절 표기의 첫 숫자는 장이고, 책에 없는 장이면 결과 화면에 알린다. 이름 검색(전례년 순서, 소속교회의 지역 축일, 연도를 붙인 이름)의 규칙도 정한다. 날짜와 기간은 검색창에서 읽지 않고 캘린더가 맡는다 **(구현 완료 2026-11-17)** |
 | [045](decisions/045-offline-save.md) | 설정의 「오프라인 저장」 스위치 하나로 성서 본문, 성서 검색 자료, 교회력 자료를 기기에 저장한다. 아직 저장하지 않은 파일만 받고 끊기면 이어 받으며, 켜 둔 동안 고친 파일을 다시 받는다. 끄면 확인 창을 거쳐 지운다 **(구현 완료 2026-11-18)** |
+| [046](decisions/046-psalter-search.md) | 기도서 번역인 전례시편과 송가를 「성시」로 묶어 검색한다. 책 선택 시트의 마지막 묶음이고, 결과는 「성서 본문, 성시, 전례일」 알약의 둘째로 성서와 따로 보인다. 송가 결과는 송가 이름과 절로 적고, `전례시편 23:1`도 구절로 읽는다 **(구현 완료 2026-11-18)** |
 
 026은 main에 없다. 1.6.0 노트와 캘린더 설계는 개발을 멈춘 `release/1.6.0` 브랜치에만 있다. 데이터 저장소의 ADR(002, 003, 006, 039 전례시편 DSL)은 그 저장소의 `docs/decisions/`에 있다.
 
