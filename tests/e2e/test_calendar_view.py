@@ -22,7 +22,7 @@ import re
 
 import pytest
 
-from .conftest import CLEAR_APP_STORAGE, IPHONE_UA, assert_sheet_close_button, emulate_status_bar
+from .conftest import CLEAR_APP_STORAGE, IPHONE_UA, assert_sheet_close_button, emulate_status_bar, press_center
 
 BASE = "http://localhost:8080"
 
@@ -1537,11 +1537,7 @@ def test_list_fits_narrow_screens_with_large_text(mobile_context):
 
 # ── ⑪ 날짜 고르기(ADR-038 §2 「날짜 고르기」) ──
 
-def _press(page, selector):
-    """좌표로 누른다. Playwright의 click은 누르기 전에 요소를 화면 안으로 스크롤하는데, 목록 화면의 위쪽 여백(scroll-padding-top) 때문에
-    상단 바 안의 단추에서도 페이지를 스크롤한다. 사람이 누를 때는 그런 스크롤이 없다."""
-    box = page.locator(selector).first.bounding_box()
-    page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+_press = press_center   # 좌표로 누른다(conftest.py)
 
 
 def _picker(page):

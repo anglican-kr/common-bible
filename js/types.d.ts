@@ -1000,6 +1000,10 @@ export interface AppHelpers {
   isDesktopLayout: () => boolean;
   /** 바텀 시트가 열린 동안 막아 두는(inert) 뒤 화면. 책 고르기 시트와 캘린더 날짜 고르기 판이 같이 쓴다. */
   SHEET_INERT_SELECTORS: string;
+  /** 날짜 고르기 판의 제목 단추와 판의 링크가 함께 다는 포커스 열쇠. 고른 뒤 새 화면의 제목 단추로 포커스가 돌아온다. */
+  DATE_PICKER_FOCUS_KEY: string;
+  /** 날짜 고르기 판을 여는 상단 바의 제목 단추(캘린더의 달, 전례독서의 날짜). */
+  datePickerTrigger: (content: Node, label?: string) => HTMLButtonElement;
   /** 상단 바의 높이를 `:root`의 `--top-bar-h`에 넣고, 높이가 바뀔 때마다 고친다(CSS용). app.js가 시작할 때 한 번 호출한다. */
   publishBarHeight: () => void;
 }
@@ -1058,6 +1062,8 @@ export interface AppOverlay {
   closeAllOverlays: () => void;
   // 열린 창이 하나도 없으면 바로, 있으면 마지막 창이 닫힌 뒤에 실행한다(route()가 열린 창을 모두 닫으므로 다시 그리기를 미룬다).
   whenNoOverlayOpen: (fn: () => void) => void;
+  // 지금 열린 창이 있는가. 날짜 고르기 판을 늦게 불러온 사이 다른 창이 열렸으면 판을 열지 않는다(lectionary.js `openDatePicker`).
+  anyOverlayOpen: () => boolean;
   // Bottom-sheet drag plumbing (ADR-032 §2), shared by the bookmark drawer +
   // cite sheet. Lifecycle stays with the overlay/caller; these only wire the
   // drag gesture onto a handle element.

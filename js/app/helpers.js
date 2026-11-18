@@ -291,6 +291,26 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   // new fixed bar only needs adding here.
   const SHEET_INERT_SELECTORS = "#sticky-group, main#app, #app-header, #audio-bar, #launch-screen, #tab-dock, #verse-select-bar";
 
+  // The date picker (ADR-038 §2 「날짜 고르기」) opens from a title button in the top bar: the calendar's month and the lectionary's date.
+  // The button and the picker's links share one focus key, so after a pick the router gives focus back to the new screen's title button
+  // (restoreFocusSpot). Both views build the button here, so its classes (no chevron, touch-safe hover) and ARIA stay the same.
+  const DATE_PICKER_FOCUS_KEY = "date-picker-title";
+
+  /**
+   * The title button that opens the date picker. `label` is its accessible name (「2027년 5월, 날짜 고르기」); the calendar sets it later
+   * when the month changes (calendar.js `setPickerTrigger`).
+   * @param {Node} content @param {string} [label]
+   * @returns {HTMLButtonElement}
+   */
+  function datePickerTrigger(content, label) {
+    const button = /** @type {HTMLButtonElement} */ (el("button", {
+      type: "button", className: "title-picker-btn cal-title-btn", "aria-haspopup": "dialog", "aria-expanded": "false",
+      "data-focus-key": DATE_PICKER_FOCUS_KEY,
+    }, content));
+    if (label) button.setAttribute("aria-label", label);
+    return button;
+  }
+
   /**
    * The bottom edge of the top bar, in px from the top of the viewport — what lies above it is covered.
    * Measured on every call, so it is right at that moment.
@@ -491,6 +511,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     _$, chUnit, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
     HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot, SCROLL_ANCHORING, barBottom, scrollUnderBar,
     publishBarHeight, isFormerNorthChurch, churchName, parishGroups, DESKTOP_LAYOUT_QUERY, isDesktopLayout, SHEET_INERT_SELECTORS,
+    DATE_PICKER_FOCUS_KEY, datePickerTrigger,
   };
 })();
 
