@@ -1,4 +1,5 @@
 ---
+pr: 596
 date: 2026-11-19
 branch: fix/liturgical-no-audio-bar
 title: "fix: 전례시편과 송가에서 오디오 바 숨김"
