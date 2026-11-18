@@ -36,7 +36,7 @@ title: "feat: 성시 검색"
 - e2e(작업 폴더 서버 8091, 시험 사본): 검색 화면, 책 선택 시트, 키보드 포커스, 탭 바의 검색, 오프라인 저장을 지나는 파일을 골랐다.
   - `test_search.py`, `test_a11y_keyboard.py`, `test_tabbar.py` 전체 128건, `test_settings.py`의 오프라인 저장 7건, `test_a11y_axe.py`의 검색 2건이 통과했다. 새 시험은 `test_search.py`의 9개(10건, 알약 셋의 차례, 성시 알약과 장 화면의 강조, 성시의 쪽 넘기기, 송가 이름, 구절과 책 이름, 시트의 「성시」 묶음(휴대폰과 데스크톱), `in:송가`, 늦게 온 전례일 알약)이다.
   - 기존 시험 셋을 고쳤다. `사랑`은 이제 성시에도 결과가 있어 알약이 없는 경우의 낱말을 `세리`로 바꿨다. 송가는 이제 칩이 되므로 모르는 책 이름 시험에서 뺐다. 쪽 넘기기 알림은 끝에 「성시 N건」이 붙어 끝말 대신 전체 문장으로 본다.
-- 전례시편의 「편」을 고친 뒤 유닛 1,929건과 타입 검사를 다시 통과했다. e2e는 전례시편의 장, 카드, 복사를 지나는 `test_search.py`, `test_tabbar.py`, `test_navigation.py`, `test_liturgical_render.py`, `test_copy.py`, `test_lectionary_view.py` 297건이 통과했다.
+- 전례시편의 「편」을 고친 뒤 유닛 1,929건과 타입 검사를 다시 통과했다. e2e는 전례시편의 장, 카드, 복사를 지나는 `test_search.py`, `test_tabbar.py`, `test_navigation.py`, `test_liturgical_render.py`, `test_copy.py`, `test_lectionary_view.py` 297건이 통과했다. 늦은 전례일을 고친 뒤 유닛 1,929건과 타입 검사, e2e `test_search.py`, `test_a11y_keyboard.py` 111건이 통과했다.
 - 휴대폰 크기(390px)로 결과의 알약 셋, 송가 결과, 시트의 「성시」 묶음을 찍어 확인했다. 아이폰 실기기에서는 확인하지 않았다.
 - 바꾼 줄의 문장 검사(`tools/prose/prose.py lint --changed origin/main`)를 돌려, 역따옴표 밖의 영어 낱말 두 곳을 고쳤다.
 
