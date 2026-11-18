@@ -2489,3 +2489,32 @@ def test_common_readings_merge_the_shorter_psalm_and_keep_other_psalms_as_cards(
         _wait_day(page, "안티오키아의 루시안(사제, 순교자, 312년)")
         assert page.locator(".lect-reading[data-slot='psalm'] .lect-ref").inner_text() == ref
         assert page.locator(".lect-optional-note").count() == 0
+
+
+@pytest.mark.parametrize("touch", [True, False])
+def test_date_step_leaves_no_hover_circle_after_a_tap(browser, touch):
+    """‹ ›를 눌러 날짜를 옮긴 뒤 같은 자리에 다시 그린 ‹ ›에 바탕 원이 남지 않는다. iOS는 마지막으로 누른 자리에 :hover를 남기므로 호버의 바탕은
+    호버할 수 있는 기기(마우스)에서만 그린다(DESIGN.md 「포인터 분기」, 사용자 확인 2026-11-18). 마우스는 올려 둔 동안 바탕이 있다."""
+    opts = dict(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA, has_touch=True, is_mobile=True) if touch else {}
+    ctx = browser.new_context(**opts)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open(page, "lectionary/2027-05-02")
+        nxt = "#page-title a.lect-datenav-btn[aria-label='다음날']"
+        box = page.locator(nxt).bounding_box()
+        x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+        if touch:
+            page.touchscreen.tap(x, y)
+        else:
+            page.mouse.click(x, y)
+        page.wait_for_selector("#page-title .lect-date time[datetime='2027-05-03']")
+        # iOS가 남기는 상태: 누른 자리에 :hover가 남아 있다. 터치 환경의 Chromium은 탭 뒤에 :hover를 남기지 않으므로 포인터를 그 자리에 둔다
+        assert page.evaluate("matchMedia('(hover: hover)').matches") is not touch
+        page.mouse.move(x, y)
+        page.wait_for_timeout(300)
+        state = page.evaluate("s => { const a = document.querySelector(s); return [a.matches(':hover'), getComputedStyle(a).backgroundColor]; }", nxt)
+        assert state[0] is True and (state[1] == "rgba(0, 0, 0, 0)") is touch, state
+    finally:
+        ctx.close()
+
