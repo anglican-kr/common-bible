@@ -1742,6 +1742,46 @@ def test_picker_sheet_fits_a_short_screen_and_scrolls_only_its_cells(mobile_cont
     page.wait_for_url(f"{BASE}/calendar/list/2027-01-31")
 
 
+@pytest.mark.parametrize("touch", [True, False])
+def test_month_title_keeps_its_text_color_after_a_tap(browser, touch):
+    """달 제목을 눌러 판을 열고 닫은 뒤에도 제목은 글자색이다. iOS는 누른 자리에 :hover를 남기므로 장 고르기 단추(.title-picker-btn)의
+    호버 색은 호버할 수 있는 기기에서만 쓴다(DESIGN.md 「포인터 분기」, 코드 검토 2026-11-18). 마우스는 올려 둔 동안 강조색이다."""
+    opts = dict(viewport={"width": 390, "height": 844}, user_agent=IPHONE_UA, has_touch=True, is_mobile=True) if touch else {}
+    ctx = browser.new_context(**opts)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _freeze_today(page)
+        _open_list(page, "calendar/list/2027-05-01")
+        box = page.locator(".cal-title-btn").bounding_box()
+        x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+        if touch:
+            page.touchscreen.tap(x, y)
+        else:
+            page.mouse.click(x, y)
+        page.wait_for_selector(".cal-picker:not([hidden])")
+        page.wait_for_timeout(400)
+        if touch:
+            close = page.locator(".cal-picker-close").bounding_box()
+            page.touchscreen.tap(close["x"] + close["width"] / 2, close["y"] + close["height"] / 2)
+        else:
+            page.keyboard.press("Escape")
+        page.wait_for_selector(".cal-picker", state="hidden")
+        # iOS가 남기는 상태: 누른 자리에 :hover가 남아 있다. 터치 환경의 Chromium은 탭 뒤에 :hover를 남기지 않으므로 포인터를 그 자리에 둔다
+        page.mouse.move(x, y)
+        page.wait_for_timeout(200)
+        state = page.evaluate("""() => {
+            const b = document.querySelector('.cal-title-btn');
+            const colorOf = (v) => { const s = document.createElement('span'); s.style.color = v; document.body.append(s);
+                const c = getComputedStyle(s).color; s.remove(); return c; };
+            return { hover: b.matches(':hover'), color: getComputedStyle(b).color, text: colorOf('var(--text)'), accent: colorOf('var(--accent)') };
+        }""")
+        assert state["hover"] is True and state["text"] != state["accent"], state
+        assert state["color"] == (state["text"] if touch else state["accent"]), state
+    finally:
+        ctx.close()
+
+
 def test_picker_popover_closes_in_place_when_the_window_narrows(desktop_context):
     """팝오버를 연 채 창이 휴대폰 폭으로 좁아지면 미끄러지는 움직임 없이 바로 닫고 팝오버의 자리를 지운다. 다시 열면 화면 아래의 시트다."""
     page = desktop_context.new_page()

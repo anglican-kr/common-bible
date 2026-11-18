@@ -16,13 +16,15 @@ dev에 올린 판을 아이폰에서 보고 나온 고침 둘이다. 캘린더 �
 - 캘린더를 2050년까지로 줄이자는 의견(2026-11-18)을 검토했다. 설날과 추석의 양력 날짜 표(한국천문연구원)가 2025-2050년이라 그 밖의 해에는 둘만 빠지고, 부활절은 모든 해에 같은 공식으로 계산하며(1900-2100년 공식 표와 대조), 캘린더 자료 가운데 해가 정해진 것은 그 표 하나뿐이다(자료 파일 열두 개를 확인했다). 이를 듣고 사용자가 제한을 두지 않기로 했다(2026-11-18). 캘린더는 계산 범위(1583-9999년)를 그대로 보이고, ADR-038 「검토한 대안 — 날짜 고르기」 I에 적었다.
 - 구현하며 정한 것:
   - 장 고르기 단추(`.title-picker-btn`)가 그리는 펼침 표시를 캘린더의 제목 단추에서만 지운다(`.lect-date > .cal-title-btn::after { content: none; }`). 펼침 표시를 띄워 두던 자리 규칙과, 펼침 표시와 겹치지 않게 › 그림을 옮기던 규칙도 지웠다. 그래서 ›의 자리는 전례독서 화면과 같아졌다.
-  - 호버의 바탕과 흐림을 `@media (hover: hover)` 안으로 옮겼다: 상단 바의 ‹ ›(`a.lect-datenav-btn`), 보기 전환 단추(누른 뒤 70%로 흐리게 남았다), 날짜 고르기 판의 머리, ‹ ›, 날, 달과 해 칸, 시트의 「닫기」. 키보드 포커스의 바탕(`:focus-visible`)은 그대로다. 앱의 다른 호버 규칙(약 100개)은 이번에 살피지 않았다.
+  - 호버의 바탕과 흐림을 `@media (hover: hover)` 안으로 옮겼다: 상단 바의 ‹ ›(`a.lect-datenav-btn`), 보기 전환 단추(누른 뒤 70%로 흐리게 남았다), 날짜 고르기 판의 머리, ‹ ›, 날, 달과 해 칸, 시트의 「닫기」, 캘린더의 월간 칸과 목록 줄(판에서 날을 고른 뒤 그 자리의 줄에 바탕이 남는다). 장 고르기 단추(`.title-picker-btn`)의 호버 색도 옮겼다. 캘린더의 달 제목이 이 단추의 모양을 써서, 판을 닫은 뒤 제목이 강조색으로 남았다. 키보드 포커스의 바탕(`:focus-visible`)은 그대로다. 앱의 다른 호버 규칙(약 100개)은 이번에 살피지 않았다.
 - 디자인 시스템 아티팩트: `CalendarDatePicker` 설명의 첫 줄, `bundle.css`, README의 「터치 · 움직임」에 호버 규칙을 맞췄다.
 
 ## 검증
 
 - 문서 검사 `node --test tests/unit/docs-*.test.js` 23개 통과.
 - e2e(작업 폴더 서버 8094): 모두 고친 뒤 `test_calendar_view.py`, `test_top_bar.py`, `test_lectionary_view.py`, `test_cite_sheet.py`, `test_search.py`, `test_a11y_axe.py`, `test_a11y_keyboard.py` 345개 통과(10분 7초).
+- 코드 검토가 장 고르기 단추(캘린더의 달 제목), 월간 칸, 목록 줄의 호버를 옮긴 뒤 `test_calendar_view.py`, `test_top_bar.py`, `test_lectionary_view.py`, `test_navigation.py` 274개 통과(7분 48초). 장 고르기 단추는 성서 장 제목도 쓰므로 `test_navigation.py`를 더했다.
+- 코드 검토의 제안으로 `test_calendar_view.py`에 `test_month_title_keeps_its_text_color_after_a_tap`을 더했다. 터치 기기와 마우스로 달 제목을 눌러 판을 열고 닫은 뒤, 포인터가 그 자리에 있을 때 터치에서는 제목이 글자색(`--text`)이고 마우스에서는 강조색인지 본다. 장 고르기 단추의 호버 색을 고치기 전으로 되돌리면 터치 쪽이 실패했다(강조색이 남는다). 같은 검토의 제안으로 ADR-038 「검토한 대안 — 날짜 고르기」 I의 사용자 결정에 날짜를 붙였다.
 - 새 시험: `test_list_title_opens_the_day_picker_and_a_day_opens_its_row`에 상단 바 제목의 펼침 표시가 없는지(`::after`의 `content`가 `none`) 보는 줄을 더했다. `test_lectionary_view.py`의 `test_date_step_leaves_no_hover_circle_after_a_tap`은 터치 기기와 마우스로 ›를 누른 뒤, 포인터가 그 자리에 있을 때 터치에서는 바탕이 없고 마우스에서는 있는지 본다. 터치 환경의 Chromium은 탭 뒤에 `:hover`를 남기지 않아, iOS가 남기는 상태를 포인터를 옮겨 만든다. 호버 규칙을 고치기 전으로 되돌리면 터치 쪽이 실패했다.
 
 ## 갱신한 문서

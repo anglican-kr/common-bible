@@ -1086,8 +1086,10 @@ body.cites-shown .lect-bracket--chips-off { display: none; }
   color: var(--text);
   text-decoration: none;
 }
-a.cal-cell:hover,
 a.cal-cell:focus-visible { background: var(--bg-card); }
+@media (hover: hover) {
+  a.cal-cell:hover { background: var(--bg-card); }
+}
 .cal-date {
   display: inline-flex;
   align-items: center;
@@ -1179,8 +1181,10 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
   color: var(--text);
   text-decoration: none;
 }
-.cal-row:hover,
 .cal-row:focus-visible { background: var(--bg-card); }
+@media (hover: hover) {
+  .cal-row:hover { background: var(--bg-card); }
+}
 .cal-row-date {
   flex: none;
   width: 2.2rem;
@@ -2276,12 +2280,15 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   vertical-align: -0.05em;
 }
 
-.title-picker-btn:hover {
-  color: var(--accent);
-}
+/* 호버의 색은 호버할 수 있는 기기에서만 바꾼다(DESIGN.md 「포인터 분기」). iOS는 누른 자리에 :hover를 남겨, 캘린더의 달 제목이 판을 닫은 뒤에도 강조색으로 남았다. */
+@media (hover: hover) {
+  .title-picker-btn:hover {
+    color: var(--accent);
+  }
 
-.title-picker-btn:hover::after {
-  border-color: var(--accent);
+  .title-picker-btn:hover::after {
+    border-color: var(--accent);
+  }
 }
 
 .chapter-popover {
