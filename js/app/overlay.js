@@ -349,7 +349,7 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
     });
   }
 
-  return { createOverlay, closeAllOverlays, whenNoOverlayOpen, attachSheetDrag, attachSheetResize };
+  return { createOverlay, closeAllOverlays, whenNoOverlayOpen, anyOverlayOpen, attachSheetDrag, attachSheetResize };
 })();
 
 // ESM module marker (ADR-019). No runtime effect; signals TypeScript that

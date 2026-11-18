@@ -619,7 +619,7 @@ function commitMonthBar(model, view) {
 }
 
 // ── 날짜 고르기(ADR-038 §2 「날짜 고르기」, DESIGN.md §6) ──
-// 상단 바의 달 제목이 여는 판이다. 전례독서 화면의 날짜도 같은 판을 연다(lectionary.js `openDatePicker`가 이 모듈의 `openLectionaryDatePicker`를 부른다, 2026-11-18). 휴대폰과 터치 기기에서는
+// 상단 바의 달 제목이 여는 판이다. 전례독서 화면의 날짜도 같은 판을 연다(lectionary.js `openDatePicker`가 이 모듈의 `openCalendarPicker`를 부른다, 2026-11-18). 휴대폰과 터치 기기에서는
 // 바텀 시트, 마우스를 쓰는 넓은 화면에서는 제목 아래 팝오버이고, 같은 요소를 CSS가 바꾼다. 판은 한 번에 한 단계만 보인다. 날과 월간의 달은
 // 링크라 고르면 라우터가 그 화면을 그리고(route()가 열린 판을 닫는다), 해와 목록, 전례독서의 달은 단추라 판 안에서 한 단계 아래로 내려간다. 판은 body 끝에 한 번 만들어 두고 다시 쓴다. 제목 칸(#page-title)은 `container-type`이 있어,
 // 그 안에 두면 고정 위치(position: fixed)가 화면이 아니라 그 칸을 기준으로 잡힌다.
@@ -1028,7 +1028,7 @@ function ensurePicker() {
 
 /**
  * 제목 단추를 누르면 판을 연다. 월간은 달 판, 목록과 전례독서는 날 판으로 연다. 목록에서 지금 보는 날은 상단 바 바로 아래 줄이고,
- * 전례독서에서는 그 화면의 날(제목 단추의 `data-date`)이다.
+ * 전례독서에서는 그 화면의 날(제목 단추의 `data-date`)이다. 전례독서 화면은 이 함수를 모듈을 불러온 뒤 부른다(lectionary.js `openDatePicker`).
  * @param {HTMLElement} trigger @param {PickerView} view
  * @param {boolean} pointer  손가락이나 마우스로 눌렀다(키보드면 false)
  */
@@ -1054,15 +1054,6 @@ function openCalendarPicker(trigger, view, pointer) {
   p.panel.setAttribute("aria-label", view === "month" ? "해와 달 고르기" : "날짜 고르기");
   renderPicker();
   p.overlay.open(null);
-}
-
-/**
- * 전례독서 화면의 날짜를 누르면 같은 판을 날 판으로 연다(ADR-038 §2 「날짜 고르기」, 사용자 결정 2026-11-18). 전례독서 화면은 이 모듈을
- * 부팅 때 받지 않고, 날짜를 누를 때 불러온다(lectionary.js `openDatePicker`).
- * @param {HTMLElement} trigger  `data-date`가 그 화면의 날이다 @param {boolean} pointer
- */
-function openLectionaryDatePicker(trigger, pointer) {
-  openCalendarPicker(trigger, "lectionary", pointer);
 }
 
 // 앱 전체의 Esc 처리(app.js)가 열린 판을 먼저 닫는다. 닫았으면 true다. 판이 없거나 닫히는 움직임 중이면 이미 닫혔으므로 false라 Esc가 다음 단계로 간다
@@ -1593,4 +1584,5 @@ async function renderCalendarView(parsed) {
   return `${model.title} ${PAGE_TITLE}`;
 }
 
-export { renderCalendarView, buildMonthGrid, calendarDay, openLectionaryDatePicker };
+// 전례독서 화면은 이 모듈을 부팅 때 받지 않고 날짜를 누를 때 불러와 판을 연다(lectionary.js `openDatePicker`, 보기 "lectionary")
+export { renderCalendarView, buildMonthGrid, calendarDay, openCalendarPicker };

@@ -1382,17 +1382,18 @@ function titleDateText(p) {
 /**
  * 전례독서의 머리 — 제목 자리에 날짜 이동 줄을 그린다(사용자 결정 2026-11-03: 스크롤해도 날짜와 「오늘」이 보이고 하루씩 옮길
  * 수 있게. 그전엔 본문 맨 위 줄이었고, 머리에는 「전례독서」가 있었다). 「전례독서」는 문서 제목(setTitle)에 남는다. 보이는 날짜는
- * 짧은 표기이고(`titleDateText`), 스크린 리더는 숨긴 전체 날짜를 읽는다. 오른쪽 단추는 마지막으로 쓴 보기의 그 날짜로 간다(ADR-038 §2).
+ * 짧은 표기이고(`titleDateText`), 스크린 리더는 날짜 단추의 이름으로 전체 날짜를 읽는다. 오른쪽 단추는 마지막으로 쓴 보기의 그 날짜로 간다(ADR-038 §2).
  * 날짜는 날짜 고르기 판을 여는 단추다(ADR-038 §2 「날짜 고르기」, 사용자 결정 2026-11-18). 캘린더의 달 제목과 같은 단추이고 펼침 표시는 없다.
  * @param {LectionaryModel} m
  */
 function commitTitleDateNav(m) {
   const p = /** @type {{ y: number, m: number, d: number }} */ (parseDate(m.date));
-  const label = el("time", { className: "lect-date-label", datetime: m.date });
-  label.appendChild(el("span", { className: "sr-only" }, dateLabel(m.date)));
-  label.appendChild(el("span", { "aria-hidden": "true" }, titleDateText(p)));
-  // 캘린더의 달 제목과 같은 단추다(helpers.js `datePickerTrigger`). 판에서 날을 고르면 새 화면의 이 단추로 포커스가 돌아온다
-  const trigger = datePickerTrigger(label, `${dateLabel(m.date)}, 날짜 고르기`);
+  const shown = titleDateText(p);
+  const label = el("time", { className: "lect-date-label", datetime: m.date }, shown);
+  // 캘린더의 달 제목과 같은 단추다(helpers.js `datePickerTrigger`). 판에서 날을 고르면 새 화면의 이 단추로 포커스가 돌아온다. 단추의 이름은
+  // 보이는 글(「27.05.02」)로 시작하고 전체 날짜를 덧붙인다. 음성으로 조작하는 사용자가 보이는 글을 말해도 누를 수 있어야 한다(WCAG 2.5.3,
+  // 코드 리뷰 2026-11-18). 스크린 리더는 이 이름으로 전체 날짜를 읽는다
+  const trigger = datePickerTrigger(label, `${shown}, ${dateLabel(m.date)}, 날짜 고르기`);
   trigger.dataset.date = m.date;
   trigger.addEventListener("click", (e) => openDatePicker(trigger, e.detail > 0));
   const history = window.tabHistory;
@@ -1416,12 +1417,13 @@ function commitTitleDateNav(m) {
 async function openDatePicker(trigger, pointer) {
   try {
     const mod = await import("./calendar.js");
-    // 불러오는 사이에 다른 화면으로 갔으면 열지 않는다
-    if (trigger.isConnected) mod.openLectionaryDatePicker(trigger, pointer);
+    // 불러오는 사이에 다른 화면으로 갔거나 다른 창(설정 등)을 열었으면 열지 않는다. 판이 그 위에 겹치면 막는 범위와 Esc의 차례가 꼬인다(코드 리뷰 2026-11-18)
+    if (trigger.isConnected && !window.appOverlay.anyOverlayOpen()) mod.openCalendarPicker(trigger, "lectionary", pointer);
   } catch (err) {
-    // 단추를 눌렀는데 아무 일도 없으면 고장 난 것처럼 보인다. 알림은 라이브 영역에도 들어간다(drive-sync.js `_showSyncSnackbar`, 코드 리뷰 2026-11-18)
+    // 단추를 눌렀는데 아무 일도 없으면 고장 난 것처럼 보인다. 알림은 라이브 영역에도 들어간다(drive-sync.js `_showSyncSnackbar`, 코드 리뷰 2026-11-18).
+    // 브라우저는 불러오지 못한 모듈을 그 페이지가 열린 동안 기억해(HTML 표준의 module map) 다시 눌러도 실패하므로, 앱을 다시 열라고 안내한다
     console.error("날짜 고르기를 열지 못했습니다", err);
-    const msg = "날짜 고르기를 열지 못했습니다. 네트워크 연결을 확인한 뒤 날짜를 다시 눌러 주세요.";
+    const msg = "날짜 고르기를 열지 못했습니다. 네트워크 연결을 확인한 뒤 앱을 다시 열어 주세요.";
     if (window._showSyncSnackbar) window._showSyncSnackbar(msg);
     else window.announce?.(msg);
   }

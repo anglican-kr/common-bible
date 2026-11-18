@@ -1813,7 +1813,7 @@ def _title_date(page):
     """머리에 보이는 날짜 글자와 「오늘」, 앞뒤 단추의 자리."""
     return page.evaluate("""() => {
       const r = (s) => document.querySelector(s).getBoundingClientRect();
-      const shown = document.querySelector('#page-title .lect-date-label [aria-hidden]');
+      const shown = document.querySelector('#page-title .lect-date-label');
       const d = shown.getBoundingClientRect(), t = r('#page-title .lect-today');
       return { text: shown.textContent, left: d.left, right: d.right, mid: (d.left + d.right) / 2, top: d.top, bottom: d.bottom,
                todayLeft: t.left, todayRight: t.right, todayMid: (t.top + t.bottom) / 2,
@@ -1834,7 +1834,8 @@ def test_title_row_is_the_date_nav_and_only_the_date_text_is_centered(mobile_con
     assert title.locator("a.lect-datenav-btn[aria-label='다음날']").count() == 1
     assert title.locator("a.lect-today").inner_text() == "오늘"
     assert title.locator(".lect-date time").get_attribute("datetime") == "2026-12-30"
-    assert title.locator(".lect-date time .sr-only").inner_text() == "2026년 12월 30일 (수)"
+    # 스크린 리더는 날짜 단추의 이름으로 전체 날짜를 읽고, 이름은 보이는 글로 시작한다(WCAG 2.5.3)
+    assert title.locator(".lect-date .cal-title-btn").get_attribute("aria-label") == "26.12.30, 2026년 12월 30일 (수), 날짜 고르기"
     assert title.locator(".title-view-btn").get_attribute("href") == "/calendar/2026-12"
     assert title.locator(".title-home-btn").count() == 0   # 성서 목록의 입구는 탭 바의 홈 탭과 데스크톱 상단 바의 「성서」 탭이다(ADR-043 §3)
     assert "전례독서" in page.evaluate("() => document.title")   # 「전례독서」는 문서 제목에 남는다
@@ -2540,7 +2541,7 @@ def test_title_date_opens_the_day_picker_and_a_day_opens_its_lectionary(mobile_c
     page.clock.set_fixed_time(datetime.datetime(2026, 11, 17, 12))
     _open(page, "lectionary/2027-05-02")
     btn = "#page-title .lect-date > .cal-title-btn"
-    assert page.get_attribute(btn, "aria-label") == "2027년 5월 2일 (일), 날짜 고르기"
+    assert page.get_attribute(btn, "aria-label") == "27.05.02, 2027년 5월 2일 (일), 날짜 고르기"
     assert page.get_attribute(btn, "aria-haspopup") == "dialog"
     assert page.locator(f"{btn} time[datetime='2027-05-02']").count() == 1
     assert page.evaluate("s => getComputedStyle(document.querySelector(s), '::after').content", btn) == "none"
