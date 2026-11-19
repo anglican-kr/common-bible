@@ -1,4 +1,5 @@
 ---
+pr: 604
 date: 2026-11-19
 branch: fix/narrow-top-bar
 title: "fix: 좁은 휴대폰의 긴 장 제목과 장 고르기 목록"
