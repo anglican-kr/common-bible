@@ -18,6 +18,8 @@ Apple HIG의 검색 방식(필터/범위 바, 토큰, 최근 항목 목록, 시�
 
 ### 검색 필드 안 토큰 (2026-06-08)
 
+ADR-049가 대체했다(2026-11-20). 고른 책은 검색창 아래의 알약으로 보이고, 검색창 안에는 깔때기만 남는다.
+
 처음에는 별도 **필터 바**(`.search-filters`: 책 선택 버튼, 칩 줄, 「결과 내 검색」 입력)를 두었다. 그런데 하단 모핑 탭 바의 검색 pill과 함께 떠, **검색창이 둘**로 보였다(HIG의 「single, clearly identified location」에 어긋난다). 그래서 이 ADR의 **대안 A(검색어 필드 안의 토큰, iOS 16 search tokens)**로 바꿨다. 처음에는 「헤더, 페이지 안, 모핑의 입력 세 곳을 모두 구현해야 한다」는 비용 때문에 미뤘던 안이다.
 
 비용을 낮춘 구현: `<input>`을 contenteditable로 바꾸지 않고, **칩을 input의 형제로 같은 flex 줄에 두는** 감싸개(`.token-zone`, `display:contents`)를 쓴다. 실제 `<input>`이 그대로라 `.value`·`focus({preventScroll})`·focus/blur·visualViewport 연결(ADR-030)이 모두 남는다. 두 필드(`#search-bar` 헤더, `#search-inpage-bar`)에 `mountSearchField`로 토큰 자리를 끼우고, `syncSearchFields()`가 route마다(routing.js) URL의 필터를 칩으로 다시 그린다. 하단 모핑 pill의 토큰 자리는 ADR-048이 하단 입력창을 없애며 함께 지웠다.
