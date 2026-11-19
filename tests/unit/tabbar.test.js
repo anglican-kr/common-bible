@@ -104,6 +104,30 @@ test("keyboardOverlap: 음수는 0 으로 클램프(키보드 없음)", () => {
   assert.equal(ctx.keyboardOverlap(800, 820), 0);
 });
 
+// ── 키보드가 뜨기 전에 미리 올리기 (ADR-030 §6, 2026-11-19) ─────────────────────
+
+test("rememberedLift: 기억한 키보드 위의 높이로 올릴 px. 폭이 같을 때만 쓰고, 도구 막대로 innerHeight가 바뀌어도 맞춘다", () => {
+  const { ctx } = makeCtx();
+  // 844 높이의 세로 화면에서 키보드 위에 508px이 남았다
+  assert.equal(ctx.rememberedLift({ w: 390, vv: 508 }, 844, 390), 336);
+  // Safari 도구 막대가 접혀 innerHeight가 늘면 그만큼 더 올린다
+  assert.equal(ctx.rememberedLift({ w: 390, vv: 508 }, 900, 390), 392);
+  // 폭이 다르면(가로) 쓰지 않는다
+  assert.equal(ctx.rememberedLift({ w: 390, vv: 508 }, 390, 844), 0);
+  // 기억이 없거나 깨졌으면 0
+  for (const bad of [null, undefined, "x", {}, { w: 390 }, { w: 390, vv: "508" }, { w: 390, vv: 0 }, { w: 390, vv: 900 }]) {
+    assert.equal(ctx.rememberedLift(bad, 844, 390), 0, JSON.stringify(bad));
+  }
+});
+
+test("keyboardLift: 잰 높이와 미리 올린 높이 가운데 큰 쪽, 1px 이하는 0", () => {
+  const { ctx } = makeCtx();
+  assert.equal(ctx.keyboardLift(120, 336), 336, "키보드가 올라오는 중에는 미리 올린 높이를 지킨다");
+  assert.equal(ctx.keyboardLift(340, 336), 340, "잰 높이가 더 크면 그 높이");
+  assert.equal(ctx.keyboardLift(0, 0), 0);
+  assert.equal(ctx.keyboardLift(0.5, 1), 0);
+});
+
 // ── setKeyboardState ─────────────────────────────────────────────────────────
 
 test("setKeyboardState(true): body 클래스 + X 버튼 a11y 노출", () => {

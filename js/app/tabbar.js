@@ -62,13 +62,48 @@ function setKeyboardState(up) {
   }
 }
 
+// 키보드가 뜨기 전에 입력을 먼저 올려 두기(ADR-030 §6, 사용자 보고 2026-11-19). iOS 는 키보드가 뜰 때 포커스 입력이
+// 키보드에 가려지면 페이지를 위로 민다. 앱은 키보드 높이를 잰 뒤에야 dock 을 올리므로, 최근 검색 화면에서 입력을 누르면
+// 페이지가 위로 튀었다가 아래의 scrollPageTop 이 되돌렸다. 그래서 키보드를 열 때마다 키보드 위에 남는 높이(비주얼 뷰포트
+// 높이)를 기기에 기억해 두고, 다음 포커스에서 그만큼 dock 을 바로 올린다. 키보드 높이 대신 남는 높이를 기억하는 것은
+// Safari 의 도구 막대가 레이아웃 뷰포트 높이(innerHeight)를 바꿔도 키보드 위의 높이는 같기 때문이다. 폭이 다르면(가로와
+// 세로) 쓰지 않는다.
+const KB_MEMORY_KEY = "bible-keyboard-height";
+/**
+ * 기억한 높이로 미리 올릴 px. 쓸 수 없으면 0.
+ * @param {unknown} saved  { w: innerWidth, vv: 키보드 위에 남은 높이 }
+ * @param {number} innerHeight @param {number} innerWidth
+ * @returns {number}
+ */
+function rememberedLift(saved, innerHeight, innerWidth) {
+  if (!saved || typeof saved !== "object") return 0;
+  const { w, vv } = /** @type {{ w?: unknown, vv?: unknown }} */ (saved);
+  if (w !== innerWidth || typeof vv !== "number" || !(vv > 0)) return 0;
+  const lift = innerHeight - vv;
+  return lift > 1 ? lift : 0;
+}
+/**
+ * dock 을 올릴 높이: 잰 키보드 높이와 미리 올린 높이 가운데 큰 쪽. 미리 올린 높이는 키보드가 다 뜰 때까지만 둔다
+ * (`preLift`, 아래). 1px 이하는 반올림 오차라 0 이다.
+ * @param {number} overlap @param {number} preLift @returns {number}
+ */
+function keyboardLift(overlap, preLift) {
+  return Math.max(overlap > 1 ? overlap : 0, preLift > 1 ? preLift : 0);
+}
+/** 키보드가 다 뜰 때까지 미리 올려 둔 높이(px). 0 이면 없다. @type {number} */
+let preLift = 0;
+/** 이번 포커스 동안 잰 가장 큰 키보드 높이(px). 키보드가 다 뜬 뒤 기억한다. @type {number} */
+let kbSessionMax = 0;
+
 // ── visualViewport: 키보드가 가리지 않게 dock 을 키보드 높이만큼 위로 ──
 function liftForKeyboard() {
   const vv = window.visualViewport;
   if (!vv || !$dock) return;
   const overlap = keyboardOverlap(window.innerHeight, vv.height);
+  if (overlap > kbSessionMax) kbSessionMax = overlap;
+  const lift = keyboardLift(overlap, preLift);
   // 1px 미만은 반올림 오차 — 키보드 없음으로 본다.
-  const up = overlap > 1;
+  const up = lift > 0;
   // transform 대신 실제 레이아웃 위치(bottom)로 올린다. transform 은 레이아웃
   // 사각형을 그대로 두므로 iOS 가 포커스 입력이 키보드에 가려졌다고 보고 페이지
   // 전체를 위로 팬(헤더·빈 상태가 화면 밖으로 밀림)한다. 입력의 실제 사각형을
@@ -76,9 +111,56 @@ function liftForKeyboard() {
   // X 노출·홈 숨김(setKeyboardState)은 여기서 다루지 않는다 — 높이 감지가 빗나가도
   // X 가 뜨도록 입력 focus/blur 에 분리해 묶었다(아래). 여기선 위치 보정만.
   // --kb-overlap 은 :root 에 둔다(dock 이 상속). dock 의 fixed 위치를 키보드 위로 올린다.
-  document.documentElement.style.setProperty("--kb-overlap", up ? `${overlap}px` : "0px");
+  document.documentElement.style.setProperty("--kb-overlap", up ? `${lift}px` : "0px");
 }
 // ── END KEYBOARD ──
+
+/** 키보드가 다 뜬 뒤로 보는 시간. iOS 의 키보드 애니메이션(약 0.3초)과 그 뒤의 페이지 밀기를 넘긴다. */
+const KB_SETTLE_MS = 700;
+/** @type {ReturnType<typeof setTimeout> | null} */
+let kbSettleTimer = null;
+
+/** 기억한 키보드 위의 높이. 저장소를 읽지 못하거나 값이 없으면 null(사생활 보호 창 등). @returns {unknown} */
+function loadKeyboardMemory() {
+  try {
+    const raw = localStorage.getItem(KB_MEMORY_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 이번에 잰 키보드 높이를 키보드 위의 높이로 기억한다. 쓰지 못하면 다음 포커스가 전처럼 동작한다. @param {number} overlap */
+function saveKeyboardMemory(overlap) {
+  try {
+    localStorage.setItem(KB_MEMORY_KEY, JSON.stringify({ w: window.innerWidth, vv: window.innerHeight - overlap }));
+  } catch {
+    /* 저장하지 못해도 동작은 같다 */
+  }
+}
+
+/** 입력이 포커스를 받을 때: 기억한 높이로 dock 을 먼저 올리고, 키보드가 다 뜬 뒤 잰 높이로 맞추고 기억한다. */
+function preLiftForKeyboard() {
+  kbSessionMax = 0;
+  preLift = rememberedLift(loadKeyboardMemory(), window.innerHeight, window.innerWidth);
+  if (preLift) liftForKeyboard();
+  if (kbSettleTimer) clearTimeout(kbSettleTimer);
+  kbSettleTimer = setTimeout(() => {
+    kbSettleTimer = null;
+    preLift = 0;
+    liftForKeyboard();
+    if (kbSessionMax > 1 && document.activeElement === $searchInput) saveKeyboardMemory(kbSessionMax);
+  }, KB_SETTLE_MS);
+}
+
+/** 입력이 포커스를 잃을 때: 미리 올린 높이를 거둬, 키보드가 내려가는 대로 dock 이 따라 내려오게 한다. */
+function endPreLift() {
+  if (kbSettleTimer) clearTimeout(kbSettleTimer);
+  kbSettleTimer = null;
+  if (!preLift) return;
+  preLift = 0;
+  liftForKeyboard();
+}
 
 // ── BEGIN SCROLL ── (tests/unit/tabbar.test.js 가 슬라이스해 검증)
 // 스크롤 축소: 아래로 스크롤하면 탭 바를 홈 원형으로 접고, 맨 위로 올라오면 복구한다.
@@ -348,6 +430,9 @@ function scrollPageTop() {
 }
 $searchInput?.addEventListener("focus", () => {
   setKeyboardState(true);
+  // 키보드가 뜨기 전에 dock 을 기억한 높이로 올린다(위 preLiftForKeyboard). 아래의 맨 위로 스크롤은 기억한 높이가 없는 첫
+  // 포커스와 높이가 어긋날 때를 위해 남긴다
+  preLiftForKeyboard();
   // 맨 위로 스크롤은 **빈 검색(쿼리 없음 = 빈 상태 화면)** 일 때만 — iOS 키보드 pan 으로
   // 빈 상태 문구가 밀리는 것 상쇄용. 결과가 있는(쿼리 입력된) 상태에서 입력을 다시 탭해
   // 편집할 땐 스크롤 위치를 보존한다(Bugbot: 결과 둘러보다 재포커스 시 맨 위 점프 방지).
@@ -356,7 +441,7 @@ $searchInput?.addEventListener("focus", () => {
   requestAnimationFrame(scrollPageTop);
   setTimeout(scrollPageTop, 300);
 });
-$searchInput?.addEventListener("blur", () => setKeyboardState(false));
+$searchInput?.addEventListener("blur", () => { setKeyboardState(false); endPreLift(); });
 
 // ⊗ 지우기 — 검색어만 비우고 입력 유지(포커스·키보드 유지). 결과 화면이면 빈
 // 검색 뷰로 되돌려 기본 안내(빈 상태)를 보인다.

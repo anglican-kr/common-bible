@@ -108,6 +108,50 @@ def test_search_button_morphs_to_input(mobile_context):
     )
 
 
+def test_search_input_lifts_by_the_remembered_keyboard_before_it_shows(mobile_context):
+    """입력이 포커스를 받으면 기억한 키보드 위의 높이로 dock을 바로 올려, iOS가 페이지를 밀지 않게 한다. 키보드가 뜨지
+    않으면 내려오고, 키보드가 뜨면 그 높이를 기억한다(ADR-030 §6, 사용자 보고 2026-11-19)."""
+    page = mobile_context.new_page()
+    page.goto(BASE_URL)
+    wait_app_ready(page)
+    page.locator("#tab-search").click()
+    page.wait_for_selector("#tab-search-input:not([hidden])", timeout=5_000)
+    overlap = "() => getComputedStyle(document.documentElement).getPropertyValue('--kb-overlap').trim()"
+    page.locator("#tab-search-input").blur()
+    page.wait_for_timeout(800)
+
+    # 기억이 없으면 올리지 않는다(키보드가 없는 이 브라우저에서는 0)
+    page.evaluate("() => localStorage.removeItem('bible-keyboard-height')")
+    page.locator("#tab-search-input").focus()
+    assert page.evaluate(overlap) in ("0px", "")
+    page.locator("#tab-search-input").blur()
+
+    # 390 폭에서 키보드 위에 508px이 남았다고 기억했으면 844 - 508 = 336px을 바로 올린다
+    page.evaluate("() => localStorage.setItem('bible-keyboard-height', JSON.stringify({ w: 390, vv: 508 }))")
+    page.locator("#tab-search-input").focus()
+    assert page.evaluate(overlap) == "336px"
+    # 키보드가 뜨지 않으면(이 브라우저) 다 뜰 시간이 지난 뒤 내려온다
+    page.wait_for_function(f"() => ({overlap})() === '0px'", timeout=3_000)
+    page.locator("#tab-search-input").blur()
+
+    # 폭이 다르면(가로) 쓰지 않는다
+    page.evaluate("() => localStorage.setItem('bible-keyboard-height', JSON.stringify({ w: 844, vv: 508 }))")
+    page.locator("#tab-search-input").focus()
+    assert page.evaluate(overlap) in ("0px", "")
+    page.locator("#tab-search-input").blur()
+
+    # 키보드가 뜨면(비주얼 뷰포트가 줄면) 다 뜬 뒤 키보드 위의 높이를 기억한다
+    page.evaluate("() => localStorage.removeItem('bible-keyboard-height')")
+    page.locator("#tab-search-input").focus()
+    page.evaluate("""() => {
+        Object.defineProperty(window.visualViewport, 'height', { configurable: true, get: () => 500 });
+        window.visualViewport.dispatchEvent(new Event('resize'));
+    }""")
+    assert page.evaluate(overlap) == "344px"
+    page.wait_for_function("() => !!localStorage.getItem('bible-keyboard-height')", timeout=3_000)
+    assert page.evaluate("() => JSON.parse(localStorage.getItem('bible-keyboard-height'))") == {"w": 390, "vv": 500}
+
+
 def test_scroll_collapse_and_home_expands_without_nav(mobile_context):
     """아래로 스크롤 → #tab-dock.collapsed. 축소 상태 홈 탭 = 펼치기(홈 이동 아님)."""
     page = mobile_context.new_page()

@@ -409,6 +409,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | `localStorage` | `bible-search-history` | 검색 이력 (LRU, [ADR-014](decisions/014-search-history.md)) | 로컬 전용 |
 | `localStorage` | `bible-bookmark-sort`, `bible-bookmark-sort-dir`, `bible-bookmark-viewed` | 북마크 정렬 기준, 방향, 최근 본 시각 | 로컬 전용 |
 | `localStorage` | `bible-install-nudge`, `bible-cite-coachmark-seen` | 설치 안내 넛지 상태, 인용 칩 안내를 봤는지 여부 | 로컬 전용 |
+| `localStorage` | `bible-keyboard-height` | 휴대폰 검색 입력창이 키보드보다 먼저 올라갈 높이. 마지막으로 연 키보드 위에 남은 높이와 그때의 화면 폭(`{w, vv}`)이다([ADR-030](decisions/030-morphing-tab-bar.md) §6) | 로컬 전용 |
 | `localStorage` | `bible-offline-save` | 설정 「오프라인 저장」의 스위치(`1`이면 켬, [ADR-045](decisions/045-offline-save.md) §7) | 로컬 전용 |
 | `sessionStorage` | `bible-drive-redirect-state-pkce` | PKCE `{nonce, verifier, returnTo, ts, flow}` (10분 TTL) | 임시 |
 | `sessionStorage` | `bible-drive-back-nav-context` | 리디렉션 전의 기록 길이 (돌아온 뒤 뒤로 가기 보정) | 임시 |
