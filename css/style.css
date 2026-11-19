@@ -3027,8 +3027,8 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-2) var(--space-4) var(--space-3);
-  border-bottom: 1px solid var(--border);
+  /* 아래쪽은 구분 탭 줄과 가깝게 둔다. 머리와 탭이 함께 시트의 고정된 윗부분이다 */
+  padding: var(--space-2) var(--space-4) var(--space-1);
 }
 
 .book-filter-title {
@@ -3070,24 +3070,34 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  /* No padding-top: the first sticky section title pins flush to the head
-     border. A padding-top here left an uncovered sliver above the sticky
-     title where scrolling rows peeked through. */
-  padding: 0 0 var(--space-3);
+  padding: var(--space-4) 0;
 }
 
-.book-filter-section-title {
-  position: sticky;
-  top: 0;
+/* 구분 탭 줄(ADR-033 「책 선택 시트의 구분 탭」). 머리 아래에 늘 있고, 아래의 선이 스크롤되는 칩과 나눈다. 모양은 성서 목록의
+   구분 탭(.division-tabs, .division-tab, .division-tab-indicator)을 그대로 쓰고, 여기서는 자리와 단추의 기본 모양만 고친다. */
+.book-filter-tabbar {
+  padding: 0 var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+/* 두 클래스로 쓴다: 뒤에 오는 .division-tabs의 위 여백(성서 목록 머리 아래의 간격)을 이겨야 한다 */
+.division-tabs.book-filter-tabs {
   margin: 0;
-  /* Generous vertical padding so the section label reads as a clear divider
-     rather than crowding the rows above/below it. */
-  padding: var(--space-3) var(--space-4) var(--space-2);
-  font-size: var(--font-sm);
-  font-weight: 600;
-  color: var(--text-secondary);
-  background: var(--bg);
-  z-index: 1;
+}
+
+.book-filter-tab {
+  min-height: var(--touch-target);
+  font-family: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 그 탭에서 고른 권수(「신약 2」). 탭 이름과 같은 크기로, 강조 색으로 보인다 */
+.book-filter-tab-count {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Chip grid — books wrap as compact multi-select chips so a whole division fits
@@ -3098,7 +3108,7 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  padding: var(--space-1) var(--space-4) var(--space-3);
+  padding: 0 var(--space-4);
 }
 .book-filter-list > li { display: contents; }
 

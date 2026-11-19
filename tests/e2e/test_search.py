@@ -49,6 +49,78 @@ def test_book_filter_sheet_closes_with_its_close_button(ctx_name, request):
     assert page.evaluate("document.activeElement.classList.contains('token-funnel')")
 
 
+def _sheet_tabs(page):
+    """책 선택 시트의 탭마다 글(스크린 리더가 읽는 이름), 고른 탭인지, 그 탭의 칩이 보이는지를 돌려준다."""
+    return page.evaluate("""() => [...document.querySelectorAll('#book-filter-sheet [role=tab]')].map((t) => ({
+        name: t.textContent,
+        selected: t.getAttribute('aria-selected') === 'true',
+        tabindex: t.getAttribute('tabindex'),
+        shown: !document.getElementById(t.getAttribute('aria-controls')).hidden,
+    }))""")
+
+
+@pytest.mark.parametrize("ctx_name", ["mobile_context", "desktop_context"])
+def test_book_filter_sheet_tabs(ctx_name, request):
+    """책 선택 시트는 구분마다 탭이다(구약, 외경, 신약, 성시). 열면 고른 책이 있는 첫 탭을 보이고, 고른 책이 있는 탭은 이름 뒤에 권수를
+    보인다(스크린 리더는 「신약 1권 선택」). 화살표, Home, End로 탭을 옮기고, 「초기화」는 모든 탭의 책을 비운다(ADR-033 「책 선택 시트의
+    구분 탭」, 사용자 결정 2026-11-19). 전에는 모든 구분을 한 목록에 이어 그려 신약과 성시를 고르려면 한참 스크롤해야 했다."""
+    page = request.getfixturevalue(ctx_name).new_page()
+    page.goto(f"{BASE_URL}/search?q={quote('사랑')}&in=mark&in=lps")
+    funnel = page.locator(".token-funnel:visible").first
+    funnel.wait_for(timeout=20_000)
+    funnel.click()
+    page.wait_for_selector("#book-filter-sheet:not([hidden]) [role=tab]", timeout=20_000)
+    tabs = _sheet_tabs(page)
+    assert [t["name"] for t in tabs] == ["구약", "외경", "신약 1권 선택", "성시 1권 선택"], tabs
+    assert [t["selected"] for t in tabs] == [False, False, True, False], tabs
+    assert [t["shown"] for t in tabs] == [False, False, True, False], tabs
+    assert [t["tabindex"] for t in tabs] == ["-1", "-1", "0", "-1"], tabs
+
+    tab = lambda name: page.locator("#book-filter-sheet [role=tab]", has_text=name)
+    tab("구약").click()
+    page.locator('#book-filter-sheet .book-filter-option[data-book-id="gen"]').click()
+    assert _sheet_tabs(page)[0]["name"] == "구약 1권 선택"
+    assert page.locator("#book-filter-sheet .book-filter-apply").text_content() == "적용 (3)"
+
+    # 화살표는 옆 탭으로 가며 그 탭을 바로 보이고, 끝에서는 처음으로 돌아간다. Home과 End는 처음과 끝 탭이다
+    tab("구약").focus()
+    page.keyboard.press("End")
+    assert page.evaluate("document.activeElement.id") == "book-filter-tab-liturgical"
+    assert [t["shown"] for t in _sheet_tabs(page)] == [False, False, False, True]
+    page.keyboard.press("ArrowRight")
+    assert page.evaluate("document.activeElement.id") == "book-filter-tab-old_testament"
+    page.keyboard.press("ArrowLeft")
+    page.keyboard.press("ArrowLeft")
+    assert page.evaluate("document.activeElement.id") == "book-filter-tab-new_testament"
+    page.keyboard.press("Home")
+    assert [t["selected"] for t in _sheet_tabs(page)] == [True, False, False, False]
+
+    page.locator("#book-filter-sheet .book-filter-reset").click()
+    assert [t["name"] for t in _sheet_tabs(page)] == ["구약", "외경", "신약", "성시"]
+    assert page.locator("#book-filter-sheet .book-filter-apply").text_content() == "적용"
+
+    # 고른 책이 없으면 다시 열 때 첫 탭(구약)이다
+    page.locator(".book-filter-close").click()
+    page.wait_for_selector("#book-filter-sheet", state="hidden")
+    page.goto(f"{BASE_URL}/search?q={quote('사랑')}")
+    funnel = page.locator(".token-funnel:visible").first
+    funnel.wait_for(timeout=20_000)
+    funnel.click()
+    page.wait_for_selector("#book-filter-sheet:not([hidden]) [role=tab]", timeout=20_000)
+    assert [t["selected"] for t in _sheet_tabs(page)] == [True, False, False, False]
+
+
+def _show_book_tab(page, book_id):
+    """책 선택 시트에서 `book_id`의 칩이 있는 구분 탭으로 바꾸고 그 칩을 돌려준다. 칩은 자기 탭에서만 보인다(ADR-033 「책 선택 시트의
+    구분 탭」)."""
+    opt = page.locator(f'#book-filter-sheet .book-filter-option[data-book-id="{book_id}"]')
+    opt.wait_for(state="attached", timeout=20_000)
+    panel_id = opt.evaluate("(o) => o.closest('[role=tabpanel]').id")
+    page.locator(f'#book-filter-sheet [role=tab][aria-controls="{panel_id}"]').click()
+    opt.wait_for(timeout=5_000)
+    return opt
+
+
 def _apply_books_to_typed_query(page, ctx_name, typed, book_id):
     """검색 입력 칸에 `typed`를 치고 Enter는 누르지 않은 채, 깔때기로 책 선택 시트를 열어 `book_id`를 고르고 「적용」을 누른다.
     휴대폰은 탭 바의 검색 입력(`#tab-search-dock`), 데스크톱은 상단 바의 검색 입력(`#search-bar`)이다. 그 입력 칸의 선택자를 돌려준다."""
@@ -62,8 +134,7 @@ def _apply_books_to_typed_query(page, ctx_name, typed, book_id):
         bar, field = "#search-bar", "#search-input"
     page.locator(field).fill(typed)
     page.locator(f"{bar} .token-funnel").click()
-    page.wait_for_selector(f'#book-filter-sheet:not([hidden]) .book-filter-option[data-book-id="{book_id}"]', timeout=20_000)
-    page.locator(f'#book-filter-sheet .book-filter-option[data-book-id="{book_id}"]').click()
+    _show_book_tab(page, book_id).click()
     page.locator("#book-filter-sheet .book-filter-apply").click()
     return field
 
@@ -93,14 +164,14 @@ def test_book_filter_sheet_takes_five_books(desktop_context):
     assert state["apply"] == "적용 (5)", state
 
     # Playwright는 aria-disabled인 요소를 누르지 않는다. 사람은 누를 수 있으므로 force로 누른다
-    opt("matt").click(force=True)
+    _show_book_tab(page, "matt").click(force=True)
     assert opt("matt").get_attribute("aria-selected") == "false"
     assert page.locator("#book-filter-sheet .book-filter-apply").text_content() == "적용 (5)"
 
-    opt("deut").click()
+    _show_book_tab(page, "deut").click()
     assert page.locator("#book-filter-sheet .book-filter-limit").text_content() == ""
     assert page.locator('#book-filter-sheet .book-filter-option[aria-disabled="true"]').count() == 0
-    opt("matt").click()
+    _show_book_tab(page, "matt").click()
     assert opt("matt").get_attribute("aria-selected") == "true"
 
 
@@ -142,7 +213,7 @@ def test_book_filter_apply_is_blocked_past_five(desktop_context):
     # Playwright는 aria-disabled인 요소를 누르지 않는다. 사람은 누를 수 있으므로 force로 누른다
     apply.click(force=True)
     assert page.url == url and page.locator("#book-filter-sheet").is_visible()
-    page.locator('#book-filter-sheet .book-filter-option[data-book-id="matt"]').click()
+    _show_book_tab(page, "matt").click()
     assert apply.get_attribute("aria-disabled") is None
     apply.click()
     page.wait_for_selector(".search-count", timeout=20_000)
@@ -261,8 +332,7 @@ def test_book_filter_apply_from_the_in_page_bar_focuses_its_new_funnel(typed, mo
     if typed is not None:
         page.locator(f"{bar} #search-inpage-input").fill(typed)
     page.locator(f"{bar} .token-funnel").click()
-    page.wait_for_selector('#book-filter-sheet:not([hidden]) .book-filter-option[data-book-id="mark"]', timeout=20_000)
-    page.locator('#book-filter-sheet .book-filter-option[data-book-id="mark"]').click()
+    _show_book_tab(page, "mark").click()
     page.locator("#book-filter-sheet .book-filter-apply").click()
     # 새 결과(모두 마르코의 복음서)가 그려질 때까지 기다린다. 옛 결과의 머리(.search-count)가 남아 있을 수 있다
     page.wait_for_function("""() => {
@@ -1630,15 +1700,15 @@ def test_psalter_verse_reference_and_book_name(page):
 
 @pytest.mark.parametrize("ctx_name", ["mobile_context", "desktop_context"])
 def test_psalter_book_filter_group_and_chips(ctx_name, request):
-    """책 선택 시트의 마지막 묶음은 「성시」(전례시편, 송가)다. 고르면 다른 책과 같이 칩이 되고 최근 검색에 범위와 함께 남는다. 입력 칸의
+    """책 선택 시트의 마지막 탭은 「성시」(전례시편, 송가)다. 고르면 다른 책과 같이 칩이 되고 최근 검색에 범위와 함께 남는다. 입력 칸의
     `in:송가`도 칩이 된다(ADR-046 §2)."""
     page = request.getfixturevalue(ctx_name).new_page()
     _apply_books_to_typed_query(page, ctx_name, "목자", "lps")
     page.wait_for_selector(".search-count", timeout=20_000)
     _wait_search_done(page)
-    titles = page.locator("#book-filter-sheet .book-filter-section-title").all_text_contents()
-    assert titles[-1] == "성시", titles
-    last = page.locator("#book-filter-sheet .book-filter-section").last
+    tabs = page.locator("#book-filter-sheet [role=tab]").all_text_contents()
+    assert tabs[-1] == "성시 1권 선택", tabs
+    last = page.locator("#book-filter-sheet [role=tabpanel]").last
     assert last.locator(".book-filter-name").all_text_contents() == ["전례시편", "송가"]
     state = page.evaluate("""() => ({
         books: new URLSearchParams(location.search).getAll('in'),
