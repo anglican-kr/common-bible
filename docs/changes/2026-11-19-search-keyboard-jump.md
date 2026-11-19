@@ -1,4 +1,5 @@
 ---
+pr: 611
 date: 2026-11-19
 branch: fix/search-keyboard-jump
 title: "fix: 검색 입력창을 누를 때 화면이 튀지 않게 하기"
