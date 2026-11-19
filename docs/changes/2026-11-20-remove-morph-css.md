@@ -1,4 +1,5 @@
 ---
+pr: 614
 date: 2026-11-20
 branch: chore/remove-morph-css
 title: "refactor: 쓰이지 않는 하단 검색 입력창 CSS 제거"
