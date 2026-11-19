@@ -1,4 +1,5 @@
 ---
+pr: 615
 date: 2026-11-20
 branch: feat/search-book-pills
 title: "feat: 검색할 책을 검색창 아래 알약으로"
