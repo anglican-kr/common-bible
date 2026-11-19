@@ -358,12 +358,27 @@ $searchInput?.addEventListener("focus", () => {
 });
 $searchInput?.addEventListener("blur", () => setKeyboardState(false));
 
-// ⊗ 지우기 — 검색어만 비우고 입력 유지(포커스·키보드 유지). 결과 화면이면 빈
-// 검색 뷰로 되돌려 기본 안내(빈 상태)를 보인다.
+// ⊗ 지우기 — 검색어만 비운다. 결과 화면이면 빈 검색 뷰(최근 검색)로 되돌린다. 키보드를 새로 띄우지 않는다
+// (ADR-030 §3, 사용자 요청 2026-11-19): 입력 중이라 키보드가 떠 있었으면 입력에 포커스를 남기고, 결과를 보던
+// 중처럼 키보드가 없었으면 같은 pill의 깔때기(책 선택)로 포커스를 옮긴다. 지우기 단추는 숨겨지므로 포커스가
+// 그 자리에 남을 수 없다(ADR-033 D3의 「적용」과 같은 자리).
+/** Whether the input had focus (keyboard up) when the clear button was pressed. Read on pointerdown, before a
+ * tap can move focus; a keyboard press (Enter/Space on the button) leaves it false. */
+let clearWhileTyping = false;
+$searchClear?.addEventListener("pointerdown", () => { clearWhileTyping = document.activeElement === $searchInput; });
 $searchClear?.addEventListener("click", () => {
   if (!$searchInput) return;
+  const typing = clearWhileTyping;
+  clearWhileTyping = false;
   $searchInput.value = "";
   syncClearBtn();
+  if (typing) {
+    $searchInput.focus({ preventScroll: true });
+  } else {
+    const funnel = /** @type {HTMLElement | null} */ (document.querySelector("#tab-search-dock .token-funnel"));
+    if (funnel) funnel.focus({ preventScroll: true });
+    else $searchInput.blur();
+  }
   // Drop the query but KEEP the book-picker scope (in=) so clearing text in the
   // pill doesn't silently remove book tokens the header/in-page clears would
   // keep — navigateSearch preserves filterBooks (ADR-033 개정 B, Bugbot).
@@ -371,7 +386,6 @@ $searchClear?.addEventListener("click", () => {
     if (W.navigateSearch) W.navigateSearch({ q: "" });
     else W.navigate("/search");
   }
-  $searchInput.focus({ preventScroll: true });
 });
 
 // 닫기(X) — 키보드가 떠 있을 때만 보이며(setKeyboardState), 키보드만 내린다.

@@ -108,6 +108,33 @@ def test_search_button_morphs_to_input(mobile_context):
     )
 
 
+def test_clear_keeps_the_keyboard_as_it_was(mobile_context):
+    """검색어 지우기(⊗)는 키보드를 새로 띄우지 않는다. 결과를 보던 중(입력에 포커스가 없을 때) 지우면 최근 검색 화면으로 돌아가고
+    포커스는 같은 pill의 깔때기로 간다. 입력 중(키보드가 떠 있을 때) 지우면 입력에 남는다(ADR-030 §3, 사용자 요청 2026-11-19)."""
+    page = mobile_context.new_page()
+    page.goto(BASE_URL)
+    wait_app_ready(page)
+    page.locator("#tab-search").click()
+    page.wait_for_selector("#tab-search-input:not([hidden])", timeout=5_000)
+    page.fill("#tab-search-input", "하계재")
+    page.press("#tab-search-input", "Enter")
+    page.wait_for_function("() => new URLSearchParams(location.search).get('q') === '하계재'", timeout=10_000)
+    page.wait_for_function("() => document.activeElement?.id !== 'tab-search-input'", timeout=5_000)
+
+    page.locator("#tab-search-clear").click()
+    page.wait_for_function("() => !new URLSearchParams(location.search).get('q')", timeout=5_000)
+    assert page.input_value("#tab-search-input") == ""
+    assert page.evaluate(
+        "() => !!document.activeElement?.matches('#tab-search-dock .token-funnel')"
+    ), page.evaluate("() => document.activeElement?.outerHTML.slice(0, 120)")
+
+    # 입력 중에 지우면 입력에 남아 바로 새 검색어를 친다
+    page.fill("#tab-search-input", "사랑")
+    page.locator("#tab-search-clear").click()
+    assert page.evaluate("() => document.activeElement?.id") == "tab-search-input"
+    assert page.input_value("#tab-search-input") == ""
+
+
 def test_scroll_collapse_and_home_expands_without_nav(mobile_context):
     """아래로 스크롤 → #tab-dock.collapsed. 축소 상태 홈 탭 = 펼치기(홈 이동 아님)."""
     page = mobile_context.new_page()
