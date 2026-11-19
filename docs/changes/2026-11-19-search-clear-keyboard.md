@@ -1,4 +1,5 @@
 ---
+pr: 610
 date: 2026-11-19
 branch: fix/search-clear-keyboard
 title: "fix: 검색어를 지울 때 키보드를 새로 띄우지 않기"
