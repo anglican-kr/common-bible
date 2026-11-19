@@ -6,10 +6,12 @@
  *
  * Protocol:
  *   Main → Worker:
- *     { type: "init", metaUrl: "data/search-meta.json",
+ *     { type: "init", metaUrl: "data/search-meta.json", booksUrl: "data/books.json",
  *       chunks: [{ name, url }, ...],
  *       lectionaryUrl: "data/lectionary/search-lectionary.json",
  *       localUrl: "data/lectionary/local-observances.json" }
+ *       — booksUrl: the book list, read for the 송가 names only (`titles`, ADR-047 §5). Optional: without it, or
+ *         when it fails, 송가 results carry no name.
  *       — lectionaryUrl is optional: without it the worker never loads the
  *         lectionary index and `lectionary` stays null (ADR-044).
  *       — localUrl is optional: the parish table, loaded with the lectionary index.
@@ -52,7 +54,6 @@
 /**
  * @typedef BookMeta
  * @property {string} ko
- * @property {{ [chapter: string]: string }} [titles]  a chapter's own name — 송가 (「모세송가」, ADR-046 §4)
  *
  * @typedef SearchMeta
  * @property {{ [alias: string]: string }} aliases
@@ -106,6 +107,7 @@
  * @typedef InitMessage
  * @property {"init"} type
  * @property {string} metaUrl
+ * @property {string} [booksUrl]
  * @property {ChunkConfig[]} chunks
  * @property {string} [lectionaryUrl]
  * @property {string} [localUrl]
@@ -258,6 +260,11 @@ let meta = null;
 let metaPromise = null;
 /** @type {string | null} */
 let metaUrl = null;
+/** @type {string | null} */
+let booksUrl = null;
+// 송가 이름(「모세송가」) — books.json 송가 항목의 `titles`, 책 id마다. 앱은 송가 이름을 이 파일에서만 읽는다(ADR-047 §5).
+/** @type {{ [bookId: string]: { [chapter: string]: string } }} */
+let chapterTitles = {};
 
 /** @type {{ [name: string]: LoadedChunk }} */
 let loadedChunks = {};
@@ -312,12 +319,22 @@ async function loadMeta() {
   if (metaPromise) return metaPromise;
   // metaUrl is set by the "init" message before loadMeta() ever runs.
   const url = /** @type {string} */ (metaUrl);
-  metaPromise = fetch(url)
-    .then((r) => {
-      if (!r.ok) throw new Error("meta 로드 실패: " + r.status);
-      return r.json();
-    })
-    .then((data) => { meta = /** @type {SearchMeta} */ (data); });
+  const metaFetch = fetch(url).then((r) => {
+    if (!r.ok) throw new Error("meta 로드 실패: " + r.status);
+    return r.json();
+  });
+  // 송가 이름은 books.json에서 읽는다(ADR-047 §5). 받지 못해도 검색은 하고, 송가 결과에 이름만 없다.
+  const titlesFetch = booksUrl
+    ? fetch(booksUrl)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((/** @type {Array<{ id: string, titles?: { [chapter: string]: string } }>} */ books) =>
+        Object.fromEntries(books.filter((b) => b.titles).map((b) => [b.id, /** @type {{ [chapter: string]: string }} */ (b.titles)])))
+      .catch(() => ({}))
+    : Promise.resolve({});
+  metaPromise = Promise.all([metaFetch, titlesFetch]).then(([data, titles]) => {
+    chapterTitles = titles;
+    meta = /** @type {SearchMeta} */ (data);
+  });
   return metaPromise;
 }
 
@@ -685,13 +702,13 @@ function tryVerseRef(query) {
 
 /**
  * The chapter's own name, for a book whose chapters are named rather than numbered — 송가 (「즈가리야 송가」, ADR-046
- * §4; search-meta.json `books.cant.titles`). null for every other book.
+ * §4; books.json `titles`, ADR-047 §5). null for every other book.
  * @param {string} bookId
  * @param {number} chapter
  * @returns {string | null}
  */
 function chapterTitle(bookId, chapter) {
-  const titles = /** @type {SearchMeta} */ (meta).books[bookId]?.titles;
+  const titles = chapterTitles[bookId];
   return titles && Object.hasOwn(titles, String(chapter)) ? titles[String(chapter)] : null;
 }
 
@@ -1401,6 +1418,7 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
 
   if (msg.type === "init") {
     metaUrl = msg.metaUrl;
+    booksUrl = msg.booksUrl || null;
     chunkConfig = msg.chunks;
     // A new lectionary address drops what the old one loaded or was loading.
     const nextLectionaryUrl = msg.lectionaryUrl || null;

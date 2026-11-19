@@ -38,8 +38,10 @@ function loadSearchPure() {
   const prelude = `
     let meta = null;
     let loadedChunks = {};
+    let chapterTitles = {};
     function _setMeta(m) { meta = m; }
     function _setChunks(c) { loadedChunks = c; }
+    function _setTitles(t) { chapterTitles = t; }
   `;
   // LECTIONARY_PURE uses REF_CHAPTER_END from SEARCH_PURE, so both run as one script.
   vm.runInContext(
@@ -363,9 +365,11 @@ const PSALTER_META = {
   books: {
     ps: { ko: "시편" },
     lps: { ko: "전례시편" },
-    cant: { ko: "성무일과 송가", titles: { "1": "모세송가", "11": "즈가리야 송가" } },
+    cant: { ko: "성무일과 송가" },
   },
 };
+// 송가 이름은 검색 메타 파일이 아니라 books.json의 `titles`에서 온다(ADR-047 §5)
+const PSALTER_TITLES = { cant: { "1": "모세송가", "11": "즈가리야 송가" } };
 const PSALTER_CHUNKS_DATA = {
   ot: { books: ["ps"], bArr: [0, 0], cArr: [23, 23], vArr: [1, 2], tArr: ["야훼는 나의 목자", "푸른 풀밭에 누워 놀게 하시고"] },
   lit: {
@@ -400,6 +404,7 @@ test("groupedResults: 책 범위가 성시의 책뿐이면 성서 본문은 없�
 
 test("paginate: 송가는 송가 이름(title)을 함께 넘긴다(ADR-046 §4)", () => {
   ctx._setMeta(PSALTER_META);
+  ctx._setTitles(PSALTER_TITLES);
   const r = plain(ctx.paginate([
     { b: "cant", c: 11, v: 1, t: "주 이스라엘의" }, { b: "lps", c: 23, v: 1, t: "주님은" },
   ], 1, 10));
@@ -407,17 +412,20 @@ test("paginate: 송가는 송가 이름(title)을 함께 넘긴다(ADR-046 §4)"
     { b: "cant", c: 11, v: 1, t: "주 이스라엘의", bookNameKo: "성무일과 송가", title: "즈가리야 송가" },
     { b: "lps", c: 23, v: 1, t: "주님은", bookNameKo: "전례시편" },
   ]);
+  ctx._setTitles({});
   ctx._setMeta(META);
 });
 
 test("tryVerseRef, tryBookOnly: 전례시편과 송가도 책 이름으로 읽고, 송가는 장마다 이름을 붙인다(ADR-046 §4, §5)", () => {
   ctx._setMeta(PSALTER_META);
+  ctx._setTitles(PSALTER_TITLES);
   assert.deepEqual(plain(ctx.tryVerseRef("전례시편 23:1")), { bookId: "lps", bookNameKo: "전례시편", parts: [{ chapter: 23, verses: "1" }] });
   assert.deepEqual(plain(ctx.tryVerseRef("송가 11:1-3")),
     { bookId: "cant", bookNameKo: "성무일과 송가", parts: [{ chapter: 11, verses: "1-3", title: "즈가리야 송가" }] });
   assert.deepEqual(plain(ctx.tryVerseRef("시편 23")).bookId, "ps", "시편은 공동번역 시편이다");
   assert.deepEqual(plain(ctx.tryBookOnly("송가")), { bookId: "cant", bookNameKo: "성무일과 송가", title: "모세송가" });
   assert.deepEqual(plain(ctx.tryBookOnly("전례시편")), { bookId: "lps", bookNameKo: "전례시편" });
+  ctx._setTitles({});
   ctx._setMeta(META);
 });
 
@@ -1046,6 +1054,40 @@ test("메시지: 성시 색인을 받지 못해도 성서 본문을 찾고, 다�
   assert.equal(second.total, 1);
   assert.deepEqual(second.psalter.results.map((r) => [r.b, r.c, r.v]), [["isa", 1, 1]]);
   assert.equal(second.psalter.total, 1);
+});
+
+// 송가 이름은 books.json에서만 읽는다(ADR-047 §5). 검색 메타 파일에는 이름이 없다.
+const CANT_FILES = {
+  meta: { aliases: { "송가": "cant" }, books: { cant: { ko: "성무일과 송가" } } },
+  nt: { books: [], b: [], c: [], v: [], t: [] },
+  lit: { books: ["cant"], b: [[0, 1]], c: [11], v: [1], t: ["주 이스라엘의 하느님을 찬미하여라."] },
+  books: [{ id: "gen", name_ko: "창세기" }, { id: "cant", name_ko: "성무일과 송가", titles: { "11": "즈가리야 송가" } }],
+};
+const CANT_INIT = { type: "init", metaUrl: "meta", booksUrl: "books", chunks: [{ name: "nt", url: "nt" }, { name: "lit", url: "lit" }] };
+
+test("메시지: 송가 이름은 books.json에서 읽어 결과와 구절 표기에 싣는다(ADR-047 §5)", async () => {
+  const w = startWorker(CANT_FILES);
+  await w.send(CANT_INIT);
+  await flush();
+  assert.ok(w.fetched.includes("books"));
+  await w.send(search("찬미하여라"));
+  await flush();
+  const [r] = w.results();
+  assert.deepEqual(r.psalter.results.map((x) => [x.c, x.v, x.title]), [[11, 1, "즈가리야 송가"]]);
+  await w.send(search("송가 11:1"));
+  await flush();
+  assert.deepEqual(plain(w.results()[1].refMatch.parts), [{ chapter: 11, verses: "1", title: "즈가리야 송가" }]);
+});
+
+test("메시지: books.json을 받지 못해도 검색은 하고, 송가 결과에 이름만 없다", async () => {
+  const w = startWorker({ ...CANT_FILES, books: "fail" });
+  await w.send(CANT_INIT);
+  await flush();
+  await w.send(search("찬미하여라"));
+  await flush();
+  const [r] = w.results();
+  assert.deepEqual(r.psalter.results.map((x) => [x.c, x.v, x.title]), [[11, 1, undefined]]);
+  assert.equal(w.posted.filter((m) => m.type === "error").length, 0);
 });
 
 // 책은 5권까지(ADR-033 「책은 5권까지」). 책 칩과 in:을 합쳐 세고, 넘으면 일부만 찾지 않고 아무것도 찾지 않는다(사용자 결정 2026-11-18).

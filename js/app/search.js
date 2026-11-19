@@ -93,6 +93,8 @@ function ensureSearchWorker() {
   searchWorker.postMessage({
     type: "init",
     metaUrl: `${DATA_DIR}/search-meta.json`,
+    // 송가 이름은 책 목록에서 읽는다(ADR-047 §5). 앱 껍데기와 함께 저장해 두는 파일이라 오프라인에서도 있다
+    booksUrl: `${DATA_DIR}/books.json`,
     chunks: [
       { name: "nt", url: `${DATA_DIR}/search-nt.json` },
       { name: "dc", url: `${DATA_DIR}/search-dc.json` },

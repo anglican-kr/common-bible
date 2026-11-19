@@ -35,7 +35,7 @@
 /** @typedef {import("../types.js").CandidateCollects} CandidateCollects */
 /** @typedef {import("../types.js").BibleChapter} BibleChapter */
 
-import { loadChapter } from "./data-fetch.js";
+import { loadChapter, loadBooks, getBooksCache } from "./data-fetch.js";
 import {
   appendVersesWithAids, bindCopyAttribution, absentVerseNumbers,
   LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
@@ -50,7 +50,7 @@ import {
 
 const {
   _$, el, clearNode, emptyState, isModifiedClick, headerIcon, HEADER_ICON_PATHS, isFormerNorthChurch,
-  DESKTOP_LAYOUT_QUERY, isDesktopLayout, datePickerTrigger,
+  DESKTOP_LAYOUT_QUERY, isDesktopLayout, datePickerTrigger, chapterTitle,
 } = window.appHelpers;
 const { loadLectionaryTrack, saveLectionaryTrack, loadLectionaryCardsFolded, saveLectionaryCardsFolded, loadLectionaryAltShow, loadParish, loadBaptismalSaint } = window.appStorage;
 
@@ -998,13 +998,6 @@ function wantsGloria(slot, lastChapter) {
   return false;
 }
 
-/** 송가 장 제목의 한국어 부분 — 「즈가리야 송가 Benedictus Dominus Deus」 → 「즈가리야 송가」. */
-function canticleTitleOf(/** @type {BibleChapter | null | undefined} */ chapter) {
-  const t = chapter && typeof chapter.chapter_title === "string" ? chapter.chapter_title : "";
-  const ko = t.replace(/\s*[A-Za-z,.;:' ]+$/, "").trim();
-  return ko || t;
-}
-
 /**
  * 대체 독서인가 — 기본 독서가 대축일, 주요축일, 고유 독서가 있는 축일인 날에 그날의 평일, 주일 독서다. 설정 「대체 독서 표시」를 끄면 전례독서 목록에서
  * 숨긴다(사용자 결정 2026-11-05, 2026-11-06, ADR-041 §4). 격자만 드니 사계재, 옮겨 지킬 수 있는 축일, 저녁 전례, 추수감사주일처럼 이름 있는 줄은 늘 보이고,
@@ -1284,9 +1277,14 @@ async function loadSlotChapters(slots) {
   for (const s of slots) for (const r of s.refs || []) needed.set(`${s.bookId}:${r.chapter}`, { bookId: s.bookId, chapter: r.chapter });
   /** @type {Map<string, BibleChapter | null>} */
   const out = new Map();
-  await Promise.all([...needed.entries()].map(async ([key, { bookId, chapter }]) => {
-    out.set(key, await cachedChapter(bookId, chapter));
-  }));
+  // 송가 이름은 책 목록에서 읽으므로(ADR-047 §5) 송가 슬롯이 있으면 책 목록도 함께 받아 둔다. 받지 못하면 이름만 없다
+  const books = slots.some((s) => s.bookId === "cant") ? loadBooks().catch(() => null) : null;
+  await Promise.all([
+    ...[...needed.entries()].map(async ([key, { bookId, chapter }]) => {
+      out.set(key, await cachedChapter(bookId, chapter));
+    }),
+    books,
+  ]);
   return out;
 }
 
@@ -1911,7 +1909,9 @@ function buildReading(m, slot, chapters) {
   const refs = slot.refs || [];
   const lastChapter = refs.length ? chapters.get(`${slot.bookId}:${refs[refs.length - 1].chapter}`) : null;
   if (slot.bookId === "cant") {
-    const title = canticleTitleOf(lastChapter);
+    // 송가 이름은 책 목록(books.json)에서만 읽는다(ADR-047 §5) — 장 화면, 검색과 같은 이름이다
+    const cantBook = (getBooksCache() ?? []).find((b) => b.id === "cant");
+    const title = refs.length ? chapterTitle(cantBook, refs[refs.length - 1].chapter) : null;
     if (title && !(slot.label || "").includes(title)) head.appendChild(el("span", { className: "lect-canticle" }, title));
     // 송가는 장 번호가 성서의 장이 아니다 — 출처는 송가 이름 + 고른 절(「즈가리야 송가 1-3」)
     if (title) section.setAttribute("data-canticle", title);

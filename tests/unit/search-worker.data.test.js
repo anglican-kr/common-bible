@@ -16,6 +16,15 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../..");
 const DATA = path.join(ROOT, "data");
+// The worker's state outside its code blocks: the meta file, the loaded chunks, and the 송가 names, which come from
+// books.json as the worker reads them (ADR-047 §5).
+const PRELUDE = "let meta = null; let loadedChunks = {}; let chapterTitles = {};"
+  + " function _setMeta(m) { meta = m; } function _setTitles(t) { chapterTitles = t; }";
+/** books.json `titles` per book id — what the worker builds from the book list. */
+function realTitles() {
+  const books = JSON.parse(fs.readFileSync(path.join(DATA, "books.json"), "utf8"));
+  return Object.fromEntries(books.filter((b) => b.titles).map((b) => [b.id, b.titles]));
+}
 const LECTIONARY = path.join(DATA, "lectionary");
 const haveData = fs.existsSync(LECTIONARY);
 
@@ -95,12 +104,13 @@ test("전례독서 표기를 검색창에 치면 저장된 장과 절로 읽는�
   vm.createContext(ctx);
   const worker = fs.readFileSync(path.join(ROOT, "js/search-worker.js"), "utf8");
   vm.runInContext(
-    `let meta = null; let loadedChunks = {}; function _setMeta(m) { meta = m; }\n${extractBlock("SEARCH_PURE", worker)}`,
+    `${PRELUDE}\n${extractBlock("SEARCH_PURE", worker)}`,
     ctx,
   );
   const verseSpec = fs.readFileSync(path.join(ROOT, "js/app/verse-spec.js"), "utf8");
   vm.runInContext(extractBlock("VERSE_SPEC", verseSpec), ctx);
   ctx._setMeta(JSON.parse(fs.readFileSync(path.join(DATA, "search-meta.json"), "utf8")));
+  ctx._setTitles(realTitles());
 
   const lastVerse = (bookId, chapter) =>
     ctx.chapterMaxVerse(JSON.parse(fs.readFileSync(path.join(DATA, "bible", `${bookId}-${chapter}.json`), "utf8")));
@@ -147,11 +157,11 @@ function loadLectionarySearch() {
   vm.createContext(ctx);
   const worker = fs.readFileSync(path.join(ROOT, "js/search-worker.js"), "utf8");
   vm.runInContext(
-    `let meta = null; let loadedChunks = {}; function _setMeta(m) { meta = m; }\n`
-      + `${extractBlock("SEARCH_PURE", worker)}\n${extractBlock("LECTIONARY_PURE", worker)}`,
+    `${PRELUDE}\n${extractBlock("SEARCH_PURE", worker)}\n${extractBlock("LECTIONARY_PURE", worker)}`,
     ctx,
   );
   ctx._setMeta(readJson(path.join(DATA, "search-meta.json")));
+  ctx._setTitles(realTitles());
   const raw = readJson(path.join(LECTIONARY, "search-lectionary.json"));
   return { ctx, raw, index: ctx.buildLectionarySearchIndex(raw) };
 }
