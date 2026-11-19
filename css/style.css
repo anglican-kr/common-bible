@@ -2211,6 +2211,20 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
    views.js measureTitleCompactness가 들어갈 때까지 붙인다. 너비 320px에 글자 크기 24의 「마카베오하 15장」이 두 단계다. */
 #page-title.title-shrink-1 { font-size: var(--font-md); }
 #page-title.title-shrink-2 { font-size: var(--font-base); }
+
+/* 두 단계를 줄여도 들어가지 않으면 글자 끝을 말줄임표로 자르고 꺾쇠는 남긴다(사용자 결정 2026-11-19). 단추의 폭은 views.js가
+   적는다(북마크 단추 앞까지). 꺾쇠는 줄지 않는 flex 칸이라 잘리지 않는다. */
+#page-title.title-clip .title-picker-btn {
+  display: inline-flex;
+  align-items: center;
+}
+#page-title.title-clip .title-picker-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#page-title.title-clip .title-picker-btn::after { flex-shrink: 0; }
 @media (hover: none) and (pointer: coarse) {
   #page-title .title-text-full { display: none; }
   #page-title .title-text-mobile { display: inline; }

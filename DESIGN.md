@@ -182,7 +182,7 @@ iOS와 macOS에서는 `-apple-system`이 SF Pro로 해석되어 HIG의 네이티
 | `--font-sm` | `0.85rem` | 보조 텍스트, 검색 입력, 시트 본문 |
 | `--font-base` | `0.92rem` | UI 기본(탭, 설정 라벨) |
 | `--font-md` | `1rem` | 본문, 헤드라인 |
-| `--font-lg` | `1.15rem` | 페이지 제목(휴대폰의 장 제목이 들어가지 않으면 `--font-md`, `--font-base`로 줄인다. `architecture.md` §4.5) |
+| `--font-lg` | `1.15rem` | 페이지 제목(휴대폰의 장 제목이 들어가지 않으면 `--font-md`, `--font-base`로 줄이고, 그래도 모자라면 끝을 말줄임표로 자른다. `architecture.md` §4.5) |
 | `--font-xl` | `1.4rem` | 큰 제목 |
 | `--font-2xl` | `1.6rem` | 최상위 제목 |
 

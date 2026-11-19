@@ -102,12 +102,16 @@ function setTitleWithChapterPicker(book, currentCh) {
     "button",
     { className: "title-picker-btn", "aria-label": `${unit} 선택`, "aria-expanded": "false" }
   );
+  // 글자를 감싸 둔다. 휴대폰에서 두 단계를 줄여도 들어가지 않는 제목은 이 글자만 말줄임표로 자르고 꺾쇠(::after)는 남긴다
+  // (measureTitleCompactness, architecture.md §4.5).
+  const label = el("span", { className: "title-picker-label" });
   if (mobileText) {
-    btn.appendChild(el("span", { className: "title-text-full", "aria-hidden": "true" }, fullText));
-    btn.appendChild(el("span", { className: "title-text-mobile", "aria-hidden": "true" }, mobileText));
+    label.appendChild(el("span", { className: "title-text-full", "aria-hidden": "true" }, fullText));
+    label.appendChild(el("span", { className: "title-text-mobile", "aria-hidden": "true" }, mobileText));
   } else {
-    btn.appendChild(document.createTextNode(fullText));
+    label.appendChild(document.createTextNode(fullText));
   }
+  btn.appendChild(label);
 
   const popover = el("div", { className: "chapter-popover", role: "listbox", "aria-label": `${unit} 선택` });
   popover.hidden = true;
@@ -492,18 +496,31 @@ function applyTitleCompactness() {
   }
 }
 
+// The smaller fonts a phone chapter title steps down through (css: #page-title.title-shrink-1, -2), and the last resort
+// when even the smallest does not fit: the label cut with an ellipsis, the chevron kept (css: #page-title.title-clip).
+const TITLE_SHRINK_STEPS = ["title-shrink-1", "title-shrink-2"];
+const TITLE_CLIP = "title-clip";
+
+/** Undo the phone chapter title's fit (smaller fonts, the ellipsis and the width it was cut to). */
+function clearPhoneTitleFit() {
+  $title.classList.remove(...TITLE_SHRINK_STEPS, TITLE_CLIP);
+  const picker = /** @type {HTMLElement | null} */ ($title.querySelector(".title-picker-btn"));
+  if (picker) picker.style.maxWidth = "";
+}
+
 function measureTitleCompactness() {
   if (!$title) return;
   // Desktop top bar (ADR-043): the title is the middle cell of a three-cell row — fitted as a whole (fitTopBar).
   const bar = $title.parentElement ?? null;
   const barStyle = bar && typeof getComputedStyle === "function" ? getComputedStyle(bar) : null;
   if (bar && barStyle && barStyle.display === "grid") {
-    $title.classList.remove(...TITLE_SHRINK_STEPS);   // the phone's smaller fonts (below) — the desktop bar has its own steps
+    clearPhoneTitleFit();   // the phone's smaller fonts and ellipsis (below) — the desktop bar has its own steps
     fitTopBar(bar, barStyle);
     return;
   }
   bar?.classList.remove("tight");
-  $title.classList.remove("compact", ...TITLE_SHRINK_STEPS);
+  $title.classList.remove("compact");
+  clearPhoneTitleFit();
 
   // The title text is centered (text-align: center) while the home / bookmark /
   // settings buttons are absolute-positioned at the edges. A centered string
@@ -540,7 +557,7 @@ function measureTitleCompactness() {
 
   const full = /** @type {HTMLElement | null} */ ($title.querySelector(".title-text-full"));
   const mobile = $title.querySelector(".title-text-mobile");
-  if (full && mobile && full.parentElement) {
+  if (full && mobile) {
     const prevWs = full.style.whiteSpace;
     const prevDisplay = full.style.display;
     full.style.whiteSpace = "nowrap";
@@ -549,25 +566,29 @@ function measureTitleCompactness() {
     full.style.whiteSpace = prevWs;
     full.style.display = prevDisplay;
     // Picker button has a ~0.4em chevron after the label — allow for it. Plus some breathing room on each side.
-    const chevronAllowance = full.parentElement.classList.contains("title-picker-btn") ? 0.8 * rem : 0;
+    const chevronAllowance = full.closest(".title-picker-btn") ? 0.8 * rem : 0;
     if (naturalWidth + chevronAllowance > room - 2 * 0.8 * rem + 0.5) $title.classList.add("compact");
   }
 
   // 짧은 명칭으로 바꿔도, 또는 짧은 명칭이 없어 장 제목과 꺾쇠가 양옆 단추와 겹치면 들어갈 때까지 제목 글씨를 한 단계씩
   // 줄인다(사용자 결정 2026-11-19, architecture.md §4.5). 말줄임은 장 번호를 자르고 두 줄은 상단 바를 높인다. The
   // button's own width (label + chevron) is measured as drawn — the short name on a phone, the long one otherwise.
+  // The calendar's and the lectionary's date button shares the class (helpers.js datePickerTrigger) but sits in a row
+  // with ‹ › and 「오늘」, which this does not measure — only the chapter picker is fitted here.
   const picker = /** @type {HTMLElement | null} */ ($title.querySelector(".title-picker-btn"));
-  if (!picker) return;
+  if (!picker || picker.classList.contains("cal-title-btn")) return;
   const fits = () => pickerNaturalWidth(picker) <= room + 0.5;
+  if (fits()) return;
   for (const step of TITLE_SHRINK_STEPS) {
-    if (fits()) return;
     $title.classList.remove(...TITLE_SHRINK_STEPS);
     $title.classList.add(step);
+    if (fits()) return;
   }
+  // 두 단계를 줄여도 들어가지 않으면 제목 끝을 말줄임표로 자르고 꺾쇠는 남긴다(사용자 결정 2026-11-19). 320px보다 좁은
+  // 화면이나 앞으로 더 긴 이름에서다. 전체 제목은 단추를 누르기 전에도 문서 제목과 화면 전환 안내로 전한다.
+  $title.classList.add(TITLE_CLIP);
+  picker.style.maxWidth = `${Math.max(0, room)}px`;
 }
-
-// The smaller fonts a phone chapter title steps down through (css: #page-title.title-shrink-1, -2).
-const TITLE_SHRINK_STEPS = ["title-shrink-1", "title-shrink-2"];
 
 /** The chapter picker button's one-line width, its chevron included. @param {HTMLElement} picker */
 function pickerNaturalWidth(picker) {

@@ -955,6 +955,16 @@ test("setTitleWithChapterPicker: 송가 이름이 없으면 번호만 보이고 
   assert.equal(grid.children[1].textContent, "2");
 });
 
+test("setTitleWithChapterPicker: 제목 글자는 단추 안에 감싸 둔다 — 휴대폰에서 말줄임표로 자를 때 꺾쇠를 남기려는 것", () => {
+  const h = loadPopover();
+  const book = { id: "2macc", name_ko: "마카베오하", chapter_count: 15, has_prologue: false, division: "deuterocanon" };
+  h.setTitleWithChapterPicker(book, 15);
+  const btn = h.$title.children[0];
+  assert.equal(btn.children.length, 1);
+  assert.equal(btn.children[0].className, "title-picker-label");
+  assert.equal(btn.children[0].textContent, "마카베오하 15장");
+});
+
 test("setTitleWithChapterPicker: popover grid has chapter_count items", () => {
   const h = loadPopover();
   const book = { id: "gen", name_ko: "창세기", chapter_count: 5, has_prologue: false, division: "old_testament" };

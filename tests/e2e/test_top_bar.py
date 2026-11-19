@@ -491,3 +491,41 @@ def test_chapter_picker_stays_on_a_narrow_phone_screen(browser, path):
         assert box["left"] >= 0 and box["right"] <= box["width"], box
     finally:
         ctx.close()
+
+
+@pytest.mark.parametrize("width, path", [(280, "2macc/15"), (300, "cant/4")])
+def test_chapter_title_is_cut_with_an_ellipsis_when_two_steps_are_not_enough(browser, width, path):
+    """⑪ 두 단계를 줄여도 들어가지 않으면(320px보다 좁은 화면) 제목 끝을 말줄임표로 자르고 꺾쇠는 북마크 단추 앞에 남긴다
+    (사용자 결정 2026-11-19)."""
+    ctx = _phone(browser, width, 24)
+    try:
+        page = ctx.new_page()
+        page.goto(f"{BASE}/{path}")
+        page.wait_for_selector("article.chapter-text .verse", timeout=20_000)
+        page.wait_for_timeout(600)
+        f = _title_fit(page)
+        assert "title-shrink-2" in f["classes"] and "title-clip" in f["classes"], f
+        assert f["btnRight"] <= f["bmLeft"] + 0.5, f
+        assert f["btnHeight"] <= f["lineHeight"] * 1.5, f   # 한 줄
+        cut = page.evaluate("""() => { const l = document.querySelector('#page-title .title-picker-label');
+            return { cut: l.scrollWidth > l.clientWidth + 1, overflow: getComputedStyle(l).textOverflow,
+                     chevron: getComputedStyle(document.querySelector('#page-title .title-picker-btn'), '::after').display }; }""")
+        assert cut["cut"] and cut["overflow"] == "ellipsis" and cut["chevron"] != "none", cut
+    finally:
+        ctx.close()
+
+
+@pytest.mark.parametrize("path, ready", [("lectionary/2026-12-24", ".lect-day"), ("calendar/2027-12", ".cal-grid")])
+def test_date_row_title_is_not_fitted_like_a_chapter_title(browser, path, ready):
+    """⑪ 캘린더와 전례독서의 날짜 단추는 장 제목 단추와 같은 클래스(`title-picker-btn`)를 쓰지만, ‹ ›와 「오늘」이 함께 있는
+    다른 배치라 장 제목의 줄인 글씨나 말줄임을 받지 않는다(코드 리뷰 2026-11-19)."""
+    ctx = _phone(browser, 320, 24)
+    try:
+        page = ctx.new_page()
+        page.goto(f"{BASE}/{path}")
+        page.wait_for_selector(ready, timeout=20_000)
+        page.wait_for_timeout(600)
+        classes = page.evaluate("() => [...document.getElementById('page-title').classList]")
+        assert not any(c.startswith("title-shrink") or c == "title-clip" for c in classes), classes
+    finally:
+        ctx.close()
