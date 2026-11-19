@@ -1861,7 +1861,9 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   border-radius: var(--radius-xs);
   height: 28px;
   /* Same width as the rows' 11rem segment groups. A long saint title (up to 36 characters, 세례명) is cut with an
-     ellipsis in the closed box; the open list is the OS picker and shows it whole (ADR-041 §9). */
+     ellipsis in the closed box; the open list is the OS picker and shows it whole (ADR-041 §9).
+     iOS Safari doesn't draw text-overflow on a <select>: the closed box clips at its edge with no "…".
+     Kept as is (사용자 결정 2026-11-19, ADR-041 「검토한 대안 — 세례명 선택 상자의 폭」 B). */
   width: 11rem;
   overflow: hidden;
   white-space: nowrap;
