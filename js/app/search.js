@@ -2080,7 +2080,7 @@ function syncSearchFields() {
 /**
  * One division tab of the sheet: its tab button, the count shown after the
  * label, and the panel of chips it shows.
- * @typedef {{ div: string, tab: HTMLElement, count: HTMLElement, panel: HTMLElement }} BookFilterTab
+ * @typedef {{ tab: HTMLElement, count: HTMLElement, panel: HTMLElement }} BookFilterTab
  */
 
 /**
@@ -2090,7 +2090,6 @@ function syncSearchFields() {
  * @property {HTMLElement} body  Scrolls the shown tab's chips.
  * @property {Set<string>} working  Book ids chosen so far, across every tab.
  * @property {BookFilterTab[]} tabs  In tab order; refilled on every open.
- * @property {Map<string, string>} divOf  Book id → the division of its tab.
  * @property {() => void} syncSelection
  * @property {(idx: number) => void} showTab
  */
@@ -2165,8 +2164,6 @@ function ensureBookSheet() {
   const working = new Set();
   /** @type {BookFilterTab[]} */
   const tabs = [];
-  /** @type {Map<string, string>} */
-  const divOf = new Map();
   // The apply label, each tab's count of chosen books, and at the limit the
   // notice plus every unchosen book dimmed and unpressable (`aria-disabled`
   // keeps it focusable and read).
@@ -2175,8 +2172,7 @@ function ensureBookSheet() {
     // 고른 책이 있는 탭은 이름 뒤에 그 탭의 권수를 보이고, 스크린 리더는 「신약 2권 선택」으로 읽는다(사용자 결정 2026-11-19).
     // 앞의 공백이 있어야 접근 이름이 「신약2권」으로 붙지 않는다.
     for (const t of tabs) {
-      let n = 0;
-      for (const id of working) if (divOf.get(id) === t.div) n++;
+      const n = t.panel.querySelectorAll('.book-filter-option[aria-selected="true"]').length;
       clearNode(t.count);
       if (n) {
         t.count.appendChild(document.createTextNode(` ${n}`));
@@ -2213,7 +2209,10 @@ function ensureBookSheet() {
   tabbar.addEventListener("click", (e) => {
     const tab = /** @type {Element} */ (e.target).closest(".book-filter-tab");
     const idx = tabs.findIndex((t) => t.tab === tab);
-    if (idx >= 0) showTab(idx);
+    if (idx < 0) return;
+    showTab(idx);
+    // Safari does not focus a button on click; focus it so the arrow keys work from the tab just pressed.
+    tabs[idx].tab.focus();
   });
   // Arrow keys move to the next / previous tab (wrapping) and show it at once;
   // Home / End go to the first / last tab (WAI-ARIA tabs, automatic activation).
@@ -2315,7 +2314,7 @@ function ensureBookSheet() {
     syncSelection();
   });
 
-  _bookSheet = { overlay, tabbar, body, working, tabs, divOf, syncSelection, showTab };
+  _bookSheet = { overlay, tabbar, body, working, tabs, syncSelection, showTab };
   return _bookSheet;
 }
 
@@ -2331,11 +2330,10 @@ const PSALTER_DIVISION = "liturgical";
  * @param {BooksData} books
  */
 function renderBookFilterList(sheet, books) {
-  const { tabbar, body, working, tabs, divOf } = sheet;
+  const { tabbar, body, working, tabs } = sheet;
   clearNode(tabbar);
   clearNode(body);
   tabs.length = 0;
-  divOf.clear();
   // 성서 목록의 구분 탭 다음, 외경 차례 설정과 상관없이 맨 끝에 성시(전례시편과 송가)다(ADR-046 §2)
   const order = [...window.divisionOrder(), PSALTER_DIVISION];
   /** @type {Record<string, string>} */
@@ -2347,6 +2345,7 @@ function renderBookFilterList(sheet, books) {
   for (const div of order) {
     const inDiv = books.filter((b) => window.effectiveDivision(b) === div);
     if (!inDiv.length) continue;
+    const label = labels[div] ?? div;
     const tabId = `book-filter-tab-${div}`;
     const panelId = `book-filter-panel-${div}`;
     const count = el("span", { className: "book-filter-tab-count" });
@@ -2356,7 +2355,7 @@ function renderBookFilterList(sheet, books) {
       role: "tab",
       id: tabId,
       "aria-controls": panelId,
-    }, labels[div] ?? div, count);
+    }, label, count);
     tablist.appendChild(tab);
     const tabPanel = el("div", {
       className: "book-filter-panel",
@@ -2364,13 +2363,12 @@ function renderBookFilterList(sheet, books) {
       id: panelId,
       "aria-labelledby": tabId,
     });
-    for (const b of inDiv) divOf.set(b.id, div);
-    tabs.push({ div, tab, count, panel: tabPanel });
+    tabs.push({ tab, count, panel: tabPanel });
     const ul = el("ul", {
       className: "book-filter-list",
       role: "listbox",
       "aria-multiselectable": "true",
-      "aria-label": labels[div],
+      "aria-label": label,
     });
     for (const b of inDiv) {
       const li = el("li", { role: "presentation" });
@@ -2394,7 +2392,7 @@ function renderBookFilterList(sheet, books) {
   tablist.style.setProperty("--tab-count", String(tabs.length));
   // No tab row when the book list failed to load: an empty track would be all that shows.
   tabbar.hidden = !tabs.length;
-  const firstChosen = tabs.findIndex((t) => [...working].some((id) => divOf.get(id) === t.div));
+  const firstChosen = tabs.findIndex((t) => t.panel.querySelector('.book-filter-option[aria-selected="true"]'));
   sheet.showTab(Math.max(0, firstChosen));
 }
 
