@@ -511,6 +511,8 @@ const LECT_RAW = {
       { kind: "sanctoral", date: "08.28", common: "teacher" }),                            // 9
     obs("s-공현", "공현대축일", 2, { kind: "sanctoral", date: "01.06" }),                    // 10
     obs("t-왕", "왕이신 그리스도 주일", 25, { aliases: ["왕이신 그리스도"] }),              // 11
+    obs("t-봄재", "봄재", 3, { aliases: ["사계재"], days: ["wed", "fri", "sat"] }),          // 12
+    obs("ember-wed-봄재", "성직자의 성소를 위한 봄재", 4),                                 // 13
   ],
   sets: [
     [0, "advent-1-sun-A-t1-s1", "A", null, 1, "대림1주일 (가해)"],   // 0
@@ -541,6 +543,14 @@ const LECT_RAW = {
 const LECT = ctx.buildLectionarySearchIndex(LECT_RAW);
 
 const names = (q) => plain(ctx.searchLectionaryNames(LECT, q).items.map((it) => [it.obs.name, it.tier]));
+
+test("searchLectionaryNames: 색인에 요일(`days`)이 있는 전례일은 날마다 한 줄로 나누고, 별칭으로 찾아도 같다(ADR-044 §3)", () => {
+  const days = (q) => plain(ctx.searchLectionaryNames(LECT, q).items.map((it) => [it.obs.key, it.ember ?? null, it.tier]));
+  // 키가 아니라 색인의 `days`로 나눈다. 지향별 줄은 `days`가 없어 한 줄이다
+  assert.deepStrictEqual(days("봄재"), [["t-봄재", "wed", 1], ["t-봄재", "fri", 1], ["t-봄재", "sat", 1], ["ember-wed-봄재", null, 3]]);
+  assert.deepStrictEqual(days("사계재"), [["t-봄재", "wed", 1], ["t-봄재", "fri", 1], ["t-봄재", "sat", 1]]);
+  assert.deepStrictEqual(days("대림1주일")[0], ["t-대림1주일", null, 1], "`days`가 없으면 나누지 않는다");
+});
 
 test("normalizeLectName: 띄어쓰기, 가운뎃점, 따옴표를 빼고 주의 번호를 「N주」로 맞춘다", () => {
   assert.equal(ctx.normalizeLectName("대림 1주일"), "대림1주");

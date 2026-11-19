@@ -478,6 +478,23 @@ test("yearDaysIn: 그해에 지키는 날, 옮겨 지키는 날, 겹쳐 기념�
   // 성탄 평일은 그날의 이름을 담는다(앱이 그해의 이름으로 거른다)
   assert.strictEqual(plain(e.yearDayIn(y27, ["d0102-성탄주간-t1-s1"], "d0102-성탄주간")).name, "성탄 1주 토요일");
   assert.strictEqual(e.yearDayIn(y27, ["d0103-성탄주간-t1-s1"], "d0103-성탄주간"), null, "1월 3일은 성탄 2주일");
+  // 사계재의 날은 그 요일의 날만 본다(ADR-044 §3). 2027년 춘계재는 2월 17, 19, 20일이다
+  assert.deepStrictEqual([3, 5, 6, 1].map((w) => e.yearDayIn(y27, ["t-춘계재"], "t-춘계재", w)?.date ?? null),
+    ["2027-02-17", "2027-02-19", "2027-02-20", null]);
+});
+
+test("사계재의 계절 이름으로 찾으면 계절 줄이 수, 금, 토요일 세 줄로 나뉘고, 지향별 줄 넷은 나누지 않는다. `사계재`로는 네 계절을 모두 찾는다(ADR-044 §3)", { skip: !haveData }, () => {
+  const { ctx, index } = loadLectionarySearch();
+  for (const season of ["춘계재", "하계재", "추계재", "동계재"]) {
+    const items = JSON.parse(JSON.stringify(ctx.searchLectionaryNames(index, season).items));
+    assert.deepStrictEqual(items.slice(0, 3).map((it) => [it.obs.key, it.ember, it.tier]),
+      [[`t-${season}`, "wed", 1], [`t-${season}`, "fri", 1], [`t-${season}`, "sat", 1]], season);
+    assert.deepStrictEqual(items.slice(3).map((it) => [it.obs.name.endsWith(season), it.ember ?? null]), Array(4).fill([true, null]), season);
+  }
+  // `사계재`는 네 계절을 함께 부르는 별칭이다. 계절마다 세 줄이라 열두 줄이다(ADR-037 §5)
+  const all = JSON.parse(JSON.stringify(ctx.searchLectionaryNames(index, "사계재").items));
+  assert.deepStrictEqual(all.map((it) => `${it.obs.key} ${it.ember}`),
+    ["춘계재", "하계재", "추계재", "동계재"].flatMap((season) => ["wed", "fri", "sat"].map((d) => `t-${season} ${d}`)));
 });
 
 test("yearDaysIn: 지키는 날은 지키는 날의 표와 같고, 전례일 자신의 날이다(색인의 모든 전례일, 2026-2028)", { skip: !haveData }, () => {
@@ -511,23 +528,30 @@ test("지키는 날의 표: 격자 전례일은 전례일로 넣지 않는다(�
   assert.ok(table.byId.get("ordinary-24-wed-II-t1-s1").some((d) => d.obs.startsWith("grid:")));
 });
 
-test("지키는 날의 표: 한 전례년에 같은 날짜가 두 번 있는 날은 해마다 같은 독서인 성 안드레아 축일뿐이다(ADR-044 「검토한 대안」, 2026-11-17)", { skip: !haveData }, () => {
+test("지키는 날의 표: 한 전례년에 여러 번 지키는 전례일은 사계재의 줄 넷과 몇 해의 성 안드레아 축일뿐이다(ADR-044 「한 전례년에 여러 번 오는 날」)", { skip: !haveData }, () => {
   const { e, index } = realEngine();
   const table = keptTable();
-  /** 전례일마다 그 세트를 한 전례년 안의 다른 날 둘 이상에 읽는 전례년 */
-  const twice = new Set();
-  const byObs = new Map();
-  for (const s of index.sets) byObs.set(index.obs[s[0]].key, [...(byObs.get(index.obs[s[0]].key) || []), s[1]]);
+  /** 전례일마다 그 세트(세트가 없으면 전례일 키)를 한 전례년 안의 다른 날 둘 이상에 지키는 전례년 */
+  const many = new Set();
+  const byObs = new Map(index.obs.map((o) => [o.key, []]));
+  for (const s of index.sets) byObs.get(index.obs[s[0]].key).push(s[1]);
   for (let y = 2026; y <= 2049; y++) {
     const ly = e.liturgicalYearSpan(`${y}-06-01`);
-    for (const [key, ids] of byObs) {
+    for (const [key, sets] of byObs) {
+      const ids = sets.length ? sets : [key];
       const dates = new Set(ids.flatMap((id) => (table.byId.get(id) || []).filter((d) => d.date >= ly.from && d.date <= ly.to).map((d) => d.date)));
-      if (dates.size > 1) twice.add(`${key} ${y}`);
+      if (dates.size > 1) many.add(key.startsWith("t-") && key.endsWith("계재") ? key : `${key} ${y}`);
     }
   }
-  assert.deepStrictEqual([...twice], ["d1130-사도-성-안드레아 2028", "d1130-사도-성-안드레아 2034", "d1130-사도-성-안드레아 2040", "d1130-사도-성-안드레아 2045"]);
-  // 성 안드레아는 해마다 같은 독서라 오늘부터 처음 오는 날을 연다
-  assert.strictEqual(e.nextDayIn(table, ["d1130-사도-성-안드레아-t1-s1"], "2028-06-01").date, "2028-11-30");
+  assert.deepStrictEqual([...many].sort(), [
+    "d1130-사도-성-안드레아 2028", "d1130-사도-성-안드레아 2034", "d1130-사도-성-안드레아 2040", "d1130-사도-성-안드레아 2045",
+    "t-동계재", "t-추계재", "t-춘계재", "t-하계재",
+  ]);
+  // 성 안드레아는 다가오는 11월 30일을 연다. 지난해의 11월 30일도 같은 전례년이다
+  assert.strictEqual(e.openDayIn(table, ["d1130-사도-성-안드레아-t1-s1"], "2028-06-01").date, "2028-11-30");
+  // 사계재는 오늘이나 그 뒤의 첫날, 모두 지났으면 수요일이다
+  assert.strictEqual(e.openDayIn(table, ["t-춘계재"], "2026-02-26").date, "2026-02-27");
+  assert.strictEqual(e.openDayIn(table, ["t-춘계재"], TODAY).date, "2026-02-25");
 });
 
 test("지키는 날의 표: 줄이 여는 날은 이번 전례년의 날이고, 지났으면 다음에 읽는 날을 따로 찾는다(ADR-044 §1)", { skip: !haveData }, () => {
@@ -550,25 +574,25 @@ test("지키는 날의 표: 줄이 여는 날은 이번 전례년의 날이고, 
   assert.strictEqual(open(["ordinary-7-sun-A-t1-s1"]).date, "2035-05-20");
 });
 
-test("지키는 날의 표: 성탄 평일의 화면 이름은 오늘부터 한 해 안에 오는 평일 아홉이고, 그 이름은 다가오는 그날을 연다(ADR-044 §3, 2026-11-17)", { skip: !haveData }, () => {
+test("지키는 날의 표: 성탄 평일의 화면 이름은 이번 전례년의 평일이고, 그 이름은 이번 전례년의 그날을 연다(ADR-044 §3)", { skip: !haveData }, () => {
   const { e } = realEngine();
   const table = keptTable();
-  // 2026년 성탄은 금요일이다. 12.26-28은 축일과 성탄 1주일, 1.1은 주님의 이름, 1.3은 성탄 2주일, 1.6은 주님 공현, 1.10은 주님 세례다
+  // 2026 전례년의 성탄(2025-12-25)은 목요일이다. 12.26-28은 축일과 성탄 1주일, 1.1은 주님의 이름, 1.4는 성탄 2주일, 1.6은 주님 공현이다
   const names = [...e.christmasNamesIn(table, TODAY)].map(([id, name]) => `${id.slice(0, 5)} ${name}`).sort();
   assert.deepStrictEqual(names, [
-    "d0102 성탄 1주 토요일", "d0104 성탄 2주 월요일", "d0105 성탄 2주 화요일", "d0107 성탄 2주 목요일", "d0108 성탄 2주 금요일",
-    "d0109 성탄 2주 토요일", "d1229 성탄 1주 화요일", "d1230 성탄 1주 수요일", "d1231 성탄 1주 목요일",
+    "d0102 성탄 1주 금요일", "d0103 성탄 1주 토요일", "d0105 성탄 2주 월요일", "d0107 성탄 2주 수요일", "d0108 성탄 2주 목요일",
+    "d0109 성탄 2주 금요일", "d0110 성탄 2주 토요일", "d1229 성탄 1주 월요일", "d1230 성탄 1주 화요일", "d1231 성탄 1주 수요일",
   ]);
-  // 그 이름으로 찾은 줄은 줄의 세트로 찾는다. 해마다 같은 독서라 오늘부터 처음 오는 날이 그 이름의 날이다
-  const open = e.nextDayIn(table, ["d1230-성탄주간-t1-s1"], TODAY);
-  assert.deepStrictEqual([open.date, open.name], ["2026-12-30", "성탄 1주 수요일"]);
-  // 성탄 시기 안의 오늘이면 한 해 안에 같은 이름의 날이 두 번 있다(2027-01-05와 2028-01-04의 성탄 2주 화요일). 줄마다 자기 세트의 날을 연다
-  // (코드 리뷰 2026-11-17)
+  // 그 이름으로 찾은 줄은 줄의 세트로 찾는다. 이번 전례년의 날이 그 이름의 날이다
+  const open = e.openDayIn(table, ["d1230-성탄주간-t1-s1"], TODAY);
+  assert.deepStrictEqual([open.date, open.name], ["2025-12-30", "성탄 1주 화요일"]);
+  // 성탄 시기 안의 오늘도 한 전례년에는 같은 이름이 한 번이다. 오늘부터 한 해의 이름을 쓸 때는 2027-01-05에 「성탄 2주 화요일」이
+  // 2027-01-05와 2028-01-04에 두 번 있었다(코드 리뷰 2026-11-17)
   const jan5 = "2027-01-05";
-  const twice = [...e.christmasNamesIn(table, jan5)].filter(([, name]) => name === "성탄 2주 화요일").map(([id]) => id.slice(0, 5)).sort();
-  assert.deepStrictEqual(twice, ["d0104", "d0105"]);
-  const days = ["d0104-성탄주간-t1-s1", "d0105-성탄주간-t1-s1"].map((id) => e.nextDayIn(table, [id], jan5));
-  assert.deepStrictEqual(days.map((d) => [d.date, d.name]), [["2028-01-04", "성탄 2주 화요일"], ["2027-01-05", "성탄 2주 화요일"]]);
+  const tue = [...e.christmasNamesIn(table, jan5)].filter(([, name]) => name === "성탄 2주 화요일").map(([id]) => id.slice(0, 5));
+  assert.deepStrictEqual(tue, ["d0105"]);
+  assert.deepStrictEqual(["d0104-성탄주간-t1-s1", "d0105-성탄주간-t1-s1"].map((id) => e.openDayIn(table, [id], jan5)).map((d) => [d.date, d.name]),
+    [["2027-01-04", "성탄 2주 월요일"], ["2027-01-05", "성탄 2주 화요일"]]);
 });
 
 test("지키는 날의 표: 색은 그 전례일을 고른 전례독서 화면 머리의 색이다. 사계재의 평일은 절기 바탕색이 아니라 그날의 색(코드 리뷰 2026-11-16)", { skip: !haveData }, () => {

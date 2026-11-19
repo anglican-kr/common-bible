@@ -2320,18 +2320,6 @@ function slugTargetsIn(lix, cal) {
 }
 
 /**
- * 해에 따라 다른 독서(가해, 나해, 다해, 홀수해, 짝수해)의 독서 세트 `id`. 검색 결과의 줄과 보조 주소는 주소의 독서 세트 가운데 이 세트가
- * 있으면 이번 전례년의 날을, 없으면 오늘부터 처음 오는 날을 연다(ADR-044 §1).
- * @param {LectionaryIndex} lix @returns {Set<string>}
- */
-function cyclicSetIdsIn(lix) {
-  /** @type {Set<string>} */
-  const ids = new Set();
-  for (const r of readingRowsIn(lix)) if (r.year) ids.add(String(r.id));
-  return ids;
-}
-
-/**
  * 독서 세트나 전례일(`ids`)을 `from`부터 `to`까지(둘 다 포함) 처음 지키는 날(설계서 §7). 지키는 날은 후보의 상태가 `proper`나
  * `transferred_in`인 날이다. 다른 날로 옮겨 간 날과 선택 봉헌으로만 오는 날은 그날 읽는 독서가 아니다. 독서 세트는 그 후보가 내는
  * 독서 그룹의 `id`로, 전례일은 후보의 `observance.id`로 견준다. 공통 독서는 견주지 않는다(지키는 날의 표와 같다). 찾은 세트의 `setId`와
@@ -2432,8 +2420,8 @@ function liturgicalYearSpan(dateStr) {
 
 /**
  * 지키는 날의 표(`table`)를 `to`까지 이어 센다(설계서 §7). 지키는 날의 뜻은 `firstKeptDayIn`과 같고, 공통 독서를 세지 않는 것도 같다
- * (색인에 없다, ADR-044 §2). 성탄 평일은 그날의 이름으로도 센다. 이 이름은 해마다 바뀌어 검색 색인에 없으므로, 검색이 오늘부터 한
- * 해 안에 오는 날의 이름을 이 표에서 얻는다(ADR-044 §3).
+ * (색인에 없다, ADR-044 §2). 성탄 평일은 그날의 이름으로도 센다. 이 이름은 해마다 바뀌어 검색 색인에 없으므로, 검색이 이번
+ * 전례년의 이름을 이 표에서 얻는다(`christmasNamesIn`, ADR-044 §3).
  * @param {LectionaryIndex} lix @param {CalendarIndex} cal @param {KeptDayTable} table @param {string} to
  */
 function extendKeptDaysIn(lix, cal, table, to) {
@@ -2523,38 +2511,30 @@ function nextDayIn(table, ids, from) {
 }
 
 /**
- * 해에 따라 다른 독서를 읽는 줄이 여는 날(ADR-044 §1): 이번 전례년에 처음 지키는 날이고, 지났어도 그날이다. 이번 전례년에 없으면 오늘부터
- * 처음 지키는 날이다. 모르면 undefined, 없으면 null(`nextDayIn`과 같다).
+ * 검색 결과의 줄이 여는 날(ADR-044 §1): 이번 전례년에 지키는 날이고, 지났어도 그날이다. 해에 따라 다른 독서도 해마다 같은 독서도 같다.
+ * 이번 전례년에 여러 번 지키면(사계재, 몇 해의 성 안드레아 축일) 오늘이나 그 뒤의 첫날이고, 모두 지났으면 첫날이다. 이번 전례년에 없으면
+ * 오늘부터 처음 지키는 날이다. 모르면 undefined, 없으면 null(`nextDayIn`과 같다).
  * @param {KeptDayTable} table @param {string[]} ids @param {string} today @returns {KeptDay | null | undefined}
  */
 function openDayIn(table, ids, today) {
   const ly = liturgicalYearSpan(today);
   if (table.to < lyEndOf(ly, table.last)) return undefined;
-  return earliestIn(table, ids, ly.from, ly.to) || nextDayIn(table, ids, today);
+  return earliestIn(table, ids, today, ly.to) || earliestIn(table, ids, ly.from, ly.to) || nextDayIn(table, ids, today);
 }
 
 /**
- * 성탄 평일의 화면 이름을 찾는 구간의 끝: 오늘부터 364일 뒤(표의 끝을 넘지 않는다). 날짜로 정해진 성탄 평일의 독서(12.29-1.12)는 이
- * 구간에 한 번씩 있다. 해마다 같은 독서라 오늘부터 처음 오는 날을 연다(ADR-044 §1, §3).
- * @param {string} today @param {string} last  표의 끝(`table.last`, 없으면 오늘의 전례년으로 정한 끝) @returns {string}
- */
-function christmasUntil(today, last) {
-  return capToLast(addDays(today, 364) || last, last);
-}
-
-/**
- * 오늘부터 한 해 안에 오는 성탄 평일의 화면 이름: 독서 세트의 `id` → 이름(「성탄 1주 수요일」). 검색 워커가 이 이름으로도 찾는다
- * (ADR-044 §3). 표가 그 구간의 끝까지 세지 않았으면 null. 표는 오늘이 있는 전례년의 첫날부터 세므로(`keptDaysThrough`) 앞쪽은 보지
- * 않는다(코드 리뷰 2026-11-17).
+ * 이번 전례년의 성탄 평일의 화면 이름: 독서 세트의 `id` → 이름(「성탄 1주 수요일」). 검색 워커가 이 이름으로도 찾는다(ADR-044 §3).
+ * 줄은 이번 전례년의 그날을 열므로(§1) 그 이름이 열리는 화면의 제목과 같다. 한 전례년에는 성탄 시기가 한 번이라 같은 이름이 두 번
+ * 나오지 않는다. 표가 이번 전례년의 끝까지 세지 않았으면 null.
  * @param {KeptDayTable} table @param {string} today @returns {Map<string, string> | null}
  */
 function christmasNamesIn(table, today) {
-  const until = christmasUntil(today, table.last);
-  if (table.to < until) return null;
+  const ly = liturgicalYearSpan(today);
+  if (table.to < lyEndOf(ly, table.last)) return null;
   /** @type {Map<string, string>} */
   const names = new Map();
   for (const [name, days] of table.byName) {
-    for (const day of days) if (day.setId && day.date >= today && day.date <= until) names.set(day.setId, name);
+    for (const day of days) if (day.setId && day.date >= ly.from && day.date <= ly.to) names.set(day.setId, name);
   }
   return names;
 }
@@ -2620,17 +2600,21 @@ function yearDaysIn(lix, cal, y) {
 
 /**
  * 독서 세트나 전례일(`ids`)을 그해에 처음 지키는 날. 없으면 전례일(`key`)이 다른 전례일과 겹쳐 기념만 하는 날, 그것도 없으면 null이다
- * (그해에 지키지 않는다, ADR-044 §4).
- * @param {YearDayTable} table @param {string[]} ids @param {string} key @returns {YearDay | null}
+ * (그해에 지키지 않는다, ADR-044 §4). `weekday`(0이 일요일)를 주면 그 요일의 날만 본다. 사계재의 줄은 날마다 한 줄이다(§3).
+ * @param {YearDayTable} table @param {string[]} ids @param {string} key @param {number | null} [weekday]
+ * @returns {YearDay | null}
  */
-function yearDayIn(table, ids, key) {
+function yearDayIn(table, ids, key, weekday = null) {
+  /** @param {YearDay} d */
+  const onDay = (d) => weekday === null || dayOfWeek(d.date) === weekday;
   /** @type {YearDay | null} */
   let best = null;
   for (const id of ids) {
-    const day = (table.kept.get(id) || [])[0];
+    const day = (table.kept.get(id) || []).find(onDay);
     if (day && (!best || day.date < best.date)) best = day;
   }
-  return best || table.overlap.get(key) || null;
+  const overlap = table.overlap.get(key);
+  return best || (overlap && onDay(overlap) ? overlap : null);
 }
 
 /**
@@ -2819,16 +2803,6 @@ function findSaintFeasts(saintId) {
   return new Set((saintId && calendarIndex.saintFeasts?.get(saintId)) || []);
 }
 
-/** `cyclicSetIdsIn`의 값. 독서 색인이 새로 서면 다시 만든다. @type {{ lix: LectionaryIndex, ids: Set<string> } | null} */
-let cyclicSets = null;
-
-/** 해에 따라 다른 독서의 세트(`cyclicSetIdsIn`). 프리로드 뒤에 부른다. @returns {Set<string>} */
-function cyclicSetIds() {
-  if (!lectionaryIndex) throw new Error("preloadLectionary() must be awaited before cyclicSetIds()");
-  if (!cyclicSets || cyclicSets.lix !== lectionaryIndex) cyclicSets = { lix: lectionaryIndex, ids: cyclicSetIdsIn(lectionaryIndex) };
-  return cyclicSets.ids;
-}
-
 /** `slugTargetsIn`의 값. 두 색인이 새로 서면 다시 만든다. @type {{ lix: LectionaryIndex, cal: CalendarIndex, ids: Set<string> } | null} */
 let slugTargets = null;
 
@@ -2915,8 +2889,7 @@ async function askKeptDays(today, firstTo, ask, none, isStale = () => false) {
 }
 
 /**
- * 검색 결과의 줄과 보조 주소가 여는 날(ADR-044 §1). 주소의 독서 세트 가운데 해에 따라 다른 독서가 있으면 이번 전례년의 날
- * (`openDayIn`)이고, 없으면(해마다 같은 독서, 고유 독서가 없는 전례일) 오늘부터 처음 지키는 날이다(사용자 결정 2026-11-17). `from`을
+ * 검색 결과의 줄과 보조 주소가 여는 날(ADR-044 §1). 이번 전례년의 날이고(`openDayIn`), 없으면 오늘부터 처음 지키는 날이다. `from`을
  * 주면 그날부터 처음 지키는 날이다(`/lectionary/d/<slug>?from=`). 표는 이번 전례년의 첫날부터 그 해의 30년 뒤까지 센다. 그 밖의 `from`
  * (지난날, 연도를 붙인 검색이 여는 먼 해)은 표 없이 그해부터 30년 뒤까지 한 해씩 찾는다(`keptLastFrom`, ADR-044 §4). 표 안의 `from`도
  * 그해부터 30년을 찾는다. 표의 끝까지 없으면 그 뒤를 표 없이 이어 찾는다. 어느 쪽이든 해 사이마다 `isStale`이 참이면(화면을 떠났으면)
@@ -2928,11 +2901,7 @@ async function findReadingDay(ids, today, from = null, isStale = () => false) {
   const ly = liturgicalYearSpan(today);
   const tableLast = keptLastFrom(ly.from);
   if (from && (from < ly.from || from > tableLast)) return firstKeptDayByYear(ids, from, keptLastFrom(from), isStale);
-  const ask = (/** @type {KeptDayTable} */ table) => {
-    if (from) return nextDayIn(table, ids, from);
-    const known = cyclicSetIds();
-    return ids.some((id) => known.has(id)) ? openDayIn(table, ids, today) : nextDayIn(table, ids, today);
-  };
+  const ask = (/** @type {KeptDayTable} */ table) => (from ? nextDayIn(table, ids, from) : openDayIn(table, ids, today));
   const found = await askKeptDays(today, ly.to, ask, null, isStale);
   if (found || !from || isStale()) return found;
   // 표의 끝 가까이의 `from`(`?from=2055-12-01`)도 그해부터 30년을 찾는다. 표 밖의 `from`과 같은 끝이다
@@ -2957,11 +2926,29 @@ async function firstKeptDayByYear(ids, from, last, isStale) {
 }
 
 /**
- * 오늘부터 한 해 안에 오는 성탄 평일의 화면 이름(`christmasNamesIn`). 표를 그 구간의 끝까지 센다.
+ * 독서 세트나 전례일(`ids`)을 `from`부터 `to`까지(둘 다 포함) 지키는 날 모두(날짜 차례, 같은 날은 한 번). 사계재의 줄이 이번 전례년과
+ * 다음 전례년에 그 요일을 찾는다(ADR-044 §3). 표는 이번 전례년의 첫날부터 30년 뒤까지라 `from`은 그 안이어야 하고, 표의 끝을 넘는
+ * 구간은 끝에서 자른다. 해 사이마다 `isStale`이 참이면(화면을 떠났으면) 그치고 빈 배열이다.
+ * @param {string[]} ids @param {string} today @param {string} from @param {string} to @param {() => boolean} [isStale]
+ * @returns {Promise<KeptDay[]>}
+ */
+async function findKeptDays(ids, today, from, to, isStale = () => false) {
+  const ask = (/** @type {KeptDayTable} */ table) => {
+    if (table.to < capToLast(to, table.last)) return undefined;
+    /** @type {Map<string, KeptDay>} */
+    const byDate = new Map();
+    for (const id of ids) for (const d of table.byId.get(id) || []) if (d.date >= from && d.date <= to && !byDate.has(d.date)) byDate.set(d.date, d);
+    return [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
+  };
+  return askKeptDays(today, to, ask, /** @type {KeptDay[]} */ ([]), isStale);
+}
+
+/**
+ * 이번 전례년의 성탄 평일의 화면 이름(`christmasNamesIn`). 표를 이번 전례년의 끝까지 센다.
  * @param {string} today @returns {Promise<Map<string, string>>}
  */
 async function findChristmasNames(today) {
-  const table = await keptDaysThrough(today, christmasUntil(today, keptLastFrom(liturgicalYearSpan(today).from)));
+  const table = await keptDaysThrough(today, liturgicalYearSpan(today).to);
   return christmasNamesIn(table, today) || new Map();
 }
 
@@ -2975,7 +2962,7 @@ const yearDayIndexes = { lix: null, cal: null };
 /**
  * 연도를 붙인 이름 검색(ADR-044 §4): 줄마다(`ids`는 독서 세트나 전례일, `key`는 전례일) 양력 `year`년의 날(`yearDayIn`). 그해를 처음
  * 찾으면 그해의 모든 날을 계산한다(`yearDaysIn`). 프리로드 규칙은 `findReadings`와 같다.
- * @param {Array<{ ids: string[], key: string }>} rows @param {number} year
+ * @param {Array<{ ids: string[], key: string, weekday?: number | null }>} rows @param {number} year
  * @returns {Array<YearDay | null>}
  */
 function findYearDays(rows, year) {
@@ -2997,7 +2984,7 @@ function findYearDays(rows, year) {
     }
   }
   const t = table;
-  return rows.map(({ ids, key }) => yearDayIn(t, ids, key));
+  return rows.map(({ ids, key, weekday }) => yearDayIn(t, ids, key, weekday ?? null));
 }
 
 /**
@@ -3044,13 +3031,13 @@ export {
   parseDate, toKey, addDays, dayOfWeek, dayOfYear,
   MIN_YEAR, MAX_YEAR, isComputableYear, isComputableDate,
   nearestSunday, firstSundayAfter, lastSundayBefore, nthSunday, sundayOfWeek,
-  easterDate, advent1Date, baptismDate, liturgicalYearOf, yearAnchors,
+  easterDate, advent1Date, baptismDate, liturgicalYearOf, liturgicalYearSpan, yearAnchors,
   seasonOf, sundayCycle, weekdayCycle, evalRule,
   buildOrdinalIndex, ordinalWeekOf, lunarDatesOf, spansOf, inSpan,
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, findDedications, findFoundings, findSaintFeasts, fastOf,
   setActivatedOptionals,
   // 검색 결과의 줄과 보조 주소(`/lectionary/d/<slug>`, ADR-044 §1)가 여는 날과 다음에 읽는 날을 찾는다.
-  knownSlugIds, firstKeptDay, findReadingDay, findChristmasNames, readingLabel, headerColors,
+  knownSlugIds, firstKeptDay, findReadingDay, findKeptDays, findChristmasNames, readingLabel, headerColors,
   // 연도를 붙인 이름 검색(ADR-044 §4)이 그해의 날과 음력 날짜 자료가 있는지를 묻는다.
   findYearDays, hasLunarYear, lunarYearSpan,
   // 같은 유형의 성인 둘 이상을 공통 본기도 하나에 모은다(독서 뷰 — 사용자 결정 2026-11-03).

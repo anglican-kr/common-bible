@@ -121,7 +121,7 @@
  * @property {string} [parish]
  * @property {{ [bookId: string]: { [chapter: string]: string } }} [titles]  송가 이름(ADR-047 §5)
  *
- * @typedef LectNamesMessage  오늘부터 한 해 안에 오는 성탄 평일의 화면 이름(ADR-044 §3). 해마다 바뀌어 색인에 없으므로 앱이 교회력 엔진으로 계산해 보낸다.
+ * @typedef LectNamesMessage  이번 전례년의 성탄 평일의 화면 이름(ADR-044 §3). 해마다 바뀌어 색인에 없으므로 앱이 교회력 엔진으로 계산해 보낸다.
  * @property {"lect-names"} type
  * @property {Array<[string, string]>} names  [독서 세트 id, 이름(「성탄 1주 수요일」)]
  *
@@ -141,6 +141,8 @@
  * @property {string | null} rank
  * @property {number} order  전례년 순서
  * @property {string | null} common  고유 독서 없이 쓰는 공통 독서의 분류
+ * @property {string[]} [days]  그 주의 여러 요일에 지키는 전례일만: 그 요일("wed" 등). 사계재 넷은 수, 금, 토요일이다. 결과를 날마다 한 줄로
+ *   나눈다(ADR-037 §5, ADR-044 §3)
  *
  * @typedef {[number, string, string | null, number | null, number, string]} LectSetRaw
  *   [obs, set id, year, track, set no, label]
@@ -240,6 +242,8 @@
  *   a local day (ADR-044 §3): the user's parish dedication or a founding day. Its obs key is `local:<level>`
  * @property {string[]} [yearNames]  year search: a Christmas weekday found only by the names it may take (「성탄 1주 수요일」).
  *   The app keeps a year's row only when that year's name of the day is one of them (ADR-044 §4)
+ * @property {string} [ember]  name search: one of the days of an observance kept on several weekdays of its week (the index's
+ *   `days`, an Ember season: 「춘계재 수요일」). Its row is split into one row a day (ADR-044 §3)
  *
  * @typedef LectResult
  * @property {"name" | "passage"} kind
@@ -289,7 +293,7 @@ let lectionaryPromise = null;
 /** @type {LectionaryIndex | null} */
 let lectionary = null;
 
-/** 오늘부터 한 해 안에 오는 성탄 평일의 화면 이름(`lect-names` 메시지). 이름 검색이 별칭처럼 함께 찾는다(ADR-044 §3). @type {Array<[string, string]>} */
+/** 이번 전례년의 성탄 평일의 화면 이름(`lect-names` 메시지). 이름 검색이 별칭처럼 함께 찾는다(ADR-044 §3). @type {Array<[string, string]>} */
 let lectExtraNames = [];
 
 /** performance.now() before which a failed lectionary index is not fetched again: elapsed time, so changing the
@@ -971,7 +975,7 @@ function swapSynonyms(index, typed) {
  * 이름으로 전례일을 찾는다(설계 §4, ADR-044 §3). 전례일의 이름과 별칭, 성인의 이름과 칭호에서 찾는다.
  * 검색어 전체가 든 이름을 찾고, 비슷한 말 표의 낱말이 있으면 앱의 이름으로 바꾼 검색어로도 찾는다. 그래도 없고
  * 검색어에 낱말이 여럿이면 낱말이 모두 든 이름을 찾는다. 결과는 이름 전체가 같은 것, 이름이 검색어로 시작하는 것,
- * 이름 안에 든 것의 차례이고, 같은 단계 안에서는 전례년 순서다. `extra`는 해마다 바뀌어 색인에 없는 이름(오늘부터 한 해 안에 오는 성탄
+ * 이름 안에 든 것의 차례이고, 같은 단계 안에서는 전례년 순서다. `extra`는 해마다 바뀌어 색인에 없는 이름(이번 전례년의 성탄
  * 평일의 화면 이름, ADR-044 §3)이고, 그 독서 세트의 전례일을 별칭처럼 찾는다.
  * @param {LectionaryIndex} index
  * @param {string} query
@@ -1043,11 +1047,14 @@ function searchLectionaryNames(index, query, extra = []) {
 
   result.items = [...best]
     .sort(([a, x], [b, y]) => x.tier - y.tier || index.obs[a].order - index.obs[b].order)
-    .map(([i, { tier, matched }]) => {
+    .flatMap(([i, { tier, matched }]) => {
       /** @type {LectItem} */
       const item = { obs: lectObsInfo(index, i), sets: index.setsOfObs[i].map((s) => lectSetInfo(index, s)), tier };
       if (matched) item.matched = matched;
-      return item;
+      // 그 주의 여러 요일에 지키는 전례일(색인의 `days`, 사계재의 계절 줄)은 날마다 한 줄로 나눈다(ADR-044 §3, 사용자 결정 2026-11-19).
+      // 지향별 줄(「성직자의 성소를 위한 춘계재」)은 하루씩이라 `days`가 없다
+      const { days } = index.obs[i];
+      return Array.isArray(days) && days.length ? days.map((ember) => ({ ...item, ember })) : [item];
     });
   return result;
 }
@@ -1116,7 +1123,7 @@ function lectNameMatches(name, query) {
 
 /**
  * 연도를 붙인 이름 검색(ADR-044 §4). 연도를 뗀 이름으로 찾고, 앱이 찾은 전례일마다 그해의 날을 계산하도록 해를 함께 넘긴다.
- * 성탄 평일의 이름은 해마다 바뀌어(§3) 오늘부터 한 해의 이름(`lect-names`)으로 찾지 않는다. 그 이름이 될 수 있는 것 가운데 검색어로
+ * 성탄 평일의 이름은 해마다 바뀌어(§3) 이번 전례년의 이름(`lect-names`)으로 찾지 않는다. 그 이름이 될 수 있는 것 가운데 검색어로
  * 찾아지는 것을 줄(`yearNames`)에 달아 넘기고, 앱이 그해의 이름으로 거른다(`2027 성탄1주`).
  * @param {LectionaryIndex} index
  * @param {{ name: string, from: number, to: number, capped: boolean }} yq  parseLectYear
