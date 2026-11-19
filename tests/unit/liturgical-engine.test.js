@@ -2250,7 +2250,7 @@ test("liturgicalYearSpan: 대림 1주일부터 다음 대림 1주일 전날까�
   same(plain(e.liturgicalYearSpan("2025-11-30")), { from: "2025-11-30", to: "2026-11-28" });
 });
 
-test("openDayIn · nextDayIn: 이번 전례년의 첫날, 없으면 오늘부터의 첫날 — 표가 아직 거기까지 세지 않았으면 undefined, 끝까지 없으면 null", () => {
+test("openDayIn · nextDayIn: 이번 전례년의 날, 없으면 오늘부터의 첫날 — 표가 아직 거기까지 세지 않았으면 undefined, 끝까지 없으면 null", () => {
   const e = loadEngine(fakeFetch([]));
   const table = {
     from: "2025-11-30", to: "2028-12-31", last: "2055-12-31",
@@ -2268,6 +2268,11 @@ test("openDayIn · nextDayIn: 이번 전례년의 첫날, 없으면 오늘부터
   assert.strictEqual(e.openDayIn(table, ["b"], today).date, "2027-03-07");
   // 여럿이면 이번 전례년에서 가장 이른 날
   assert.strictEqual(e.openDayIn(table, ["c", "a"], today).date, "2026-03-01");
+  // 이번 전례년에 여러 번 지키면 오늘이나 그 뒤의 첫날, 모두 지났으면 첫날이다(사계재, 성 안드레아. ADR-044 「한 전례년에 여러 번 오는 날」)
+  const ember = { ...table, byId: new Map([["e", ["2026-02-25", "2026-02-27", "2026-02-28", "2027-02-17"].map((d) => KD(d, { setId: "e" }))]]) };
+  assert.strictEqual(e.openDayIn(ember, ["e"], "2026-02-26").date, "2026-02-27");
+  assert.strictEqual(e.openDayIn(ember, ["e"], "2026-02-27").date, "2026-02-27", "오늘이면 오늘");
+  assert.strictEqual(e.openDayIn(ember, ["e"], today).date, "2026-02-25");
   // 표가 2028년까지라 2029년의 날은 아직 모른다
   assert.strictEqual(e.nextDayIn(table, ["a"], today), undefined);
   assert.strictEqual(e.nextDayIn(table, ["c"], today).date, "2027-04-07");
@@ -2280,17 +2285,17 @@ test("openDayIn · nextDayIn: 이번 전례년의 첫날, 없으면 오늘부터
   assert.strictEqual(e.openDayIn(full, ["nope"], today), null);
 });
 
-test("christmasNamesIn: 성탄 평일의 화면 이름은 오늘부터 한 해 안에 오는 그 이름의 날에서 계산한다(ADR-044 §3, 2026-11-17)", () => {
+test("christmasNamesIn: 성탄 평일의 화면 이름은 이번 전례년의 그 이름의 날에서 계산한다(ADR-044 §3)", () => {
   const e = loadEngine(fakeFetch([]));
   const wed = (date, setId) => KD(date, { obs: "grid:christmas-x-weekday-wed", setId, name: "성탄 1주 수요일" });
   const table = {
     from: "2025-11-30", to: "2050-12-31", last: "2055-12-31", byId: new Map(),
     byName: new Map([["성탄 1주 수요일", [wed("2025-12-31", "d1231"), wed("2026-12-30", "d1230")]]]),
   };
-  // 지난 2025-12-31이 아니라 다가오는 2026-12-30이다
-  same(plain([...e.christmasNamesIn(table, "2026-11-16")]), [["d1230", "성탄 1주 수요일"]]);
-  same(plain([...e.christmasNamesIn(table, "2025-12-01")]), [["d1231", "성탄 1주 수요일"]]);
-  assert.strictEqual(e.christmasNamesIn({ ...table, to: "2027-01-31" }, "2026-11-16"), null, "한 해를 다 세지 않았다");
+  // 다가오는 2026-12-30이 아니라 이번 전례년(2025-11-30부터)의 2025-12-31이다. 대림 1주일부터는 새 전례년의 이름이다
+  same(plain([...e.christmasNamesIn(table, "2026-11-16")]), [["d1231", "성탄 1주 수요일"]]);
+  same(plain([...e.christmasNamesIn(table, "2026-11-29")]), [["d1230", "성탄 1주 수요일"]]);
+  assert.strictEqual(e.christmasNamesIn({ ...table, to: "2026-11-27" }, "2026-11-16"), null, "이번 전례년을 다 세지 않았다");
 });
 
 test("findReadingDay · findChristmasNames · readingLabel: 프리로드 뒤에 지키는 날의 표로 찾는다(ADR-044 §1, §3)", async () => {
@@ -2300,22 +2305,21 @@ test("findReadingDay · findChristmasNames · readingLabel: 프리로드 뒤에 
 
   const e = loadEngine(fakeFetch([]));
   await Promise.all([e.preloadCalendar(), e.preloadLectionary()]);
-  // 해마다 같은 독서는 이번 전례년의 지난 2026-01-25가 아니라 다가오는 2027-01-25다(ADR-044 §1, 2026-11-17). `from`을 주면 그날부터의 첫날이다
+  // 해마다 같은 독서도 지났어도 이번 전례년의 날이다(ADR-044 §1). `from`을 주면 그날부터의 첫날이다
   const open = plain(await e.findReadingDay(["d0125-paul-s1"], "2026-11-16"));
-  same([open.date, open.obs, open.setId, open.name], ["2027-01-25", "d0125-paul", "d0125-paul-s1", "사도 성 바울로의 회심"]);
+  same([open.date, open.obs, open.setId, open.name], ["2026-01-25", "d0125-paul", "d0125-paul-s1", "사도 성 바울로의 회심"]);
   assert.strictEqual((await e.findReadingDay(["d0125-paul-s1"], "2026-01-25")).date, "2026-01-25", "오늘이면 오늘");
   // 해에 따라 다른 독서는 지났어도 이번 전례년의 날이다(대림 1주일 가해는 2025-11-30)
   assert.strictEqual((await e.findReadingDay(["advent-1-sun-A"], "2026-11-16")).date, "2025-11-30");
   assert.strictEqual((await e.findReadingDay(["d0125-paul-s1"], "2026-11-16", "2026-11-16")).date, "2027-01-25");
   // 표가 시작하기 전의 `from`은 표 없이 찾는다
   assert.strictEqual((await e.findReadingDay(["d0125-paul-s1"], "2026-11-16", "2024-01-01")).date, "2024-01-25");
-  // 성탄 평일의 이름은 해마다 다르다: 12월 31일 독서는 2025년에 성탄 1주 수요일, 다가오는 2026년에 성탄 1주 목요일
-  assert.strictEqual((await e.findChristmasNames("2025-12-01")).get("d1231-xmas-week"), "성탄 1주 수요일");
-  const names = await e.findChristmasNames("2026-11-16");
-  assert.strictEqual(names.get("d1231-xmas-week"), "성탄 1주 목요일");
-  // 그 이름으로 찾은 줄은 줄의 세트로 찾아 다가오는 그날을 연다
+  // 성탄 평일의 이름은 전례년마다 다르다: 12월 31일 독서는 2026 전례년(2025년 12월)에 성탄 1주 수요일, 2027 전례년에 성탄 1주 목요일
+  assert.strictEqual((await e.findChristmasNames("2026-11-16")).get("d1231-xmas-week"), "성탄 1주 수요일");
+  assert.strictEqual((await e.findChristmasNames("2026-11-29")).get("d1231-xmas-week"), "성탄 1주 목요일");
+  // 그 이름으로 찾은 줄은 줄의 세트로 찾아 이번 전례년의 그날을 연다
   const named = plain(await e.findReadingDay(["d1231-xmas-week"], "2026-11-16"));
-  same([named.date, named.setId, named.name], ["2026-12-31", "d1231-xmas-week", "성탄 1주 목요일"]);
+  same([named.date, named.setId, named.name], ["2025-12-31", "d1231-xmas-week", "성탄 1주 수요일"]);
   // 독서 표기는 엔진이 읽은 독서 표에서 꺼낸다(날짜, 이름, 격자의 행 모두)
   assert.strictEqual(e.readingLabel("d0125-paul-s1", "gospel"), "d0125-paul-s1:gospel");
   assert.strictEqual(e.readingLabel("ordinary-3-sun-A-t1", "first"), "ordinary-3-sun-A-t1:first");
@@ -2354,6 +2358,16 @@ test("지키는 날의 표: 전례년이 표의 끝을 넘어도 답을 낸다 �
   assert.strictEqual((await e.findReadingDay(["d0125-paul-s1"], "2050-12-01")).date, "2051-01-25");
   assert.strictEqual(await e.findReadingDay(["d0125-paul-s1"], "9999-12-01"), null, "10000-01-25는 계산 범위 밖이다");
   assert.ok((await e.findChristmasNames("9999-12-01")) instanceof Map);
+});
+
+test("findKeptDays: 구간 안에 지키는 날을 모두 날짜 차례로, 같은 날은 한 번(사계재의 날, ADR-044 §3)", async () => {
+  const e = loadEngine(fakeFetch([]));
+  await Promise.all([e.preloadCalendar(), e.preloadLectionary()]);
+  const dates = async (ids, from, to, stale) => plain(await e.findKeptDays(ids, "2026-11-16", from, to, stale)).map((d) => d.date);
+  same(await dates(["d0125-paul-s1"], "2025-11-30", "2027-11-27"), ["2026-01-25", "2027-01-25"]);
+  same(await dates(["d0125-paul-s1", "d0125-paul"], "2025-11-30", "2027-11-27"), ["2026-01-25", "2027-01-25"], "세트와 전례일이 같은 날");
+  same(await dates(["d0125-paul-s1"], "2026-02-01", "2026-12-31"), []);
+  same(await dates(["nope"], "2025-11-30", "2027-11-27"), [], "지키는 날이 없으면 빈 배열");
 });
 
 test("findReadingDay: 표보다 이른 `from`을 한 해씩 찾다가 화면을 떠났으면 그친다(코드 리뷰 2026-11-16)", async () => {

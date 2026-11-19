@@ -974,10 +974,10 @@ def test_christmas_weekdays_show_the_name_of_the_day_they_open(page):
     _wait_days(page)
     titles = page.locator(".lect-rows .cal-row-title").all_inner_texts()
     assert len(titles) == 13
-    # 해마다 같은 독서라 다가오는 2026년 성탄 평일의 이름이다(ADR-044 §1, 2026-11-17)
-    assert titles[:3] == ["성탄 1주 화요일", "성탄 1주 수요일", "성탄 1주 목요일"]
+    # 이번 전례년(2025-11-30부터)의 성탄 평일의 이름이다(ADR-044 §1)
+    assert titles[:3] == ["성탄 1주 월요일", "성탄 1주 화요일", "성탄 1주 수요일"]
     assert "성탄주간" not in titles
-    assert "다음 2026년 12월 29일 (화)" in page.locator(".lect-rows .cal-row-meta").first.inner_text()
+    assert "지난 2025년 12월 29일 (월)" in page.locator(".lect-rows .cal-row-meta").first.inner_text()
 
 
 def test_christmas_weekday_is_found_by_its_name_on_screen(page):
@@ -986,9 +986,30 @@ def test_christmas_weekday_is_found_by_its_name_on_screen(page):
     _goto_search(page, "성탄 1주 수요일")
     _wait_days(page)
     assert page.locator(".lect-rows .cal-row-title").all_inner_texts() == ["성탄 1주 수요일"]
-    assert "다음 2026년 12월 30일 (수)" in page.inner_text(".lect-rows .cal-row-meta")
-    # 성탄 평일은 해마다 같은 날짜의 같은 독서라 다음 링크가 없다(ADR-044 §1)
+    assert "지난 2025년 12월 31일 (수)" in page.inner_text(".lect-rows .cal-row-meta")
+    # 성탄 평일은 해마다 같은 날짜의 같은 독서라 다음 링크 없이 다음 전례년에 그 독서를 읽는 날을 적는다(ADR-044 §1)
     assert page.locator(".lect-rows .lect-row-next").count() == 0
+    assert "다음 전례년 2026년 12월 31일 (목)" in page.inner_text(".lect-rows .cal-row-body")
+
+
+def test_ember_season_row_is_split_into_its_three_days(page):
+    """사계재의 계절 이름으로 찾으면 계절 줄이 수, 금, 토요일 세 줄이고, 줄마다 이번 전례년의 그날을 연다. 연도를 붙여도 해마다 세 날이다(ADR-044 §3)."""
+    _fix_today(page)
+    _goto_search(page, "춘계재")
+    _wait_days(page)
+    titles = page.locator(".lect-rows .cal-row-title").all_inner_texts()
+    assert titles[:3] == ["춘계재 수요일", "춘계재 금요일", "춘계재 토요일"], titles
+    assert len(titles) == 7, "지향별 네 줄은 그대로다"
+    row = page.locator(".lect-rows > li").nth(1)
+    assert "지난 2026년 2월 27일 (금)" in row.locator(".cal-row-meta").inner_text()
+    assert "다음 전례년 2027년 2월 19일 (금)" in row.locator(".cal-row-body").inner_text()
+    row.locator("a.cal-row").click()
+    page.wait_for_function("() => location.pathname === '/lectionary/2026-02-27'", timeout=15_000)
+    page.wait_for_selector(".lect-day", timeout=15_000)
+
+    _goto_year_search(page, "2027 춘계재")
+    days = [label.split(", ")[0] for label in _row_labels(page) if label.startswith("춘계재")]
+    assert days == ["춘계재 수요일", "춘계재 금요일", "춘계재 토요일"], days
 
 
 def test_row_shows_the_day_it_opens_and_a_link_to_the_next(page):
@@ -1006,13 +1027,16 @@ def test_row_shows_the_day_it_opens_and_a_link_to_the_next(page):
     # 이번 전례년에 읽지 않는 나해의 독서는 다음 날을 열고, 따로 둘 링크가 없다
     assert "다음 2027년 3월 7일 (일)" in second.locator(".cal-row-meta").inner_text()
     assert second.locator(".lect-row-next").count() == 0
-    # 해마다 같은 독서는 다가오는 날을 열고, 링크도 다음 해의 날도 없다(2026-11-17)
+    # 해마다 같은 독서도 이번 전례년의 날을 열고, 링크 없이 다음 전례년의 날을 글로 적는다(ADR-044 §1)
     third, fifth = rows.nth(2), rows.nth(4)
     assert third.locator(".lect-row-next").count() == 0
-    assert "다음 2027년 4월 7일 (수)" in third.locator(".cal-row-meta").inner_text()
+    assert "지난 2026년 4월 15일 (수)" in third.locator(".cal-row-meta").inner_text()
+    assert "다음 전례년 2027년 4월 7일 (수)" in third.locator(".cal-row-body").inner_text()
     assert fifth.locator(".lect-row-next").count() == 0
-    assert "다음 2027년 9월 14일 (화)" in fifth.locator(".cal-row-meta").inner_text()
-    assert "년에는" not in page.inner_text(".lect-rows")
+    assert "지난 2026년 9월 14일 (월)" in fifth.locator(".cal-row-meta").inner_text()
+    assert fifth.locator("a.cal-row").get_attribute("aria-label").endswith("지난 2026년 9월 14일 월요일, 다음 전례년 2027년 9월 14일 화요일")
+    # 해에 따라 다른 독서의 줄에는 다음 전례년의 글이 없다
+    assert "다음 전례년" not in first.inner_text() and "다음 전례년" not in second.inner_text()
 
     nxt.click()
     page.wait_for_function("() => location.pathname === '/lectionary/2029-02-25'", timeout=15_000)
@@ -1211,15 +1235,17 @@ def test_local_days_of_my_parish(browser):
         for query in ["용인", "용인교회", "축성일"]:
             _goto_local_search(page, query)
             row = page.locator(".lect-rows a.cal-row").first
-            assert row.get_attribute("aria-label") == "용인성당 축성일, 백색, 다음 2027년 1월 31일 일요일", query
-            assert row.get_attribute("href") == "/lectionary/2027-01-31?obs=my-dedication"
+            assert row.get_attribute("aria-label") == "용인성당 축성일, 백색, 지난 2026년 1월 31일 토요일, 다음 전례년 2027년 1월 31일 일요일", query
+            assert row.get_attribute("href") == "/lectionary/2026-01-31?obs=my-dedication"
         page.locator(".lect-rows a.cal-row").first.click()
         page.wait_for_selector(".lect-head", timeout=15_000)
         assert page.inner_text(".lect-head").startswith("용인성당 축성일")
 
         _goto_local_search(page, "설립일")
-        assert _row_labels(page) == ["서울교구설립일, 백색, 1965년 설립, 다음 2027년 5월 27일 목요일",
-                                     "관구설립일, 백색, 1992년 설립, 다음 2027년 9월 29일 수요일"]
+        # 2026-05-27은 하계재 수요일이라 그날의 색이 자색이다
+        assert _row_labels(page) == [
+            "서울교구설립일, 자색, 1965년 설립, 지난 2026년 5월 27일 수요일, 다음 전례년 2027년 5월 27일 목요일",
+            "관구설립일, 백색, 1992년 설립, 지난 2026년 9월 29일 화요일, 다음 전례년 2027년 9월 29일 수요일"]
 
         _goto_local_search(page, "2027-2028 용인")
         assert [label.split(", ")[-1] for label in _row_labels(page)] == ["다음 2027년 1월 31일 일요일", "다음 2028년 1월 31일 월요일"]
@@ -1250,7 +1276,7 @@ def test_local_notices_without_my_parish(page):
 
     # 관구설립일은 소속교회와 상관없다
     _goto_local_search(page, "설립일")
-    assert _row_labels(page) == ["관구설립일, 백색, 1992년 설립, 다음 2027년 9월 29일 수요일"]
+    assert _row_labels(page) == ["관구설립일, 백색, 1992년 설립, 지난 2026년 9월 29일 화요일, 다음 전례년 2027년 9월 29일 수요일"]
 
 
 def test_local_notice_picks_my_parish(page):
@@ -1261,7 +1287,7 @@ def test_local_notice_picks_my_parish(page):
     page.wait_for_selector(".lect-rows a.cal-row", timeout=15_000)
     assert page.evaluate("localStorage.getItem('bible-parish')") == "jqdnsv"
     assert page.inner_text(".search-view-results .search-note") == "용인교회를 소속교회로 등록했습니다. 설정에서 바꿀 수 있습니다."
-    assert page.evaluate("document.activeElement.getAttribute('aria-label')") == "용인성당 축성일, 백색, 다음 2027년 1월 31일 일요일"
+    assert page.evaluate("document.activeElement.getAttribute('aria-label')") == "용인성당 축성일, 백색, 지난 2026년 1월 31일 토요일, 다음 전례년 2027년 1월 31일 일요일"
     assert "q=%EC%9A%A9%EC%9D%B8%EC%84%B1%EB%8B%B9" in page.url, "같은 검색이다"
 
     # 목록에서 등록하기: 교회를 선택하지 않고 누르면 목록으로 포커스를 옮긴다
@@ -1273,7 +1299,7 @@ def test_local_notice_picks_my_parish(page):
     page.select_option("#search-local-church", "jqdnsv")
     page.click(".search-local-note button")
     page.wait_for_selector(".lect-rows a.cal-row", timeout=15_000)
-    assert _row_labels(page) == ["용인성당 축성일, 백색, 다음 2027년 1월 31일 일요일"]
+    assert _row_labels(page) == ["용인성당 축성일, 백색, 지난 2026년 1월 31일 토요일, 다음 전례년 2027년 1월 31일 일요일"]
 
 
 def test_local_notice_pick_without_a_dedication_row_focuses_the_note(page):
@@ -1311,7 +1337,7 @@ def test_parish_changed_elsewhere_redraws_the_results(page):
         return window.redrawIfSyncedSettingsChanged();
     }""")
     page.wait_for_selector(".lect-rows a.cal-row", timeout=15_000)
-    assert page.locator(".lect-rows a.cal-row").first.get_attribute("aria-label") == "용인성당 축성일, 백색, 다음 2027년 1월 31일 일요일"
+    assert page.locator(".lect-rows a.cal-row").first.get_attribute("aria-label") == "용인성당 축성일, 백색, 지난 2026년 1월 31일 토요일, 다음 전례년 2027년 1월 31일 일요일"
     assert page.locator(".search-local-note").count() == 0
 
 
@@ -1396,36 +1422,39 @@ def test_christmas_names_do_not_wait_again_after_three_seconds(browser):
     ctx.close()
 
 
-def test_fixed_feast_row_opens_the_coming_day(page):
-    """해마다 같은 독서를 읽는 줄은 오늘부터 처음 오는 날을 연다. 줄을 누르면 가는 보조 주소도 같은 날을 연다(ADR-044 §1, 2026-11-17).
-    지난 2026년 9월 14일이 아니라 2027년 9월 14일이다."""
+def test_fixed_feast_row_opens_this_years_day(page):
+    """해마다 같은 독서를 읽는 줄도 이번 전례년의 날을 열고, 링크 없이 다음 전례년의 날을 글로 적는다. 줄을 누르면 가는 보조 주소도
+    같은 날을 연다(ADR-044 §1, 2026-11-19)."""
     _fix_today(page)
     _goto_search(page, "성 십자가의 날")
     _wait_days(page)
     row = page.locator(".lect-rows > li").first
-    assert "다음 2027년 9월 14일 (화)" in row.locator(".cal-row-meta").inner_text()
+    assert "지난 2026년 9월 14일 (월)" in row.locator(".cal-row-meta").inner_text()
+    assert "다음 전례년 2027년 9월 14일 (화)" in row.locator(".cal-row-body").inner_text()
     assert row.locator(".lect-row-next").count() == 0
     row.locator("a.cal-row").click()
-    page.wait_for_function("() => location.pathname === '/lectionary/2027-09-14'", timeout=15_000)
+    page.wait_for_function("() => location.pathname === '/lectionary/2026-09-14'", timeout=15_000)
 
 
 
-def test_weekday_gospel_read_every_year_opens_the_coming_day(page):
+def test_weekday_gospel_read_every_year_opens_this_years_day(page):
     """구절로 찾은 독서가 그 전례일의 모든 해의 세트에 있으면 해마다 같은 독서다. 연중1주 월요일의 복음 마르 1:14-20은 홀수해와
-    짝수해에 같아, 지난 2026년 1월 12일이 아니라 다가오는 2027년 1월 11일을 연다(ADR-044 §1, 2026-11-17)."""
+    짝수해에 같아, 링크 없이 다음 전례년의 날을 적는다. 여는 날은 이름으로 찾은 줄과 같이 이번 전례년의 날이라 주소에 날짜를 붙이지
+    않는다(ADR-044 §1, 2026-11-19)."""
     _fix_today(page)
     _goto_search(page, "마르 1:14", "&group=lectionary")
     _wait_days(page)
     row = page.locator(".lect-rows > li").filter(has_text="연중1주 월요일").first
-    assert "다음 2027년 1월 11일 (월)" in row.locator(".cal-row-meta").inner_text()
+    assert "지난 2026년 1월 12일 (월)" in row.locator(".cal-row-meta").inner_text()
+    assert "다음 전례년 2027년 1월 11일 (월)" in row.locator(".cal-row-body").inner_text()
     assert row.locator(".lect-row-next").count() == 0
-    assert row.locator("a.cal-row").get_attribute("href").endswith("?from=2027-01-11")
+    assert "?from=" not in row.locator("a.cal-row").get_attribute("href")
     row.locator("a.cal-row").click()
-    page.wait_for_function("() => location.pathname === '/lectionary/2027-01-11'", timeout=15_000)
+    page.wait_for_function("() => location.pathname === '/lectionary/2026-01-12'", timeout=15_000)
 
 def test_row_opens_the_coming_day_when_it_comes_twice_in_the_year(page):
-    """한 전례년(2027-11-28부터 2028-12-02까지)의 처음과 끝에 한 번씩 있는 성 안드레아 축일도 다가오는 날을 연다. 해마다
-    같은 독서라 오늘부터 처음 오는 날이다(ADR-044 §1, 2026-11-17)."""
+    """한 전례년(2027-11-28부터 2028-12-02까지)의 처음과 끝에 한 번씩 있는 성 안드레아 축일은 오늘이나 그 뒤의 날을 연다
+    (ADR-044 「한 전례년에 여러 번 오는 날」, 2026-11-19)."""
     page.clock.set_fixed_time(datetime.datetime(2028, 6, 1, 12))
     _goto_search(page, "안드레아", "&group=lectionary")
     _wait_days(page)
@@ -1591,7 +1620,8 @@ def test_saint_with_common_readings_only_shows_its_rank_and_opens_the_day(page):
     _goto_search(page, "레오나드")
     row = page.locator(".lect-rows a").first
     assert row.locator(".cal-row-title").inner_text().startswith("레오나드")
-    assert row.locator(".cal-row-line").all_inner_texts() == ["축일"]
+    lines = row.locator(".cal-row-line").all_inner_texts()
+    assert lines[0] == "축일" and lines[1].startswith("다음 전례년"), lines
     row.click()
     page.wait_for_function("() => /^\\/lectionary\\/\\d{4}-11-06$/.test(location.pathname)", timeout=15_000)
     assert "obs=" not in page.url

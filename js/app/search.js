@@ -414,8 +414,8 @@ function buildSearchUrl(state) {
 }
 
 // ── Lectionary results (ADR-044 §1) ──
-// 전례일 줄은 캘린더 목록의 줄(.cal-row)에서 날짜 칸을 뺀 모양이다. 줄에는 누르면 열리는 날(해에 따라 다른 독서는 이번 전례년의 날, 해마다 같은 독서는 다가오는 날)과
-// 그날의 색을 적고, 해에 따라 다른 독서를 읽는 줄에는 다른 날로 가는 링크를 따로 둔다(ADR-044 §1). 날짜는 교회력 엔진으로 계산한다
+// 전례일 줄은 캘린더 목록의 줄(.cal-row)에서 날짜 칸을 뺀 모양이다. 줄에는 누르면 열리는 날(이번 전례년의 날)과 그날의 색을 적고, 해에
+// 따라 다른 독서를 읽는 줄에는 다른 날로 가는 링크를 따로 두며, 해마다 같은 독서를 읽는 줄에는 다음 전례년의 날을 글로 적는다(ADR-044 §1). 날짜는 교회력 엔진으로 계산한다
 // (`lectDaysOf`). 아직 계산하지 못했으면 날짜가 정해진 전례일만 그 날짜(「12월 29일」)를 적어 같은 이름을 구별한다.
 
 const LECT_SLOT_LABEL = ["제1독서", "성시", "제2독서", "복음"];
@@ -438,12 +438,18 @@ const LECT_WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
 // 성탄 평일의 격자 전례일(엔진 `CHRISTMAS_WEEKDAY_PREFIX`). 독서는 날짜로 정해져 있고 이름은 주일을 기준으로 해마다 바뀌어, 줄 제목에는
 // 열리는 날의 이름(「성탄 1주 수요일」)을 적는다(ADR-044 §3).
 const LECT_CHRISTMAS_WEEKDAY = "grid:christmas-x-weekday-";
+// 사계재의 계절 줄을 나눈 날(워커의 `ember`, ADR-044 §3): 줄 제목에 붙이는 요일과 그 요일의 번호(0이 일요일)
+/** @type {Record<string, { name: string, weekday: number }>} */
+const LECT_EMBER_DAY = { wed: { name: "수요일", weekday: 3 }, fri: { name: "금요일", weekday: 5 }, sat: { name: "토요일", weekday: 6 } };
 
 /**
- * 줄이 여는 날(`open`)과, 그날이 지났을 때 다음에 읽는 날(`next`). `nextIds`는 다음 링크의 슬러그다(엔진 `findReadingDay`).
- * 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 `year`는 열리는 날의 해(`A`, `I` 등)이고, `cycles`는 그 뒤에
- * 다른 해의 독서를 읽는 첫날을 해마다 하나씩 날짜 차례로 담는다(ADR-044 §1). 그 밖의 줄은 `year`가 null, `cycles`가 비었다.
- * @typedef {{ open: KeptDay, next: KeptDay | null, nextIds: string[], year: string | null, cycles: KeptDay[] }} LectDays
+ * 줄이 여는 날(`open`, 이번 전례년의 날)과, 해에 따라 다른 독서를 읽는 줄이 그날이 지났을 때 다음에 읽는 날(`next`). `nextIds`는
+ * 다음 링크의 슬러그다(엔진 `findReadingDay`). 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 `year`는 열리는 날의 해(`A`, `I` 등)이고,
+ * `cycles`는 그 뒤에 다른 해의 독서를 읽는 첫날을 해마다 하나씩 날짜 차례로 담는다(ADR-044 §1). 그 밖의 줄은 `year`가 null, `cycles`가
+ * 비었다. `nextYear`는 해마다 같은 독서를 읽는 줄이 이번 전례년의 날을 열 때 다음 전례년에 그 전례일을 지키는 날이고, 다음 전례년에
+ * 지키지 않으면 `date`가 null이다. 그 밖의 줄은 null이다.
+ * @typedef {{ open: KeptDay, next: KeptDay | null, nextIds: string[], year: string | null, cycles: KeptDay[],
+ *   nextYear: { date: string | null } | null }} LectDays
  */
 /**
  * 줄 아래의 링크 하나. `prefix`는 날짜 앞의 글(「다음」, 「나해」)이다.
@@ -532,7 +538,7 @@ const LECT_YEAR_RE = /(?:^|\s)\d{4}년?(?:\s*[-~～–]\s*\d{4}년?)?(?:\s|$)/;
 
 /**
  * 연도를 붙인 이름 검색어(ADR-044 §4)로 보이는가. 워커(`parseLectYear`)는 받는 해와 이름까지 보고 정하지만, 여기서는 찾기 전에 성탄 평일의
- * 이름을 보내고 기다릴지만 가른다. 연도를 붙인 검색은 그 이름(오늘부터 한 해의 이름)을 쓰지 않는다(코드 리뷰 2026-11-17).
+ * 이름을 보내고 기다릴지만 가른다. 연도를 붙인 검색은 그 이름(이번 전례년의 이름)을 쓰지 않는다(코드 리뷰 2026-11-17).
  * @param {string} query @returns {boolean}
  */
 function looksLikeYearQuery(query) {
@@ -565,6 +571,21 @@ function monthDayIn(y, m, d) {
   const t = new Date(Date.UTC(y, m - 1, d));
   if (t.getUTCMonth() !== m - 1) return null;
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/**
+ * 「MM.DD」 날짜가 `from`부터 `to`까지(둘 다 포함) 있는 날들(날짜 차례). 한 전례년(52주나 53주)에는 없거나 하나거나 둘이다.
+ * @param {string} md 「MM.DD」 @param {string} from @param {string} to  "YYYY-MM-DD" @returns {string[]}
+ */
+function monthDaysBetween(md, from, to) {
+  const [m, d] = md.split(".").map(Number);
+  /** @type {string[]} */
+  const dates = [];
+  for (let y = Number(from.slice(0, 4)); y <= Number(to.slice(0, 4)); y++) {
+    const date = monthDayIn(y, m, d);
+    if (date && date >= from && date <= to) dates.push(date);
+  }
+  return dates;
 }
 
 /**
@@ -699,8 +720,14 @@ function yearRowsOf(found, perYear, years, lunarSpan = null) {
  */
 function lectDateText(date, full = false) {
   const [y, m, d] = date.split("-").map(Number);
-  const wd = LECT_WEEKDAY[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  const wd = LECT_WEEKDAY[lectWeekdayOf(date)];
   return `${y}년 ${m}월 ${d}일 ${full ? `${wd}요일` : `(${wd})`}`;
+}
+
+/** 그날의 요일 번호(0이 일요일). @param {string} date "YYYY-MM-DD" */
+function lectWeekdayOf(date) {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
 
 /**
@@ -759,15 +786,6 @@ function lectCyclic(item) {
 }
 
 /**
- * 해에 따라 다른 독서처럼 해 표시가 있는 세트를 넘기지만 해마다 같은 독서인 줄(구절로 찾은 평일 복음 등). 보조 주소만으로는 엔진이
- * 이름으로 찾은 줄과 가를 수 없어, 이 줄의 주소에는 여는 날을 붙인다(`?from=`, ADR-044 §1).
- * @param {any} item
- */
-function lectYearlyWithYears(item) {
-  return !lectCyclic(item) && lectSetsOf(item).some((x) => x.year);
-}
-
-/**
  * 그날 읽는 독서 세트의 해(`A`, `I` 등). 줄의 세트에 없거나 해가 없으면 빈 문자열.
  * @param {any} item @param {KeptDay} day
  */
@@ -808,7 +826,8 @@ function lectRowOf(item, labelOf, days = null, today = "") {
   const yearDay = item.yearDay || null;
   /** @type {KeptDay | null} */
   const open = yearDay || (days ? days.open : null);
-  const title = open && open.obs.startsWith(LECT_CHRISTMAS_WEEKDAY) ? open.name : obs.name;
+  const title = open && open.obs.startsWith(LECT_CHRISTMAS_WEEKDAY) ? open.name
+    : item.ember && LECT_EMBER_DAY[item.ember] ? `${obs.name} ${LECT_EMBER_DAY[item.ember].name}` : obs.name;
   /** @type {{ slot: string, text: string } | null} */
   let found = null;
   /** @type {string[]} */
@@ -861,8 +880,8 @@ function lectRowOf(item, labelOf, days = null, today = "") {
     lines.push(by ? `${by}${hasBatchim(by) ? "과" : "와"} 겹침` : "다른 전례일과 겹침");
   }
   // 다른 날로 가는 링크: 해에 따라 다른 독서(가해, 나해, 다해, 홀수해, 짝수해)를 읽는 줄만 둔다. 이름으로 찾은 줄은 다른 해의 날을
-  // 해마다 하나씩(세 해 주기는 둘), 구절로 찾은 줄은 지났을 때 다음에 읽는 날 하나다. 해마다 같은 독서는 엔진이 오늘부터 처음 오는
-  // 날을 열어 덧붙일 것이 없다(ADR-044 §1, 사용자 결정 2026-11-17)
+  // 해마다 하나씩(세 해 주기는 둘), 구절로 찾은 줄은 지났을 때 다음에 읽는 날 하나다. 해마다 같은 독서는 다음 해에 가도 같은 내용이라
+  // 링크 없이 다음 전례년의 날만 글로 적는다(ADR-044 §1)
   /** @type {LectNext[]} */
   const nexts = [];
   if (days && days.cycles.length) {
@@ -884,12 +903,19 @@ function lectRowOf(item, labelOf, days = null, today = "") {
       date: later.date > today ? lectDateText(later.date) : lectDayText(later.date, today),
     });
   }
-  const label = [title, found ? `${found.slot} ${found.text}` : null, ...colors.map((c) => c.name), ...said, ...lines]
+  const saidLines = [...lines];
+  if (days && days.nextYear) {
+    const { date } = days.nextYear;
+    lines.push(date ? `다음 전례년 ${lectDateText(date)}` : "다음 전례년에는 지키지 않음");
+    saidLines.push(date ? `다음 전례년 ${lectDateText(date, true)}` : "다음 전례년에는 지키지 않음");
+  }
+  const label = [title, found ? `${found.slot} ${found.text}` : null, ...colors.map((c) => c.name), ...said, ...saidLines]
     .filter(Boolean).join(", ");
-  // 연도를 붙여 찾은 줄: 지키는 날은 그날부터 처음 지키는 날(곧 그날)을 고른 화면, 겹친 날은 그날의 기본 화면이다
+  // 연도를 붙여 찾은 줄: 지키는 날은 그날부터 처음 지키는 날(곧 그날)을 고른 화면, 겹친 날은 그날의 기본 화면이다. 지역 축일은 날짜를
+  // 계산하기 전이면 다음 그날이다(엔진 없이 셀 수 있다). 사계재의 날은 보조 주소만으로는 요일을 모르므로 그날을 붙인다
   const href = item.local ? localHref(item, open ? open.date : nextMonthDay(obs.date, today))
     : yearDay ? (yearDay.kind === "overlap" ? `/lectionary/${yearDay.date}` : lectHrefOf(lectSlugIds(item), yearDay.date))
-    : open && lectYearlyWithYears(item) ? lectHrefOf(lectSlugIds(item), open.date) : lectSlugHref(item);
+    : item.ember && open ? lectHrefOf(lectSlugIds(item), open.date) : lectSlugHref(item);
   return { title, href, bold, found, colors, meta, lines, label, nexts };
 }
 
@@ -1526,8 +1552,8 @@ function christmasNamesFresh() {
 }
 
 /**
- * 오늘부터 한 해 안에 오는 성탄 평일의 화면 이름(「성탄 1주 수요일」)을 워커에 보낸다. 해마다 바뀌어 색인에 없으므로 엔진으로 계산한다.
- * 그 성탄 평일이 지나면 다음 해의 이름으로 바뀌므로 날마다 한 번 보내고, 워커는 다음 검색부터 별칭처럼 찾는다.
+ * 이번 전례년의 성탄 평일의 화면 이름(「성탄 1주 수요일」)을 워커에 보낸다. 해마다 바뀌어 색인에 없으므로 엔진으로 계산한다.
+ * 전례년이 바뀌면 이름도 바뀌므로 날마다 한 번 보내고, 워커는 다음 검색부터 별칭처럼 찾는다.
  * @param {Engine} mod @param {string} today
  */
 async function sendChristmasNames(mod, today) {
@@ -1541,20 +1567,39 @@ async function sendChristmasNames(mod, today) {
 
 // ── BEGIN LECT_DAYS ──
 /**
- * 줄 하나가 여는 날과 다른 날(ADR-044 §1). 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 다른 해의 날을 해마다 하나씩 찾는다. 그 밖의
- * 줄은 여는 날이 지났을 때만 다음에 읽는 날을 찾는다. 화면의 이름으로 찾은 성탄 평일(§3)도 그 줄의 세트로 찾는다. 해마다 같은 독서라
- * 엔진이 오늘부터 처음 오는 날을 열고, 그날이 그 이름의 날이다. 이름으로 찾으면 오늘부터 한 해 안에 같은 이름의 날이 두 번 있을 때(1월 5일에
- * 본 1월 5일과 이듬해 1월 4일의 「성탄 2주 화요일」)에 두 줄이 같은 날을 적고 한 줄은 다른 날을 열었다(코드 리뷰 2026-11-17).
- * `isStale`이 참이면(화면을 떠났으면) 엔진이 표를 더 세지 않는다(코드 리뷰 2026-11-17).
+ * 줄 하나가 여는 날과 다른 날(ADR-044 §1). 모든 줄이 이번 전례년의 날을 연다(엔진 `findReadingDay`). 이름으로 찾은 줄이 해에 따라 다른
+ * 독서를 읽으면 다른 해의 날을 해마다 하나씩 찾고, 구절로 찾은 줄이 해에 따라 다른 독서를 읽으면 여는 날이 지났을 때만 다음에 읽는 날을
+ * 찾는다. 해마다 같은 독서를 읽는 줄은 이번 전례년의 날을 열면 다음 전례년에 그 전례일을 지키는 날을 찾는다(`nextYear`). 화면의 이름으로
+ * 찾은 성탄 평일(§3)도 그 줄의 세트로 찾는다. 그 이름은 이번 전례년의 이름이라(엔진 `findChristmasNames`) 여는 날이 그 이름의 날이다.
+ * 지역 축일은 해마다 같은 날짜라 엔진의 표 없이 센다. `isStale`이 참이면(화면을 떠났으면) 엔진이 표를 더 세지 않는다(코드 리뷰 2026-11-17).
  * @param {Engine} mod @param {any} item @param {string} today @param {() => boolean} [isStale]
  * @returns {Promise<LectDays | null>}
  */
 async function lectDaysOf(mod, item, today, isStale = () => false) {
-  // 지역 축일은 해마다 같은 날짜라 엔진의 표 없이 다음 그날을 연다(ADR-044 §3)
-  if (item.local) return { open: localDayOf(mod, item, nextMonthDay(item.obs.date, today)), next: null, nextIds: [], year: null, cycles: [] };
+  const ly = mod.liturgicalYearSpan(today);
+  const nextLy = mod.liturgicalYearSpan(/** @type {string} */ (mod.addDays(ly.to, 1)));
+  if (item.local) {
+    // 한 전례년에 같은 날짜가 두 번 있으면(11월 말과 12월 초) 오늘이나 그 뒤의 날, 둘 다 지났으면 앞의 날이다. 없으면(평년의 2월 29일)
+    // 다음 그날이다
+    const here = monthDaysBetween(item.obs.date, ly.from, ly.to);
+    const date = here.find((d) => d >= today) || here[0] || nextMonthDay(item.obs.date, today);
+    const nextYear = here.length ? { date: monthDaysBetween(item.obs.date, nextLy.from, nextLy.to)[0] || null } : null;
+    return { open: localDayOf(mod, item, date), next: null, nextIds: [], year: null, cycles: [], nextYear };
+  }
   const ids = lectSlugIds(item);
-  // 해마다 같은 독서인데 해 표시가 있는 세트를 넘기는 줄은 엔진이 해에 따라 다른 독서로 보므로, 오늘부터 찾게 한다(ADR-044 §1)
-  const open = await mod.findReadingDay(ids, today, lectYearlyWithYears(item) ? today : null, isStale);
+  const ember = item.ember ? LECT_EMBER_DAY[item.ember] : null;
+  if (ember) {
+    // 사계재의 날(ADR-044 §3): 이번 전례년과 다음 전례년에 그 계절을 지키는 날 가운데 그 요일이다. 이번 전례년에 그 요일이 없으면 다음
+    // 전례년의 그 요일을 연다
+    const days = await mod.findKeptDays(ids, today, ly.from, nextLy.to, isStale);
+    const onDay = (/** @type {KeptDay[]} */ list) => list.find((d) => lectWeekdayOf(d.date) === ember.weekday) || null;
+    const here = onDay(days.filter((d) => d.date <= ly.to));
+    const there = onDay(days.filter((d) => d.date >= nextLy.from));
+    const open = here || there;
+    if (!open) return null;
+    return { open, next: null, nextIds: ids, year: null, cycles: [], nextYear: here ? { date: there ? there.date : null } : null };
+  }
+  const open = await mod.findReadingDay(ids, today, null, isStale);
   if (!open) return null;
   const year = item.hits ? "" : lectYearOf(item, open);
   if (year) {
@@ -1572,10 +1617,20 @@ async function lectDaysOf(mod, item, today, isStale = () => false) {
       if (day) cycles.push(day);
     }
     cycles.sort((a, b) => (a.date < b.date ? -1 : 1));
-    return { open, next: null, nextIds: ids, year, cycles };
+    return { open, next: null, nextIds: ids, year, cycles, nextYear: null };
+  }
+  if (!lectCyclic(item)) {
+    // 해마다 같은 독서는 링크 없이 다음 전례년의 날을 적는다. 이번 전례년에 오지 않아 다음에 읽는 날을 열었으면 적지 않는다
+    /** @type {{ date: string | null } | null} */
+    let nextYear = null;
+    if (open.date <= ly.to) {
+      const day = await mod.findReadingDay(ids, today, nextLy.from, isStale);
+      nextYear = { date: day && day.date <= nextLy.to ? day.date : null };
+    }
+    return { open, next: null, nextIds: ids, year: null, cycles: [], nextYear };
   }
   const next = open.date < today ? await mod.findReadingDay(ids, today, today, isStale) : null;
-  return { open, next: next && next.date !== open.date ? next : null, nextIds: ids, year: null, cycles: [] };
+  return { open, next: next && next.date !== open.date ? next : null, nextIds: ids, year: null, cycles: [], nextYear: null };
 }
 
 /**
@@ -1622,7 +1677,7 @@ async function withLectDays(result, screen, deadline, isStale) {
     const mod = await ensureEngine();
     if (!mod) return;
     const today = todayOf(mod);
-    // 화면의 이름으로 찾을 수 있게, 교회력 자료를 처음 받은 뒤 오늘부터 한 해 안에 오는 성탄 평일의 이름을 보내 둔다
+    // 화면의 이름으로 찾을 수 있게, 교회력 자료를 처음 받은 뒤 이번 전례년의 성탄 평일의 이름을 보내 둔다
     sendChristmasNames(mod, today).catch(() => {});
     const found = await Promise.all(lect.items.map((/** @type {any} */ item) => lectDaysOf(mod, item, today, isStale).catch(() => null)));
     if (screen.days !== days) return;
@@ -1677,7 +1732,10 @@ async function withYearRows(result, screen, isStale) {
   const found = lect.items;
   // 지역 축일은 해마다 같은 날짜라 엔진의 해마다의 표에 묻지 않는다(`localYearDayOf`)
   const engineItems = found.filter((/** @type {any} */ item) => !item.local);
-  const asks = engineItems.map((/** @type {any} */ item) => ({ ids: lectSlugIds(item), key: item.obs.key }));
+  // 사계재의 날은 그 요일의 날만 묻는다(ADR-044 §3)
+  const asks = engineItems.map((/** @type {any} */ item) => ({
+    ids: lectSlugIds(item), key: item.obs.key, weekday: item.ember && LECT_EMBER_DAY[item.ember] ? LECT_EMBER_DAY[item.ember].weekday : null,
+  }));
   /** @type {Array<{ year: number, days: Array<any | null>, lunar: boolean }>} */
   const perYear = [];
   for (let y = lect.years.from; y <= lect.years.to; y++) {
