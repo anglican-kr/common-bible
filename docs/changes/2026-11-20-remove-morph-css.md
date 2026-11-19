@@ -33,6 +33,7 @@ ADR-048의 2단계다. 1단계(#612)에서 휴대폰의 검색 입력창을 검�
 ## 갱신한 문서
 
 - `docs/decisions/048-mobile-search-input-on-top.md`: 상태를 구현 완료(2026-11-20)로.
+- `docs/architecture.md`: 부록 A의 ADR 목록에서 ADR-048을 구현 완료(2026-11-20)로.
 - `docs/decisions/030-morphing-tab-bar.md`: §1, §2, §5, 「구현 메모」, 「적용 확장」의 이어 읽기 항목에 검색 모핑 부분을 ADR-048이 대체했다는 안내. §3과 §6에는 1단계에서 넣었다.
 - `docs/decisions/033-search-options.md`: 토큰 자리를 끼우는 필드를 셋에서 둘로(하단 모핑 pill을 뺌). 모핑 pill의 토큰 항목을 지웠다.
 - `docs/topics/routing.md`: 「남은 일」의 CSS 정리 항목을 지우고, 「결정」의 ADR-048 줄에서 「CSS 정리 남음」을 뺐다.
