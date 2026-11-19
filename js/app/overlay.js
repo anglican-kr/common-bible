@@ -284,12 +284,14 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
    *
    * @param {HTMLElement} handle
    * @param {HTMLElement} sheet
-   * @param {{ onClose: () => void, maxRatio?: number }} opts
+   * @param {{ onClose: () => void, maxRatio?: number, minHeight?: () => number }} opts
    *   onClose runs when the release gesture decides "close"; the caller owns the
    *   actual dismiss (and any inline-height reset). maxRatio caps the dragged
-   *   height as a fraction of viewport height (default 0.9).
+   *   height as a fraction of viewport height (default 0.9). minHeight, read on
+   *   each release, raises the rest min above 30vh (px) for a sheet whose fixed
+   *   rows would leave its content out of sight there.
    */
-  function attachSheetDrag(handle, sheet, { onClose, maxRatio = 0.9 }) {
+  function attachSheetDrag(handle, sheet, { onClose, maxRatio = 0.9, minHeight }) {
     let startY = 0;
     let startH = 0;
     /** @param {number} clientY */
@@ -302,9 +304,11 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
     function onPointerMove(e) { onMove(e.clientY); }
     function onPointerUp() {
       handle.removeEventListener("pointermove", onPointerMove);
-      const action = dragReleaseAction(sheet.offsetHeight, window.innerHeight);
+      const vh = window.innerHeight;
+      const restMin = Math.min(Math.max(vh * 0.3, minHeight ? minHeight() : 0), vh * maxRatio);
+      const action = dragReleaseAction(sheet.offsetHeight, vh, restMin);
       if (action === "close") onClose();
-      else if (action === "snap-min") sheet.style.height = `${window.innerHeight * 0.3}px`;
+      else if (action === "snap-min") sheet.style.height = `${restMin}px`;
     }
     handle.addEventListener("pointerdown", (e) => {
       if (_isDesktopPanel()) return; // desktop (wide + mouse): fixed-size side panel

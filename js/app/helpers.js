@@ -219,8 +219,11 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
    *
    * Threshold semantics (using viewport-height ratios):
    *   - h < 20vh  → close
-   *   - 20vh ≤ h < 30vh → snap-min (animate back to the 30vh rest min)
-   *   - h ≥ 30vh → stay where released
+   *   - 20vh ≤ h < minH → snap-min (animate back to the rest min)
+   *   - h ≥ minH → stay where released
+   * The rest min `minH` is 30vh unless the sheet passes a taller one: the
+   * book-filter sheet's fixed rows (head, tabs, 적용) leave no chips visible at
+   * 30vh, so it rests where two rows of chips show (ADR-033).
    *
    * Callers' onMove handlers MUST allow the visual height to drop below the
    * 30vh rest min (clamp at 0, not 30vh) — otherwise the close branch is
@@ -228,11 +231,12 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
    *
    * @param {number} h    final sheet height in px (post-drag)
    * @param {number} vh   viewport innerHeight in px
+   * @param {number} [minH]  rest min in px (default 30vh)
    * @returns {"close" | "snap-min" | "stay"}
    */
-  function dragReleaseAction(h, vh) {
+  function dragReleaseAction(h, vh, minH = vh * 0.30) {
     if (h < vh * 0.20) return "close";
-    if (h < vh * 0.30) return "snap-min";
+    if (h < minH) return "snap-min";
     return "stay";
   }
 

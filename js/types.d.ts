@@ -978,7 +978,7 @@ export interface AppHelpers {
   hangingQuoteClass: (ch: string | undefined) => string;
   setInert: (on: boolean, selectors: string) => void;
   trapFocus: (container: HTMLElement) => () => void;
-  dragReleaseAction: (h: number, vh: number) => "close" | "snap-min" | "stay";
+  dragReleaseAction: (h: number, vh: number, minH?: number) => "close" | "snap-min" | "stay";
   emptyState: (opts: {
     icon: Node | null;
     title: string;
@@ -1082,7 +1082,7 @@ export interface AppOverlay {
   attachSheetDrag: (
     handle: HTMLElement,
     sheet: HTMLElement,
-    opts: { onClose: () => void; maxRatio?: number },
+    opts: { onClose: () => void; maxRatio?: number; minHeight?: () => number },
   ) => void;
   attachSheetResize: (
     handle: HTMLElement,
