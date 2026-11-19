@@ -134,6 +134,9 @@ test("_combinedRef: 송가는 책 이름과 번호 대신 송가 이름이다 �
   const first = { startCh: 5, startV: 7, endCh: 5, endV: 9, endDisplay: "9" };
   const last = { startCh: 6, startV: 1, endCh: 6, endV: 2, endDisplay: "2" };
   assert.strictEqual(ctx._combinedRef("송가", "", first, last, false, titleOf), "이사야 둘째 송가 7–이사야 셋째 송가 2");
+  // 끝 송가의 이름이 없으면 「7:3」 — 「7 3」은 장인지 절인지 알 수 없다
+  const tail = { startCh: 7, startV: 1, endCh: 7, endV: 3, endDisplay: "3" };
+  assert.strictEqual(ctx._combinedRef("송가", "", range, tail, false, titleOf), "이사야 셋째 송가 1–7:3");
 });
 
 test("_combinedRef: a lone whole chapter reads as 창세 1장", () => {

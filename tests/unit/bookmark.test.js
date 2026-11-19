@@ -1303,19 +1303,19 @@ const LABEL_BOOKS = [
   { id: "cant", name_ko: "성무일과 송가", short_name_ko: "송가", chapter_count: 13, titles: { 5: "이사야 둘째 송가", 6: "이사야 셋째 송가" } },
 ];
 
-// chUnit (the chapter unit — 「편」 for the psalms) and chapterTitle (the 송가 name, ADR-047) are helpers.js's:
+// chUnit (the chapter unit — 「편」 for the psalms), chapterTitle and verseRefLabel (the 송가 name, ADR-047) are helpers.js's:
 // bookmark-core.js reads them from window.appHelpers. The test runs that file for them rather than restate the rules.
 const HELPERS_SOURCE = stripEsmMarker(fs.readFileSync(path.resolve(__dirname, "../../js/app/helpers.js"), "utf8"));
 function realNaming() {
   const ctx = { window: {}, Object, Array, String, Math, Number, JSON, console, Error };
   vm.createContext(ctx);
   vm.runInContext(HELPERS_SOURCE, ctx, { filename: "helpers.js" });
-  const { chUnit, chapterTitle } = ctx.window.appHelpers;
-  return { chUnit, chapterTitle };
+  const { chUnit, chapterTitle, verseRefLabel } = ctx.window.appHelpers;
+  return { chUnit, chapterTitle, verseRefLabel };
 }
 
 // ── BOOKMARK_LABEL loader ────────────────────────────────────────────────────
-// The block calls chUnit and chapterTitle (destructured at the top of bookmark-core.js, outside the blocks). VERSE_SPEC comes along for
+// The block calls chUnit, chapterTitle and verseRefLabel (destructured at the top of bookmark-core.js, outside the blocks). VERSE_SPEC comes along for
 // mergeVerseSpecs, so a test merges as the merge dialog does.
 
 function loadBookmarkLabel() {
@@ -1332,7 +1332,7 @@ function loadBookmarkLabel() {
 
 // ── BOOKMARK_LEGACY loader ───────────────────────────────────────────────────
 // The block calls wholeVerseSpec (an import of bookmark-core.js) — the VERSE_SPEC block stands in for it —
-// changeBookmarkRange (the BOOKMARK_LABEL block, with chUnit and chapterTitle), and the store's loadBookmarks · rewriteBookmarks
+// changeBookmarkRange (the BOOKMARK_LABEL block, with chUnit, chapterTitle and verseRefLabel), and the store's loadBookmarks · rewriteBookmarks
 // (window.appStorage) and window.loadBooks · getBooksCache, stubbed here. `calls` records what the startup move asked for.
 
 function loadBookmarkLegacy({ stored = [], books = LEGACY_BOOKS, booksCached = true, booksFail = false, storeThrows = false } = {}) {

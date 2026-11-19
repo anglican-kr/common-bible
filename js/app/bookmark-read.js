@@ -122,9 +122,11 @@ function _combinedRef(bookName, unit, first, last, isSingleWhole, titleOf = () =
   if (startTitle) {
     if (isSingleWhole) return startTitle;
     if (first.startCh === last.endCh && first.startV === last.endV) return `${startTitle} ${first.startV}`;
+    // 끝 송가의 이름이 없으면 「7:3」이다 — 「7 3」은 장인지 절인지 알 수 없다
+    const endTitle = titleOf(last.endCh);
     const end = last.endCh === first.startCh
       ? last.endDisplay
-      : `${titleOf(last.endCh) ?? last.endCh} ${last.endDisplay}`;
+      : endTitle ? `${endTitle} ${last.endDisplay}` : `${last.endCh}:${last.endDisplay}`;
     return `${startTitle} ${first.startV}–${end}`;
   }
   if (isSingleWhole) return `${bookName} ${first.startCh}${unit}`;

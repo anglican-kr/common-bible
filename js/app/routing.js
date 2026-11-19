@@ -764,10 +764,8 @@ async function route() {
       saveReadingPosition(bookId, chapter, resumeVerse);
       startScrollTracking(bookId, chapter);
       // 송가는 송가 이름이다(「이사야 셋째 송가」, ADR-047 §2)
-      updatePageMeta({
-        title: chapterLabel(book, chapter),
-        description: `${chapterLabel(book, chapter)} — 공동번역성서`,
-      });
+      const label = chapterLabel(book, chapter);
+      updatePageMeta({ title: label, description: `${label} — 공동번역성서` });
       trackPageView();
     }
   } catch (err) {

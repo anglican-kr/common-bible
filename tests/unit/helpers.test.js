@@ -401,6 +401,24 @@ test("chapterLabel: 「책 N장」, 「시편 N편」이고 송가는 책 이름
   assert.equal(chapterLabel({ id: "cant", name_ko: "성무일과 송가" }, 6), "성무일과 송가 6");
 });
 
+test("verseRefLabel: 「책 장:절」이고 송가는 송가 이름과 절이다(복사 출처와 북마크 이름, ADR-047 §1)", () => {
+  const h = loadHelpers();
+  const { verseRefLabel } = h.helpers;
+  assert.equal(verseRefLabel({ id: "john" }, 3, "16", "요한의 복음서"), "요한의 복음서 3:16");
+  assert.equal(verseRefLabel(CANTICLES, 6, "1-3", "성무일과 송가"), "이사야 셋째 송가 1-3");
+  assert.equal(verseRefLabel(CANTICLES, 2, "1-3", "송가"), "송가 2:1-3");   // 이름이 없는 번호
+  assert.equal(verseRefLabel(undefined, 6, "1", "cant"), "cant 6:1");
+});
+
+test("hasBatchim: 끝 글자의 받침 — 한글 음절이 아니면 없다", () => {
+  const h = loadHelpers();
+  const { hasBatchim } = h.helpers;
+  assert.equal(hasBatchim("장"), true);
+  assert.equal(hasBatchim("편"), true);
+  assert.equal(hasBatchim("송가"), false);
+  assert.equal(hasBatchim("23"), false);
+});
+
 test("missingChapterText: 없는 장의 안내 — 송가는 「14번 송가가 없습니다」", () => {
   const h = loadHelpers();
   const { missingChapterText } = h.helpers;

@@ -962,6 +962,10 @@ export interface AppHelpers {
   chapterTitle: (book: { titles?: { [chapter: string]: string } } | null | undefined, chapter: number | string | null | undefined) => string | null;
   /** 장 하나의 이름 — 「요한의 복음서 3장」, 송가는 「이사야 셋째 송가」(ADR-047 §1). */
   chapterLabel: (book: { id: string; name_ko: string; titles?: { [chapter: string]: string } }, chapter: number | string, bookName?: string) => string;
+  /** 절 범위의 위치 — 「요한의 복음서 3:16」, 송가는 「이사야 셋째 송가 1-3」(ADR-047 §1). */
+  verseRefLabel: (book: { titles?: { [chapter: string]: string } } | null | undefined, chapter: number | string, spec: string, bookName: string) => string;
+  /** 끝 글자에 받침이 있는가 — 조사를 고를 때 쓴다. */
+  hasBatchim: (word: string) => boolean;
   /** 없는 장의 안내 — 「성무일과 송가에는 14번 송가가 없습니다」(ADR-047 §3). */
   missingChapterText: (bookId: string, bookName: string, chapter: number) => string;
   el: <K extends keyof HTMLElementTagNameMap>(

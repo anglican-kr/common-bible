@@ -73,6 +73,26 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   }
 
   /**
+   * 절 범위의 위치다. 「요한의 복음서 3:16」이고, 송가는 책 이름과 번호 없이 송가 이름과 절이다(「이사야 셋째 송가 1-3」,
+   * ADR-047 §1). 복사한 글의 출처와 북마크 기본 이름이 쓴다. `bookName`은 책 이름 자리에 쓸 이름이다(줄인 이름 「이사」).
+   * @param {{ titles?: { [chapter: string]: string } } | null | undefined} book  없으면 언제나 「책 장:절」이다
+   * @param {number | string} chapter @param {string} spec  「1-3」 @param {string} bookName
+   */
+  function verseRefLabel(book, chapter, spec, bookName) {
+    const title = chapterTitle(book, chapter);
+    return title ? `${title} ${spec}` : `${bookName} ${chapter}:${spec}`;
+  }
+
+  /**
+   * 끝 글자에 받침이 있는가. 한글 음절이 아니면 없다고 본다. 조사를 고를 때 쓴다(「장을」, 「송가를」).
+   * @param {string} word
+   */
+  function hasBatchim(word) {
+    const code = word.charCodeAt(word.length - 1) - 0xac00;
+    return code >= 0 && code < 11172 && code % 28 !== 0;
+  }
+
+  /**
    * 없는 장의 안내다. 「요한의 복음서에는 99장이 없습니다」, 「시편에는 151편이 없습니다」, 「성무일과 송가에는 14번 송가가 없습니다」
    * (ADR-047 §3). 장 화면(views.js)과 검색의 구절 바로가기(search.js)가 같은 문장을 쓴다.
    * @param {string} bookId @param {string} bookName @param {number} chapter
@@ -555,7 +575,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   }
 
   return {
-    _$, chUnit, chUnitNoun, chapterTitle, chapterLabel, missingChapterText, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
+    _$, chUnit, chUnitNoun, chapterTitle, chapterLabel, verseRefLabel, missingChapterText, hasBatchim, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
     HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot, SCROLL_ANCHORING, barBottom, scrollUnderBar,
     publishBarHeight, isFormerNorthChurch, churchName, parishGroups, DESKTOP_LAYOUT_QUERY, isDesktopLayout, SHEET_INERT_SELECTORS,
     DATE_PICKER_FOCUS_KEY, datePickerTrigger,

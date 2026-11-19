@@ -54,7 +54,7 @@ const OVERLAY_PATH = path.resolve(__dirname, "../../js/app/overlay.js");
 const OVERLAY_SOURCE = fs.readFileSync(OVERLAY_PATH, "utf8")
   .replace(/\nexport\s*\{\s*\}\s*;?\s*$/, "");
 
-// The chapter naming rules (chUnit, chUnitNoun, chapterTitle, chapterLabel, missingChapterText) are helpers.js's:
+// The chapter naming rules (chUnit, chUnitNoun, chapterTitle, chapterLabel, missingChapterText, hasBatchim) are helpers.js's:
 // 「편」 for the psalms, no unit and the 송가 name for the canticles (ADR-047). The POPOVER and FAILURE_TEXT loaders run
 // that file for them rather than restate the rules (helpers.test.js checks them on their own).
 const HELPERS_SOURCE = fs.readFileSync(path.resolve(__dirname, "../../js/app/helpers.js"), "utf8")
@@ -63,8 +63,8 @@ function realNaming() {
   const ctx = { window: {}, Object, Array, String, Math, Number, JSON, console, Error };
   vm.createContext(ctx);
   vm.runInContext(HELPERS_SOURCE, ctx, { filename: "helpers.js" });
-  const { chUnit, chUnitNoun, chapterTitle, chapterLabel, missingChapterText } = ctx.window.appHelpers;
-  return { chUnit, chUnitNoun, chapterTitle, chapterLabel, missingChapterText };
+  const { chUnit, chUnitNoun, chapterTitle, chapterLabel, missingChapterText, hasBatchim } = ctx.window.appHelpers;
+  return { chUnit, chUnitNoun, chapterTitle, chapterLabel, missingChapterText, hasBatchim };
 }
 
 function extractBlock(name, source = VIEWS_SOURCE) {
@@ -919,6 +919,18 @@ test("setTitleWithChapterPicker: 송가는 송가 이름이고, 고르기 목록
   assert.deepEqual(grid.children.map((a) => a.textContent), ["모세송가", "하느님 찬미송가", "창조송가"]);
   assert.deepEqual(grid.children.map((a) => a.getAttribute("href")), ["/cant/1", "/cant/2", "/cant/3"]);
   assert.equal(grid.children[1].className, "popover-item current");
+});
+
+test("setTitleWithChapterPicker: 1번에만 이름이 없어도 이름 칸이고, 그 번호는 숫자다", () => {
+  const h = loadPopover();
+  const book = {
+    id: "cant", name_ko: "성무일과 송가", chapter_count: 3, has_prologue: false, division: "liturgical",
+    titles: { 2: "하느님 찬미송가", 3: "창조송가" },
+  };
+  h.setTitleWithChapterPicker(book, 3);
+  const grid = h.$title.children[1].children[0];
+  assert.equal(grid.className, "popover-grid popover-names");
+  assert.deepEqual(grid.children.map((a) => a.textContent), ["1", "하느님 찬미송가", "창조송가"]);
 });
 
 test("setTitleWithChapterPicker: 송가 이름이 없으면 번호만 보이고 「장」은 붙이지 않는다", () => {

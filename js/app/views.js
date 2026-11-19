@@ -25,7 +25,8 @@ import { showAudioPlayer, hideAudioBar } from "./audio-player.js";
 import { citationSource, halfVerseMark, selectionCitation, formatVerseRanges, verseInstanceKeys } from "./verse-spec.js";
 
 const {
-  _$, el, clearNode, chUnit, chUnitNoun, chapterTitle, chapterLabel, missingChapterText, hangingQuoteClass, emptyState, scrollUnderBar,
+  _$, el, clearNode, chUnit, chUnitNoun, chapterTitle, chapterLabel, verseRefLabel, missingChapterText, hasBatchim, hangingQuoteClass,
+  emptyState, scrollUnderBar,
 } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
 const {
@@ -111,8 +112,8 @@ function setTitleWithChapterPicker(book, currentCh) {
   const popover = el("div", { className: "chapter-popover", role: "listbox", "aria-label": `${unit} 선택` });
   popover.hidden = true;
 
-  // 송가는 숫자 격자 대신 송가 이름의 목록이다(ADR-047 §2)
-  const named = chapterTitle(book, 1) !== null;
+  // 송가는 숫자 격자 대신 송가 이름의 목록이다(ADR-047 §2). 이름이 하나라도 있으면 이름 칸이고, 이름이 없는 번호는 숫자다.
+  const named = Object.keys(book.titles ?? {}).length > 0;
   const grid = el("div", { className: named ? "popover-grid popover-names" : "popover-grid" });
   if (book.has_prologue) {
     grid.appendChild(
@@ -856,8 +857,8 @@ function renderChapterList(book, books) {
     );
   }
 
-  // 송가는 숫자 격자 대신 송가 이름의 목록이다(ADR-047 §2)
-  if (chapterTitle(book, 1) !== null) grid.classList.add("chapter-names");
+  // 송가는 숫자 격자 대신 송가 이름의 목록이다(ADR-047 §2). 고르기 목록(setTitleWithChapterPicker)과 같은 조건이다.
+  if (Object.keys(book.titles ?? {}).length > 0) grid.classList.add("chapter-names");
   for (let i = 1; i <= book.chapter_count; i++) {
     const title = chapterTitle(book, i);
     grid.appendChild(
@@ -1779,8 +1780,9 @@ function renderChapter(data, book, opts) {
 
   // one article — one chapter. The liturgical books (전례시편 · 송가) are the prayer-book translation, not 공동번역
   // (ADR-037 §1 · §3), so they are credited to 「(대한성공회 기도서)」 (사용자 결정 2026-10-13 — verse-spec.js citationSource).
+  // 송가는 송가 이름과 절이다(「이사야 셋째 송가 1-3」, ADR-047 §2) — 전례독서 화면의 송가 출처와 같다.
   bindCopyAttribution(article, (_unit, runs) =>
-    `${book.name_ko} ${runs[0].chapterRef ?? ch}:${formatVerseRanges(runs[0].ranges)} ${citationSource(book.division === "liturgical")}`);
+    `${verseRefLabel(book, runs[0].chapterRef ?? ch, formatVerseRanges(runs[0].ranges), book.name_ko)} ${citationSource(book.division === "liturgical")}`);
 
   $app.appendChild(article);
   $app.appendChild(buildChapterNav(book, ch));
@@ -1874,7 +1876,8 @@ function renderError(msg) {
 // 서로 달라지기 때문이다(PR #355 리뷰 2026-10-18, 성서 화면은 ADR-024 §6, 2026-11-07).
 
 // ── BEGIN FAILURE_TEXT ──
-// Exercised by tests/unit/views.test.js with a chUnit stub. Pure: the copy of the failure screens, no DOM.
+// Exercised by tests/unit/views.test.js with helpers.js's naming rules (chUnitNoun, missingChapterText, hasBatchim). Pure: the
+// copy of the failure screens, no DOM.
 // 다음 행동의 이름. 부제가 이 이름으로 할 일을 가리킨다(coding-pitfalls §29).
 const RELOAD_LABEL = "다시 불러오기";
 const BOOK_LIST_LABEL = "성서 목록";
@@ -1892,8 +1895,9 @@ const RELOAD_SUBTITLE = `네트워크 연결을 확인한 뒤 「${RELOAD_LABEL}
  *   (구현하며 정함).
  * - `"load"`: 자료를 받지 못했다. 그 자리에서 다시 하므로 링크가 아니라 「다시 불러오기」 단추다(`link`는 `null`). 캘린더와 같은
  *   화면은 사용자 결정 2026-11-07이고, 제목의 「성서 자료」는 구현하며 정했다.
- * 장 단위는 `chUnit`을 따라 시편과 전례시편은 「시편에는 151편이 없습니다」다. 링크와 부제의 「편」(「편 목록」)은 장 선택 단추의 이름
- * 「편 선택」에 맞춰 구현하며 정했다. 송가는 「성무일과 송가에는 14번 송가가 없습니다」와 「송가 목록」이다(ADR-047 §3).
+ * 장 단위는 단위 낱말(`chUnitNoun`)과 없는 장의 안내(`missingChapterText`)를 따라 시편과 전례시편은 「시편에는 151편이
+ * 없습니다」다. 링크와 부제의 「편」(「편 목록」)은 장 선택 단추의 이름 「편 선택」에 맞춰 구현하며 정했다. 송가는 「성무일과
+ * 송가에는 14번 송가가 없습니다」와 「송가 목록」이다(ADR-047 §3).
  * @param {BibleFailureKind} kind
  * @param {BookEntry | null} book  머리의 책. `null`이면 성서 목록의 머리다
  * @param {number} [chapter]  `"no-chapter"`의 장 번호
@@ -1910,7 +1914,7 @@ function bibleFailureText(kind, book, chapter) {
   }
   // 송가는 「송가 목록」, 「다른 송가를」이다(ADR-047 §3)
   const unit = chUnitNoun(book.id);
-  const unitObject = `${unit}${book.id === "cant" ? "를" : "을"}`;
+  const unitObject = `${unit}${hasBatchim(unit) ? "을" : "를"}`;
   const link = { label: `${unit} 목록`, href: `/${book.id}` };
   if (kind === "no-chapter") {
     return {
