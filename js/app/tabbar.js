@@ -62,45 +62,89 @@ function setKeyboardState(up) {
   }
 }
 
-// 키보드가 뜨기 전에 입력을 먼저 올려 두기(ADR-030 §6, 사용자 보고 2026-11-19). iOS 는 키보드가 뜰 때 포커스 입력이
-// 키보드에 가려지면 페이지를 위로 민다. 앱은 키보드 높이를 잰 뒤에야 dock 을 올리므로, 최근 검색 화면에서 입력을 누르면
-// 페이지가 위로 튀었다가 아래의 scrollPageTop 이 되돌렸다. 그래서 키보드를 열 때마다 키보드 위에 남는 높이(비주얼 뷰포트
-// 높이)를 기기에 기억해 두고, 다음 포커스에서 그만큼 dock 을 바로 올린다. 키보드 높이 대신 남는 높이를 기억하는 것은
-// Safari 의 도구 막대가 레이아웃 뷰포트 높이(innerHeight)를 바꿔도 키보드 위의 높이는 같기 때문이다. 폭이 다르면(가로와
-// 세로) 쓰지 않는다.
+// 키보드가 뜨기 전에 입력을 먼저 올려 두기(ADR-030 §6, 사용자 보고 2026-11-19). iOS는 키보드가 뜰 때 포커스 입력이
+// 키보드에 가려지면 페이지를 위로 민다. 앱은 키보드 높이를 잰 뒤에야 dock을 올리므로, 최근 검색 화면에서 입력을 누르면
+// 페이지가 위로 튀었다가 아래의 scrollPageTop이 되돌렸다. 그래서 키보드 위에 남는 높이(비주얼 뷰포트 높이)를 기기의 성질로
+// 기억해 두고, 다음 포커스에서 그만큼 dock을 바로 올린다(사용자 결정 2026-11-19: 단말기별 고유 속성).
+//   - 기기 화면의 크기와 방향마다 따로 적는다(`keyboardMemoryKey`). 화면 크기는 브라우저 도구 막대와 상관없이 기기마다 정해져
+//     있고, 세로와 가로의 기억이 서로 덮어쓰지 않는다.
+//   - 키보드 높이 대신 키보드 위에 남는 높이를 적는다. Safari의 도구 막대가 레이아웃 뷰포트 높이(innerHeight)를 바꿔도 키보드
+//     위의 높이는 같다.
+//   - 더 큰 키보드를 잴 때만 고친다(`updatedKeyboardEntry`). 덜 올라온 키보드를 재도 기억이 줄지 않는다.
+//   - 화면 높이의 60%를 넘는 높이는 쓰지도 적지도 않는다. 화면을 돌리는 사이의 순간 값 같은 잘못 잰 값이다.
+//   - 미리 올렸는데 키보드가 뜨지 않았으면(하드웨어 키보드) 표시해 두고 다음 포커스에서는 미리 올리지 않는다. 키보드가 다시
+//     뜨면 표시를 지운다.
 const KB_MEMORY_KEY = "bible-keyboard-height";
+/** 키보드가 가릴 수 있는 화면 높이의 몫. 이보다 큰 높이는 잘못 잰 값으로 본다. */
+const KB_MAX_SHARE = 0.6;
 /**
- * 기억한 높이로 미리 올릴 px. 쓸 수 없으면 0.
- * @param {unknown} saved  { w: innerWidth, vv: 키보드 위에 남은 높이 }
- * @param {number} innerHeight @param {number} innerWidth
- * @returns {number}
+ * 기억을 적는 이름: 기기 화면의 크기(짧은 변 x 긴 변)와 방향.
+ * @param {number} screenW @param {number} screenH @param {number} innerW @param {number} innerH
+ * @returns {string}  "390x844:portrait"
  */
-function rememberedLift(saved, innerHeight, innerWidth) {
-  if (!saved || typeof saved !== "object") return 0;
-  const { w, vv } = /** @type {{ w?: unknown, vv?: unknown }} */ (saved);
-  if (w !== innerWidth || typeof vv !== "number" || !(vv > 0)) return 0;
-  const lift = innerHeight - vv;
-  return lift > 1 ? lift : 0;
+function keyboardMemoryKey(screenW, screenH, innerW, innerH) {
+  return `${Math.min(screenW, screenH)}x${Math.max(screenW, screenH)}:${innerW > innerH ? "landscape" : "portrait"}`;
 }
 /**
- * dock 을 올릴 높이: 잰 키보드 높이와 미리 올린 높이 가운데 큰 쪽. 미리 올린 높이는 키보드가 다 뜰 때까지만 둔다
- * (`preLift`, 아래). 1px 이하는 반올림 오차라 0 이다.
+ * 기억으로 미리 올릴 px. 기억이 없거나, 하드웨어 키보드로 표시했거나, 화면 높이의 60%를 넘으면 0.
+ * @param {unknown} entry  { vv: 키보드 위에 남은 높이, hw?: true }
+ * @param {number} innerHeight
+ * @returns {number}
+ */
+function rememberedLift(entry, innerHeight) {
+  if (!entry || typeof entry !== "object") return 0;
+  const { vv, hw } = /** @type {{ vv?: unknown, hw?: unknown }} */ (entry);
+  if (hw === true || typeof vv !== "number" || !(vv > 0)) return 0;
+  const lift = innerHeight - vv;
+  return lift > 1 && lift <= innerHeight * KB_MAX_SHARE ? lift : 0;
+}
+/**
+ * 이번 포커스에서 잰 것으로 고친 기억. 고칠 것이 없으면 null.
+ * @param {unknown} entry  지금 기억(없으면 null)
+ * @param {number} sessionMax  이번 포커스에서 잰 가장 큰 키보드 높이(px)
+ * @param {number} sessionVV  그 높이를 잰 순간의 비주얼 뷰포트 높이(px)
+ * @param {number} innerHeight  그 순간의 레이아웃 뷰포트 높이(px)
+ * @param {boolean} preLifted  이번 포커스에서 기억으로 미리 올렸는가
+ * @returns {{ vv: number, hw?: true } | null}
+ */
+function updatedKeyboardEntry(entry, sessionMax, sessionVV, innerHeight, preLifted) {
+  const cur = entry && typeof entry === "object" ? /** @type {{ vv?: unknown, hw?: unknown }} */ (entry) : null;
+  const curVV = cur && typeof cur.vv === "number" && cur.vv > 0 ? cur.vv : null;
+  if (sessionMax > 1) {
+    if (sessionMax > innerHeight * KB_MAX_SHARE || !(sessionVV > 0)) return null;
+    // 더 큰 키보드(키보드 위에 남은 높이가 더 작다)만 고친다. 하드웨어 키보드 표시는 키보드가 뜬 것으로 지운다
+    const vv = curVV === null ? sessionVV : Math.min(curVV, sessionVV);
+    if (curVV === vv && cur && cur.hw !== true) return null;
+    return { vv };
+  }
+  // 미리 올렸는데 키보드가 뜨지 않았다: 다음 포커스에서는 미리 올리지 않는다
+  if (preLifted && curVV !== null && cur && cur.hw !== true) return { vv: curVV, hw: true };
+  return null;
+}
+/**
+ * dock을 올릴 높이: 잰 키보드 높이와 미리 올린 높이 가운데 큰 쪽. 미리 올린 높이는 키보드가 다 뜰 때까지만 둔다
+ * (`preLift`, 아래). 1px 이하는 반올림 오차라 0이다.
  * @param {number} overlap @param {number} preLift @returns {number}
  */
 function keyboardLift(overlap, preLift) {
   return Math.max(overlap > 1 ? overlap : 0, preLift > 1 ? preLift : 0);
 }
-/** 키보드가 다 뜰 때까지 미리 올려 둔 높이(px). 0 이면 없다. @type {number} */
+/** 키보드가 다 뜰 때까지 미리 올려 둔 높이(px). 0이면 없다. @type {number} */
 let preLift = 0;
-/** 이번 포커스 동안 잰 가장 큰 키보드 높이(px). 키보드가 다 뜬 뒤 기억한다. @type {number} */
+/** 이번 포커스 동안 잰 가장 큰 키보드 높이(px)와 그 순간의 비주얼 뷰포트 높이. 키보드가 다 뜬 뒤 기억한다. 그 순간의 레이아웃
+ * 뷰포트 높이는 둘의 합이다. */
 let kbSessionMax = 0;
+let kbSessionVV = 0;
 
 // ── visualViewport: 키보드가 가리지 않게 dock 을 키보드 높이만큼 위로 ──
 function liftForKeyboard() {
   const vv = window.visualViewport;
   if (!vv || !$dock) return;
   const overlap = keyboardOverlap(window.innerHeight, vv.height);
-  if (overlap > kbSessionMax) kbSessionMax = overlap;
+  if (overlap > kbSessionMax) {
+    kbSessionMax = overlap;
+    kbSessionVV = vv.height;
+  }
   const lift = keyboardLift(overlap, preLift);
   // 1px 미만은 반올림 오차 — 키보드 없음으로 본다.
   const up = lift > 0;
@@ -115,45 +159,62 @@ function liftForKeyboard() {
 }
 // ── END KEYBOARD ──
 
-/** 키보드가 다 뜬 뒤로 보는 시간. iOS 의 키보드 애니메이션(약 0.3초)과 그 뒤의 페이지 밀기를 넘긴다. */
+/** 키보드가 다 뜬 뒤로 보는 시간. iOS의 키보드 애니메이션(약 0.3초)과 그 뒤의 페이지 밀기를 넘긴다. */
 const KB_SETTLE_MS = 700;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let kbSettleTimer = null;
 
-/** 기억한 키보드 위의 높이. 저장소를 읽지 못하거나 값이 없으면 null(사생활 보호 창 등). @returns {unknown} */
+/** 기억 전체(기기 화면의 크기와 방향마다 하나). 저장소를 읽지 못하거나 깨졌으면 빈 기억이다(사생활 보호 창 등). */
 function loadKeyboardMemory() {
   try {
     const raw = localStorage.getItem(KB_MEMORY_KEY);
-    return raw ? JSON.parse(raw) : null;
+    const all = raw ? JSON.parse(raw) : null;
+    return all && typeof all === "object" && !Array.isArray(all) ? /** @type {Record<string, unknown>} */ (all) : {};
   } catch {
-    return null;
+    return {};
   }
 }
 
-/** 이번에 잰 키보드 높이를 키보드 위의 높이로 기억한다. 쓰지 못하면 다음 포커스가 전처럼 동작한다. @param {number} overlap */
-function saveKeyboardMemory(overlap) {
+/** 지금 화면의 기억 이름. */
+function currentKeyboardKey() {
+  return keyboardMemoryKey(window.screen.width, window.screen.height, window.innerWidth, window.innerHeight);
+}
+
+/** 이번 포커스의 기억을 고쳐 적는다. 쓰지 못해도 다음 포커스가 전처럼 동작할 뿐이다. @param {boolean} preLifted */
+function saveKeyboardMemory(preLifted) {
+  // 기억 이름마다 객체가 아닌 값(이 PR의 처음 구현이 적은 `{ w, vv }` 등)은 버린다
+  /** @type {Record<string, unknown>} */
+  const all = {};
+  for (const [k, v] of Object.entries(loadKeyboardMemory())) if (v && typeof v === "object") all[k] = v;
+  const key = currentKeyboardKey();
+  const next = updatedKeyboardEntry(all[key] ?? null, kbSessionMax, kbSessionVV, kbSessionMax + kbSessionVV, preLifted);
+  if (!next) return;
+  all[key] = next;
   try {
-    localStorage.setItem(KB_MEMORY_KEY, JSON.stringify({ w: window.innerWidth, vv: window.innerHeight - overlap }));
+    localStorage.setItem(KB_MEMORY_KEY, JSON.stringify(all));
   } catch {
     /* 저장하지 못해도 동작은 같다 */
   }
 }
 
-/** 입력이 포커스를 받을 때: 기억한 높이로 dock 을 먼저 올리고, 키보드가 다 뜬 뒤 잰 높이로 맞추고 기억한다. */
+/** 입력이 포커스를 받을 때: 기억한 높이로 dock을 먼저 올리고, 키보드가 다 뜬 뒤 잰 높이로 맞추고 기억을 고친다. */
 function preLiftForKeyboard() {
   kbSessionMax = 0;
-  preLift = rememberedLift(loadKeyboardMemory(), window.innerHeight, window.innerWidth);
-  if (preLift) liftForKeyboard();
+  kbSessionVV = 0;
+  preLift = rememberedLift(loadKeyboardMemory()[currentKeyboardKey()], window.innerHeight);
+  const preLifted = preLift > 0;
+  if (preLifted) liftForKeyboard();
   if (kbSettleTimer) clearTimeout(kbSettleTimer);
+  // 포커스를 잃으면 endPreLift가 이 타이머를 지운다. 그래서 타이머가 돌 때는 입력에 포커스가 있다
   kbSettleTimer = setTimeout(() => {
     kbSettleTimer = null;
     preLift = 0;
     liftForKeyboard();
-    if (kbSessionMax > 1 && document.activeElement === $searchInput) saveKeyboardMemory(kbSessionMax);
+    saveKeyboardMemory(preLifted);
   }, KB_SETTLE_MS);
 }
 
-/** 입력이 포커스를 잃을 때: 미리 올린 높이를 거둬, 키보드가 내려가는 대로 dock 이 따라 내려오게 한다. */
+/** 입력이 포커스를 잃을 때: 미리 올린 높이를 거둬, 키보드가 내려가는 대로 dock이 따라 내려오게 한다. */
 function endPreLift() {
   if (kbSettleTimer) clearTimeout(kbSettleTimer);
   kbSettleTimer = null;
@@ -430,7 +491,7 @@ function scrollPageTop() {
 }
 $searchInput?.addEventListener("focus", () => {
   setKeyboardState(true);
-  // 키보드가 뜨기 전에 dock 을 기억한 높이로 올린다(위 preLiftForKeyboard). 아래의 맨 위로 스크롤은 기억한 높이가 없는 첫
+  // 키보드가 뜨기 전에 dock을 기억한 높이로 올린다(위 preLiftForKeyboard). 아래의 맨 위로 스크롤은 기억한 높이가 없는 첫
   // 포커스와 높이가 어긋날 때를 위해 남긴다
   preLiftForKeyboard();
   // 맨 위로 스크롤은 **빈 검색(쿼리 없음 = 빈 상태 화면)** 일 때만 — iOS 키보드 pan 으로

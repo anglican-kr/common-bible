@@ -30,7 +30,7 @@ CLEAR_APP_STORAGE = """
     'bible-bookmarks-v2', 'bible-sync-meta',
     'bible-lectionary-track', 'bible-lectionary-cards-folded',
     'bible-start-page', 'bible-lectionary-alt-show', 'bible-baptismal-saint', 'bible-parish',
-    'bible-offline-save',
+    'bible-offline-save', 'bible-keyboard-height',
   ];
   for (const k of keys) try { localStorage.removeItem(k); } catch(_) {}
   // Suppress the install-promo nudge so the #install-scrim overlay never covers

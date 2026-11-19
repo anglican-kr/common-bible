@@ -106,18 +106,42 @@ test("keyboardOverlap: 음수는 0 으로 클램프(키보드 없음)", () => {
 
 // ── 키보드가 뜨기 전에 미리 올리기 (ADR-030 §6, 2026-11-19) ─────────────────────
 
-test("rememberedLift: 기억한 키보드 위의 높이로 올릴 px. 폭이 같을 때만 쓰고, 도구 막대로 innerHeight가 바뀌어도 맞춘다", () => {
+test("keyboardMemoryKey: 기기 화면의 크기(짧은 변 x 긴 변)와 방향. 화면을 돌려도 크기는 같고 방향만 바뀐다", () => {
   const { ctx } = makeCtx();
-  // 844 높이의 세로 화면에서 키보드 위에 508px이 남았다
-  assert.equal(ctx.rememberedLift({ w: 390, vv: 508 }, 844, 390), 336);
-  // Safari 도구 막대가 접혀 innerHeight가 늘면 그만큼 더 올린다
-  assert.equal(ctx.rememberedLift({ w: 390, vv: 508 }, 900, 390), 392);
-  // 폭이 다르면(가로) 쓰지 않는다
-  assert.equal(ctx.rememberedLift({ w: 390, vv: 508 }, 390, 844), 0);
-  // 기억이 없거나 깨졌으면 0
-  for (const bad of [null, undefined, "x", {}, { w: 390 }, { w: 390, vv: "508" }, { w: 390, vv: 0 }, { w: 390, vv: 900 }]) {
-    assert.equal(ctx.rememberedLift(bad, 844, 390), 0, JSON.stringify(bad));
+  assert.equal(ctx.keyboardMemoryKey(390, 844, 390, 760), "390x844:portrait");
+  assert.equal(ctx.keyboardMemoryKey(844, 390, 844, 340), "390x844:landscape");
+  assert.equal(ctx.keyboardMemoryKey(390, 844, 844, 340), "390x844:landscape", "iOS는 화면을 돌려도 screen.width가 그대로다");
+});
+
+test("rememberedLift: 기억한 키보드 위의 높이로 올릴 px. 도구 막대로 innerHeight가 바뀌어도 맞추고, 하드웨어 키보드 표시와 60%를 넘는 값은 쓰지 않는다", () => {
+  const { ctx } = makeCtx();
+  assert.equal(ctx.rememberedLift({ vv: 508 }, 844), 336);
+  assert.equal(ctx.rememberedLift({ vv: 508 }, 900), 392, "Safari 도구 막대가 접혀 innerHeight가 늘면 그만큼 더 올린다");
+  assert.equal(ctx.rememberedLift({ vv: 508, hw: true }, 844), 0, "키보드가 뜨지 않은 기기");
+  assert.equal(ctx.rememberedLift({ vv: 40 }, 844), 0, "화면 높이의 60%를 넘는다(잘못 잰 값)");
+  for (const bad of [null, undefined, "x", {}, { vv: "508" }, { vv: 0 }, { vv: 900 }]) {
+    assert.equal(ctx.rememberedLift(bad, 844), 0, JSON.stringify(bad));
   }
+});
+
+test("updatedKeyboardEntry: 더 큰 키보드를 잴 때만 고치고, 미리 올렸는데 키보드가 뜨지 않으면 표시하며, 키보드가 다시 뜨면 표시를 지운다", () => {
+  const { ctx } = makeCtx();
+  const plain = (v) => JSON.parse(JSON.stringify(v));
+  // 처음 잰 것
+  assert.deepEqual(plain(ctx.updatedKeyboardEntry(null, 336, 508, 844, false)), { vv: 508 });
+  // 더 큰 키보드(남은 높이가 작다)면 고친다
+  assert.deepEqual(plain(ctx.updatedKeyboardEntry({ vv: 508 }, 380, 464, 844, true)), { vv: 464 });
+  // 덜 올라온 키보드나 같은 키보드면 고치지 않는다(다시 쓰지도 않는다)
+  assert.equal(ctx.updatedKeyboardEntry({ vv: 508 }, 200, 644, 844, true), null);
+  assert.equal(ctx.updatedKeyboardEntry({ vv: 508 }, 336, 508, 844, true), null);
+  // 화면 높이의 60%를 넘는 높이는 적지 않는다
+  assert.equal(ctx.updatedKeyboardEntry(null, 600, 244, 844, false), null);
+  // 미리 올렸는데 키보드가 뜨지 않았다(하드웨어 키보드)
+  assert.deepEqual(plain(ctx.updatedKeyboardEntry({ vv: 508 }, 0, 0, 844, true)), { vv: 508, hw: true });
+  assert.equal(ctx.updatedKeyboardEntry({ vv: 508, hw: true }, 0, 0, 844, false), null, "이미 표시했다");
+  assert.equal(ctx.updatedKeyboardEntry(null, 0, 0, 844, false), null, "기억도 키보드도 없다");
+  // 키보드가 다시 뜨면 표시를 지운다. 더 작은 키보드였어도 기억은 큰 쪽이다
+  assert.deepEqual(plain(ctx.updatedKeyboardEntry({ vv: 508, hw: true }, 300, 544, 844, false)), { vv: 508 });
 });
 
 test("keyboardLift: 잰 높이와 미리 올린 높이 가운데 큰 쪽, 1px 이하는 0", () => {

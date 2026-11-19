@@ -174,47 +174,60 @@ def test_clear_falls_back_to_the_home_tab_when_the_funnel_cannot_take_focus(mobi
 
 
 def test_search_input_lifts_by_the_remembered_keyboard_before_it_shows(mobile_context):
-    """입력이 포커스를 받으면 기억한 키보드 위의 높이로 dock을 바로 올려, iOS가 페이지를 밀지 않게 한다. 키보드가 뜨지
-    않으면 내려오고, 키보드가 뜨면 그 높이를 기억한다(ADR-030 §6, 사용자 보고 2026-11-19)."""
+    """입력이 포커스를 받으면 이 기기 화면의 크기와 방향으로 기억한 키보드 위의 높이만큼 dock을 바로 올려, iOS가 페이지를
+    밀지 않게 한다. 키보드가 뜨지 않으면 내려오고 다음 포커스에서는 미리 올리지 않는다. 키보드가 뜨면 그 높이를 기억한다
+    (ADR-030 §6, 사용자 결정 2026-11-19: 단말기별 고유 속성)."""
     page = mobile_context.new_page()
     page.goto(BASE_URL)
     wait_app_ready(page)
     page.locator("#tab-search").click()
     page.wait_for_selector("#tab-search-input:not([hidden])", timeout=5_000)
     overlap = "() => getComputedStyle(document.documentElement).getPropertyValue('--kb-overlap').trim()"
-    page.locator("#tab-search-input").blur()
+    key = page.evaluate("""() => `${Math.min(screen.width, screen.height)}x${Math.max(screen.width, screen.height)}:${
+        innerWidth > innerHeight ? 'landscape' : 'portrait'}`""")
+    memory = "() => JSON.parse(localStorage.getItem('bible-keyboard-height') || 'null')"
+    inp = page.locator("#tab-search-input")
+    inp.blur()
     page.wait_for_timeout(800)
+
+    def remember(entries):
+        page.evaluate("(m) => localStorage.setItem('bible-keyboard-height', JSON.stringify(m))", entries)
 
     # 기억이 없으면 올리지 않는다(키보드가 없는 이 브라우저에서는 0)
     page.evaluate("() => localStorage.removeItem('bible-keyboard-height')")
-    page.locator("#tab-search-input").focus()
+    inp.focus()
     assert page.evaluate(overlap) in ("0px", "")
-    page.locator("#tab-search-input").blur()
+    inp.blur()
 
-    # 390 폭에서 키보드 위에 508px이 남았다고 기억했으면 844 - 508 = 336px을 바로 올린다
-    page.evaluate("() => localStorage.setItem('bible-keyboard-height', JSON.stringify({ w: 390, vv: 508 }))")
-    page.locator("#tab-search-input").focus()
+    # 이 기기 화면에서 키보드 위에 508px이 남았다고 기억했으면 844 - 508 = 336px을 바로 올린다
+    remember({key: {"vv": 508}})
+    inp.focus()
     assert page.evaluate(overlap) == "336px"
-    # 키보드가 뜨지 않으면(이 브라우저) 다 뜰 시간이 지난 뒤 내려온다
+    # 키보드가 뜨지 않으면(이 브라우저) 다 뜰 시간이 지난 뒤 내려오고, 하드웨어 키보드로 표시한다
     page.wait_for_function(f"() => ({overlap})() === '0px'", timeout=3_000)
-    page.locator("#tab-search-input").blur()
-
-    # 폭이 다르면(가로) 쓰지 않는다
-    page.evaluate("() => localStorage.setItem('bible-keyboard-height', JSON.stringify({ w: 844, vv: 508 }))")
-    page.locator("#tab-search-input").focus()
+    assert page.evaluate(memory) == {key: {"vv": 508, "hw": True}}
+    inp.blur()
+    # 표시한 뒤에는 미리 올리지 않는다
+    inp.focus()
     assert page.evaluate(overlap) in ("0px", "")
-    page.locator("#tab-search-input").blur()
+    inp.blur()
 
-    # 키보드가 뜨면(비주얼 뷰포트가 줄면) 다 뜬 뒤 키보드 위의 높이를 기억한다
-    page.evaluate("() => localStorage.removeItem('bible-keyboard-height')")
-    page.locator("#tab-search-input").focus()
+    # 다른 화면(가로)의 기억은 쓰지 않는다
+    other = key.replace("portrait", "landscape") if key.endswith("portrait") else key.replace("landscape", "portrait")
+    remember({other: {"vv": 200}})
+    inp.focus()
+    assert page.evaluate(overlap) in ("0px", "")
+    inp.blur()
+
+    # 키보드가 뜨면(비주얼 뷰포트가 줄면) 다 뜬 뒤 키보드 위의 높이를 이 화면의 이름으로 기억하고, 다른 화면의 기억은 남긴다
+    inp.focus()
     page.evaluate("""() => {
         Object.defineProperty(window.visualViewport, 'height', { configurable: true, get: () => 500 });
         window.visualViewport.dispatchEvent(new Event('resize'));
     }""")
     assert page.evaluate(overlap) == "344px"
-    page.wait_for_function("() => !!localStorage.getItem('bible-keyboard-height')", timeout=3_000)
-    assert page.evaluate("() => JSON.parse(localStorage.getItem('bible-keyboard-height'))") == {"w": 390, "vv": 500}
+    page.wait_for_function(f"() => !!(({memory})() || {{}})['{key}']", timeout=3_000)
+    assert page.evaluate(memory) == {other: {"vv": 200}, key: {"vv": 500}}
 
 
 def test_scroll_collapse_and_home_expands_without_nav(mobile_context):
