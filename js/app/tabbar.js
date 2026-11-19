@@ -361,37 +361,35 @@ $searchInput?.addEventListener("blur", () => setKeyboardState(false));
 // ⊗ 지우기 — 검색어를 비우고 키보드를 내린다(ADR-030 §3, 사용자 결정 2026-11-19). 입력 중에 지워도 검색을 그만두는
 // 뜻이라 키보드를 남기지 않는다. 결과 화면이면 빈 검색 뷰(최근 검색)로 되돌린다. 지우기 단추는 숨겨지므로 포커스를 같은
 // 입력창의 깔때기(책 선택)로 옮긴다(ADR-033 D3의 「적용」과 같은 자리, WCAG 2.4.3). 깔때기가 포커스를 받지 못하면 홈 탭이다.
+// 빈 검색 뷰를 다시 그려도 깔때기는 숨겨지지 않는다. 입력창 안에 포커스가 있는 동안 `syncOneField`(search.js)가 깔때기를 보인다.
 // pointerdown의 기본 동작을 막아, 누르는 사이에 입력의 포커스가 먼저 빠지지 않게 한다. 빠지면 키보드가 내려가며 dock이
 // 움직이는데, 포커스는 click에서 한 번에 옮긴다(깔때기의 pointerdown과 같다).
-/** 지운 뒤 포커스를 깔때기로, 받지 못하면 홈 탭으로 옮긴다. 입력에서 포커스가 빠져 키보드가 내려간다. */
-function focusAfterClear() {
+/**
+ * 지운 뒤 포커스를 깔때기로, 받지 못하면 홈 탭으로 옮긴다. 입력에서 포커스가 빠져 키보드가 내려간다. 손가락이나 마우스로
+ * 눌렀으면 포커스 테두리를 그리지 않는다. 입력창은 늘 :focus-visible이라, 그대로 두면 브라우저가 옮겨 간 포커스에도 테두리를
+ * 그린다(`focusVisible: false`, helpers.js와 같다). 키보드로 눌렀으면 테두리가 옮겨 간 자리를 보인다.
+ * @param {boolean} pointer  손가락이나 마우스로 눌렀다(키보드면 false)
+ */
+function focusAfterClear(pointer) {
+  const opts = pointer ? { preventScroll: true, focusVisible: false } : { preventScroll: true };
   const funnel = /** @type {HTMLElement | null} */ (document.querySelector("#tab-search-dock .token-funnel"));
-  // 그려지지 않은 깔때기는 포커스를 받지 못한다. 숨겨지기 전에 받은 포커스는 레이아웃을 다시 계산할 때까지 그대로 보고되므로
-  // `activeElement`만으로는 가를 수 없다
-  const shown = !!funnel && funnel.getClientRects().length > 0;
-  if (shown) funnel.focus({ preventScroll: true });
-  if (shown && document.activeElement === funnel) return;
+  funnel?.focus(opts);
+  if (funnel && document.activeElement === funnel) return;
   $searchInput?.blur();
-  /** @type {HTMLElement | null} */ (document.querySelector('#tab-bar [data-tab="home"]'))?.focus({ preventScroll: true });
+  /** @type {HTMLElement | null} */ ($home)?.focus(opts);
 }
 $searchClear?.addEventListener("pointerdown", (e) => e.preventDefault());
-$searchClear?.addEventListener("click", () => {
+$searchClear?.addEventListener("click", (e) => {
   if (!$searchInput) return;
   $searchInput.value = "";
   syncClearBtn();
-  focusAfterClear();
+  focusAfterClear(e.detail > 0);
   // Drop the query but KEEP the book-picker scope (in=) so clearing text in the
   // pill doesn't silently remove book tokens the header/in-page clears would
   // keep — navigateSearch preserves filterBooks (ADR-033 개정 B, Bugbot).
   if (W.parsePath?.().view === "search") {
-    const drawn = W.navigateSearch ? W.navigateSearch({ q: "" }) : W.navigate("/search");
-    // 다시 그리는 사이에 깔때기가 숨겨져 포커스를 잃었으면 다시 옮긴다. 숨겨진 요소의 포커스는 브라우저가 레이아웃을 다시 계산할
-    // 때에야 페이지 맨 앞으로 떨어지므로, 포커스가 그려지지 않은 요소에 있는 것도 잃은 것으로 본다(`getClientRects`가 레이아웃을
-    // 계산한다). 사용자가 그사이 다른 곳에 둔 포커스는 건드리지 않는다(코드 리뷰 2026-11-19)
-    Promise.resolve(drawn).then(() => {
-      const at = document.activeElement;
-      if (!at || at === document.body || !at.getClientRects().length) focusAfterClear();
-    }, () => {});
+    if (W.navigateSearch) W.navigateSearch({ q: "" });
+    else W.navigate("/search");
   }
 });
 

@@ -1484,7 +1484,7 @@ declare global {
     enterBookmarkSelectMode?: () => void;
     syncSearchFields?: () => void;
     // search.js — patches the /search URL keeping the rest of its state (the tab-bar pill's clear keeps the book scope).
-    navigateSearch?: (patch: { q?: string; page?: number; filterBooks?: string[] }) => Promise<void>;
+    navigateSearch?: (patch: { q?: string; page?: number; filterBooks?: string[] }) => void;
     // Bookmark reading view (ADR-035, bookmark-read.js) — resolves to the page title.
     renderBookmarkReadView: (folderId?: string | null) => Promise<string>;
     // Mobile tab-bar full-screen views (ADR-029 / P2). Always assigned at
@@ -1594,7 +1594,7 @@ declare global {
   // routing.js — the view-discriminated route descriptor (`Route` above).
   function parsePath(): Route;
   function route(): Promise<void>;
-  function navigate(path: string): Promise<void>;
+  function navigate(path: string): void;
   function setTitle(text: string): void;
   function hideAudioBar(): void;
   function renderError(msg: string): void;

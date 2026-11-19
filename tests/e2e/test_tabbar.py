@@ -110,26 +110,31 @@ def test_search_button_morphs_to_input(mobile_context):
 
 def test_clear_lowers_the_keyboard_and_focuses_the_funnel(mobile_context):
     """검색어 지우기(⊗)는 키보드를 내린다. 결과를 보던 중에 지워도, 입력 중에 지워도, 키보드로 단추를 눌러도 최근 검색 화면으로
-    돌아가고 포커스는 같은 입력창의 깔때기로 간다(ADR-030 §3, 사용자 결정 2026-11-19)."""
+    돌아가고 포커스는 같은 입력창의 깔때기로 간다. 최근 검색 화면을 다 그린 뒤에도 깔때기에 남는다. 손가락이나 마우스로 눌렀으면
+    깔때기에 포커스 테두리를 그리지 않고, 키보드로 눌렀으면 그린다(ADR-030 §3, 사용자 결정 2026-11-19)."""
     page = mobile_context.new_page()
     page.goto(BASE_URL)
     wait_app_ready(page)
     page.locator("#tab-search").click()
     page.wait_for_selector("#tab-search-input:not([hidden])", timeout=5_000)
     funnel_focused = "() => !!document.activeElement?.matches('#tab-search-dock .token-funnel')"
+    ring = "() => !!document.activeElement?.matches(':focus-visible')"
     where = "() => document.activeElement?.outerHTML.slice(0, 120)"
 
-    # 결과를 보던 중(Enter가 입력에서 포커스를 뺐다)
+    # 결과를 보던 중(Enter가 입력에서 포커스를 뺐다). 최근 검색 화면을 다 그린 뒤에도 깔때기에 있다
     page.fill("#tab-search-input", "하계재")
     page.press("#tab-search-input", "Enter")
     page.wait_for_function("() => new URLSearchParams(location.search).get('q') === '하계재'", timeout=10_000)
     page.wait_for_function("() => document.activeElement?.id !== 'tab-search-input'", timeout=5_000)
     page.locator("#tab-search-clear").click()
     page.wait_for_function("() => !new URLSearchParams(location.search).get('q')", timeout=5_000)
+    page.wait_for_selector("#app .search-recents", timeout=5_000)
     assert page.input_value("#tab-search-input") == ""
     assert page.evaluate(funnel_focused), page.evaluate(where)
+    assert not page.evaluate(ring), "마우스로 눌렀으면 깔때기에 포커스 테두리가 없다"
 
-    # 입력 중. 누르는 사이에 입력의 포커스가 먼저 빠지지 않고(pointerdown의 기본 동작을 막는다), click에서 깔때기로 간다
+    # 입력 중. 누르는 사이에 입력의 포커스가 먼저 빠지지 않고(pointerdown의 기본 동작을 막는다), click에서 깔때기로 간다.
+    # 입력창은 늘 :focus-visible이라, 막지 않으면 브라우저가 옮겨 간 포커스에도 테두리를 그린다
     page.fill("#tab-search-input", "사랑")
     page.evaluate("""() => {
         document.addEventListener('click', () => { window.__focusAtClick = document.activeElement?.id; }, { capture: true, once: true });
@@ -138,18 +143,19 @@ def test_clear_lowers_the_keyboard_and_focuses_the_funnel(mobile_context):
     assert page.evaluate("() => window.__focusAtClick") == "tab-search-input", "누르는 사이에 입력의 포커스가 빠지지 않는다"
     assert page.input_value("#tab-search-input") == ""
     assert page.evaluate(funnel_focused), page.evaluate(where)
+    assert not page.evaluate(ring), "마우스로 눌렀으면 깔때기에 포커스 테두리가 없다"
 
-    # 키보드로 단추를 눌러도 같다(지우기 단추는 숨겨져 포커스가 그 자리에 남을 수 없다)
+    # 키보드로 단추를 눌러도 같다(지우기 단추는 숨겨져 포커스가 그 자리에 남을 수 없다). 테두리가 옮겨 간 자리를 보인다
     page.fill("#tab-search-input", "목자")
     page.focus("#tab-search-clear")
     page.keyboard.press("Enter")
     assert page.input_value("#tab-search-input") == ""
     assert page.evaluate(funnel_focused), page.evaluate(where)
+    assert page.evaluate(ring), "키보드로 눌렀으면 깔때기에 포커스 테두리가 있다"
 
 
 def test_clear_falls_back_to_the_home_tab_when_the_funnel_cannot_take_focus(mobile_context):
-    """깔때기가 포커스를 받지 못하면 홈 탭으로 옮긴다. 지운 뒤 다시 그리는 사이에 깔때기가 숨겨져 포커스가 페이지 맨 앞으로
-    떨어져도, 다 그린 뒤 다시 옮긴다(ADR-030 §3, 코드 리뷰 2026-11-19)."""
+    """깔때기가 포커스를 받지 못하면 홈 탭으로 옮긴다(ADR-030 §3)."""
     page = mobile_context.new_page()
     page.goto(BASE_URL)
     wait_app_ready(page)
@@ -157,30 +163,14 @@ def test_clear_falls_back_to_the_home_tab_when_the_funnel_cannot_take_focus(mobi
     page.wait_for_selector("#tab-search-input:not([hidden])", timeout=5_000)
     home_focused = "() => !!document.activeElement?.matches('#tab-bar [data-tab=\"home\"]')"
     where = "() => document.activeElement?.outerHTML.slice(0, 120)"
-    hide_funnel = "() => { document.querySelector('#tab-search-dock .token-funnel').style.display = 'none'; }"
 
-    def search(q):
-        page.fill("#tab-search-input", q)
-        page.press("#tab-search-input", "Enter")
-        page.wait_for_function(f"() => new URLSearchParams(location.search).get('q') === '{q}'", timeout=10_000)
-        page.evaluate("() => { document.querySelector('#tab-search-dock .token-funnel').style.display = ''; }")
-
-    # 누를 때 이미 깔때기가 숨겨져 있으면 바로 홈 탭이다
-    search("하계재")
-    page.evaluate(hide_funnel)
+    page.fill("#tab-search-input", "하계재")
+    page.press("#tab-search-input", "Enter")
+    page.wait_for_function("() => new URLSearchParams(location.search).get('q') === '하계재'", timeout=10_000)
+    page.evaluate("() => { document.querySelector('#tab-search-dock .token-funnel').style.display = 'none'; }")
     page.locator("#tab-search-clear").click()
     page.wait_for_function("() => !new URLSearchParams(location.search).get('q')", timeout=5_000)
     assert page.evaluate(home_focused), page.evaluate(where)
-
-    # 누른 뒤 다시 그리는 사이에(화면을 바꿀 때) 깔때기가 숨겨지면, 다 그린 뒤 홈 탭으로 옮긴다
-    search("추계재")
-    page.evaluate(f"""() => {{
-        const seen = new MutationObserver(() => {{ seen.disconnect(); ({hide_funnel})(); }});
-        seen.observe(document.getElementById('app'), {{ childList: true, subtree: true }});
-    }}""")
-    page.locator("#tab-search-clear").click()
-    page.wait_for_function("() => !new URLSearchParams(location.search).get('q')", timeout=5_000)
-    page.wait_for_function(home_focused, timeout=5_000)
 
 
 def test_scroll_collapse_and_home_expands_without_nav(mobile_context):
