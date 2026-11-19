@@ -1987,9 +1987,9 @@ const LY_ENGINE = {
 };
 const DAY = (date, o = {}) => ({ date, obs: "grid:lent-2-sunday", setId: "lent-2-sun-A-t1-s1", track: null, name: "사순 2주일", colors: ["violet"], ...o });
 
-test("lectDayText: 지난날은 「지난」, 앞날은 「다음」, 오늘은 「오늘」이고 해를 늘 적는다(ADR-044 §1)", () => {
+test("lectDayText: 지난날은 날짜만, 앞날은 「다음」, 오늘은 「오늘」이고 해를 늘 적는다(ADR-044 §1, 2026-11-19)", () => {
   const h = loadPureHelpers();
-  assert.strictEqual(h.lectDayText("2026-03-01", "2026-11-16"), "지난 2026년 3월 1일 (일)");
+  assert.strictEqual(h.lectDayText("2026-03-01", "2026-11-16"), "2026년 3월 1일 (일)");
   assert.strictEqual(h.lectDayText("2029-02-25", "2026-11-16"), "다음 2029년 2월 25일 (일)");
   assert.strictEqual(h.lectDayText("2026-11-16", "2026-11-16"), "오늘");
   assert.strictEqual(h.lectDayText("2026-12-30", "2026-11-16", true), "다음 2026년 12월 30일 수요일");
@@ -2004,8 +2004,8 @@ test("lectRowOf: 날짜를 계산했으면 열리는 날의 색과 날짜를 적
   const days = { open: DAY("2026-03-01"), next: DAY("2029-02-25"), nextIds: ["lent-2-sun-A-t1-s1"], year: null, cycles: [] };
   const row = JSON.parse(JSON.stringify(h.lectRowOf(item, () => "요한 3:1-17", days, "2026-11-16")));
   assert.deepStrictEqual(row.colors, [{ code: "violet", name: "자색" }]);
-  assert.deepStrictEqual(row.meta, ["가해", "지난 2026년 3월 1일 (일)"]);
-  assert.strictEqual(row.label, "사순2주일, 복음 요한 3:1-17, 자색, 가해, 지난 2026년 3월 1일 일요일");
+  assert.deepStrictEqual(row.meta, ["가해", "2026년 3월 1일 (일)"]);
+  assert.strictEqual(row.label, "사순2주일, 복음 요한 3:1-17, 자색, 가해, 2026년 3월 1일 일요일");
   assert.strictEqual(row.href, "/lectionary/d/lent-2-sun-A-t1-s1");
   assert.deepStrictEqual(row.nexts, [{
     href: "/lectionary/d/lent-2-sun-A-t1-s1?from=2029-02-25", label: "사순2주일, 다음 2029년 2월 25일 일요일",
@@ -2025,7 +2025,7 @@ test("lectRowOf: 날짜가 정해진 줄은 계산한 날짜가 그 날짜를 �
   const row = h.lectRowOf(item, () => null, { open, next, nextIds: ["d1230-성탄주간-t1-s1"], year: null, cycles: [] }, "2026-11-16");
   assert.strictEqual(row.title, "성탄 1주 화요일");
   // 해마다 같은 날짜의 같은 독서라 다음 링크도 다음 해의 날도 없다(ADR-044 §1)
-  assert.deepStrictEqual(JSON.parse(JSON.stringify(row.meta)), ["지난 2025년 12월 30일 (화)"]);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(row.meta)), ["2025년 12월 30일 (화)"]);
   assert.strictEqual(row.nexts.length, 0);
   // 아직 계산하지 못했으면 색인의 이름과 정해진 날짜다
   const before = h.lectRowOf(item, () => null, null, "");
@@ -2249,14 +2249,14 @@ test("lectRowOf: 축성일 줄은 축성일을 고른 화면을 열고 굵게, �
       nextYear: { date: "2027-01-31" } },
     "2026-11-17");
   assert.deepStrictEqual(plain([ded.href, ded.bold, ded.meta, ded.lines, ded.nexts, ded.label]), [
-    "/lectionary/2026-01-31?obs=my-dedication", true, ["지난 2026년 1월 31일 (토)"], ["다음 전례년 2027년 1월 31일 (일)"], [],
-    "용인성당 축성일, 백색, 지난 2026년 1월 31일 토요일, 다음 전례년 2027년 1월 31일 일요일"]);
+    "/lectionary/2026-01-31?obs=my-dedication", true, ["2026년 1월 31일 (토)"], ["다음 전례년 2027년 1월 31일 (일)"], [],
+    "용인성당 축성일, 백색, 2026년 1월 31일 토요일, 다음 전례년 2027년 1월 31일 일요일"]);
   const dio = h.lectRowOf(LOCAL_ITEM("diocese"), () => null,
     { open: DAY("2026-05-27", { obs: "local:diocese", setId: null, name: "서울교구설립일", colors: ["white"] }), next: null, nextIds: [], year: null, cycles: [],
       nextYear: { date: "2027-05-27" } },
     "2026-11-17");
   assert.deepStrictEqual(plain([dio.href, dio.bold, dio.meta, dio.lines]),
-    ["/lectionary/2026-05-27", false, ["1965년 설립", "지난 2026년 5월 27일 (수)"], ["다음 전례년 2027년 5월 27일 (목)"]]);
+    ["/lectionary/2026-05-27", false, ["1965년 설립", "2026년 5월 27일 (수)"], ["다음 전례년 2027년 5월 27일 (목)"]]);
   // 날짜를 계산하기 전에도 다음 그날의 주소다(엔진 없이 셀 수 있다)
   assert.strictEqual(h.lectRowOf(LOCAL_ITEM("province"), () => null, null, "2026-11-17").href, "/lectionary/2027-09-29");
   // 연도를 붙여 찾은 줄은 그해의 날이다
@@ -2306,8 +2306,8 @@ test("lectRowOf: 해마다 같은 독서는 이번 전례년의 날을 열고, �
   const moving = { obs: OBS({ key: "easter-2-wed", name: "부활2주 수요일" }), sets: [SET("easter-2-wed-t1-s1")], hits: hit("easter-2-wed-t1-s1") };
   const row = h.lectRowOf(moving, () => null, days("2026-04-15", { date: "2027-04-07" }, { colors: ["white"] }), "2026-11-17");
   assert.deepStrictEqual(plain([row.href, row.nexts, row.meta, row.lines]),
-    ["/lectionary/d/easter-2-wed-t1-s1", [], ["지난 2026년 4월 15일 (수)"], ["다음 전례년 2027년 4월 7일 (수)"]]);
-  assert.strictEqual(row.label, "부활2주 수요일, 복음 요한 3:16-21, 백색, 지난 2026년 4월 15일 수요일, 다음 전례년 2027년 4월 7일 수요일");
+    ["/lectionary/d/easter-2-wed-t1-s1", [], ["2026년 4월 15일 (수)"], ["다음 전례년 2027년 4월 7일 (수)"]]);
+  assert.strictEqual(row.label, "부활2주 수요일, 복음 요한 3:16-21, 백색, 2026년 4월 15일 수요일, 다음 전례년 2027년 4월 7일 수요일");
   // 성 십자가의 날: 날짜가 정해져 있다. 열리는 날이 앞날이어도 다음 전례년의 날을 적는다
   const fixed = { obs: OBS({ key: "d0914-cross", name: "성 십자가의 날", kind: "sanctoral", date: "09.14", rank: "major_feast" }), sets: [SET("d0914-cross-t1-s1")], hits: hit("d0914-cross-t1-s1") };
   const fixedRow = h.lectRowOf(fixed, () => null, days("2026-09-14", { date: "2027-09-14" }, { colors: ["white"] }), "2026-02-01");
@@ -2315,8 +2315,8 @@ test("lectRowOf: 해마다 같은 독서는 이번 전례년의 날을 열고, �
   // 고유 독서가 없는 성인(공통 독서)은 등급 줄 아래에 적는다. 다음 전례년에 지키지 않으면 그렇다고 적는다
   const saint = { obs: OBS({ key: "d0117-안토니오", name: "안토니오", kind: "sanctoral", date: "01.17", rank: "commemoration", common: "religious" }), sets: [] };
   const saintRow = h.lectRowOf(saint, () => null, days("2026-01-17", { date: null }, { colors: ["white"] }), "2026-11-17");
-  assert.deepStrictEqual(plain([saintRow.nexts, saintRow.meta, saintRow.lines]), [[], ["지난 2026년 1월 17일 (토)"], ["기념일", "다음 전례년에는 지키지 않음"]]);
-  assert.ok(saintRow.label.endsWith("지난 2026년 1월 17일 토요일, 기념일, 다음 전례년에는 지키지 않음"));
+  assert.deepStrictEqual(plain([saintRow.nexts, saintRow.meta, saintRow.lines]), [[], ["2026년 1월 17일 (토)"], ["기념일", "다음 전례년에는 지키지 않음"]]);
+  assert.ok(saintRow.label.endsWith("2026년 1월 17일 토요일, 기념일, 다음 전례년에는 지키지 않음"));
   // 이번 전례년에 오지 않아 다음에 읽는 날을 열면 적지 않는다
   const later = h.lectRowOf(saint, () => null, days("2028-01-17", null, { colors: ["white"] }), "2026-11-17");
   assert.deepStrictEqual(plain([later.meta, later.lines]), [["다음 2028년 1월 17일 (월)"], ["기념일"]]);
@@ -2344,7 +2344,7 @@ test("lectRowOf, lectDaysOf: 사계재의 날은 계절 이름 뒤에 요일을 
   assert.deepStrictEqual(plain(calls[0]), [["t-춘계재"], "2025-11-30", "2027-11-27"]);
   const row = h.lectRowOf(spring("fri"), () => null, fri, "2026-11-16");
   assert.deepStrictEqual(plain([row.title, row.href, row.meta, row.lines, row.nexts]),
-    ["춘계재 금요일", "/lectionary/d/t-%EC%B6%98%EA%B3%84%EC%9E%AC?from=2026-02-27", ["지난 2026년 2월 27일 (금)"], ["다음 전례년 2027년 2월 19일 (금)"], []]);
+    ["춘계재 금요일", "/lectionary/d/t-%EC%B6%98%EA%B3%84%EC%9E%AC?from=2026-02-27", ["2026년 2월 27일 (금)"], ["다음 전례년 2027년 2월 19일 (금)"], []]);
   // 날짜를 계산하기 전에도 제목에 요일이 있다
   assert.strictEqual(h.lectRowOf(spring("sat"), () => null, null, "").title, "춘계재 토요일");
   // 이번 전례년에 그 요일을 지키지 않으면 다음 전례년의 그 요일을 열고 다음 전례년의 날을 적지 않는다
@@ -2363,8 +2363,8 @@ test("lectRowOf: 이름으로 찾은 줄이 해에 따라 다른 독서를 읽�
   const D = (date, y) => DAY(date, { obs: "grid:pentecost", setId: `pentecost-${y}-t1-s1`, name: "성령강림주일", colors: ["red"] });
   const days = { open: D("2026-05-24", "A"), next: null, nextIds: ids, year: "A", cycles: [D("2027-05-16", "B"), D("2028-06-04", "C")] };
   const row = JSON.parse(JSON.stringify(h.lectRowOf(item, () => null, days, "2026-11-16")));
-  assert.deepStrictEqual(row.meta, ["가해", "지난 2026년 5월 24일 (일)"]);
-  assert.strictEqual(row.label, "성령강림주일, 적색, 가해, 지난 2026년 5월 24일 일요일");
+  assert.deepStrictEqual(row.meta, ["가해", "2026년 5월 24일 (일)"]);
+  assert.strictEqual(row.label, "성령강림주일, 적색, 가해, 2026년 5월 24일 일요일");
   const slug = ids.join(",");
   assert.deepStrictEqual(row.nexts, [
     { href: `/lectionary/d/${slug}?from=2027-05-16`, label: "성령강림주일, 나해 2027년 5월 16일 일요일", prefix: "나해", date: "2027년 5월 16일 (일)" },
@@ -2377,7 +2377,7 @@ test("lectRowOf: 이름으로 찾은 줄이 해에 따라 다른 독서를 읽�
   const weekday = { obs: OBS({ key: "ord-1-mon", name: "연중1주 월요일" }), sets: [SET("ord-1-mon-I", "I"), SET("ord-1-mon-II", "II")] };
   const W = (date, y) => DAY(date, { obs: "grid:ord-1-mon", setId: `ord-1-mon-${y}`, name: "연중 1주 월요일", colors: ["green"] });
   const wrow = JSON.parse(JSON.stringify(h.lectRowOf(weekday, () => null, { open: W("2026-01-12", "II"), next: null, nextIds: ["x"], year: "II", cycles: [W("2027-01-11", "I")] }, "2026-11-16")));
-  assert.deepStrictEqual([wrow.meta, wrow.nexts.map((n) => `${n.prefix} ${n.date}`)], [["짝수해", "지난 2026년 1월 12일 (월)"], ["홀수해 2027년 1월 11일 (월)"]]);
+  assert.deepStrictEqual([wrow.meta, wrow.nexts.map((n) => `${n.prefix} ${n.date}`)], [["짝수해", "2026년 1월 12일 (월)"], ["홀수해 2027년 1월 11일 (월)"]]);
 });
 
 test("lectRowOf: 구절로 찾은 독서가 그 전례일의 모든 해의 세트에 있으면 해마다 같은 독서라, 링크 없이 다음 전례년의 날을 적는다(ADR-044 §1)", () => {
@@ -2389,7 +2389,7 @@ test("lectRowOf: 구절로 찾은 독서가 그 전례일의 모든 해의 세�
   const yearly = { open: W("2026-01-12", "II"), next: null, nextIds: ["x"], year: null, cycles: [], nextYear: { date: "2027-01-11" } };
   const row = JSON.parse(JSON.stringify(h.lectRowOf(both, () => null, yearly, "2026-11-16")));
   assert.strictEqual(row.href, "/lectionary/d/ord-1-mon-I,ord-1-mon-II");
-  assert.deepStrictEqual([row.nexts, row.meta, row.lines], [[], ["홀수해, 짝수해", "지난 2026년 1월 12일 (월)"], ["다음 전례년 2027년 1월 11일 (월)"]]);
+  assert.deepStrictEqual([row.nexts, row.meta, row.lines], [[], ["홀수해, 짝수해", "2026년 1월 12일 (월)"], ["다음 전례년 2027년 1월 11일 (월)"]]);
   // 한 해의 세트에만 있는 독서는 해에 따라 다른 독서다. 지난날이면 다음 링크가 있고 주소는 그대로다
   const one = { ...both, hits: [{ slot: 0, rows: [["heb", 1, 1, 6]], sets: [sets[0]] }] };
   const days = { open: W("2025-01-13", "I"), next: W("2027-01-11", "I"), nextIds: ["ord-1-mon-I"], year: null, cycles: [], nextYear: null };
@@ -2455,14 +2455,14 @@ test("lectDaysOf: 이름으로 찾은 줄은 열리는 날 뒤에 다른 해의 
 test("fillLectRow: 링크를 한 줄에 하나씩 더하고 빼며, 있던 링크는 그대로 두고 글만 바꾼다(포커스가 남는다)", () => {
   const h = loadPureHelpers();
   const row = (nexts) => ({
-    title: "성령강림주일", href: "/lectionary/d/x", bold: true, found: null, colors: [{ code: "red", name: "적색" }], meta: ["가해", "지난 2026년 5월 24일 (일)"],
+    title: "성령강림주일", href: "/lectionary/d/x", bold: true, found: null, colors: [{ code: "red", name: "적색" }], meta: ["가해", "2026년 5월 24일 (일)"],
     lines: [], label: "L", nexts,
   });
   const B = { href: "/lectionary/d/x?from=2027-05-16", label: "N1", prefix: "나해", date: "2027년 5월 16일 (일)" };
   const C = { href: "/lectionary/d/x?from=2028-06-04", label: "N2", prefix: "다해", date: "2028년 6월 4일 (일)" };
   const li = h.buildLectRow(row([]));
   const a = li.children[0];
-  assert.strictEqual(recursiveText(a), "성령강림주일적색가해지난 2026년 5월 24일 (일)");
+  assert.strictEqual(recursiveText(a), "성령강림주일적색가해2026년 5월 24일 (일)");
   assert.strictEqual(li.className, "");
   h.fillLectRow(li, row([B, C]));
   assert.strictEqual(li.children[0], a, "같은 링크");

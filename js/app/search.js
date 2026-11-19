@@ -740,13 +740,14 @@ function lectWeekdayOf(date) {
 }
 
 /**
- * 줄에 적는 날짜(ADR-044 §1): 지난날은 「지난 2026년 3월 1일 (일)」, 앞날은 「다음 2027년 3월 7일 (일)」, 오늘은 「오늘」이다.
+ * 줄에 적는 날짜(ADR-044 §1): 지난날은 날짜만(「2026년 3월 1일 (일)」), 앞날은 「다음 2027년 3월 7일 (일)」, 오늘은 「오늘」이다.
+ * 지난날에 붙이던 「지난」은 2026-11-19에 뗐다(사용자 결정, 화면에서 어색했다).
  * 「올해」라고 적지 않는다. 이번 전례년은 대림 무렵에 달력의 해와 어긋난다.
  * @param {string} date @param {string} today @param {boolean} [full]
  */
 function lectDayText(date, today, full = false) {
   if (date === today) return "오늘";
-  return `${date < today ? "지난" : "다음"} ${lectDateText(date, full)}`;
+  return date < today ? lectDateText(date, full) : `다음 ${lectDateText(date, full)}`;
 }
 
 /**
@@ -1589,10 +1590,13 @@ async function lectDaysOf(mod, item, today, isStale = () => false) {
   const nextLy = mod.liturgicalYearSpan(/** @type {string} */ (mod.addDays(ly.to, 1)));
   if (item.local) {
     // 한 전례년에 같은 날짜가 두 번 있으면(11월 말과 12월 초) 오늘이나 그 뒤의 날, 둘 다 지났으면 앞의 날이다. 없으면(평년의 2월 29일)
-    // 다음 그날이다
-    const here = monthDaysBetween(item.obs.date, ly.from, ly.to);
+    // 다음 그날이다. 설립 연도보다 이른 날은 세지 않는다(`localYearDayOf`와 같다)
+    const since = item.local.level !== "dedication" && item.local.year ? Number(item.local.year) : 0;
+    const datesIn = (/** @type {{ from: string, to: string }} */ span) =>
+      monthDaysBetween(item.obs.date, span.from, span.to).filter((d) => Number(d.slice(0, 4)) >= since);
+    const here = datesIn(ly);
     const date = here.find((d) => d >= today) || here[0] || nextMonthDay(item.obs.date, today);
-    const nextYear = here.length ? { date: monthDaysBetween(item.obs.date, nextLy.from, nextLy.to)[0] || null } : null;
+    const nextYear = here.length ? { date: datesIn(nextLy)[0] || null } : null;
     return { open: localDayOf(mod, item, date), next: null, nextIds: [], year: null, cycles: [], nextYear };
   }
   const ids = lectSlugIds(item);
@@ -1635,6 +1639,8 @@ async function lectDaysOf(mod, item, today, isStale = () => false) {
     let nextYear = null;
     if (open.date <= ly.to) {
       const [day] = await mod.findKeptDays(ids, today, nextLy.from, nextLy.to, isStale);
+      // 화면을 떠나 그친 빈 배열을 「다음 전례년에는 지키지 않음」으로 적지 않는다
+      if (isStale()) return null;
       nextYear = { date: day ? day.date : null };
     }
     return { open, next: null, nextIds: ids, year: null, cycles: [], nextYear };
