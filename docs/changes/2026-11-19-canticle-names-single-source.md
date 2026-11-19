@@ -1,4 +1,5 @@
 ---
+pr: 600
 date: 2026-11-19
 branch: refactor/canticle-names-single-source
 title: "refactor: 송가 이름을 books.json 한 곳에서 읽기"
