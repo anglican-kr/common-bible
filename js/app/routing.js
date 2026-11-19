@@ -131,10 +131,11 @@ function parsePath() {
   /** @param {string} s */
   const decodeOrRaw = (s) => { try { return decodeURIComponent(s); } catch { return s; } };
 
-  // Search route: /search?q=...&page=...&in=<bookId>&group=psalter|lectionary (ADR-033, ADR-044 §1, ADR-046 §3).
-  // `in` (book-picker scope, repeatable) lives in the URL so it survives
+  // Search route: /search?q=...&page=...&in=<bookId>&group=psalter|lectionary&book=<bookId> (ADR-033, ADR-044 §1,
+  // ADR-046 §3, ADR-049 §2). `in` (book-picker scope, repeatable) lives in the URL so it survives
   // history/back-forward and tab restore (ADR-031), and so paginated/filtered
-  // links stay shareable. `group` is the chosen result pill; 성서 본문 when absent.
+  // links stay shareable. `group` is the chosen result pill; 성서 본문 when absent. `book` is the chosen book pill
+  // within the scope; 「전체」 when absent.
   if (pathname === "search") {
     return {
       view: "search",
@@ -143,6 +144,7 @@ function parsePath() {
       filterBooks: query.getAll("in").filter(Boolean),
       group: query.get("group") === "psalter" || query.get("group") === "lectionary"
         ? /** @type {"psalter" | "lectionary"} */ (query.get("group")) : null,
+      book: query.get("book") || null,
     };
   }
 
@@ -518,7 +520,7 @@ async function route() {
         // 떠 바운스 없이 마지막 검색이 그대로 복원된다.
         window.tabHistory?.recordPath(location.pathname + location.search);
         await renderSearchResults(parsed.query, parsed.page, autoNav, {
-          filterBooks: parsed.filterBooks, group: parsed.group,
+          filterBooks: parsed.filterBooks, group: parsed.group, book: parsed.book,
         });
         // renderSearchResults 가 verse-ref auto-nav 으로 inner route() 를 호출했으면
         // _routeSeq가 올라가므로 이 검사로 알 수 있다 — inner route()가 챕터의 meta·분석을 이미

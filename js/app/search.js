@@ -154,8 +154,9 @@ function canticleTitles() {
  * @param {number} page
  * @param {number} pageSize
  * @param {((partial: any) => void) | null} [onPartial]
- * @param {{ scopeBooks?: string[] }} [opts]
+ * @param {{ scopeBooks?: string[], showBook?: string | null }} [opts]
  *   scopeBooks — book-picker filter (book ids), forwarded to the worker (ADR-033).
+ *   showBook — the book pill shown within that scope (ADR-049 §2); 「전체」 when absent.
  */
 function doSearch(query, page, pageSize, onPartial, opts) {
   return new Promise((resolve) => {
@@ -170,6 +171,8 @@ function doSearch(query, page, pageSize, onPartial, opts) {
     worker.postMessage({
       type: "search", q: query, page, pageSize, searchId: activeSearchId,
       scopeBooks: (opts && opts.scopeBooks) || [],
+      // 책을 고른 검색에서 보이는 책 알약(ADR-049 §2). 없으면 「전체」다
+      showBook: (opts && opts.showBook) || "",
       // 소속교회(ADR-041 §6). 검색마다 실어, 설정을 바꾼 뒤의 검색이 곧 새 교회로 찾는다
       parish: loadParish(),
       titles: canticleTitles(),
@@ -402,7 +405,9 @@ function verseRefTargets(ref) {
  * encodeURIComponent — so the book-picker scope (`in=`) round-trips through the
  * URL (mirrors parsePath). `page` is dropped when 1; empty params are omitted.
  * `group` is the result pill (ADR-044 §1, ADR-046 §3): 성시 and 전례일 are written, 성서 본문 is the default.
- * @param {{ q?: string, page?: number, filterBooks?: string[], group?: string | null }} state
+ * `book` is the book pill shown with a book scope (ADR-049 §2); 「전체」 is the default. The worker shows 「전체」 for a
+ * book outside the scope or with no results.
+ * @param {{ q?: string, page?: number, filterBooks?: string[], group?: string | null, book?: string | null }} state
  * @returns {string}
  */
 function buildSearchUrl(state) {
@@ -411,6 +416,7 @@ function buildSearchUrl(state) {
   if (state.page && state.page > 1) parts.push("page=" + state.page);
   for (const b of state.filterBooks || []) parts.push("in=" + encodeURIComponent(b));
   if (state.group === "psalter" || state.group === "lectionary") parts.push("group=" + state.group);
+  if (state.book) parts.push("book=" + encodeURIComponent(state.book));
   return "/search" + (parts.length ? "?" + parts.join("&") : "");
 }
 
@@ -1047,6 +1053,74 @@ function buildSearchPills(group, counts, hrefOf) {
   return nav;
 }
 
+/**
+ * 고른 책의 알약 줄(ADR-049). 검색창 바로 아래에 둔다. 결과 수(`counts`, 워커의 `books`)를 알면 알약마다 수를 적고 그 책의
+ * 결과로 가는 링크로 둔다. 두 권 이상이면 맨 앞에 「전체」를 둔다(§2). 결과가 없는 책은 흐린 글이다(§4). 수를 모르면 이름만
+ * 적는다(§5). 알약마다 ×(그 책 빼기, §3)가 있고, 누르면 `onRemove`가 그 책 id를 받는다. 링크는 누른 뒤 다시 그려도 포커스가
+ * 그 알약에 남는다(`data-focus-key`, routing.js).
+ * @param {Array<{ id: string, name: string }>} books  in pill order
+ * @param {{ counts: Array<[string, number]> | null, shown: string | null, hrefOf: (id: string | null) => string,
+ *   onRemove: (id: string, e: MouseEvent) => void }} opts  shown: the book pill shown, null for 「전체」
+ * @returns {HTMLElement}
+ */
+function buildScopePills(books, opts) {
+  const wrap = el("div", { className: "scope-pills", role: "group", "aria-label": "검색할 책" });
+  const list = el("ul", { className: "scope-pill-list", role: "list" });
+  const counts = opts.counts;
+  /** @param {string} id */
+  const countOf = (id) => {
+    const entry = counts ? counts.find(([b]) => b === id) : null;
+    return entry ? entry[1] : 0;
+  };
+  /**
+   * @param {string} label @param {number} count @param {string} href @param {string} key @param {boolean} current
+   * @returns {HTMLElement}
+   */
+  const link = (label, count, href, key, current) => {
+    const a = el("a", { className: "scope-pill-main", href, "data-focus-key": key });
+    if (current) a.setAttribute("aria-current", "true");
+    a.appendChild(document.createTextNode(`${label} `));
+    a.appendChild(el("span", { className: "search-pill-count" }, String(count)));
+    a.appendChild(el("span", { className: "sr-only" }, "건"));
+    return a;
+  };
+  if (counts && books.length > 1) {
+    const all = el("li", { className: "scope-pill scope-pill-all" });
+    const total = books.reduce((sum, b) => sum + countOf(b.id), 0);
+    if (opts.shown === null) all.classList.add("scope-pill-current");
+    all.appendChild(link("전체", total, opts.hrefOf(null), "book:all", opts.shown === null));
+    list.appendChild(all);
+  }
+  for (const b of books) {
+    const li = el("li", { className: "scope-pill" });
+    if (!counts) {
+      li.appendChild(el("span", { className: "scope-pill-main" }, b.name));
+    } else if (countOf(b.id) === 0) {
+      // 결과가 없는 책: 흐리게 두고 누를 수 없다(§4)
+      li.classList.add("scope-pill-empty");
+      const span = el("span", { className: "scope-pill-main" }, `${b.name} `);
+      span.appendChild(el("span", { className: "search-pill-count" }, "0"));
+      span.appendChild(el("span", { className: "sr-only" }, "건"));
+      li.appendChild(span);
+    } else {
+      // 한 권이면 「전체」와 같은 목록이라 그 주소로 가고 늘 고른 알약이다(§2)
+      const one = books.length === 1;
+      const current = one || opts.shown === b.id;
+      if (current) li.classList.add("scope-pill-current");
+      li.appendChild(link(b.name, countOf(b.id), opts.hrefOf(one ? null : b.id), `book:${b.id}`, current));
+    }
+    const x = el("button", {
+      type: "button", className: "scope-pill-remove", "aria-label": `검색할 책에서 ${b.name} 빼기`, "data-remove-book": b.id,
+    });
+    x.appendChild(el("span", { "aria-hidden": "true" }, "×"));
+    x.addEventListener("click", (e) => opts.onRemove(b.id, /** @type {MouseEvent} */ (e)));
+    li.appendChild(x);
+    list.appendChild(li);
+  }
+  wrap.appendChild(list);
+  return wrap;
+}
+
 // Absolute date label for a recent-search entry (ADR-014 개정 / ADR-033). One
 // consistent absolute format ("YYYY. M. D.") — no relative "n일 전". Returns ""
 // for entries with no timestamp (migrated from the legacy string[] format) or
@@ -1065,8 +1139,9 @@ function formatSearchDate(ts) {
  * user decision 2026-10-17: the pressed link, not the top of the results). On
  * the first / last page that link is gone and the other one takes over
  * (`data-focus-fallback`).
- * The links stay in the group shown (`group`, ADR-046 §3): its pages, not the other's.
- * @param {{ q?: string, filterBooks?: string[], group?: string | null }} state
+ * The links stay in the group shown (`group`, ADR-046 §3) and the book pill shown (`book`, ADR-049 §2): its pages,
+ * not the other's.
+ * @param {{ q?: string, filterBooks?: string[], group?: string | null, book?: string | null }} state
  * @param {number} currentPage
  * @param {number} totalPages
  */
@@ -1074,7 +1149,7 @@ function buildSearchPagination(state, currentPage, totalPages) {
   const nav = el("nav", { className: "search-pagination", "aria-label": "검색 결과 페이지" });
   /** @param {number} p */
   const pageUrl = (p) => buildSearchUrl({
-    q: state.q, page: p, filterBooks: state.filterBooks, group: state.group,
+    q: state.q, page: p, filterBooks: state.filterBooks, group: state.group, book: state.book,
   });
 
   if (currentPage > 1) {
@@ -1101,11 +1176,13 @@ function buildSearchPagination(state, currentPage, totalPages) {
 /**
  * 성서 색인을 받는 동안 라이브 영역이 읽는 문장(사용자 결정 2026-11-19). 묶음마다 결과 수를 알약의 이름과 차례로 읽는다.
  * 성시는 결과가 있을 때만 읽는다. 그전에는 성서 본문의 수만 읽어, 성시에만 결과가 있으면 「현재 0건」이었다.
+ * 책을 고른 검색은 고른 책을 한 목록에 세므로(ADR-049 §2) 묶음 이름 없이 「현재 12건」이다.
  * @param {string} query
- * @param {{ total: number, psalter?: { total: number } | null }} partial
+ * @param {{ total: number, psalter?: { total: number } | null, books?: unknown }} partial
  * @returns {string}
  */
 function partialAnnouncement(query, partial) {
+  if (Array.isArray(partial.books)) return `"${query}" 검색 중… 현재 ${partial.total}건`;
   const psalter = partial.psalter && partial.psalter.total > 0 ? `, 성시 ${partial.psalter.total}건` : "";
   return `"${query}" 검색 중… 현재 성서 본문 ${partial.total}건${psalter}`;
 }
@@ -1289,7 +1366,7 @@ function resultRefLabel(r) {
  * @param {string} query
  * @param {number} page
  * @param {number} pageSize
- * @param {((q: string, p: number, t: number, group: SearchGroup) => HTMLElement) | null} paginationBuilder
+ * @param {((q: string, p: number, t: number, group: SearchGroup, book: string | null) => HTMLElement) | null} paginationBuilder
  * @param {SearchScreen} [screen]
  * @returns {string}  the status message for the live region (design §9): the answer card, then the counts in screen order
  */
@@ -1311,8 +1388,9 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
     container.appendChild(buildSearchExamples(false, screen.scoped));
     return `"${query}" 검색 결과 0건. ${note}`;
   }
-  // More books than one search takes (ADR-033 「책은 5권까지」): the worker searched none. The chips stay in the field
-  // so the user picks which to remove. No examples: they search within the same chips and would hit this again.
+  // More books than one search takes (ADR-033 「책은 5권까지」): the worker searched none. The book pills stay under
+  // the field so the user picks which to remove (ADR-049 §5). No examples: they search within the same books and would hit
+  // this again.
   if (result.tooManyBooks) {
     container.appendChild(buildSearchEmptyState("검색 결과가 없습니다", SCOPE_LIMIT_NOTE));
     return `"${query}" 검색 결과 0건. ${SCOPE_LIMIT_NOTE}`;
@@ -1320,6 +1398,10 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
 
   const { isPending, lect, psalter, hasBible, groups, counts, group } = resultGroups(result, screen);
   const answer = buildAnswer(result, screen);
+  // 책을 고른 검색: 고른 책마다의 수와 보이는 책 알약(ADR-049 §2). 워커가 세므로 입력 칸에 친 `in:`의 책도 든다
+  /** @type {Array<[string, number]> | null} */
+  const books = Array.isArray(result.books) ? result.books : null;
+  const scoped = screen.scoped || !!books;
 
   // 연도를 붙여 찾았는데 줄이 없으면 그 사정(ADR-044 §4)
   const notes = lect ? [] : lectNotes(result);
@@ -1334,9 +1416,9 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
     container.appendChild(
       // 책을 골라 두었으면 전례일은 찾지 않았다(ADR-044 §1). 고르지 않았으면 알약의 세 묶음을 모두 찾았다(사용자 결정 2026-11-19)
       buildSearchEmptyState("검색 결과가 없습니다", notes.length ? notes.join(" ")
-        : `‘${query}’에 해당하는 ${screen.scoped ? "구절을" : `${SEARCHED_GROUPS}을`} 찾지 못했어요.`)
+        : `‘${query}’에 해당하는 ${scoped ? "구절을" : `${SEARCHED_GROUPS}을`} 찾지 못했어요.`)
     );
-    container.appendChild(buildSearchExamples(true, screen.scoped));
+    container.appendChild(buildSearchExamples(true, scoped));
     return `"${query}" 검색 결과 0건${notes.length ? `. ${notes.join(" ")}` : ""}`;
   }
 
@@ -1363,7 +1445,12 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
   if (groups.length > 1) {
     container.appendChild(buildSearchPills(group, counts, screen.groupHref));
   }
-  if (hasBible) said.push(isPending ? `검색 중… 현재 성서 본문 ${result.total}건` : `성서 본문 ${result.total}건${group === "bible" ? pageWords : ""}`);
+  // 책을 골랐으면 보이는 알약의 이름(「전체」, 책의 온전한 이름)과 수, 그 뒤에 책마다의 수다(ADR-049 §2)
+  const scopeLabel = books ? (result.shownBook ? bookTitle(result.shownBook) : books.length === 1 ? bookTitle(books[0][0]) : "전체") : null;
+  if (scopeLabel && books) {
+    said.push(isPending ? `검색 중… 현재 ${result.total}건` : `${scopeLabel} ${result.total}건${pageWords}`);
+    if (!isPending && books.length > 1) for (const [id, n] of books) said.push(`${bookName(id)} ${n}건`);
+  } else if (hasBible) said.push(isPending ? `검색 중… 현재 성서 본문 ${result.total}건` : `성서 본문 ${result.total}건${group === "bible" ? pageWords : ""}`);
   if (psalter) said.push(`성시 ${psalter.total}건${group === "psalter" ? pageWords : ""}`);
   if (lect) said.push(`${lectGroupName(lect)} ${lect.items.length}건`);
 
@@ -1376,7 +1463,7 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
     for (const note of notes) container.appendChild(el("p", { className: "search-note" }, note));
     const countLabel = group === "bible" && isPending
       ? `"${query}" 검색 중… (현재 ${result.total}건)`
-      : `${group === "psalter" ? "성시" : "성서 본문"} ${verses.total}건 (${page}/${totalPages}쪽)`;
+      : `${scopeLabel || (group === "psalter" ? "성시" : "성서 본문")} ${verses.total}건 (${page}/${totalPages}쪽)`;
     // A heading, so a screen-reader user whose focus stayed on the pressed page link (routing.js) reaches the new
     // page's results in one move — VoiceOver rotor / TalkBack headings. Looks the same as the old <p> (style.css).
     container.appendChild(el("h2", { className: "search-count" }, countLabel));
@@ -1392,7 +1479,7 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
     }
     container.appendChild(list);
 
-    if (paged && paginationBuilder) container.appendChild(paginationBuilder(query, page, totalPages, group));
+    if (paged && paginationBuilder) container.appendChild(paginationBuilder(query, page, totalPages, group, result.shownBook || null));
   }
   return `"${query}" ${lead ? `${lead} ` : ""}${said.join(", ")}`;
 }
@@ -1491,13 +1578,19 @@ function navigateSearch(patch) {
   else window.navigate(url);
 }
 
-// Lazy book-id → 한국어 이름 map, used for filter chip labels. Resolved on
+// Lazy book-id → 한국어 이름 map, used for the book pill labels (ADR-049). Resolved on
 // demand (renderSearchResults awaits it before building the filter bar) rather
 // than at module load — search.js loads before views.js, so
 // window.loadBooks isn't defined yet at init. On failure the cache stays null so
-// a later render retries; chips fall back to the raw id until names arrive.
+// a later render retries; pills fall back to the raw id until names arrive.
 /** @type {{ [id: string]: string } | null} */
 let _bookMap = null;
+// The books' full names (books.json `name_ko`, 「루가의 복음서」) for the heading above a book's results, and their canon
+// order for the book pills (ADR-049). Filled with _bookMap.
+/** @type {Map<string, string>} */
+const _bookTitles = new Map();
+/** @type {string[]} */
+let _bookOrder = [];
 // Chapters per book (books.json `chapter_count`): the results screen tells a chapter the book does not have (ADR-044 §2).
 /** @type {Map<string, number>} */
 const _chapterCounts = new Map();
@@ -1508,12 +1601,14 @@ async function ensureBookMap() {
     const books = await window.loadBooks();
     /** @type {{ [id: string]: string }} */
     const map = {};
-    // Token chips use the Korean short name (창세, 요한) — the full name (창세기,
-    // 요한의 복음서) overflows the compact in-field chip. Fall back to name_ko.
+    // Book pills use the Korean short name (창세, 요한) — five full names (창세기,
+    // 요한의 복음서) would not fit the row. Fall back to name_ko.
     for (const b of books) {
       map[b.id] = b.short_name_ko || b.name_ko;
+      if (b.name_ko) _bookTitles.set(b.id, b.name_ko);
       if (typeof b.chapter_count === "number") _chapterCounts.set(b.id, b.chapter_count);
     }
+    _bookOrder = books.map((b) => b.id);
     _bookMap = map;
     return _bookMap;
   } catch {
@@ -1845,14 +1940,14 @@ function wireLocalNotice(target, query) {
 }
 
 // alias(소문자) → book id, for absorbing typed/example `in:<alias>` operators
-// into book-scope chips at commit time. Built from the worker's alias table
+// into the chosen books (the book pills) at commit time. Built from the worker's alias table
 // (search-meta.json: 막, 마가복음, …) plus each book's id, short and full Korean
-// name, so every `in:` the search reads becomes a chip (ADR-033). Until the map
+// name, so every `in:` the search reads becomes a chosen book (ADR-033). Until the map
 // loads, or for an alias neither knows, the token stays as text in `q` and the
 // worker reports or resolves it.
 /** @type {Map<string, string> | null} */
 let _aliasMap = null;
-// book id → short name (the chip label), in canon order: the `in:` aliases a
+// book id → short name (the book pill label), in canon order: the `in:` aliases a
 // recent-search label is written with (`historyLabel`, ADR-014 D1). Built with
 // _aliasMap, so the labels replay through it.
 /** @type {Map<string, string> | null} */
@@ -1882,7 +1977,7 @@ async function ensureAliasMap() {
     if (typeof window.loadBooks !== "function") return map;
     const books = await window.loadBooks();
     const meta = await metaPromise;
-    // With the worker's table, only the books it searches become chips: a book
+    // With the worker's table, only the books it searches become chosen books: a book
     // outside its index would search nothing. 전례시편 and 송가 are in it, in the
     // 성시 chunk (ADR-046 §2).
     const ids = new Set(books.map((b) => b.id).filter((id) => !meta || Object.hasOwn(meta.books || {}, id)));
@@ -1956,11 +2051,42 @@ function historyLabel(keyword, ids, aliasById) {
   return [keyword, ...scope].filter(Boolean).join(" ");
 }
 
+/**
+ * The search with book `id` taken out of its scope (the × on a book pill, ADR-049 §3): out of the chosen books and,
+ * when it was typed as `in:<alias>` and never moved to the URL's books, out of the query too.
+ * @param {string} q @param {string[]} filterBooks @param {string} id
+ * @param {Map<string, string> | null} aliasMap
+ * @returns {{ q: string, filterBooks: string[] }}
+ */
+function withoutScopeBook(q, filterBooks, id, aliasMap) {
+  const books = filterBooks.filter((b) => b !== id);
+  if (!aliasMap || !/(?:^|\s)in:/.test(q)) return { q, filterBooks: books };
+  const keyword = q.replace(IN_TOKEN_RE, (whole, alias) => (aliasMap.get(String(alias).toLowerCase()) === id ? " " : whole))
+    .replace(/\s+/g, " ").trim();
+  return { q: keyword, filterBooks: books };
+}
+
+/**
+ * Book ids in canon order (the book pills, ADR-049 §1), duplicates dropped; ids `order` does not know go last.
+ * @param {string[]} ids @param {string[]} order  every book id in canon order
+ * @returns {string[]}
+ */
+function canonOrder(ids, order) {
+  /** @param {string} id */
+  const rank = (id) => { const i = order.indexOf(id); return i < 0 ? order.length : i; };
+  return Array.from(new Set(ids)).sort((a, b) => rank(a) - rank(b));
+}
+
 /** @param {string} id */
 function bookName(id) {
   return (_bookMap && _bookMap[id]) || id;
 }
 // ── END SCOPE_HELPERS ──
+
+/** A book's full name (「루가의 복음서」), its short name until the books load. @param {string} id */
+function bookTitle(id) {
+  return _bookTitles.get(id) || bookName(id);
+}
 
 // CSP-safe inline SVG icon (no markup string — see buildSearchEmptyState).
 /**
@@ -1994,49 +2120,19 @@ function svgIcon(className, paths, circles) {
   return svg;
 }
 
-// ── In-field search tokens (ADR-033 개정 2026-06-08 — option B) ──────────────
-// Book-scope filters render as removable chips INSIDE the search field itself
-// (HIG search tokens), so there is a single search surface — no separate filter
-// bar. Mounted on each field container (header #search-bar, mobile in-page
-// #search-inpage-bar) and refreshed from
-// the URL on every route via syncSearchFields(). The worker/URL schema (in=) is
-// unchanged — only how the filters surface.
+// ── Search field: the book-picker funnel (ADR-033, ADR-049 §1) ──────────────
+// The funnel sits inside each search field (header #search-bar, mobile in-page #search-inpage-bar) and opens the book
+// picker. The chosen books are no longer chips in the field: they show as pills right under it (ADR-049, the scope
+// row below). The funnel turns the accent color while books are chosen; syncSearchFields() refreshes it from the URL
+// on every route.
 
 /** @typedef {{ container: HTMLElement, input: HTMLInputElement, zone: HTMLElement, funnel: HTMLElement, focused?: boolean }} SearchField */
 /** @type {SearchField[]} */
 const _searchFields = [];
 
-// One removable in-field token (a book scope or an AND term). Smaller than the
-// old filter-bar chip — it sits inline with the typed query.
-/**
- * @param {string} label
- * @param {string} removeAria
- * @param {() => void} onRemove
- */
-function buildFieldToken(label, removeAria, onRemove) {
-  const chip = el("span", { className: "field-token" });
-  chip.appendChild(el("span", { className: "field-token-label" }, label));
-  const x = el("button", {
-    type: "button",
-    className: "field-token-remove",
-    "aria-label": removeAria,
-    tabindex: "-1",
-  });
-  x.appendChild(el("span", { "aria-hidden": "true" }, "×"));
-  // pointerdown preventDefault keeps the field input focused (no keyboard flicker
-  // on the mobile in-page bar); click does the removal.
-  x.addEventListener("pointerdown", (e) => e.preventDefault());
-  x.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); onRemove(); });
-  chip.appendChild(x);
-  return chip;
-}
-
-// Insert the token zone (funnel button + chip slot) just before `input` inside
-// `container`, wire the field-level interactions (Backspace-to-remove) and
-// register the field for
-// syncSearchFields(). The zone uses display:contents so its children flex inline
-// within the existing bar row. The header field mounts once at load; the
-// in-page bar mounts each time it's rebuilt (stale ones are pruned).
+// Insert the token zone (the funnel button) just before `input` inside `container` and register the field for
+// syncSearchFields(). The header field mounts once at load; the in-page bar mounts each time it's rebuilt (stale ones
+// are pruned).
 /**
  * @param {HTMLElement} container
  * @param {HTMLInputElement} input
@@ -2055,23 +2151,8 @@ function mountSearchField(container, input) {
   funnel.addEventListener("pointerdown", (e) => e.preventDefault());
   funnel.addEventListener("click", (e) => { e.preventDefault(); openBookFilterSheet(funnel); });
 
-  zone.appendChild(funnel); // chips get appended after the funnel
+  zone.appendChild(funnel);
   container.insertBefore(zone, input);
-
-  // Backspace at caret 0 (empty selection) removes the last book-scope token
-  // (mirrors iOS token fields).
-  input.addEventListener("keydown", (e) => {
-    if (e.key !== "Backspace") return;
-    // Only fall through to token removal on an empty field with the caret at the
-    // start — otherwise Backspace at caret 0 with text would eat a token instead
-    // of doing normal in-field editing (Bugbot).
-    if (input.value !== "" || input.selectionStart !== 0 || input.selectionEnd !== 0) return;
-    const cur = currentSearchState();
-    if (cur.filterBooks.length) {
-      e.preventDefault();
-      navigateSearch({ filterBooks: cur.filterBooks.slice(0, -1) });
-    }
-  });
 
   /** @type {SearchField} */
   const field = { container, input, zone, funnel, focused: false };
@@ -2096,7 +2177,7 @@ function mountSearchField(container, input) {
   syncOneField(field);
 }
 
-// Refresh one field's chips + funnel state from the live URL.
+// Refresh one field's funnel (shown, accent while books are chosen) from the live URL.
 /** @param {SearchField} field */
 function syncOneField(field) {
   const { zone, funnel } = field;
@@ -2107,32 +2188,11 @@ function syncOneField(field) {
   // the book-list fallback). Mobile always renders the search view for /search.
   const searchView = p.view === "search" && (isMobile()
     || !!p.query || (p.filterBooks && p.filterBooks.length));
-  // Reveal the token zone (funnel + any active chips) on the search view, OR
-  // whenever the field itself is focused — so the book-filter funnel is reachable
-  // from the search box on any screen, not only the search results view (user
-  // request). Off the search view there's no URL scope, so the chip loop below is
-  // empty and only the funnel shows.
+  // Reveal the funnel on the search view, OR whenever the field itself is focused — so the book-filter funnel is
+  // reachable from the search box on any screen, not only the search results view (user request).
   const active = searchView || field.focused === true;
-
-  zone.querySelectorAll(".field-token").forEach((n) => n.remove());
-
-  if (!active) {
-    zone.hidden = true;
-    return;
-  }
-  zone.hidden = false;
-
-  const state = currentSearchState();
-  const frag = document.createDocumentFragment();
-  for (const id of state.filterBooks) {
-    const name = bookName(id);
-    frag.appendChild(buildFieldToken(name, `책 범위에서 ${name} 제거`, () => {
-      navigateSearch({ filterBooks: currentSearchState().filterBooks.filter((b) => b !== id) });
-    }));
-  }
-  zone.appendChild(frag);
-
-  funnel.classList.toggle("active", state.filterBooks.length > 0);
+  zone.hidden = !active;
+  if (active) funnel.classList.toggle("active", currentSearchState().filterBooks.length > 0);
 }
 
 // Refresh every mounted field (called from route() and the search view renders). Prune
@@ -2142,14 +2202,6 @@ function syncSearchFields() {
     if (!_searchFields[i].container.isConnected) _searchFields.splice(i, 1);
   }
   for (const f of _searchFields) syncOneField(f);
-  // route() can sync before a search view finishes ensureBookMap(); if a book
-  // scope is active while names aren't loaded yet, book tokens would show raw
-  // ids. Resolve the map and re-sync once so they flip to Korean names (Bugbot).
-  if (!_bookMap && currentSearchState().filterBooks.length) {
-    ensureBookMap().then((map) => {
-      if (Object.keys(map).length) for (const f of _searchFields) syncOneField(f);
-    });
-  }
 }
 
 // ── Book-filter sheet (book picker) ──
@@ -2206,6 +2258,86 @@ function focusRebuiltInpageBar(view, seq) {
   const at = document.activeElement;
   if (at && at !== document.body && at.isConnected) return;
   const target = view.querySelector(want.target === "input" ? "#search-inpage-input" : "#search-inpage-bar .token-funnel");
+  if (target instanceof HTMLElement) target.focus(want.options);
+}
+
+// ── Book pills under the search field (ADR-049) ──
+// The chosen books show as a row of pills right under the search field: under the mobile in-page bar, at the top of
+// the search view on desktop (the header field is the input there). The row is drawn with the view, names only, and
+// drawn again with each book's count once the search ends (`drawScopeRow`). The × on a pill takes that book out and
+// searches again; focus then goes to the next pill's ×, the one before, or the funnel (§3).
+
+// What the next render of the search view must focus after a pill's × took its book out: the × of the first of `ids`
+// still there (the next book, then the one before), else the funnel. Matched against the route sequence like
+// `_inpageFocusAfterRender`.
+/** @type {{ seq: number | null, ids: string[], options: FocusOptions & { focusVisible?: boolean } } | null} */
+let _scopeFocusAfterRender = null;
+
+/**
+ * Draw the book pill row for `query` within `filterBooks` into `row`. `result` is the search's final result: with its
+ * `books` the pills carry each book's count (ADR-049 §2), without (no search yet, a verse reference, still loading)
+ * they show the names only (§5). Hidden when no book is chosen. Focus inside the row stays on the same control.
+ * @param {HTMLElement} row
+ * @param {string} query
+ * @param {string[]} filterBooks
+ * @param {any} [result]
+ */
+function drawScopeRow(row, query, filterBooks, result) {
+  /** @type {Array<[string, number]> | null} */
+  const counts = result && Array.isArray(result.books) ? result.books : null;
+  const ids = counts ? counts.map(([id]) => id) : canonOrder(filterBooks, _bookOrder);
+  const at = document.activeElement;
+  const focusKey = at instanceof HTMLElement && row.contains(at)
+    ? at.dataset.removeBook ? `x:${at.dataset.removeBook}` : at.dataset.focusKey || null
+    : null;
+  clearNode(row);
+  row.hidden = ids.length === 0;
+  if (!ids.length) return;
+  row.appendChild(buildScopePills(ids.map((id) => ({ id, name: bookName(id) })), {
+    counts,
+    shown: counts ? result.shownBook || null : null,
+    hrefOf: (id) => buildSearchUrl({ q: query, filterBooks, book: id }),
+    onRemove: (id, e) => removeScopeBook(ids, id, e),
+  }));
+  if (focusKey) {
+    const same = Array.from(row.querySelectorAll("[data-remove-book], [data-focus-key]")).find((n) => n instanceof HTMLElement
+      && (n.dataset.removeBook ? `x:${n.dataset.removeBook}` : n.dataset.focusKey) === focusKey);
+    if (same instanceof HTMLElement) same.focus({ preventScroll: true });
+  }
+}
+
+/**
+ * The × on book pill `id`: search again without that book (ADR-049 §3), from page 1 and 「전체」. Focus goes to the
+ * next pill's × once the view redraws, else the one before, else the funnel.
+ * @param {string[]} ids  the pills' books, in order
+ * @param {string} id
+ * @param {MouseEvent} e
+ */
+function removeScopeBook(ids, id, e) {
+  const cur = currentSearchState();
+  const i = ids.indexOf(id);
+  /** @type {FocusOptions & { focusVisible?: boolean }} */
+  const options = e.detail > 0 ? { preventScroll: true, focusVisible: false } : { preventScroll: true };
+  navigateSearch(withoutScopeBook(cur.q, cur.filterBooks, id, _aliasMap));
+  _scopeFocusAfterRender = { seq: window.routeSeq?.() ?? null, ids: [ids[i + 1], ids[i - 1]].filter(Boolean), options };
+}
+
+/**
+ * Focus the × named by `_scopeFocusAfterRender` when this render is the one it waits for and focus fell to <body> with
+ * the pressed ×. No such pill left: the funnel of the field above the row.
+ * @param {HTMLElement} view @param {number} seq
+ */
+function focusRebuiltScopeRow(view, seq) {
+  const want = _scopeFocusAfterRender;
+  if (!want || want.seq !== seq) return;
+  _scopeFocusAfterRender = null;
+  const at = document.activeElement;
+  if (at && at !== document.body && at.isConnected) return;
+  const xs = Array.from(view.querySelectorAll(".scope-pill-remove"));
+  const next = want.ids.map((id) => xs.find((x) => x instanceof HTMLElement && x.dataset.removeBook === id)).find(Boolean);
+  const funnel = Array.from(document.querySelectorAll("#search-inpage-bar .token-funnel, #search-bar .token-funnel"))
+    .find((n) => n.getClientRects().length > 0);
+  const target = next || funnel;
   if (target instanceof HTMLElement) target.focus(want.options);
 }
 
@@ -2685,7 +2817,7 @@ async function renderSearchView(state) {
   const askKeyword = _askKeywordPath === location.pathname + location.search;
   _askKeywordPath = null;
   // Resolve book names before building the filter bar so pre-set/deep-linked
-  // scope chips render with names rather than raw ids (ADR-033). Capture the
+  // book pills render with names rather than raw ids (ADR-049). Capture the
   // route sequence first and bail if navigation happened during the await, so a
   // late completion never mutates #app over a newer view (ADR-033, Bugbot).
   const seq = window.routeSeq?.() ?? 0;
@@ -2702,6 +2834,10 @@ async function renderSearchView(state) {
   // when the user moves focus there (the bar, or the tab bar's search circle on
   // this screen, ADR-048 §2).
   if (isMobile()) view.appendChild(buildInPageSearchInput(""));
+  // The chosen books, names only: nothing searched yet (ADR-049 §5)
+  const scopeRow = el("div", { className: "scope-row" });
+  view.appendChild(scopeRow);
+  drawScopeRow(scopeRow, "", filterBooks);
   if (askKeyword) view.appendChild(el("p", { className: "search-note search-keyword-note" }, KEYWORD_NOTE));
   const dyn = el("div", { className: "search-empty-dynamic" });
   view.appendChild(dyn);
@@ -2712,8 +2848,9 @@ async function renderSearchView(state) {
   // Sync after the view is connected so a deep-linked scope resolves names.
   syncSearchFields();
   // The bar's ⊗ or the book sheet's 「적용」 drew this view: focus the new bar's funnel or input (after the sync above shows
-  // the token zone).
+  // the token zone). A pill's × drew it: focus the next pill's × (ADR-049 §3).
   focusRebuiltInpageBar(view, seq);
+  focusRebuiltScopeRow(view, seq);
   _emptyDynHost = dyn;
   renderEmptyDynamic(dyn);
 }
@@ -2726,16 +2863,17 @@ const LECTIONARY_WAIT_MS = 3000;
  * @param {string} query
  * @param {number} page
  * @param {boolean} [autoNavigate]
- * @param {{ filterBooks?: string[], group?: "psalter" | "lectionary" | null }} [opts]
+ * @param {{ filterBooks?: string[], group?: "psalter" | "lectionary" | null, book?: string | null }} [opts]
  *   filterBooks — book-picker scope (book ids), from the URL via parsePath (ADR-033).
  *   group — the chosen result pill (ADR-044 §1, ADR-046 §3); 성서 본문 when absent.
+ *   book — the chosen book pill within the scope (ADR-049 §2); 「전체」 when absent.
  */
 async function renderSearchResults(query, page, autoNavigate = false, opts = {}) {
   const filterBooks = opts.filterBooks || [];
   const state = { q: query, page, filterBooks };
 
   // Resolve book names before any DOM mutation so deep-linked/restored `in=`
-  // scope chips render with names rather than raw ids (ADR-033). Capture the
+  // book pills render with names rather than raw ids (ADR-049). Capture the
   // route sequence and bail if navigation happened during the await, so a late
   // completion never clears/builds over a newer view (ADR-033, Bugbot).
   const seq = window.routeSeq?.() ?? 0;
@@ -2758,14 +2896,19 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   // render into their own box so re-rendering them never touches the field.
   const view = el("div", { className: "search-view" });
   if (isMobile()) view.appendChild(buildInPageSearchInput(query));
+  // The chosen books under the field (ADR-049 §1): names now, each book's count once the search ends
+  const scopeRow = el("div", { className: "scope-row" });
+  view.appendChild(scopeRow);
+  drawScopeRow(scopeRow, query, filterBooks);
   const resultsTarget = el("div", { className: "search-view-results" });
   view.appendChild(resultsTarget);
   $app.appendChild(view);
-  // Book/AND filters surface as in-field tokens (ADR-033 개정 B); sync the
-  // header/in-page fields for this query + scope (after view is connected).
+  // Sync the header/in-page fields' funnel for this scope (after view is connected).
   syncSearchFields();
   // The book sheet's 「적용」 searched from this bar: focus its new funnel (after the sync above shows the token zone).
+  // A pill's × searched again: focus the next pill's × (ADR-049 §3).
   focusRebuiltInpageBar(view, seq);
+  focusRebuiltScopeRow(view, seq);
 
   resultsTarget.appendChild(el("div", { className: "loading", "aria-live": "polite" }, "검색 중…"));
 
@@ -2778,7 +2921,7 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   // Pagination links must carry the active book filters (ADR-033) and stay in the group shown (ADR-046 §3); the
   // closure binds the current state so renderSearchResultList stays filter-agnostic.
   const paginationBuilder = (/** @type {string} */ _q, /** @type {number} */ p, /** @type {number} */ t,
-    /** @type {SearchGroup} */ group) => buildSearchPagination({ ...state, group }, p, t);
+    /** @type {SearchGroup} */ group, /** @type {string | null} */ book) => buildSearchPagination({ ...state, group, book }, p, t);
 
   /** @type {SearchScreen} */
   const screen = {
@@ -2833,7 +2976,7 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
     }
   }
 
-  const result = await doSearch(query, page, pageSize, onPartial, { scopeBooks: filterBooks });
+  const result = await doSearch(query, page, pageSize, onPartial, { scopeBooks: filterBooks, showBook: opts.book || null });
 
   // A book after `in:` the worker does not know, or more books than one search
   // takes, only gets a notice (ADR-005, ADR-033), so the line the commit kept for
@@ -2888,6 +3031,8 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   const lateDays = await withLectDays(result, screen, resultGroups(result, screen).group === "lectionary" ? deadline : Date.now(), isStale);
   if (isStale()) return;
 
+  // Each chosen book's count on its pill (ADR-049 §2)
+  drawScopeRow(scopeRow, query, filterBooks, result);
   window.announce(draw(result));
   wireLocalNotice(resultsTarget, query);
   // 카드에서 등록한 뒤면 누른 단추가 사라졌으므로, 새로 생긴 소속교회의 축성일 줄로 포커스를 옮긴다
@@ -3068,14 +3213,14 @@ function takeCommittedSearch(query, filterBooks) {
  * @param {{ filterBooks?: string[], autoNavigate?: boolean, fromHistory?: boolean }} [opts]
  *   filterBooks — the book scope to search in, in place of the URL's (the book sheet's 「적용」, ADR-033 D3).
  *   autoNavigate — false keeps a verse reference on the results (only Enter may jump to the chapter, ADR-033 D3).
- *   fromHistory — `rawQuery` is a recent-search label: search its own `in:` scope in place of the chips (ADR-014 D2).
+ *   fromHistory — `rawQuery` is a recent-search label: search its own `in:` scope in place of the chosen books (ADR-014 D2).
  * @returns {string} the committed keyword (empty when nothing was committed or only `in:` scope remained)
  */
 function commitTopSearch(rawQuery, opts = {}) {
   const raw = (rawQuery || "").trim();
   // A fresh query keeps the book-picker scope (union in: tokens) but resets
   // pagination (ADR-033). A recent search carries its own scope: its in: tokens
-  // replace the chips, and one without any searches the whole Bible (ADR-014 D2).
+  // replace the chosen books, and one without any searches the whole Bible (ADR-014 D2).
   /** @type {string[]} */
   const scope = opts.fromHistory ? [] : (opts.filterBooks || currentSearchState().filterBooks);
   if (!raw) {
@@ -3083,7 +3228,7 @@ function commitTopSearch(rawQuery, opts = {}) {
     if (scope.length) goSearch("", scope, true);
     return "";
   }
-  // Absorb typed/example `in:<alias>` operators into book-scope chips so the
+  // Absorb typed/example `in:<alias>` operators into the chosen books (pills) so the
   // operator doesn't linger as raw text in the field (token UI). The alias map
   // is preloaded at boot (ensureAliasMap kick at module init), so this stays
   // SYNCHRONOUS — no await, hence no stale/race surface to guard (the async
@@ -3097,15 +3242,15 @@ function commitTopSearch(rawQuery, opts = {}) {
     ({ keyword, ids } = extractInScope(raw, _aliasMap));
   }
   let filterBooks = ids.length ? Array.from(new Set(scope.concat(ids))) : scope;
-  // No sixth chip from a typed `in:` (ADR-033 「책은 5권까지」): past the limit the
-  // tokens stay text in the query, the worker counts them with the chips,
+  // No sixth book from a typed `in:` (ADR-033 「책은 5권까지」): past the limit the
+  // tokens stay text in the query, the worker counts them with the chosen books,
   // searches nothing and says so. Known here, so the search is not kept (ADR-014 D1).
   const tooManyBooks = filterBooks.length > MAX_SCOPE_BOOKS;
   if (tooManyBooks && ids.length) {
     keyword = raw;
     filterBooks = scope;
   }
-  // The recent-search label holds the scope searched, chips included (ADR-014
+  // The recent-search label holds the scope searched, chosen books included (ADR-014
   // D1). A scope-only commit has nothing to search and is not kept. A replayed
   // label written another way (an older `in:요한복음`) gives way to the new one.
   // The worker may still answer that a book after `in:` is unknown: the results

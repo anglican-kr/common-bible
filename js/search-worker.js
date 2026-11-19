@@ -15,9 +15,10 @@
  *       — localUrl is optional: the parish table, loaded with the lectionary index.
  *         Without it (or when it fails) there are no local days (ADR-044 §3).
  *     { type: "search", q: "keyword", page: 1, pageSize: 50, searchId: N,
- *       scopeBooks: ["john", ...], parish: "jqdnsv", titles: { cant: { "1": "모세송가", ... } } }
+ *       scopeBooks: ["john", ...], showBook: "john", parish: "jqdnsv", titles: { cant: { "1": "모세송가", ... } } }
  *       — scopeBooks: structured book filter (book ids) from the book picker,
  *         merged with any typed `in:<alias>` tokens (ADR-033).
+ *       — showBook: the book pill shown with a book scope (ADR-049 §2); "" or absent for 「전체」.
  *       — parish: the church id of the user's parish, "" when none (ADR-041 §6).
  *         The name search adds its local days (ADR-044 §3).
  *       — titles: the 송가 names per book id, from the app's book list (books.json `titles`, ADR-047 §5).
@@ -43,6 +44,10 @@
  *         the 성시 chunk (전례시편, 송가), cut to the same page — the page is the one of the
  *         group the app shows (ADR-046 §3). The 성시 chunk is optional: when it fails to
  *         load the Bible is searched alone and the next search fetches it again.
+ *       — books, shownBook: with a book scope only (ADR-049 §2). books: [[bookId, count], ...]
+ *         for every chosen book in canon order; results / total are then the list of the
+ *         book pill shown — showBook, or every chosen book when shownBook is null — and
+ *         psalter is empty.
  *       — lectionary: the lectionary days found (LectResult) or null — no index, a
  *         book scope is set (ADR-044 §1), nothing to search for, or searching the
  *         index failed. A search never waits for the index: while it is still
@@ -118,6 +123,7 @@
  * @property {number} pageSize
  * @property {number} searchId
  * @property {string[]} [scopeBooks]
+ * @property {string} [showBook]  책을 고른 검색에서 보이는 책 알약(ADR-049 §2). 없으면 「전체」
  * @property {string} [parish]
  * @property {{ [bookId: string]: { [chapter: string]: string } }} [titles]  송가 이름(ADR-047 §5)
  *
@@ -826,6 +832,36 @@ function groupedResults(q, chunkNames, restrictBooks, page, pageSize) {
   const psalter = paginate(gatherResults(q, chunkNames.filter((n) => PSALTER_CHUNKS.has(n)), restrictBooks), page, pageSize);
   return { results: bible.results, total: bible.total, psalter };
 }
+
+/**
+ * 책을 고른 검색의 결과(ADR-049 §2). 고른 책마다 찾은 절의 수(`books`, 성경의 차례)를 세고, 보이는 알약의 목록을 쪽으로
+ * 자른다. `showBook`이 고른 책이고 결과가 있으면 그 책만, 아니면(「전체」) 고른 책의 결과를 성경의 차례로 한 목록에 둔다.
+ * 성서 본문과 성시를 나누지 않으므로 `psalter`는 비어 있다. `shownBook`은 실제로 보인 책이고, 「전체」면 null이다.
+ * 색인에 없는 책 id는 결과가 없어 차례의 끝에 0으로 둔다.
+ * @param {string} q
+ * @param {string[]} chunkNames  the chunks to search: all of them, or those loaded so far
+ * @param {Set<string>} restrictBooks  the chosen books, never empty
+ * @param {string | null} showBook
+ * @param {number} page
+ * @param {number} pageSize
+ * @returns {PaginatedResult & { psalter: PaginatedResult, books: Array<[string, number]>, shownBook: string | null }}
+ */
+function scopedResults(q, chunkNames, restrictBooks, showBook, page, pageSize) {
+  const m = /** @type {SearchMeta} */ (meta);
+  const order = Object.keys(m.books).filter((id) => restrictBooks.has(id));
+  for (const id of restrictBooks) if (!order.includes(id)) order.push(id);
+  /** @type {Map<string, MatchedRow[]>} */
+  const byBook = new Map(order.map((id) => [id, []]));
+  for (const row of gatherResults(q, chunkNames, restrictBooks)) byBook.get(row.b)?.push(row);
+  const shownBook = showBook && (byBook.get(showBook)?.length ?? 0) > 0 ? showBook : null;
+  const rows = shownBook ? /** @type {MatchedRow[]} */ (byBook.get(shownBook)) : Array.from(byBook.values()).flat();
+  return {
+    ...paginate(rows, page, pageSize),
+    psalter: { results: [], total: 0 },
+    books: order.map((id) => [id, /** @type {MatchedRow[]} */ (byBook.get(id)).length]),
+    shownBook,
+  };
+}
 // ── END SEARCH_PURE ──
 
 // ── BEGIN LECTIONARY_PURE ──
@@ -1452,6 +1488,8 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
   if (msg.type === "search") {
     const { q, page, pageSize, searchId } = msg;
     const scopeBooks = msg.scopeBooks || [];
+    // 책을 고른 검색에서 보이는 책 알약(ADR-049 §2). 없으면 「전체」다
+    const showBook = typeof msg.showBook === "string" && msg.showBook ? msg.showBook : null;
     const parish = msg.parish || "";
     // 앱이 책 목록을 가졌으면 검색마다 송가 이름을 싣는다. 실려 오지 않으면 마지막에 받은 이름을 그대로 쓴다(ADR-047 §5)
     if (msg.titles && typeof msg.titles === "object") chapterTitles = msg.titles;
@@ -1542,11 +1580,16 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       const loadedNames = chunkConfig.map((c) => c.name).filter((n) => loadedChunks[n]);
       const pendingNames = chunkConfig.map((c) => c.name).filter((n) => !loadedChunks[n]);
 
+      // 책을 고르면 책마다 세고 고른 책의 결과를 한 목록에 둔다(ADR-049 §2). 고르지 않으면 성서 본문과 성시를 따로 센다
+      /** @param {string[]} names */
+      const found = (names) => (scoped
+        ? scopedResults(keyword, names, restrictBooks, showBook, page, pageSize)
+        : groupedResults(keyword, names, restrictBooks, page, pageSize));
+
       // Send partial results if some chunks are still loading
       if (pendingNames.length > 0) {
-        const { results, total, psalter } = groupedResults(keyword, loadedNames, restrictBooks, page, pageSize);
         post("partial-results", {
-          searchId, q: trimmed, keyword, results, total, psalter, page, pageSize,
+          searchId, q: trimmed, keyword, ...found(loadedNames), page, pageSize,
           loadedChunks: loadedNames, pendingChunks: pendingNames,
           unmatchedScopes: unmatched,
           // Only what is loaded already — a partial result never waits for the lectionary index.
@@ -1559,11 +1602,10 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       }
 
       // Full search across all chunks
-      const { results, total, psalter } = groupedResults(keyword, chunkConfig.map((c) => c.name), restrictBooks, page, pageSize);
       // `keyword` is the query stripped of in:<alias> tokens — used by the UI
       // for snippet highlighting and the ?hl= chapter-view param.
       post("results", { searchId, q: trimmed, keyword, refMatch: null,
-        results, total, psalter, page, pageSize, unmatchedScopes: unmatched,
+        ...found(chunkConfig.map((c) => c.name)), page, pageSize, unmatchedScopes: unmatched,
         bookOnly, ...(scoped ? NO_LECTIONARY : lectionaryFields(searchId, trimmed, findNames)) });
 
     } catch (err) {

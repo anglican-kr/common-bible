@@ -226,13 +226,13 @@ def test_typed_in_cannot_add_a_sixth_book(page, base_url):
     결과 없음 화면에 「책은 5권까지 고를 수 있습니다.」를 보인다. 이런 검색은 최근 검색에 남지 않는다(ADR-033 「책은 5권까지」, ADR-014 D1,
     사용자 결정 2026-11-18). 처음에는 여섯째 칩을 만들고 결과 화면에서만 알렸다."""
     page.goto(f"{base_url}/search?" + "&".join(f"in={b}" for b in FIVE_BOOKS))
-    page.wait_for_selector("#search-bar .field-token", timeout=20_000)
+    page.wait_for_selector(".scope-pill", timeout=20_000)
     page.fill("#search-input", "사랑 in:요한")
     page.press("#search-input", "Enter")
     page.wait_for_selector(".empty-state", timeout=20_000)
     state = page.evaluate("""() => ({
         text: document.querySelector('.empty-state').innerText,
-        chips: document.querySelectorAll('#search-bar .field-token').length,
+        chips: document.querySelectorAll('.scope-pill').length,
         q: new URLSearchParams(location.search).get('q'),
         books: new URLSearchParams(location.search).getAll('in'),
         field: document.querySelector('#search-input').value,
@@ -271,7 +271,7 @@ def test_scope_without_a_word_asks_for_one(typed, page, base_url):
     """책 칩만 두고 빈 입력 칸에서 Enter를 누르거나 `in:마르`처럼 범위만 쳐서 찾으면, 검색 화면에 「검색어를 입력해주세요.」를 보인다
     (ADR-033 「책은 5권까지」, 사용자 결정 2026-11-18). 그전에는 아무 안내 없이 최근 검색 화면이 나왔다."""
     page.goto(f"{base_url}/search?in=matt")
-    page.wait_for_selector("#search-bar .field-token", timeout=20_000)
+    page.wait_for_selector(".scope-pill", timeout=20_000)
     page.fill("#search-input", typed)
     page.press("#search-input", "Enter")
     page.wait_for_selector(".search-keyword-note", timeout=20_000)
@@ -690,20 +690,21 @@ def test_unknown_book_leaves_no_recent_before_the_alias_map_loads(page, base_url
 
 
 @pytest.mark.parametrize("alias", ["마르", "막", "마가복음", "mark"])
-def test_in_operator_alias_becomes_a_chip(alias, page, base_url):
-    """입력 칸에 친 `in:<별칭>`은 검색이 알아보는 별칭이면 모두 책 칩이 되고, 입력 칸에는 낱말만 남는다(ADR-033). 그전에는 책의 짧은
-    이름과 전체 이름만 칩이 되고, 다른 별칭(`막`, `마가복음`, 책 id)은 결과는 맞지만 입력 칸에 글로 남았다(사용자 결정 2026-11-18)."""
+def test_in_operator_alias_becomes_a_book_pill(alias, page, base_url):
+    """입력 칸에 친 `in:<별칭>`은 검색이 알아보는 별칭이면 모두 고른 책이 되어 검색창 아래의 알약으로 보이고, 입력 칸에는 낱말만 남는다
+    (ADR-033, ADR-049 §1). 그전에는 책의 짧은 이름과 전체 이름만 칩이 되고, 다른 별칭(`막`, `마가복음`, 책 id)은 결과는 맞지만 입력 칸에
+    글로 남았다(사용자 결정 2026-11-18)."""
     page.goto(base_url)
     wait_app_ready(page)
 
     page.fill("#search-input", f"사랑 in:{alias}")
     page.press("#search-input", "Enter")
-    page.wait_for_selector("#search-bar .field-token", timeout=20_000)
+    page.wait_for_selector(".scope-pill", timeout=20_000)
     state = page.evaluate("""() => ({
         q: new URLSearchParams(location.search).get('q'),
         books: new URLSearchParams(location.search).getAll('in'),
         field: document.querySelector('#search-input').value,
-        chips: [...document.querySelectorAll('#search-bar .field-token')].map((n) => n.textContent),
+        chips: [...document.querySelectorAll('.scope-pill')].map((n) => n.textContent),
     })""")
     assert state["q"] == "사랑" and state["books"] == ["mark"] and state["field"] == "사랑", state
     assert len(state["chips"]) == 1 and "마르" in state["chips"][0], state
@@ -742,7 +743,7 @@ def test_in_operator_unmatched_alias_blocks_search(name, particle, page, base_ur
     """`사랑 in:없는책`은 찾지 않고, 다른 결과 없음 화면과 같은 모양으로 그 책을 찾지 못했다고 알리며 고치는 방법을 적는다. 검색 예시에는
     책 범위 예시(`사랑 in:요한`)도 있다. 최근 검색에는 넣지 않는다(ADR-005 「검색 연산자 `in:`」, ADR-014 D1). 결과 위에 「in:없는책 —
     알 수 없는 책 별칭입니다」 한 줄만 보이던 때가 있었다(사용자 결정 2026-11-18). 받침이 없는 이름은 「라는」이다. 송가는 성시 색인에
-    들어가 이제 칩이 된다(ADR-046 §2, `test_psalter_book_filter_group_and_chips`)."""
+    들어가 이제 책 알약이 된다(ADR-046 §2, `test_psalter_book_filter_group_and_pills`)."""
     page.goto(base_url)
     wait_app_ready(page)
 
@@ -756,7 +757,7 @@ def test_in_operator_unmatched_alias_blocks_search(name, particle, page, base_ur
     empty_text = page.locator(".empty-state").inner_text()
     assert "검색 결과가 없습니다" in empty_text, empty_text
     assert f"‘{name}’{particle} 책을 찾지 못했어요. in: 뒤에는 마르, 마르코처럼 책 이름을 적어 주세요." in empty_text, empty_text
-    assert page.locator("#search-bar .field-token").count() == 0
+    assert page.locator(".scope-pill").count() == 0
     examples = page.locator(".search-example-q").all_inner_texts()
     assert "사랑 in:요한" in examples, examples
     recent = page.evaluate("JSON.parse(localStorage.getItem('bible-search-history') || '[]').map((e) => e.q)")
@@ -1745,10 +1746,10 @@ def test_psalter_pages_stay_in_the_psalter(page):
 
 
 def test_canticle_results_show_the_canticle_name(page):
-    """송가의 결과는 송가 이름과 절로 적는다(「즈가리야 송가 1」, ADR-046 §4). 책을 성시의 책만 골랐으면 성서 본문이 없어 알약도 없다."""
+    """송가의 결과는 송가 이름과 절로 적는다(「즈가리야 송가 1」, ADR-046 §4). 책을 골랐으면 결과 묶음의 알약 대신 책 알약이다(ADR-049 §2)."""
     _goto_search(page, "이스라엘의 주 하느님", "&in=lps&in=cant")
     assert page.locator(".search-pill").count() == 0
-    assert page.inner_text("h2.search-count") == "성시 2건 (1/1쪽)"
+    assert page.inner_text("h2.search-count") == "전체 2건 (1/1쪽)"
     assert page.locator(".search-result-ref").all_inner_texts() == ["전례시편 106:48", "즈가리야 송가 1"]
     assert page.locator(".search-result-item a").nth(1).get_attribute("href").startswith("/cant/11/1?hl=")
 
@@ -1783,9 +1784,9 @@ def test_psalter_verse_reference_and_book_name(page):
 
 
 @pytest.mark.parametrize("ctx_name", ["mobile_context", "desktop_context"])
-def test_psalter_book_filter_group_and_chips(ctx_name, request):
-    """책 선택 시트의 마지막 탭은 「성시」(전례시편, 송가)다. 고르면 다른 책과 같이 칩이 되고 최근 검색에 범위와 함께 남는다. 입력 칸의
-    `in:송가`도 칩이 된다(ADR-046 §2)."""
+def test_psalter_book_filter_group_and_pills(ctx_name, request):
+    """책 선택 시트의 마지막 탭은 「성시」(전례시편, 송가)다. 고르면 다른 책과 같이 검색창 아래의 책 알약이 되고 최근 검색에 범위와 함께
+    남는다(ADR-046 §2, ADR-049 §1). 한 권만 골랐으면 목록 위의 제목은 그 책의 이름이다(ADR-049 §2)."""
     page = request.getfixturevalue(ctx_name).new_page()
     _apply_books_to_typed_query(page, ctx_name, "목자", "lps")
     page.wait_for_selector(".search-count", timeout=20_000)
@@ -1799,31 +1800,112 @@ def test_psalter_book_filter_group_and_chips(ctx_name, request):
         heading: document.querySelector('h2.search-count').textContent,
         refs: [...document.querySelectorAll('.search-result-ref')].map((n) => n.textContent),
         pills: document.querySelectorAll('.search-pill').length,
-        chips: [...document.querySelectorAll('.field-token')].filter((n) => n.offsetParent).map((n) => n.textContent),
+        chips: [...document.querySelectorAll('.scope-pill')].filter((n) => n.offsetParent).map((n) => n.textContent),
         recent: (JSON.parse(localStorage.getItem('bible-search-history') || '[]')[0] || {}).q,
     })""")
     assert state["books"] == ["lps"], state
-    assert state["heading"].startswith("성시 5건"), state
+    assert state["heading"].startswith("전례시편 5건"), state
     assert state["refs"] and all(r.startswith("전례시편 ") for r in state["refs"]), state
     assert state["pills"] == 0, state
     assert any("전례시편" in c for c in state["chips"]), state
     assert state["recent"] == "목자 in:전례시편", state
 
 
-def test_typed_in_canticles_becomes_a_chip(page, base_url):
-    """입력 칸의 `in:송가`는 칩이 되고 송가에서만 찾는다(ADR-046 §2)."""
+def test_typed_in_canticles_becomes_a_book_pill(page, base_url):
+    """입력 칸의 `in:송가`는 책 알약이 되고 송가에서만 찾는다(ADR-046 §2, ADR-049 §1)."""
     page.goto(base_url)
     wait_app_ready(page)
     page.fill("#search-input", "구원 in:송가")
     page.press("#search-input", "Enter")
-    page.wait_for_selector("#search-bar .field-token", timeout=20_000)
+    page.wait_for_selector(".scope-pill", timeout=20_000)
     page.wait_for_selector("h2.search-count", timeout=20_000)
     _wait_search_done(page)
     assert page.evaluate("new URLSearchParams(location.search).getAll('in')") == ["cant"]
-    assert page.inner_text("h2.search-count").startswith("성시 12건 (1/")
-    assert page.locator("#search-bar .field-token").inner_text().startswith("송가")
+    assert page.inner_text("h2.search-count").startswith("성무일과 송가 12건 (1/")
+    assert page.locator(".scope-pill").inner_text().startswith("송가")
     refs = page.locator(".search-result-ref").all_inner_texts()
     assert refs and all(not r.startswith("전례시편") and ":" not in r for r in refs), refs
+
+
+# ── 고른 책의 알약(ADR-049) ───────────────────────────────────────────────────
+
+_SCOPE_PILLS = """() => [...document.querySelectorAll('.scope-pill')].map((li) => ({
+    text: li.querySelector('.scope-pill-main').textContent,
+    link: li.querySelector('a.scope-pill-main') !== null,
+    current: li.classList.contains('scope-pill-current'),
+    empty: li.classList.contains('scope-pill-empty'),
+    x: li.querySelector('.scope-pill-remove') !== null,
+}))"""
+
+
+@pytest.mark.parametrize("ctx_name", ["mobile_context", "desktop_context"])
+def test_book_pills_count_each_book_and_show_one(ctx_name, request):
+    """고른 책은 검색창 아래의 알약이고 검색창 안에는 깔때기만 있다(ADR-049 §1). 결과 화면의 알약은 「전체」와 책마다의 결과 수이고,
+    책 알약을 누르면 그 책의 결과만 보이며 주소에 `book=`을 적는다. 쪽을 넘겨도 그 책에 머문다(§2). 결과 묶음의 알약은 없다.
+    전에는 고른 책이 검색창 안의 칩이라 셋째부터 가려지고, 결과는 「성서 본문 71」처럼 합친 수만 보였다(사용자 제안 2026-11-20)."""
+    page = request.getfixturevalue(ctx_name).new_page()
+    _goto_search(page, "사랑", "&in=john&in=lps&in=luke")
+    pills = page.evaluate(_SCOPE_PILLS)
+    names = [p["text"].rsplit(" ", 1)[0] for p in pills]
+    counts = [int(p["text"].rsplit(" ", 1)[1].removesuffix("건")) for p in pills]
+    assert names == ["전체", "루가", "요한", "전례시편"], pills
+    assert counts[0] == sum(counts[1:]) and all(counts[1:]), pills
+    assert [p["current"] for p in pills] == [True, False, False, False], pills
+    assert [p["x"] for p in pills] == [False, True, True, True], pills
+    assert page.locator(".search-pill").count() == 0
+    assert page.inner_text("h2.search-count").startswith(f"전체 {counts[0]}건 (1/")
+    assert page.locator(".search-result-ref").first.inner_text().startswith("루가의 복음서 ")
+    # 검색창 안에는 칩이 없다
+    assert page.locator("#search-bar .scope-pill, #search-inpage-bar .scope-pill").count() == 0
+
+    page.locator(".scope-pill a[data-focus-key='book:john']").click()
+    page.wait_for_url("**book=john")
+    page.wait_for_function("() => document.querySelector('h2.search-count')?.textContent.startsWith('요한의 복음서 ')")
+    page.wait_for_function("() => document.activeElement?.dataset.focusKey === 'book:john'")
+    assert [p["current"] for p in page.evaluate(_SCOPE_PILLS)] == [False, False, True, False]
+    refs = page.locator(".search-result-ref").all_inner_texts()
+    assert refs and all(r.startswith("요한의 복음서 ") for r in refs), refs
+    page.locator(".search-pagination a", has_text="다음").click()
+    page.wait_for_url("**page=2**book=john")
+    page.wait_for_function("() => document.querySelector('h2.search-count')?.textContent.startsWith('요한의 복음서 ') && document.querySelector('h2.search-count').textContent.includes('(2/')")
+
+
+def test_book_pill_remove_searches_again_and_moves_focus(mobile_context):
+    """알약의 ×는 그 책을 빼고 같은 검색어로 다시 찾는다. 보던 알약은 「전체」로 돌아가고, 포커스는 다음 알약의 ×, 앞 알약의 ×, 깔때기의
+    차례로 옮긴다. 마지막 책을 빼면 결과 묶음의 알약이 돌아온다(ADR-049 §3). 결과가 없는 책은 흐린 글이고 ×는 남는다(§4).
+    빈 검색창에서 Backspace는 책을 빼지 않는다."""
+    page = mobile_context.new_page()
+    _goto_search(page, "사랑", "&in=luke&in=obad&in=john&book=john")
+    pills = page.evaluate(_SCOPE_PILLS)
+    assert [p["text"].split(" ")[0] for p in pills] == ["전체", "오바", "루가", "요한"], pills
+    assert pills[1]["empty"] and not pills[1]["link"] and pills[1]["x"], pills
+    assert pills[3]["current"], pills
+
+    page.locator(".scope-pill-remove[data-remove-book='luke']").click()
+    page.wait_for_function("() => !location.search.includes('in=luke')")
+    page.wait_for_function("() => document.activeElement?.dataset.removeBook === 'john'")
+    assert "book=" not in page.url
+    _wait_search_done(page)
+    assert [p["current"] for p in page.evaluate(_SCOPE_PILLS)] == [True, False, False]
+
+    page.keyboard.press("Enter")
+    page.wait_for_function("() => !location.search.includes('in=john')")
+    page.wait_for_function("() => document.activeElement?.dataset.removeBook === 'obad'")
+    page.keyboard.press("Enter")
+    page.wait_for_function("() => !location.search.includes('in=obad')")
+    page.wait_for_function("() => document.activeElement?.classList.contains('token-funnel')")
+    page.wait_for_selector(".search-pill", timeout=20_000)
+    assert page.locator(".scope-pill").count() == 0
+    assert page.locator(".search-pill").count() >= 2
+
+    page.goto(f"{BASE_URL}/search?in=mark")
+    field = page.locator("#search-inpage-input")
+    field.wait_for(timeout=20_000)
+    field.focus()
+    page.keyboard.press("Backspace")
+    page.wait_for_timeout(300)
+    assert page.evaluate("new URLSearchParams(location.search).getAll('in')") == ["mark"]
+    assert page.evaluate(_SCOPE_PILLS) == [{"text": "마르", "link": False, "current": False, "empty": False, "x": True}]
 
 
 def test_three_pills_in_order(page):

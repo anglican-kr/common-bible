@@ -675,7 +675,7 @@ export interface LectionaryRoute {
 
 export type Route =
   | { view: "books" }
-  | { view: "search"; query: string; page: number; filterBooks: string[]; group: "psalter" | "lectionary" | null }
+  | { view: "search"; query: string; page: number; filterBooks: string[]; group: "psalter" | "lectionary" | null; book: string | null }
   | { view: "bookmark-read"; folderId: string | null }
   | { view: "bookmarks" }
   | { view: "settings" }
@@ -1579,7 +1579,7 @@ declare global {
   function updateVerseSelectBar(): void;
   function initBookmarkSheetDrag(): void;
   function initBookmarkDrawerResize(): void;
-  function renderSearchResults(query: string, page: number, autoNavigate?: boolean, opts?: { filterBooks?: string[]; group?: "psalter" | "lectionary" | null }): Promise<void>;
+  function renderSearchResults(query: string, page: number, autoNavigate?: boolean, opts?: { filterBooks?: string[]; group?: "psalter" | "lectionary" | null; book?: string | null }): Promise<void>;
   function renderSearchView(state?: { filterBooks?: string[] }): Promise<void>;
   function isMobile(): boolean;
   function highlightTextNodes(nodes: ReadonlyArray<Text>, query: string | null): void;
