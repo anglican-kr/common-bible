@@ -17,7 +17,7 @@
 """
 import pytest
 
-from .conftest import CLEAR_APP_STORAGE
+from .conftest import CLEAR_APP_STORAGE, IPHONE_UA
 
 BASE = "http://localhost:8080"
 
@@ -418,3 +418,114 @@ def test_today_keeps_the_focus_when_it_moves(desktop_context):
         page.set_viewport_size({"width": width, "height": 700})
         page.wait_for_function(f"() => document.querySelector('#page-title {cell} .lect-today')")
         assert page.evaluate("() => document.activeElement.classList.contains('lect-today')"), width
+
+
+# ── ⑪ 휴대폰의 긴 장 제목 (사용자 결정 2026-11-19, architecture.md §4.5) ──
+
+def _phone(browser, width, font):
+    ctx = browser.new_context(viewport={"width": width, "height": 700}, user_agent=IPHONE_UA,
+                              is_mobile=True, has_touch=True)
+    ctx.add_init_script(CLEAR_APP_STORAGE + f"localStorage.setItem('bible-font-size', '{font}');")
+    return ctx
+
+
+def _title_fit(page):
+    """장 제목 단추(꺾쇠 포함)의 자리, 북마크 단추의 자리, 제목의 클래스."""
+    return page.evaluate("""() => {
+        const t = document.getElementById('page-title');
+        const btn = t.querySelector('.title-picker-btn').getBoundingClientRect();
+        const bm = t.querySelector('.title-bookmark-btn').getBoundingClientRect();
+        const s = getComputedStyle(t.querySelector('.title-picker-btn'));
+        return { btnLeft: btn.left, btnRight: btn.right, btnHeight: btn.height, bmLeft: bm.left,
+                 lineHeight: parseFloat(s.lineHeight), classes: [...t.classList] };
+    }""")
+
+
+@pytest.mark.parametrize("font, path, step", [
+    (24, "2macc/15", "title-shrink-2"), (24, "cant/4", "title-shrink-2"), (22, "2macc/15", "title-shrink-1"),
+    (24, "1thess/5", "title-shrink-2"),
+])
+def test_long_chapter_title_shrinks_to_fit_a_narrow_phone(browser, font, path, step):
+    """⑪ 너비 320px에서 짧은 명칭으로도 들어가지 않거나 짧은 명칭이 없는 장 제목은 글씨만 줄여, 꺾쇠까지 한 줄로 북마크
+    단추 앞에 있다. 처음 연 화면에서도 그렇다(웹 글꼴이 늦게 와도 다시 잰다)."""
+    ctx = _phone(browser, 320, font)
+    try:
+        page = ctx.new_page()
+        page.goto(f"{BASE}/{path}")
+        page.wait_for_selector("article.chapter-text .verse", timeout=20_000)
+        page.wait_for_timeout(600)
+        f = _title_fit(page)
+        assert step in f["classes"], f
+        assert f["btnRight"] <= f["bmLeft"] + 0.5, f
+        assert f["btnHeight"] <= f["lineHeight"] * 1.5, f   # 한 줄
+    finally:
+        ctx.close()
+
+
+def test_chapter_title_keeps_its_size_when_it_fits(browser):
+    """⑪ 들어가는 장 제목은 글씨를 줄이지 않는다(너비 390px, 글자 크기 18)."""
+    ctx = _phone(browser, 390, 18)
+    try:
+        page = ctx.new_page()
+        page.goto(f"{BASE}/cant/4")
+        page.wait_for_selector("article.chapter-text .verse", timeout=20_000)
+        page.wait_for_timeout(600)
+        f = _title_fit(page)
+        assert not any(c.startswith("title-shrink") for c in f["classes"]), f
+    finally:
+        ctx.close()
+
+
+@pytest.mark.parametrize("path", ["gen/1", "cant/6"])
+def test_chapter_picker_stays_on_a_narrow_phone_screen(browser, path):
+    """⑪ 너비 320px에 글자 크기 24에서도 장 고르기 목록(숫자, 송가 이름)이 화면 안에 있다. 15rem이 360px라 양옆이 잘렸다."""
+    ctx = _phone(browser, 320, 24)
+    try:
+        page = ctx.new_page()
+        page.goto(f"{BASE}/{path}")
+        page.wait_for_selector("article.chapter-text .verse", timeout=20_000)
+        page.click(".title-picker-btn")
+        page.wait_for_selector(".chapter-popover:not([hidden])")
+        box = page.evaluate("() => { const r = document.querySelector('.chapter-popover').getBoundingClientRect(); "
+                            "return { left: r.left, right: r.right, width: window.innerWidth }; }")
+        assert box["left"] >= 0 and box["right"] <= box["width"], box
+    finally:
+        ctx.close()
+
+
+@pytest.mark.parametrize("width, path", [(280, "2macc/15"), (300, "cant/4")])
+def test_chapter_title_is_cut_with_an_ellipsis_when_two_steps_are_not_enough(browser, width, path):
+    """⑪ 두 단계를 줄여도 들어가지 않으면(320px보다 좁은 화면) 제목 끝을 말줄임표로 자르고 꺾쇠는 북마크 단추 앞에 남긴다
+    (사용자 결정 2026-11-19)."""
+    ctx = _phone(browser, width, 24)
+    try:
+        page = ctx.new_page()
+        page.goto(f"{BASE}/{path}")
+        page.wait_for_selector("article.chapter-text .verse", timeout=20_000)
+        page.wait_for_timeout(600)
+        f = _title_fit(page)
+        assert "title-shrink-2" in f["classes"] and "title-clip" in f["classes"], f
+        assert f["btnRight"] <= f["bmLeft"] + 0.5, f
+        assert f["btnHeight"] <= f["lineHeight"] * 1.5, f   # 한 줄
+        cut = page.evaluate("""() => { const l = document.querySelector('#page-title .title-picker-label');
+            return { cut: l.scrollWidth > l.clientWidth + 1, overflow: getComputedStyle(l).textOverflow,
+                     chevron: getComputedStyle(document.querySelector('#page-title .title-picker-btn'), '::after').display }; }""")
+        assert cut["cut"] and cut["overflow"] == "ellipsis" and cut["chevron"] != "none", cut
+    finally:
+        ctx.close()
+
+
+@pytest.mark.parametrize("path, ready", [("lectionary/2026-12-24", ".lect-day"), ("calendar/2027-12", ".cal-grid")])
+def test_date_row_title_is_not_fitted_like_a_chapter_title(browser, path, ready):
+    """⑪ 캘린더와 전례독서의 날짜 단추는 장 제목 단추와 같은 클래스(`title-picker-btn`)를 쓰지만, ‹ ›와 「오늘」이 함께 있는
+    다른 배치라 장 제목의 줄인 글씨나 말줄임을 받지 않는다(코드 리뷰 2026-11-19)."""
+    ctx = _phone(browser, 320, 24)
+    try:
+        page = ctx.new_page()
+        page.goto(f"{BASE}/{path}")
+        page.wait_for_selector(ready, timeout=20_000)
+        page.wait_for_timeout(600)
+        classes = page.evaluate("() => [...document.getElementById('page-title').classList]")
+        assert not any(c.startswith("title-shrink") or c == "title-clip" for c in classes), classes
+    finally:
+        ctx.close()
