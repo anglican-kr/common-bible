@@ -110,6 +110,50 @@ def test_book_filter_sheet_tabs(ctx_name, request):
     assert [t["selected"] for t in _sheet_tabs(page)] == [True, False, False, False]
 
 
+@pytest.mark.parametrize("size", [(375, 667), (393, 852)])
+def test_book_filter_sheet_rests_where_two_rows_show(size, browser):
+    """책 선택 시트를 끌어내려 화면 높이의 30% 근처에서 놓으면, 칩 두 줄과 「적용」 단추가 다 보이는 높이로 돌아온다(ADR-033 「책 선택 시트의
+    구분 탭」, 사용자 결정 2026-11-19). 구분 탭 줄이 생긴 뒤 30%에서 멈추던 때는 칩이 하나도 보이지 않았다(아이폰 보고 2026-11-19).
+    더 내리면 전처럼 닫힌다."""
+    w, h = size
+    ctx = browser.new_context(viewport={"width": w, "height": h}, is_mobile=True, has_touch=True)
+    page = ctx.new_page()
+    page.goto(f"{BASE_URL}/search?q={quote('사랑')}")
+    page.wait_for_selector(".search-count", timeout=20_000)
+    page.locator(".token-funnel:visible").first.click()
+    page.wait_for_selector("#book-filter-sheet:not([hidden]) [role=tab]", timeout=20_000)
+    page.wait_for_timeout(400)
+
+    def drag_to(height):
+        box = page.locator(".book-filter-handle").bounding_box()
+        x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+        top = page.evaluate("document.getElementById('book-filter-sheet').getBoundingClientRect().top")
+        page.mouse.move(x, y)
+        page.mouse.down()
+        page.mouse.move(x, y + (h - top - height) / 2, steps=4)
+        page.mouse.move(x, y + (h - top - height), steps=4)
+        page.mouse.up()
+
+    drag_to(h * 0.31)
+    state = page.evaluate("""() => {
+        const sheet = document.getElementById('book-filter-sheet');
+        const body = sheet.querySelector('.book-filter-body').getBoundingClientRect();
+        const chips = [...sheet.querySelectorAll('.book-filter-panel:not([hidden]) .book-filter-option')].map((o) => o.getBoundingClientRect());
+        const rows = [...new Set(chips.map((r) => Math.round(r.top)))].sort((a, b) => a - b);
+        const second = chips.filter((r) => Math.round(r.top) === rows[1]);
+        const apply = sheet.querySelector('.book-filter-apply').getBoundingClientRect();
+        return { height: sheet.offsetHeight, secondBottom: Math.max(...second.map((r) => r.bottom)), bodyBottom: body.bottom,
+                 applyBottom: apply.bottom, vh: innerHeight };
+    }""")
+    assert state["height"] > h * 0.31, state
+    assert state["secondBottom"] <= state["bodyBottom"] + 0.5, state
+    assert state["applyBottom"] <= state["vh"], state
+
+    drag_to(h * 0.1)
+    page.wait_for_selector("#book-filter-sheet", state="hidden", timeout=5_000)
+    ctx.close()
+
+
 def _show_book_tab(page, book_id):
     """책 선택 시트에서 `book_id`의 칩이 있는 구분 탭으로 바꾸고 그 칩을 돌려준다. 칩은 자기 탭에서만 보인다(ADR-033 「책 선택 시트의
     구분 탭」)."""

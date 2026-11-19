@@ -2258,7 +2258,22 @@ function ensureBookSheet() {
       _bookSheetCloseTimer = setTimeout(done, 350);
     },
   });
-  window.appOverlay.attachSheetDrag(handle, panel, { onClose: () => overlay.close() });
+  // 끌어내려도 칩 두 줄이 보이는 높이에서 멈춘다(사용자 결정 2026-11-19, ADR-033 「책 선택 시트의 구분 탭」). 구분 탭 줄이 생겨
+  // 화면 높이의 30%로는 칩이 하나도 보이지 않았다. 높이는 놓을 때마다 잰다: 글자 크기를 바꾸면 칩과 머리의 높이가 바뀐다.
+  // The fixed rows are summed one by one, not taken as panel minus body: a sheet dragged below them squeezes
+  // the body to 0 and the difference would come out short.
+  function twoRowsHeight() {
+    const opt = /** @type {HTMLElement | null} */ (body.querySelector(".book-filter-panel:not([hidden]) .book-filter-option"));
+    if (!opt) return 0;
+    const list = /** @type {HTMLElement} */ (opt.closest(".book-filter-list"));
+    const rowGap = parseFloat(getComputedStyle(list).rowGap) || 0;
+    const bodyStyle = getComputedStyle(body);
+    const pad = (parseFloat(bodyStyle.paddingTop) || 0) + (parseFloat(bodyStyle.paddingBottom) || 0);
+    let fixed = parseFloat(getComputedStyle(panel).paddingBottom) || 0; // the home-indicator inset
+    for (const part of [handle, head, tabbar, foot]) fixed += part.offsetHeight;
+    return fixed + pad + 2 * opt.offsetHeight + rowGap;
+  }
+  window.appOverlay.attachSheetDrag(handle, panel, { onClose: () => overlay.close(), minHeight: twoRowsHeight });
   window.appOverlay.attachSheetResize(resize, panel);
   closeBtn.addEventListener("click", () => overlay.close());
 

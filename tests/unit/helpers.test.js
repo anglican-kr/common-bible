@@ -847,6 +847,15 @@ test("dragReleaseAction: thresholds scale with viewport height", () => {
   assert.equal(h.helpers.dragReleaseAction(400, 800), "stay");
 });
 
+test("dragReleaseAction: a taller rest min moves the snap line, not the close line", () => {
+  // 책 선택 시트는 칩 두 줄이 보이는 높이에서 멈춘다(ADR-033 「책 선택 시트의 구분 탭」, 사용자 결정 2026-11-19)
+  const h = loadHelpers();
+  assert.equal(h.helpers.dragReleaseAction(199, 1000, 420), "close");
+  assert.equal(h.helpers.dragReleaseAction(350, 1000, 420), "snap-min");
+  assert.equal(h.helpers.dragReleaseAction(419, 1000, 420), "snap-min");
+  assert.equal(h.helpers.dragReleaseAction(420, 1000, 420), "stay");
+});
+
 // ── emptyState (shared empty-state builder, ADR-032) ─────────────────────────
 
 test("emptyState: builds icon slot + title + subtitle structure", () => {
