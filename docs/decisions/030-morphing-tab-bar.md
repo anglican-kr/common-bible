@@ -19,6 +19,8 @@ ADR-029로 모바일 하단 탭 바(홈, 검색, 북마크, 설정의 4탭, 탭�
 
 ### 1. 라벨 없는 아이콘 탭 바와 따로 떨어진 검색 원형 (ADR-029 §1을 바꿈)
 
+> 이 절에서 검색 모핑에 쓰던 규칙(간격의 `#tab-dock.searching{gap}`, 인디케이터를 숨기는 `.searching`, 모핑 입력창과 키보드 닫기 단추의 글래스)은 **ADR-048이 대체했다.** 탭 바, 검색 원형, 스크롤 축소의 규칙은 그대로다.
+
 - 탭 라벨(`.tab-label`)을 없애 **아이콘만** 둔다(접근성은 `aria-label`). 처음 탭 순서는 **홈, 북마크, 노트, 설정**의 넷이었다. `노트`는 뒤의 기능을 위한 **목업**(비활성 `<button aria-disabled>`, 노트패드 아이콘)으로 자리만 잡았다. 1.6.0(2026-06-09)부터 노트 탭은 숨겨 두었고, 지금 탭은 홈, 캘린더(ADR-038), 북마크, 설정이다(`index.html`).
 - **검색은 탭에서 뺀다.** 탭 바 오른쪽의 따로 된 원형 버튼(`#tab-search`)이다. 검색 아이콘이 한가운데 있고, FAB와 비슷하다(ADR-029의 「검색=4탭 가운데 하나」를 바꿨다).
 - 구조: `#tab-dock`(fixed, 투명) flex 컨테이너가 `#tab-bar`(pill)와 `#tab-search-dock`(검색 원형과 입력)을 묶는다. **탭 바는 오디오 바의 왼쪽 끝, 검색 원형은 오른쪽 끝**에 맞춘다(`#tab-dock` 좌우 `--space-4`와 `justify-content` / `margin-left:auto`로, 오디오 바 `margin:0 --space-4`와 좌우를 맞춘다). `#tab-dock`·`#tab-search-dock`은 보이는 효과가 없는 순수 레이아웃 층이다.
@@ -60,6 +62,8 @@ ADR-029로 모바일 하단 탭 바(홈, 검색, 북마크, 설정의 4탭, 탭�
 
 ### 2. frosted glass를 요소에 직접 (ADR-029 §3을 바꿈)
 
+> 이 절의 모핑 입력 pill과 모핑 트랜지션, 키보드가 뜰 때 `--kb-overlap`으로 dock을 올리는 것은 **ADR-048이 대체했다.**
+
 ADR-029는 Safari 26의 홈 인디케이터 색 문제를 피하려고 글래스를 `::before` 층에 얹고 fixed 부모를 투명하게 두었다. ADR-030 구조에서는 **fixed 요소가 `#tab-dock`(투명) 하나뿐**이라 그 걱정이 없어진다. 그래서 **frosted glass(반투명 배경과 `backdrop-filter`)를 `#tab-bar`·`#tab-search` 요소에 직접** 적용한다(`::before` 우회는 지웠다).
 
 - **떠 있는 모양 셋을 맞춘다.** 탭 바 pill, 검색 원형, 오디오 바 모두 `frosted glass + 1px 테두리(--text 8%) + --shadow-2`이고, 높이는 **60px**(`--touch-target 44 + --space-2 ×2`)이다. 테두리가 가장자리를 그어 같은 그림자도 또렷하게 떠 보인다.
@@ -92,6 +96,8 @@ ADR-029는 Safari 26의 홈 인디케이터 색 문제를 피하려고 글래스
 검색이 탭 바 모핑 하나로 모이면서, **모바일 검색 바텀 시트(`openSearchSheet`/`closeSearchSheet`/`#search-sheet`와 드래그)를 모두 지웠다**(search.js가 크게 줄었다). 데스크톱의 인라인 검색 바와 `/search` 결과 경로는 그대로다. 검색 FAB는 ADR-029에서 이미 지웠다.
 
 ### 5. 스크롤 축소와 오디오 미니 모핑 (구현 완료)
+
+> 이 절에서 검색 모핑을 가리키는 문장(검색 모핑과 함께 쓰던 CSS, 검색 모핑 중에는 줄이지 않기, 가로 모드의 검색 모핑 두 항목)은 **ADR-048이 대체했다.** 스크롤 축소와 오디오 미니는 그대로다.
 
 **쓰는 조건:** 스크롤 축소는 (1) **오디오북 설정(`loadAudioShow()`)이 켜져 있고** (2) **읽기 화면(`view==="chapter"`·`"prologue"`)**일 때만 한다. 책 목록(`books`·`division`), 장 선택(`chapters`), 검색, 북마크, 설정 화면에서는 아래로 스크롤해도 탭 바를 그대로 둔다(축소와 미니 오디오는 오디오북이 켜져 있고 본문을 읽는 때만이다).
 
@@ -150,6 +156,8 @@ ADR-029는 Safari 26의 홈 인디케이터 색 문제를 피하려고 글래스
 
 ## 구현 메모
 
+> 검색 모핑의 스크립트(`exitTabSearch`, `syncTabSearchQuery`, `KEYBOARD` 블록)와 CSS(`#tab-dock.searching`, `body.tabbar-searching`, `body.tabbar-keyboard`, `--kb-overlap`)는 **ADR-048이 대체해** 지웠다. 남은 CSS는 탭 바와 `.collapsed` 축소 규칙이다.
+
 - 새 모듈 `js/app/tabbar.js`(`// @ts-check`과 JSDoc, ESM). `window.exitTabSearch`·`syncTabSearchQuery`·`resetTabCollapse`를 내놓고, search.js가 `window.commitTopSearch`를 내놓는다. SW 미리 넣기(`sw.js` SHELL_FILES)에 tabbar/citations/parallels를 더했다.
 - CSS는 `css/style.css`의 탭 바 블록과 `#tab-dock.searching`/`.collapsed` 모핑 규칙(홈 원형과 탭 접기를 함께 쓴다)이다. 모션 토큰 `--duration-base`/`--ease-standard`, reduced-motion 분기를 둔다.
 - 키보드(`KEYBOARD` 블록: `keyboardOverlap`/`setKeyboardState`/`liftForKeyboard`)와 스크롤 축소(`SCROLL` 블록: `nextScrollCollapsed`)는 순수 함수로 잘라 유닛으로 검증한다(`tests/unit/tabbar.test.js` 12 케이스). 전체 유닛 578, tsc 0(그때 수).
@@ -169,4 +177,5 @@ ADR-029는 Safari 26의 홈 인디케이터 색 문제를 피하려고 글래스
   - 테마색 솔리드 채움은 유지한다(주요 행동 CTA를 강조하고, 글래스 캡슐 사이에서 색 있는 pill로 도드라진다). 닫기 ×는 세로 구분선을 없애고 크기를 키우며(`--font-2xl`), 버튼 폭을 `--dock-control`(60px)로 두어 × 가운데를 오른쪽 반원 캡의 가운데(오른쪽 끝 −30px)에 맞춘다.
   - 순수 CSS(`@media (orientation: landscape)`와 mobile 조건)이고, 세로는 바뀌지 않는다.
   - **함정: `#tab-dock`이 클릭을 가로챈다.** 이어 읽기 pill은 DOM에서 `#tab-dock`보다 앞이고 z-index가 같아(`--nav-z`), 투명한 `#tab-dock`(폭 전체의 레이아웃 층)이 빈 가운데에서 pill(링크와 ×) 클릭을 먹어 **이어 읽기와 닫기가 모두 작동하지 않았다.** `#resume-banner-slot{z-index:10}`의 쌓임 맥락이 pill의 z를 가둬 z-index만으로는 벗어날 수 없다. 그래서 **`#tab-dock{pointer-events:none}`으로 두고 실제 컨트롤(`#tab-bar`·`#tab-search-dock`·`#tab-search-close`)만 `pointer-events:auto`**로 되살려, 빈 가운데 클릭이 아래 pill로 지나가게 한다(가로 한정). 미니 오디오는 DOM에서 `#tab-dock` 뒤라 우연히 영향이 없었다.
+  - 위 항목의 `#tab-search-close`와 아래 항목에서 검색 모핑을 빼는 조건(`:not(.tabbar-searching)`, `body.tabbar-searching .resume-banner`)은 **ADR-048이 대체해** 지웠다. 지금 선택자는 `body:has(#resume-banner-slot .resume-banner)`다.
   - **검사(Bugbot 후속):** 지나가게 하는 것은 pill이 실제로 dock에 있을 때만 켠다. `body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching)` 선택자로 그때만 적용한다. 배너 없는 책 목록이나 다른 가로 뷰에서는 dock이 빈 가운데 누름을 그대로 받는다(쓸데없이 지나가게 하지 않는다). 또 **검색 모핑(`.tabbar-searching`) 중에는** 검색 입력이 dock 줄을 채우므로 pill을 숨기고(`body.tabbar-searching .resume-banner{display:none}`), dock pill 적용도 `body:not(.tabbar-searching)`로 뺀다. 가로 오디오 바의 `body:not(.tabbar-searching)` 조건과 같은 뜻이다(입력과 pill이 부딪치지 않게).

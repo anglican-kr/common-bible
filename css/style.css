@@ -2536,8 +2536,7 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
 /* ── In-field search tokens (ADR-033 개정 B) ───────────────────────────────
    Book scope surfaces as chips INSIDE the search field (HIG search tokens).
    .token-zone uses display:contents so the funnel/chips flex inline within each
-   field row — the header #search-bar, the mobile in-page #search-inpage-bar,
-   and the bottom morphing #tab-search-dock pill. */
+   field row — the header #search-bar and the mobile in-page #search-inpage-bar. */
 /* Horizontal-scroll strip for the funnel + chips — so many book tokens scroll
    instead of crushing the query input or overflowing the bar (Bugbot). The main
    input and trailing clear/toggle stay OUTSIDE this scroller, so they're always
@@ -2588,7 +2587,7 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
 }
 
 /* Keep the compact visual size but expand the tap area to the 44px touch target
-   via a transparent overlay (mirrors #tab-search-clear) so the in-field funnel
+   via a transparent overlay so the in-field funnel
    and chip × meet --touch-target (ADR-028 / WCAG) without growing the inline
    pill (Bugbot). */
 .token-funnel::after,
@@ -3960,10 +3959,7 @@ mark.search-highlight {
    로 포착(ADR-030 가로 오디오 규칙과 동일 게이트). */
 @media (orientation: landscape) and (max-width: 768px),
        (orientation: landscape) and (pointer: coarse) {
-  /* 검색 모핑(.tabbar-searching) 중엔 검색 입력이 dock 행을 채우므로 pill 을 빼낸다 —
-     평소에만 fixed dock pill, 검색 중엔 숨김(가로 오디오 바의 body:not(.tabbar-searching)
-     게이트와 같은 취지 — Bugbot Medium). */
-  body:not(.tabbar-searching) .resume-banner {
+  .resume-banner {
     position: fixed;
     bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
     left: calc(var(--space-4) + var(--tab-bar-w, calc(var(--dock-control) * 4)) + var(--space-2));
@@ -3974,19 +3970,17 @@ mark.search-highlight {
     border-radius: var(--radius-pill);
     z-index: var(--nav-z);
   }
-  body.tabbar-searching .resume-banner { display: none; }
   /* 배치만 맡는 투명한 `#tab-dock` 요소가 가운데 빈 영역의 클릭을 가로채, 그 아래의 이어 읽기
      알약 단추(링크와 ×)가 눌리지 않았다. `#tab-dock` 요소는 DOM 순서로 배너보다 뒤에 있고 쌓임
      순서(`z-index` 속성)가 같다. 또 `#resume-banner-slot` 요소의 `z-index: 10`이 쌓임 맥락을
      만들어, 알약 단추의 쌓임 순서는 그 안에서만 비교된다. 그래서 알약 단추가 실제로 `#tab-dock`
-     요소와 같은 줄에 보일 때만(배너가 있고 검색 중이 아닐 때) `#tab-dock` 요소가 클릭을 받지 않게 하고
+     요소와 같은 줄에 보일 때만(배너가 있을 때) `#tab-dock` 요소가 클릭을 받지 않게 하고
      (`pointer-events: none`) 실제 컨트롤만 다시 받게 한다. 배너가 없는 책 목록과 다른 화면에서는
      `#tab-dock` 요소가 가운데 빈 영역의 클릭을 그대로 받아야 하므로, `:has()` 선택자로 배너가
      있을 때만 이 규칙을 적용한다(Bugbot 지적, 낮음). 미니 오디오 플레이어는 별도 요소다. */
-  body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching) #tab-dock { pointer-events: none; }
-  body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching) #tab-bar,
-  body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching) #tab-search-dock,
-  body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching) #tab-search-close { pointer-events: auto; }
+  body:has(#resume-banner-slot .resume-banner) #tab-dock { pointer-events: none; }
+  body:has(#resume-banner-slot .resume-banner) #tab-bar,
+  body:has(#resume-banner-slot .resume-banner) #tab-search-dock { pointer-events: auto; }
   /* 닫기 × — 세로 구분선 제거 + × 키움 + 중심을 우측 반원 캡 중심에 정렬.
      버튼 폭을 --dock-control(60px)로 두고 × 를 가운데 정렬하면 × 중심 = 버튼 중심 =
      pill 우측 끝 −30px = 반원 캡(반지름 --dock-control/2=30px) 중심과 일치. */
@@ -5105,23 +5099,15 @@ html.cite-sheet-open {
   position: fixed;
   left: 0;
   right: 0;
-  /* --kb-overlap 은 키보드가 떠 있을 때 tabbar.js 가 키보드 높이로 설정한다.
-     transform 이 아니라 실제 bottom 으로 올려야 입력의 레이아웃 사각형이 키보드
-     위로 가서 iOS 가 페이지를 팬하지 않는다(헤더·빈 상태가 제자리 유지). */
-  bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75 + var(--kb-overlap, 0px));
+  bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
   z-index: var(--nav-z);
   display: flex;
   align-items: center;
   /* ADR-030: 탭바=왼쪽 끝, 검색 그룹=오른쪽 끝. 검색 그룹(#tab-search-dock)의
-     margin-left:auto 가 우측으로 밀어붙인다(닫기 X 버튼이 collapsed 0폭으로 끼어
-     있어도 space-between 처럼 가운데로 흩어지지 않음). padding 0 space-4 + left/right 0
-     으로 오디오 바(margin:0 space-4)와 좌우 가장자리 정렬. */
+     margin-left:auto 가 우측으로 밀어붙인다. padding 0 space-4 + left/right 0
+     으로 오디오 바(margin:0 space-4)와 좌우 가장자리 정렬. 탭 바↔검색 간격은 dock gap
+     이 아니라 #tab-bar margin-right 가 준다. */
   padding: 0 var(--space-4);
-  /* idle 엔 dock gap 을 두지 않는다 — 마지막 자식 #tab-search-close(키보드 전용,
-     idle width:0)와 #tab-search-dock 사이에 gap 이 끼면 검색 원형이 8px 왼쪽으로
-     밀려 우측 여백이 홈 좌측 여백과 어긋난다(home↔audio↔search 간격도 불균등).
-     탭 바↔검색 간격은 #tab-bar margin-right 로 주고, 검색 모핑 중 입력↔닫기 간격은
-     아래 #tab-dock.searching{gap} 이 담당. */
   /* 순수 레이아웃 레이어 — 어떤 표면도 없음(완전 투명). */
   background: none;
   border: none;
@@ -5150,13 +5136,11 @@ html.cite-sheet-open {
   /* 높이 60px 명시 = 캡 지름·검색 원형·각 탭 슬롯과 동일(정사각 슬롯 한 변). 상하 패딩 0. */
   height: var(--dock-control);
   padding: 0;
-  /* 검색 원형과의 8px 간격(오디오↔탭 바 수직 간격과 동일). dock gap 대신 여기서 줘서
-     마지막 자식(idle width:0 닫기 버튼) 앞에 gap 이 끼는 부작용을 피한다 — 그래야
-     검색 원형이 우측 가장자리에 flush 로 붙어 홈 좌측 여백과 대칭이 된다. */
+  /* 검색 원형과의 8px 간격(오디오↔탭 바 수직 간격과 동일). */
   margin-right: var(--space-2);
-  /* 좌우 끝을 완전한 반원 캡으로 — stadium(pill) 형태. 모핑으로 홈만 남아 폭이
-     60px 로 줄면(아래 #tab-dock.searching #tab-bar) 이 pill 캡이 그대로 정원이
-     되어, 검색 원형 버튼·모핑 원과 형태 언어가 이어진다(둥근 사각 26px 의 모서리
+  /* 좌우 끝을 완전한 반원 캡으로 — stadium(pill) 형태. 스크롤 축소로 홈만 남아 폭이
+     60px 로 줄면(아래 #tab-dock.collapsed #tab-bar) 이 pill 캡이 그대로 정원이
+     되어, 검색 원형 버튼과 형태 언어가 이어진다(둥근 사각 26px 의 모서리
      불일치 해소). border-radius: --radius-pill 만으로 반원/정원 끝 — squircle 미사용. */
   border-radius: var(--radius-pill);
   /* ADR-030: frosted glass 를 ::before 레이어가 아니라 #tab-bar 요소에 직접.
@@ -5243,7 +5227,7 @@ html.cite-sheet-open {
   z-index: 0;
   /* 56px — 좁은 폭에서 슬롯이 60px 아래로 줄면(#tab-bar flex-shrink) tabbar.js sizeTabIndicator 가
      슬롯의 활성 원(.tab-icon-wrap, max-width:100%)을 재어 인라인 width 로 맞춘다. 탭 바 폭(100%)을
-     따라가지 않는 것은 축소 · 검색 모핑 중 탭 바가 60px 로 줄었다 펼쳐지는 동안 원이 작아졌다 커지며
+     따라가지 않는 것은 스크롤 축소 중 탭 바가 60px 로 줄었다 펼쳐지는 동안 원이 작아졌다 커지며
      나타나지 않게 하려는 것(PR #348 리뷰) — 크기는 탭 바가 쉬고 있을 때만 잰다. */
   width: calc(var(--dock-control) - var(--space-1));
   aspect-ratio: 1 / 1;
@@ -5257,22 +5241,20 @@ html.cite-sheet-open {
   pointer-events: none;
 }
 .tab-indicator.is-shown { opacity: 1; }
-/* 모핑(홈 원형)·축소 중엔 60px 캡슐 자체가 인디케이터 — 슬라이딩 인디케이터 숨김
+/* 스크롤 축소(홈 원형) 중엔 60px 캡슐 자체가 인디케이터 — 슬라이딩 인디케이터 숨김
    (이중 원 회피). ID 포함 선택자라 인라인 transform 과 무관하게 .is-shown 보다 우세. */
-#tab-dock.searching .tab-indicator,
 #tab-dock.collapsed .tab-indicator { opacity: 0; }
 
 /* ── 분리된 검색 원형 버튼 (ADR-030) ──────────────────────────────────────────
    탭 바와 같은 하단 높이의 우측 플로팅 원형. 탭 바와 동일 glass 레시피(::before).
    지름 = touch-target(44px) + 상하 패딩(space-2 ×2) = 60px → 탭 바·오디오 바 높이와 일치.
-   P2 에서 입력창으로 모핑(width 확장). */
+   입력창으로 바뀌지 않는다(ADR-048 §1 — 휴대폰 검색 입력창은 검색 화면 위쪽). */
 #tab-search-dock {
-  /* dock 의 flex 자식 — 위치는 #tab-dock 이 책임. P2 에서 입력창 확장 컨테이너.
+  /* dock 의 flex 자식 — 위치는 #tab-dock 이 책임.
      순수 레이아웃 래퍼 — 어떤 시각효과도 없음(완전 투명). */
   display: flex;
   align-items: center;
-  /* 검색 그룹을 우측 끝으로(닫기 X 가 collapsed 0폭으로 뒤에 붙어 있어도 가운데로
-     흩어지지 않게). 모핑 시엔 margin-left:0 으로 풀어 flex:1 확장에 양보. */
+  /* 검색 그룹을 우측 끝으로. */
   margin-left: auto;
   background: none;
   border: none;
@@ -5302,7 +5284,8 @@ html.cite-sheet-open {
   box-shadow: var(--shadow-2), var(--glass-inset);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: transform var(--duration-fast) ease;
+  transition: transform var(--duration-fast) ease,
+              background var(--duration-fast) var(--ease-standard);
 }
 [data-theme="dark"] #tab-search {
   background: var(--glass-sheen), color-mix(in srgb, var(--bg) 50%, transparent);
@@ -5318,44 +5301,26 @@ html.cite-sheet-open {
 [data-theme="dark"] #tab-search.active {
   background: var(--glass-sheen), color-mix(in srgb, var(--theme) 18%, color-mix(in srgb, var(--bg) 50%, transparent));
 }
-#tab-search-input[hidden] { display: none; }
-
-/* ── ADR-030 P2: 검색 모핑 ────────────────────────────────────────────────
-   검색 원형 버튼 → 입력 pill 확장 + 비-홈 탭 접기(홈만 남음). tabbar.js 가
-   #tab-dock.searching 토글. 양방향 트랜지션 — 모션 생략은 reduced-motion 에서. */
+/* ── ADR-030 P3: 스크롤 축소 ─────────────────────────────────────────────
+   아래로 스크롤하면 tabbar.js 가 #tab-dock.collapsed 를 켜서 홈이 아닌 탭을 접고
+   #tab-bar 를 60px 원형으로 줄인다. 양방향 트랜지션 — 모션 생략은 reduced-motion 에서. */
 .tab-item {
   max-width: 6rem; /* 접힘 애니메이션을 위해 명시적 시작값(콘텐츠 ~3rem) */
   transition: max-width var(--duration-base) var(--ease-standard),
               opacity var(--duration-fast) var(--ease-standard);
 }
 #tab-bar { transition: gap var(--duration-base) var(--ease-standard); }
-#tab-search-dock {
-  transition: flex-grow var(--duration-base) var(--ease-standard);
-}
-#tab-search {
-  transition: transform var(--duration-fast) ease,
-              width var(--duration-base) var(--ease-standard),
-              background var(--duration-fast) var(--ease-standard);
-}
 
-/* 모핑 중: 홈 원형·입력 pill·닫기 X 를 균등 간격으로(idle 엔 gap 없이 margin-auto
-   우측 정렬). */
-#tab-dock.searching { gap: var(--space-2); }
-/* 홈만 남기고 접기 + #tab-bar 를 60px 원형으로(검색 원형과 동일 형태).
-   검색 모핑(.searching)과 스크롤 축소(.collapsed)가 이 홈 원형·탭 접힘을 공유. */
-#tab-dock.searching #tab-bar,
+/* 홈만 남기고 접기 + #tab-bar 를 60px 원형으로(검색 원형과 동일 형태). */
 #tab-dock.collapsed #tab-bar {
   gap: 0;
-  /* 모핑 중 홈 원형↔입력 간격은 #tab-dock.searching{gap} 이 담당 — 여기선 base 의
-     margin-right 를 풀어 16px(margin+gap) 이중 간격을 막는다. collapsed 는 auto-margin
-     이 흡수하므로 무관. */
+  /* base 의 margin-right 를 푼다 — 남는 폭은 #tab-search-dock 의 margin-left:auto 가 차지한다. */
   margin-right: 0;
   flex: 0 0 auto;
   width: var(--dock-control); /* 60px */
   border-radius: var(--radius-pill);
   justify-content: center;
 }
-#tab-dock.searching .tab-item:not([data-tab="home"]),
 #tab-dock.collapsed .tab-item:not([data-tab="home"]) {
   max-width: 0;
   min-width: 0;
@@ -5364,149 +5329,19 @@ html.cite-sheet-open {
   pointer-events: none;
 }
 /* 원 안에 홈 아이콘 중앙 정렬 — 활성 pill 폭(3rem) 강제 해제. */
-#tab-dock.searching .tab-item[data-tab="home"],
 #tab-dock.collapsed .tab-item[data-tab="home"] { min-width: 0; }
-#tab-dock.searching .tab-item[data-tab="home"] .tab-icon-wrap,
 #tab-dock.collapsed .tab-item[data-tab="home"] .tab-icon-wrap { width: auto; }
-/* 모핑(홈 원형/검색) 중에도 홈 아이콘은 테마색으로 강조 — 활성 표시와 동일 언어.
-   (route 가 .active 를 못 따라오는 모핑 중간 프레임에도 보장.) */
-#tab-dock.searching .tab-item[data-tab="home"],
+/* 축소 중에도 홈 아이콘은 테마색으로 강조 — 활성 표시와 동일 언어. */
 #tab-dock.collapsed .tab-item[data-tab="home"] { color: var(--theme); }
 /* 단, 탭 바 자체가 60px 원형 캡슐이 되므로 안쪽 56px 인디케이터는 제거(이중 원 회피). */
-#tab-dock.searching .tab-item[data-tab="home"] .tab-icon-wrap,
 #tab-dock.collapsed .tab-item[data-tab="home"] .tab-icon-wrap { background: none; }
-/* 검색 dock → 남은 폭을 채우는 입력 pill (floating glass 스타일을 dock 으로 이동).
-   flex-basis 0 으로 콘텐츠(placeholder) 길이와 무관하게 — 우측 넘침 방지. */
-#tab-dock.searching #tab-search-dock {
-  flex: 1 1 0;
-  min-width: 0;
-  margin-left: 0; /* idle 의 margin-left:auto 해제 — flex:1 확장에 양보 */
-  height: var(--dock-control); /* 60px — 탭 pill 과 동일 */
-  padding: 0 var(--space-3);
-  gap: var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--glass-sheen), color-mix(in srgb, var(--bg) 50%, transparent);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-  box-shadow: var(--shadow-2), var(--glass-inset); /* 후속⁵: 모핑 입력창도 동일 질감 */
-}
-[data-theme="dark"] #tab-dock.searching #tab-search-dock {
-  background: var(--glass-sheen), color-mix(in srgb, var(--bg) 50%, transparent);
-}
-/* 검색 활성(토큰 필드) 레이아웃에선 좌측 돋보기를 숨긴다 — funnel(책 선택)이
-   빈 검색이든 아니든 항상 선두 아이콘 역할을 한다(ADR-033 개정 C — 빈 검색에서도
-   funnel 노출, 사용자 요청). 돋보기가 함께 있으면 중복이라 숨긴다(개정 B). idle 에선
-   #tab-search 가 그대로 "검색 진입" 원형 버튼으로 보인다. */
-#tab-dock.searching #tab-search {
-  width: auto;
-  height: auto;
-  flex: 0 0 auto;
-  background: none;
-  border: none;
-  box-shadow: none;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  display: none;
-}
-/* 하단 검색 입력 — Sans(본문 Serif 상속 회피), 콘텐츠 무관 축소(flex-basis 0). */
-#tab-dock.searching #tab-search-input {
-  flex: 1 1 0;
-  min-width: 0;
-  height: 100%;
-  border: none;
-  background: none;
-  outline: none;
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: var(--font-md);
-  color: var(--text);
-}
-#tab-dock.searching #tab-search-input::placeholder { color: var(--text-secondary); }
 
-/* ── ADR-030 P3: 입력 pill 안 검색어 지우기(⊗) ──────────────────────────────
-   Apple Music 식 — 텍스트 있을 때만(JS 가 [hidden] 토글) pill 우측에 표시. */
-#tab-search-clear[hidden] { display: none; }
-/* :not([hidden]) — 같은 영역 [hidden] 규칙보다 특이도가 높아 텍스트 없을 때도
-   보이는 버그를 막는다(JS 가 입력값으로 hidden 토글). */
-#tab-dock.searching #tab-search-clear:not([hidden]) {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* ⊗ 아이콘 자체는 작게(svg 1.4rem) 보이되 탭 영역은 HIG ≥44px(--touch-target)
-     확보 — 표면이 없어 커진 영역은 보이지 않고 누르기만 쉬워진다. */
-  width: var(--touch-target);
-  height: var(--touch-target);
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-#tab-dock.searching #tab-search-clear svg { width: 1.4rem; height: 1.4rem; }
-#tab-dock.searching #tab-search-clear:active { transform: scale(0.9); }
-
-/* ── ADR-030 P3: 키보드 내리기 버튼 — 입력 pill 오른쪽 원형 ───────────────────
-   "키보드가 나타나면 한 번 더 모핑": 키보드가 떠 있는 동안에만 width 0→60px 로
-   모핑 인(body.tabbar-keyboard). 탭하면 키보드만 내리고(blur) 검색 세션·입력값·
-   결과는 유지(grounded dock). 키보드가 내려간 결과 화면에선 접힘(width/opacity 0)
-   이라 레이아웃·시각 비표시(collapse 탭과 동일 패턴) — 검색 종료는 홈 버튼 담당. */
-#tab-search-close {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 0;
-  height: var(--dock-control); /* 60px — 다른 원형과 동일 */
-  padding: 0;
-  border: none;
-  background: none;
-  box-shadow: none;
-  border-radius: var(--radius-pill);
-  color: var(--text-secondary);
-  cursor: pointer;
-  overflow: hidden;
-  opacity: 0;
-  pointer-events: none;
-  -webkit-tap-highlight-color: transparent;
-  transition: width var(--duration-base) var(--ease-standard),
-              opacity var(--duration-fast) var(--ease-standard),
-              transform var(--duration-fast) ease;
-}
-#tab-search-close svg { width: 1.6rem; height: 1.6rem; }
-#tab-search-close:active { transform: scale(0.92); }
-body.tabbar-keyboard #tab-dock.searching #tab-search-close {
-  width: var(--dock-control); /* 60px 원형 */
-  opacity: 1;
-  pointer-events: auto;
-  /* 홈·검색 원형과 동일한 floating glass + 후속⁵ liquid-glass 질감. */
-  background: var(--glass-sheen), color-mix(in srgb, var(--bg) 50%, transparent);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-  box-shadow: var(--shadow-2), var(--glass-inset);
-}
-[data-theme="dark"] body.tabbar-keyboard #tab-dock.searching #tab-search-close {
-  background: var(--glass-sheen), color-mix(in srgb, var(--bg) 50%, transparent);
-}
-/* 키보드 표시 중: 홈 버튼 숨기고 검색 입력 pill 이 홈 자리(왼쪽 끝)까지 확장.
-   #tab-bar 가 flow 에서 빠지면 flex:1 인 #tab-search-dock 가 그 폭을 흡수한다.
-   키보드가 내려가면(결과 화면) 홈 복귀 — 검색 종료 진입점 유지. */
-body.tabbar-keyboard #tab-dock.searching #tab-bar { display: none; }
-
-/* 모핑 중 /search 전체뷰의 상단 입력은 숨김 — 하단 입력이 단일 검색 필드. */
-body.tabbar-searching #search-inpage-bar { display: none; }
-
-/* 투명도 감소 / backdrop-filter 미지원 → 불투명 표면 폴백. 모핑 입력 pill
-   (#tab-dock.searching #tab-search-dock)도 글래스 표면을 쓰므로 함께 폴백. */
+/* 투명도 감소 / backdrop-filter 미지원 → 불투명 표면 폴백. */
 @media (prefers-reduced-transparency: reduce) {
   /* 후속⁵: 광택 sheen 도 제거(글래스 큐 최소화). --glass-inset(은은한 베벨)은 유지. */
   :root { --glass-sheen: none; }
   #tab-bar,
-  #tab-search,
-  #tab-dock.searching #tab-search-dock,
-  #tab-dock.searching #tab-search-close {
+  #tab-search {
     background: var(--bg-card);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
@@ -5515,23 +5350,18 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root { --glass-sheen: none; }
   #tab-bar,
-  #tab-search,
-  #tab-dock.searching #tab-search-dock,
-  #tab-dock.searching #tab-search-close { background: var(--bg-card); }
+  #tab-search { background: var(--bg-card); }
 }
 @media (prefers-reduced-motion: reduce) {
   .tab-icon-wrap { transition: none; }
   .tab-item:active .tab-icon-wrap { transform: none; }
-  /* 모핑 트랜지션 + 인디케이터 슬라이드 생략 — 상태/위치 즉시 스왑. */
+  /* 축소 트랜지션 + 인디케이터 슬라이드 생략 — 상태/위치 즉시 스왑. */
   .tab-item,
   .tab-indicator,
   #tab-bar,
   #tab-search,
-  #tab-search-dock,
-  #tab-search-close,
   #audio-bar { transition: none; }
   #tab-search:active { transform: none; }
-  #tab-search-close:active { transform: none; }
 }
 
 /* 데스크탑: 사이드바 단계 전까지 탭 dock(탭바+검색) 숨김. */
@@ -5622,38 +5452,24 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   /* ── ADR-030 개정: 가로 모드 — 탭바 전체 유지 + 오디오 dock 미니 ───────────────
      가로는 화면이 넓어(아이폰 가로 ≥568px) 탭바(보이는 탭 N×60px) + 미니 오디오 + 검색을
      한 dock 행에 다 담고도 여유가 있다. 그래서 스크롤 축소(.collapsed)에도 탭바를 홈
-     원형으로 접지 않고 펴 둔 채 오디오만 dock 행 미니로 둔다. 검색 모핑(.searching)은
-     입력 폭이 필요하므로 가로에서도 홈 원형 유지 — 아래 revert 는 .collapsed 한정.
+     원형으로 접지 않고 펴 둔 채 오디오만 dock 행 미니로 둔다.
      오디오 left 는 탭바 실폭(--tab-bar-w = 보이는 탭 수 × --dock-control, tabbar.js 가
      설정)에 맞춰 정렬 — 노트 탭(현재 hidden, 1.7.0 예정)이 켜져 탭이 3→4개가 돼도 자동
      적응. JS 미설정 시 폴백은 4탭(겹침 방지 — 넓게 잡아도 빈틈만 생김). */
   @media (orientation: landscape) {
-    /* (1) .collapsed(스크롤 축소) + .searching(검색 모핑) 둘 다 가로에선 탭바 전체 유지 —
-       검색 시에도 홈 원형으로 접지 않고, 검색 입력창은 탭바 우측~검색 사이 남은 공간만 쓴다
-       (#tab-search-dock flex:1 이 그 폭을 채움 — 미니 오디오·이어읽기 pill 이 쓰던 자리). */
-    #tab-dock.collapsed #tab-bar,
-    #tab-dock.searching #tab-bar { width: auto; }
-    /* .collapsed 는 dock gap 이 없어 탭바↔오디오 간격을 margin-right 로 준다
-       (.searching 은 #tab-dock.searching{gap} 이 간격 담당 → base margin-right:0 유지). */
-    #tab-dock.collapsed #tab-bar { margin-right: var(--space-2); }
-    #tab-dock.collapsed .tab-item:not([data-tab="home"]),
-    #tab-dock.searching .tab-item:not([data-tab="home"]) {
+    /* (1) .collapsed(스크롤 축소)에도 가로에선 탭바 전체 유지. dock gap 이 없어
+       탭바↔오디오 간격은 margin-right 로 준다. */
+    #tab-dock.collapsed #tab-bar { width: auto; margin-right: var(--space-2); }
+    #tab-dock.collapsed .tab-item:not([data-tab="home"]) {
       max-width: 6rem; min-width: 0; opacity: 1; overflow: visible; pointer-events: auto;
     }
-    #tab-dock.collapsed .tab-item[data-tab="home"],
-    #tab-dock.searching .tab-item[data-tab="home"] { color: var(--text-secondary); }
+    #tab-dock.collapsed .tab-item[data-tab="home"] { color: var(--text-secondary); }
     #tab-dock.collapsed .tab-item[data-tab="home"].active,
-    #tab-dock.collapsed .tab-item[data-tab="home"][aria-current="page"],
-    #tab-dock.searching .tab-item[data-tab="home"].active,
-    #tab-dock.searching .tab-item[data-tab="home"][aria-current="page"] { color: var(--theme); }
-    #tab-dock.collapsed .tab-item[data-tab="home"] .tab-icon-wrap,
-    #tab-dock.searching .tab-item[data-tab="home"] .tab-icon-wrap {
+    #tab-dock.collapsed .tab-item[data-tab="home"][aria-current="page"] { color: var(--theme); }
+    #tab-dock.collapsed .tab-item[data-tab="home"] .tab-icon-wrap {
       width: calc(var(--dock-control) - var(--space-1));
     }
-    #tab-dock.collapsed .tab-indicator.is-shown,
-    #tab-dock.searching .tab-indicator.is-shown { opacity: 1; }
-    /* 키보드가 떠도 가로에선 탭바 유지(세로는 input 풀폭 위해 base 가 display:none 으로 숨김). */
-    body.tabbar-keyboard #tab-dock.searching #tab-bar { display: flex; }
+    #tab-dock.collapsed .tab-indicator.is-shown { opacity: 1; }
 
     /* (2) 축소 시 미니 오디오는 '전체 탭바' 우측~검색 사이에. 우측(검색)은 base 축소
        규칙(space-4 + 60 + space-2)과 동일하므로 left 만 탭바 실폭(--tab-bar-w) 기준으로 옮긴다. */
@@ -5665,10 +5481,9 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   }
 
   /* (3) 가로 + 전체 컨트롤이 들어가는 넓은 폭(≥641px): 오디오를 항상 dock 행에 둔다 —
-     맨 위(비축소)에서도 floating 풀바로 올라오지 않는다. 검색 모핑(.tabbar-searching)
-     중엔 입력창이 dock 행을 차지하므로 제외(그때만 base floating 으로 복귀). */
+     맨 위(비축소)에서도 floating 풀바로 올라오지 않는다. */
   @media (orientation: landscape) and (min-width: 641px) {
-    body:not(.tabbar-searching) #audio-bar:not([hidden]) {
+    body #audio-bar:not([hidden]) {
       position: fixed;
       bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
       left: calc(var(--space-4) + var(--tab-bar-w, calc(var(--dock-control) * 4)) + var(--space-2));
@@ -5680,12 +5495,12 @@ body.tabbar-searching #search-inpage-bar { display: none; }
       align-items: center;
       z-index: var(--nav-z);
     }
-    body:not(.tabbar-searching) #audio-bar:not([hidden]) .audio-player {
+    body #audio-bar:not([hidden]) .audio-player {
       width: 100%;
       gap: var(--space-2);
     }
     /* 항상 dock 행이라 #app 하단 여유는 탭 바 footprint 만(floating 풀바 자리 불필요). */
-    body:not(.tabbar-searching):not(.verse-select-active) #app:has(~ #audio-bar:not([hidden])) {
+    body:not(.verse-select-active) #app:has(~ #audio-bar:not([hidden])) {
       padding-bottom: var(--tabbar-reserve);
     }
   }
@@ -6763,7 +6578,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
    탭 dock·오디오 바는 body.verse-select-active 에서 숨으므로 이 바가 그 자리를 대체한다. */
 
 /* 투명 레이아웃 dock — #tab-dock 미러(표면 없음). 데스크탑은 max-width 중앙, 모바일은
-   space-4 패딩으로 가장자리 정렬. 키보드와 무관하므로 --kb-overlap 없음. */
+   space-4 패딩으로 가장자리 정렬. */
 /* #bm-select-bar (북마크 선택 모드, ADR-029 개정) shares this dock layout/glass. */
 #verse-select-bar,
 #bm-select-bar {

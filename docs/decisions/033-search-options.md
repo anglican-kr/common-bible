@@ -20,11 +20,10 @@ Apple HIG의 검색 방식(필터/범위 바, 토큰, 최근 항목 목록, 시�
 
 처음에는 별도 **필터 바**(`.search-filters`: 책 선택 버튼, 칩 줄, 「결과 내 검색」 입력)를 두었다. 그런데 하단 모핑 탭 바의 검색 pill과 함께 떠, **검색창이 둘**로 보였다(HIG의 「single, clearly identified location」에 어긋난다). 그래서 이 ADR의 **대안 A(검색어 필드 안의 토큰, iOS 16 search tokens)**로 바꿨다. 처음에는 「헤더, 페이지 안, 모핑의 입력 세 곳을 모두 구현해야 한다」는 비용 때문에 미뤘던 안이다.
 
-비용을 낮춘 구현: `<input>`을 contenteditable로 바꾸지 않고, **칩을 input의 형제로 같은 flex 줄에 두는** 감싸개(`.token-zone`, `display:contents`)를 쓴다. 실제 `<input>`이 그대로라 `.value`·`focus({preventScroll})`·focus/blur·visualViewport 연결(ADR-030)이 모두 남는다. 세 필드(`#search-bar` 헤더, `#search-inpage-bar`, `#tab-search-dock` 모핑 pill)에 `mountSearchField`로 토큰 자리를 끼우고, `syncSearchFields()`가 route마다(routing.js)와 모핑을 열 때(tabbar.js) URL의 필터를 칩으로 다시 그린다.
+비용을 낮춘 구현: `<input>`을 contenteditable로 바꾸지 않고, **칩을 input의 형제로 같은 flex 줄에 두는** 감싸개(`.token-zone`, `display:contents`)를 쓴다. 실제 `<input>`이 그대로라 `.value`·`focus({preventScroll})`·focus/blur·visualViewport 연결(ADR-030)이 모두 남는다. 두 필드(`#search-bar` 헤더, `#search-inpage-bar`)에 `mountSearchField`로 토큰 자리를 끼우고, `syncSearchFields()`가 route마다(routing.js) URL의 필터를 칩으로 다시 그린다. 하단 모핑 pill의 토큰 자리는 ADR-048이 하단 입력창을 없애며 함께 지웠다.
 
 - **책 범위**: 필드 왼쪽의 **깔때기 버튼**(`.token-funnel`, 책 선택 시트로 들어간다. 시트는 그대로다)과, 고른 책마다 지울 수 있는 **칩**(`.field-token`)이다.
 - **Backspace**(커서가 0이고 필드가 비었을 때)로 마지막 토큰을 지우고, 칩의 ×를 눌러 하나씩 지운다.
-- 모핑 pill의 토큰은 `body.tabbar-searching`일 때만 그린다(접힌 dock에는 칩이 없다).
 - **`in:<별칭>`을 칩으로 옮긴다**: `commitTopSearch`가 커밋할 때 쿼리의 `in:` 연산자를 풀어 book id로 바꾸고 `filterBooks`(칩)로 옮긴 뒤, `q`에는 낱말만 남긴다(예제, 최근 검색, 직접 입력 모두 같다). 토큰 UI에서 연산자가 입력창에 그대로 보이지 않게 하려는 것이다. 풀지 못한 별칭은 `q`에 남아 워커가 그대로 처리한다(문제없이 넘어간다). 새로 친 검색어의 `in:`은 지금 칩에 더하고, 최근 검색을 누르면 지금 칩 대신 그 기록의 `in:`만 범위로 쓴다(ADR-014 D2, 2026-11-18). 별칭 맵은 워커와 같은 별칭 표(`search-meta.json`의 `aliases`)에 books의 책 id, `short_name_ko`, `name_ko`를 더해 만들고 **부팅할 때 미리 불러 둔다**(`ensureAliasMap` 시작). 그래서 검색이 알아보는 별칭(`in:막`, `in:마가복음`, `in:mark`)은 모두 칩이 된다(사용자 결정 2026-11-18). 검색 색인에 없는 책은 칩으로 만들지 않는다. 칩이 되면 아무것도 찾지 않고 결과 없음만 나오므로, 모르는 책 이름과 같이 안내한다(ADR-005 「검색 연산자 `in:`」). 기도서 번역인 전례시편과 송가는 성시 색인에 있어 칩이 된다(ADR-046 §2). `search-meta.json`을 받지 못하면 books의 이름과 id만으로 만든다. 그전에는 books의 두 이름만 알아봐, 다른 별칭은 결과는 맞지만 칩이 되지 않고 입력 칸에 글로 남았다. 그래서 `commitTopSearch`는 **동기**로 둔다. async로 두면 await 경쟁 상태(낡은 값 적용, 플래그 남음)를 매번 routeSeq 검사로 막아야 해서, 그럴 자리 자체를 없앴다.
 - **넘칠 때**: 토큰이 많으면 `.token-zone`(깔때기, 칩)이 **가로로 스크롤**되고, 메인 입력과 지우기 버튼은 zone 밖이라 늘 닿는다. 누를 자리(깔때기, 칩 ×)는 투명 `::after` 44px 덮개로 `--touch-target`을 확보한다(보이는 크기는 그대로). 책 칩 라벨은 `short_name_ko`(줄인 이름)다.
 
