@@ -1,4 +1,5 @@
 ---
+pr: 608
 date: 2026-11-19
 branch: feat/lectionary-search-this-year
 title: "feat: 전례일 검색 결과를 이번 전례년의 날로 통일"
