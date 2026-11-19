@@ -2414,6 +2414,11 @@ test("lectDaysOf: 이름으로 찾은 줄은 열리는 날 뒤에 다른 해의 
       calls.push([Array.from(ids), from]);
       return table.find((d) => ids.includes(d.setId) && (!from || d.date >= from)) || null;
     },
+    async findKeptDays(ids, today, from, to, isStale = null) {
+      assert.strictEqual(isStale, stale, "화면을 떠났는지 엔진에 알린다(코드 리뷰 2026-11-17)");
+      calls.push([Array.from(ids), from, to]);
+      return table.filter((d) => ids.includes(d.setId) && d.date >= from && d.date <= to);
+    },
   };
   // 세트 차례를 일부러 다해부터 둔다. 트랙이 다른 세트는 한 해로 묶는다
   const sets = [SET("C-1", "C", 1), SET("C-2", "C", 2), SET("A-1", "A", 1), SET("A-2", "A", 2), SET("B-1", "B", 1), SET("B-2", "B", 2)];
@@ -2432,17 +2437,18 @@ test("lectDaysOf: 이름으로 찾은 줄은 열리는 날 뒤에 다른 해의 
   assert.deepStrictEqual([p.year, p.cycles.length, p.next.date], [null, 0, "2029-05-20"]);
   assert.strictEqual(p.nextYear, null);
   // 구절로 찾은 독서가 모든 해의 세트에 있으면 해마다 같은 독서다. 이름으로 찾은 줄과 같이 이번 전례년의 날을 열고, 링크 대신 다음
-  // 전례년(2026-11-29부터)의 날을 찾는다
+  // 전례년(2026-11-29부터 2027-11-27까지) 안에서 그날을 찾는다
   calls.length = 0;
   const yearly = { obs: item.obs, sets, hits: [{ slot: 3, rows: [], sets }] };
   const y = plain(await ctx.lectDaysOf(mod, yearly, "2026-11-16", stale));
-  assert.deepStrictEqual(plain(calls), [[["C-1", "C-2", "A-1", "A-2", "B-1", "B-2"], null], [["C-1", "C-2", "A-1", "A-2", "B-1", "B-2"], "2026-11-29"]]);
+  assert.deepStrictEqual(plain(calls), [[["C-1", "C-2", "A-1", "A-2", "B-1", "B-2"], null], [["C-1", "C-2", "A-1", "A-2", "B-1", "B-2"], "2026-11-29", "2027-11-27"]]);
   assert.deepStrictEqual([y.open.date, y.next, y.cycles, y.nextYear], ["2026-05-24", null, [], { date: "2027-05-16" }]);
-  // 다음 전례년의 날이 그 전례년보다 늦으면 다음 전례년에는 지키지 않는다
-  const sparse = { ...mod, findReadingDay: async (ids, today, from) => (from ? DAY("2029-05-20") : DAY("2026-05-24")) };
+  // 다음 전례년 안에 없으면 다음 전례년에는 지키지 않는다
+  const sparse = { ...mod, findReadingDay: async () => DAY("2026-05-24"), findKeptDays: async () => [] };
   assert.deepStrictEqual(plain(await ctx.lectDaysOf(sparse, yearly, "2026-11-16")).nextYear, { date: null });
   // 이번 전례년에 오지 않아 다음에 읽는 날을 열면 다음 전례년의 날을 찾지 않는다
-  const absent = { ...mod, findReadingDay: async (ids, today, from) => (from ? assert.fail("묻지 않는다") : DAY("2027-05-16")) };
+  const absent = { ...mod, findReadingDay: async (ids, today, from) => (from ? assert.fail("묻지 않는다") : DAY("2027-05-16")),
+    findKeptDays: async () => assert.fail("묻지 않는다") };
   assert.strictEqual(plain(await ctx.lectDaysOf(absent, yearly, "2026-11-16")).nextYear, null);
 });
 

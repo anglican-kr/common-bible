@@ -483,7 +483,7 @@ test("yearDaysIn: 그해에 지키는 날, 옮겨 지키는 날, 겹쳐 기념�
     ["2027-02-17", "2027-02-19", "2027-02-20", null]);
 });
 
-test("사계재의 계절 이름으로 찾으면 계절 줄이 수, 금, 토요일 세 줄로 나뉘고, 지향별 줄 넷은 나누지 않는다(ADR-044 §3)", { skip: !haveData }, () => {
+test("사계재의 계절 이름으로 찾으면 계절 줄이 수, 금, 토요일 세 줄로 나뉘고, 지향별 줄 넷은 나누지 않는다. `사계재`로는 네 계절을 모두 찾는다(ADR-044 §3)", { skip: !haveData }, () => {
   const { ctx, index } = loadLectionarySearch();
   for (const season of ["춘계재", "하계재", "추계재", "동계재"]) {
     const items = JSON.parse(JSON.stringify(ctx.searchLectionaryNames(index, season).items));
@@ -491,6 +491,10 @@ test("사계재의 계절 이름으로 찾으면 계절 줄이 수, 금, 토요�
       [[`t-${season}`, "wed", 1], [`t-${season}`, "fri", 1], [`t-${season}`, "sat", 1]], season);
     assert.deepStrictEqual(items.slice(3).map((it) => [it.obs.name.endsWith(season), it.ember ?? null]), Array(4).fill([true, null]), season);
   }
+  // `사계재`는 네 계절을 함께 부르는 별칭이다. 계절마다 세 줄이라 열두 줄이다(ADR-037 §5)
+  const all = JSON.parse(JSON.stringify(ctx.searchLectionaryNames(index, "사계재").items));
+  assert.deepStrictEqual(all.map((it) => `${it.obs.key} ${it.ember}`),
+    ["춘계재", "하계재", "추계재", "동계재"].flatMap((season) => ["wed", "fri", "sat"].map((d) => `t-${season} ${d}`)));
 });
 
 test("yearDaysIn: 지키는 날은 지키는 날의 표와 같고, 전례일 자신의 날이다(색인의 모든 전례일, 2026-2028)", { skip: !haveData }, () => {

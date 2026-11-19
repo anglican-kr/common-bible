@@ -2420,8 +2420,8 @@ function liturgicalYearSpan(dateStr) {
 
 /**
  * 지키는 날의 표(`table`)를 `to`까지 이어 센다(설계서 §7). 지키는 날의 뜻은 `firstKeptDayIn`과 같고, 공통 독서를 세지 않는 것도 같다
- * (색인에 없다, ADR-044 §2). 성탄 평일은 그날의 이름으로도 센다. 이 이름은 해마다 바뀌어 검색 색인에 없으므로, 검색이 오늘부터 한
- * 해 안에 오는 날의 이름을 이 표에서 얻는다(ADR-044 §3).
+ * (색인에 없다, ADR-044 §2). 성탄 평일은 그날의 이름으로도 센다. 이 이름은 해마다 바뀌어 검색 색인에 없으므로, 검색이 이번
+ * 전례년의 이름을 이 표에서 얻는다(`christmasNamesIn`, ADR-044 §3).
  * @param {LectionaryIndex} lix @param {CalendarIndex} cal @param {KeptDayTable} table @param {string} to
  */
 function extendKeptDaysIn(lix, cal, table, to) {

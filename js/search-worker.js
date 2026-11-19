@@ -141,6 +141,8 @@
  * @property {string | null} rank
  * @property {number} order  전례년 순서
  * @property {string | null} common  고유 독서 없이 쓰는 공통 독서의 분류
+ * @property {string[]} [days]  그 주의 여러 요일에 지키는 전례일만: 그 요일("wed" 등). 사계재 넷은 수, 금, 토요일이다. 결과를 날마다 한 줄로
+ *   나눈다(ADR-037 §5, ADR-044 §3)
  *
  * @typedef {[number, string, string | null, number | null, number, string]} LectSetRaw
  *   [obs, set id, year, track, set no, label]
@@ -240,8 +242,8 @@
  *   a local day (ADR-044 §3): the user's parish dedication or a founding day. Its obs key is `local:<level>`
  * @property {string[]} [yearNames]  year search: a Christmas weekday found only by the names it may take (「성탄 1주 수요일」).
  *   The app keeps a year's row only when that year's name of the day is one of them (ADR-044 §4)
- * @property {"wed" | "fri" | "sat"} [ember]  name search: one of the three days of an Ember season (「춘계재 수요일」). The season's
- *   row is split into one row a day (ADR-044 §3)
+ * @property {string} [ember]  name search: one of the days of an observance kept on several weekdays of its week (the index's
+ *   `days`, an Ember season: 「춘계재 수요일」). Its row is split into one row a day (ADR-044 §3)
  *
  * @typedef LectResult
  * @property {"name" | "passage"} kind
@@ -1049,16 +1051,13 @@ function searchLectionaryNames(index, query, extra = []) {
       /** @type {LectItem} */
       const item = { obs: lectObsInfo(index, i), sets: index.setsOfObs[i].map((s) => lectSetInfo(index, s)), tier };
       if (matched) item.matched = matched;
-      return EMBER_KEYS.has(item.obs.key) ? EMBER_DAYS.map((ember) => ({ ...item, ember })) : [item];
+      // 그 주의 여러 요일에 지키는 전례일(색인의 `days`, 사계재의 계절 줄)은 날마다 한 줄로 나눈다(ADR-044 §3, 사용자 결정 2026-11-19).
+      // 지향별 줄(「성직자의 성소를 위한 춘계재」)은 하루씩이라 `days`가 없다
+      const { days } = index.obs[i];
+      return Array.isArray(days) && days.length ? days.map((ember) => ({ ...item, ember })) : [item];
     });
   return result;
 }
-
-// 사계재의 계절 줄(교회력 표의 `ember_wfs` 넷). 그 주의 수, 금, 토요일 사흘을 지켜 날마다 한 줄로 나눈다(ADR-044 §3, 사용자 결정
-// 2026-11-19). 지향별 줄(「성직자의 성소를 위한 춘계재」)은 하루씩이라 나누지 않는다.
-const EMBER_KEYS = new Set(["t-춘계재", "t-하계재", "t-추계재", "t-동계재"]);
-/** @type {Array<"wed" | "fri" | "sat">} */
-const EMBER_DAYS = ["wed", "fri", "sat"];
 
 // 연도를 붙인 이름 검색(ADR-044 §4). 연도는 「년」을 붙이거나 네 자리 숫자만 쓰고, 이름의 앞이나 뒤에 둔다. 범위는 하이픈이나
 // 물결표로 잇는다. 찾는 해는 캘린더와 같은 1583-9999년이다(교회력 엔진 `MIN_YEAR`, `MAX_YEAR`. 워커는 엔진을 읽지 않는다. 네 자리

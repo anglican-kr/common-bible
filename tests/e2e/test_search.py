@@ -993,7 +993,8 @@ def test_christmas_weekday_is_found_by_its_name_on_screen(page):
 
 
 def test_ember_season_row_is_split_into_its_three_days(page):
-    """사계재의 계절 이름으로 찾으면 계절 줄이 수, 금, 토요일 세 줄이고, 줄마다 이번 전례년의 그날을 연다. 연도를 붙여도 해마다 세 날이다(ADR-044 §3)."""
+    """사계재의 계절 이름으로 찾으면 계절 줄이 수, 금, 토요일 세 줄이고, 줄마다 이번 전례년의 그날을 연다. 연도를 붙여도 해마다 세 날이고,
+    `사계재`로는 네 계절을 모두 찾는다(ADR-044 §3)."""
     _fix_today(page)
     _goto_search(page, "춘계재")
     _wait_days(page)
@@ -1010,6 +1011,12 @@ def test_ember_season_row_is_split_into_its_three_days(page):
     _goto_year_search(page, "2027 춘계재")
     days = [label.split(", ")[0] for label in _row_labels(page) if label.startswith("춘계재")]
     assert days == ["춘계재 수요일", "춘계재 금요일", "춘계재 토요일"], days
+
+    # `사계재`는 네 계절을 함께 부르는 별칭이라 네 계절의 사흘, 열두 줄이다(ADR-037 §5)
+    _goto_search(page, "사계재", "&group=lectionary")
+    _wait_days(page)
+    titles = page.locator(".lect-rows .cal-row-title").all_inner_texts()
+    assert titles == [f"{season} {day}" for season in ["춘계재", "하계재", "추계재", "동계재"] for day in ["수요일", "금요일", "토요일"]], titles
 
 
 def test_row_shows_the_day_it_opens_and_a_link_to_the_next(page):
