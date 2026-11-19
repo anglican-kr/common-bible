@@ -1,4 +1,5 @@
 ---
+pr: 612
 date: 2026-11-19
 branch: feat/search-top-input
 title: "feat: 휴대폰 검색 입력창을 검색 화면 위쪽으로"
