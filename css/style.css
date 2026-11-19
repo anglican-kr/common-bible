@@ -5314,7 +5314,7 @@ html.cite-sheet-open {
 /* 홈만 남기고 접기 + #tab-bar 를 60px 원형으로(검색 원형과 동일 형태). */
 #tab-dock.collapsed #tab-bar {
   gap: 0;
-  /* base 의 margin-right 를 푼다 — 남는 폭은 #tab-search-dock 의 margin-left:auto 가 흡수한다. */
+  /* base 의 margin-right 를 푼다 — 남는 폭은 #tab-search-dock 의 margin-left:auto 가 차지한다. */
   margin-right: 0;
   flex: 0 0 auto;
   width: var(--dock-control); /* 60px */
