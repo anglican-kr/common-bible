@@ -11,7 +11,7 @@ const $home = document.querySelector('#tab-bar [data-tab="home"]');
 
 /** @type {Window & typeof globalThis & Record<string, any>} */
 const W = /** @type {any} */ (window);
-const { isModifiedClick } = window.appHelpers;
+const { isModifiedClick, DESKTOP_LAYOUT_QUERY } = window.appHelpers;
 
 let collapsed = false; // ADR-030 P3: 스크롤 축소(탭 바 홈 원형) 상태
 
@@ -40,15 +40,24 @@ function nextScrollCollapsed(y, lastY, collapsed) {
 $searchBtn?.addEventListener("click", (e) => {
   e.preventDefault();
   if (W.parsePath?.().view === "search") {
+    // Already on the search tab: never navigate again (that would push a duplicate history entry). While the view
+    // is still drawing, the bar is not there yet and the press does nothing.
     const input = document.getElementById("search-inpage-input");
     if (input instanceof HTMLInputElement) {
       window.scrollTo(0, 0);
       input.focus({ preventScroll: true });
-      return;
     }
+    return;
   }
   W.tabHistory?.requestRestore(); // 탭 전환 → 마지막 검색 결과 스크롤 복원
   W.navigate(W.tabHistory?.lastPath("search") || "/search");
+});
+
+// The search view is drawn for one layout: the mobile in-page bar, or the desktop header field with no bar. When the
+// window crosses the desktop tier (DESKTOP_LAYOUT_QUERY, the same split as search.js `isMobile`), redraw it so the
+// page never shows both fields or neither.
+window.matchMedia(DESKTOP_LAYOUT_QUERY).addEventListener("change", () => {
+  if (W.parsePath?.().view === "search") W.route?.();
 });
 
 // ADR-030 P4: 스크롤 축소 상태에서 홈 탭 = 홈 이동이 아니라 "펼치기" — 탭바 복원 +

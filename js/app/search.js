@@ -2384,7 +2384,7 @@ function ensureBookSheet() {
     const filterBooks = Array.from(working);
     // 「적용」은 시트를 연 입력 칸에 보이는 검색어를 고른 책 안에서 찾는다(ADR-033 D3, 사용자 보고 2026-11-18). Enter를 누르지 않고
     // 친 검색어는 주소에 없으므로 칸에서 읽는다. 읽기는 이동보다 먼저다: route()가 시트를 닫기 전에 칸을 주소의 검색어로 다시 채운다
-    // (routing.js의 상단 바 칸, tabbar.js `syncInputFromUrl`의 탭 바 칸).
+    // (routing.js의 상단 바 칸).
     const field = _bookSheetReturnField;
     const typed = field && field.input.isConnected ? field.input.value.trim() : null;
     // `searched`: a keyword reached the URL. A typed `in:<alias>` alone is absorbed into
@@ -2761,7 +2761,7 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   view.appendChild(resultsTarget);
   $app.appendChild(view);
   // Book/AND filters surface as in-field tokens (ADR-033 개정 B); sync the
-  // header/pill/in-page fields for this query + scope (after view is connected).
+  // header/in-page fields for this query + scope (after view is connected).
   syncSearchFields();
   // The book sheet's 「적용」 searched from this bar: focus its new funnel (after the sync above shows the token zone).
   focusRebuiltInpageBar(view, seq);
@@ -3488,16 +3488,16 @@ function consumeSearchAutoNavigate() {
 // Window facade for legacy app.js callers (route handler invokes
 // renderSearchResults / renderSearchView / isMobile / consumeSearchAutoNavigate,
 // chapter renderer calls highlightTextNodes for ?hl= highlighting).
-// ADR-030: 탭 바 하단 모핑 입력이 검색을 커밋할 때 재사용.
+// 검색 입력 칸이 검색을 커밋할 때 쓴다(상단 바, 휴대폰의 위쪽 입력창).
 window.commitTopSearch = commitTopSearch;
 window.renderSearchResults = renderSearchResults;
 window.renderSearchView = renderSearchView;
 // Refresh in-field search tokens (book scope) from the URL —
-// called by route() and the tab-bar morph (ADR-033 개정 B).
+// called by route() (ADR-033 개정 B).
 window.syncSearchFields = syncSearchFields;
-// Patch the search URL preserving the rest of the state — the morphing pill's
-// clear (tabbar.js) uses it to drop the query while KEEPING the book scope,
-// matching the header/in-page clears (ADR-033 개정 B, Bugbot).
+// Patch the search URL preserving the rest of the state — the in-page bar's
+// clear and the book sheet use it to drop the query while KEEPING the book
+// scope (ADR-033 개정 B, Bugbot).
 window.navigateSearch = navigateSearch;
 window.isMobile = isMobile;
 window.highlightTextNodes = highlightTextNodes;
