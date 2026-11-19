@@ -24,7 +24,7 @@ import {
   parseVerseSpec, specCoversVerse, chapterMaxVerse, verseInstanceKeys,
 } from "./verse-spec.js";
 
-const { _$, el, clearNode, chUnit, emptyState } = window.appHelpers;
+const { _$, el, clearNode, chUnit, chapterTitle, emptyState } = window.appHelpers;
 const { loadBookmarks } = window.appStorage;
 
 const $app = _$("app");
@@ -110,12 +110,25 @@ function _isContinuous(prev, cur) {
  * Combined reference label for a joined group. A lone whole chapter reads as
  * "창세 1장"; everything else as a range "창세 1:1–2:4a" (collapsing to a single
  * "창세 3:5" when start and end coincide).
+ * 송가는 책 이름과 장 번호 대신 송가 이름이다: 「이사야 셋째 송가」, 「이사야 셋째 송가 1–3」(ADR-047 §4).
  * @param {string} bookName @param {string} unit
  * @param {ReturnType<typeof _bmRange>} first @param {ReturnType<typeof _bmRange>} last
  * @param {boolean} isSingleWhole  group is one whole-chapter bookmark
+ * @param {(chapter: number) => string | null} [titleOf]  a chapter's own name (송가); null for every other book
  * @returns {string}
  */
-function _combinedRef(bookName, unit, first, last, isSingleWhole) {
+function _combinedRef(bookName, unit, first, last, isSingleWhole, titleOf = () => null) {
+  const startTitle = titleOf(first.startCh);
+  if (startTitle) {
+    if (isSingleWhole) return startTitle;
+    if (first.startCh === last.endCh && first.startV === last.endV) return `${startTitle} ${first.startV}`;
+    // 끝 송가의 이름이 없으면 「7:3」이다 — 「7 3」은 장인지 절인지 알 수 없다
+    const endTitle = titleOf(last.endCh);
+    const end = last.endCh === first.startCh
+      ? last.endDisplay
+      : endTitle ? `${endTitle} ${last.endDisplay}` : `${last.endCh}:${last.endDisplay}`;
+    return `${startTitle} ${first.startV}–${end}`;
+  }
   if (isSingleWhole) return `${bookName} ${first.startCh}${unit}`;
   const startRef = `${first.startCh}:${first.startV}`;
   // One-verse range collapses to a single ref — compared numerically so a
@@ -350,7 +363,7 @@ async function renderBookmarkReadView(folderId = null) {
     const firstEnds = endsOf(first);
     const lastEnds = endsOf(last);
     const isSingleWhole = bms.length === 1 && firstEnds.wholeChapter;
-    const ref = _combinedRef(bookName, unit, firstEnds, lastEnds, isSingleWhole);
+    const ref = _combinedRef(bookName, unit, firstEnds, lastEnds, isSingleWhole, (ch) => chapterTitle(book, ch));
 
     const section = el("section", { className: "reading-passage" });
     const heading = el("div", { className: "reading-heading" });

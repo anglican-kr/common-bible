@@ -54,6 +54,19 @@ const OVERLAY_PATH = path.resolve(__dirname, "../../js/app/overlay.js");
 const OVERLAY_SOURCE = fs.readFileSync(OVERLAY_PATH, "utf8")
   .replace(/\nexport\s*\{\s*\}\s*;?\s*$/, "");
 
+// The chapter naming rules (chUnit, chUnitNoun, chapterTitle, chapterLabel, missingChapterText, hasBatchim) are helpers.js's:
+// 「편」 for the psalms, no unit and the 송가 name for the canticles (ADR-047). The POPOVER and FAILURE_TEXT loaders run
+// that file for them rather than restate the rules (helpers.test.js checks them on their own).
+const HELPERS_SOURCE = fs.readFileSync(path.resolve(__dirname, "../../js/app/helpers.js"), "utf8")
+  .replace(/\nexport\s*\{\s*\}\s*;?\s*$/, "");
+function realNaming() {
+  const ctx = { window: {}, Object, Array, String, Math, Number, JSON, console, Error };
+  vm.createContext(ctx);
+  vm.runInContext(HELPERS_SOURCE, ctx, { filename: "helpers.js" });
+  const { chUnit, chUnitNoun, chapterTitle, chapterLabel, missingChapterText, hasBatchim } = ctx.window.appHelpers;
+  return { chUnit, chUnitNoun, chapterTitle, chapterLabel, missingChapterText, hasBatchim };
+}
+
 function extractBlock(name, source = VIEWS_SOURCE) {
   const begin = `// ── BEGIN ${name} ──`;
   const end = `// ── END ${name} ──`;
@@ -343,11 +356,11 @@ function loadPieceSpace() {
 }
 
 // ── FAILURE_TEXT loader ──────────────────────────────────────────────────────
-// Pure: the copy of the full-screen failure screens. chUnit is a shim like the POPOVER loader's (helpers.test.js checks
-// the real one). The result is made in the vm's realm, so tests compare a JSON copy.
+// Pure: the copy of the full-screen failure screens, with helpers.js's naming rules (realNaming). The result is made in
+// the vm's realm, so tests compare a JSON copy.
 
 function loadFailureText() {
-  const ctx = { String, chUnit: (bookId) => (bookId === "ps" ? "편" : "장") };
+  const ctx = { String, ...realNaming() };
   vm.createContext(ctx);
   vm.runInContext(extractBlock("FAILURE_TEXT"), ctx, { filename: "views-failure-text.js" });
   return {
@@ -784,7 +797,7 @@ function makeRichDom() {
 }
 
 // ── POPOVER loader ───────────────────────────────────────────────────────────
-// Provides shims for el / clearNode / chUnit / trapFocus + stubs for
+// Provides shims for el / clearNode / trapFocus, helpers.js's naming rules (realNaming) + stubs for
 // announce, divisionLabels/divisionOrder, buildHomeBtn /
 // buildBookmarkHeaderBtn. Loads only the POPOVER block.
 
@@ -813,7 +826,7 @@ function loadPopover() {
     Node: NodeMarker, Element: ElementMarker,
     document: dom.document, $title,
     announce: (msg) => { announceCalls.push(msg); },
-    chUnit: (bookId) => bookId === "ps" ? "편" : "장",
+    ...realNaming(),
     divisionLabels: () => ({
       old_testament: "구약",
       deuterocanon: "외경",
@@ -888,6 +901,46 @@ test("setTitleWithChapterPicker: non-psalms uses '장' unit", () => {
   h.setTitleWithChapterPicker(book, 1);
   const btn = h.$title.children[0];
   assert.equal(btn.textContent, "창세기 1장");
+});
+
+test("setTitleWithChapterPicker: 송가는 송가 이름이고, 고르기 목록은 숫자 대신 이름이다(ADR-047 §2, §3)", () => {
+  const h = loadPopover();
+  const titles = { 1: "모세송가", 2: "하느님 찬미송가", 3: "창조송가" };
+  const book = { id: "cant", name_ko: "성무일과 송가", chapter_count: 3, has_prologue: false, division: "liturgical", titles };
+  h.setTitleWithChapterPicker(book, 2);
+  const btn = h.$title.children[0];
+  assert.equal(btn.textContent, "하느님 찬미송가");
+  assert.equal(btn.getAttribute("aria-label"), "송가 선택");
+  assert.equal(h.dom.document.title, "하느님 찬미송가 — 공동번역성서");
+  const popover = h.$title.children[1];
+  assert.equal(popover.getAttribute("aria-label"), "송가 선택");
+  const grid = popover.children[0];
+  assert.equal(grid.className, "popover-grid popover-names");
+  assert.deepEqual(grid.children.map((a) => a.textContent), ["모세송가", "하느님 찬미송가", "창조송가"]);
+  assert.deepEqual(grid.children.map((a) => a.getAttribute("href")), ["/cant/1", "/cant/2", "/cant/3"]);
+  assert.equal(grid.children[1].className, "popover-item current");
+});
+
+test("setTitleWithChapterPicker: 1번에만 이름이 없어도 이름 칸이고, 그 번호는 숫자다", () => {
+  const h = loadPopover();
+  const book = {
+    id: "cant", name_ko: "성무일과 송가", chapter_count: 3, has_prologue: false, division: "liturgical",
+    titles: { 2: "하느님 찬미송가", 3: "창조송가" },
+  };
+  h.setTitleWithChapterPicker(book, 3);
+  const grid = h.$title.children[1].children[0];
+  assert.equal(grid.className, "popover-grid popover-names");
+  assert.deepEqual(grid.children.map((a) => a.textContent), ["1", "하느님 찬미송가", "창조송가"]);
+});
+
+test("setTitleWithChapterPicker: 송가 이름이 없으면 번호만 보이고 「장」은 붙이지 않는다", () => {
+  const h = loadPopover();
+  const book = { id: "cant", name_ko: "성무일과 송가", chapter_count: 3, has_prologue: false, division: "liturgical" };
+  h.setTitleWithChapterPicker(book, 2);
+  assert.equal(h.$title.children[0].textContent, "성무일과 송가 2");
+  const grid = h.$title.children[1].children[0];
+  assert.equal(grid.className, "popover-grid");
+  assert.equal(grid.children[1].textContent, "2");
 });
 
 test("setTitleWithChapterPicker: popover grid has chapter_count items", () => {
@@ -1294,6 +1347,17 @@ test("bibleFailureText: 시편은 장 대신 편이다(chUnit — 장 선택 단
     link: { label: "편 목록", href: "/ps" },
   });
   assert.equal(bibleFailureText("no-page", psalms).subtitle, "「편 목록」을 눌러 편을 골라 주세요.");
+});
+
+test("bibleFailureText: 송가는 「14번 송가가 없습니다」와 「송가 목록」이다(ADR-047 §3)", () => {
+  const { bibleFailureText } = loadFailureText();
+  const canticles = { id: "cant", name_ko: "성무일과 송가" };
+  assert.deepEqual(bibleFailureText("no-chapter", canticles, 14), {
+    message: "성무일과 송가에는 14번 송가가 없습니다",
+    subtitle: "「송가 목록」을 눌러 다른 송가를 골라 주세요.",
+    link: { label: "송가 목록", href: "/cant" },
+  });
+  assert.equal(bibleFailureText("no-page", canticles).subtitle, "「송가 목록」을 눌러 송가를 골라 주세요.");
 });
 
 test("bibleFailureText: 책을 모르는 없는 주소(/xyz)는 「성서 목록」으로 보낸다", () => {

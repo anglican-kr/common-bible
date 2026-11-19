@@ -398,6 +398,28 @@ def test_liturgical_psalter_copy_credits_prayer_book(page):
     assert text.endswith("\n\n— 전례시편 23:1-2 (대한성공회 기도서)"), text[-80:]
 
 
+def test_canticle_copy_credits_canticle_name(page):
+    """송가의 출처는 책 이름과 번호 대신 송가 이름과 절이다 — 전례독서 화면의 송가 출처와 같다(ADR-047 §2)."""
+    _open_chapter(page, "cant/6")
+    vrefs = page.eval_on_selector_all("article.chapter-text .verse[data-vref]", "els => els.map(e => e.getAttribute('data-vref'))")
+    first2 = next(v for v in vrefs if v.startswith("2"))
+    text = _copy_text(page, _SELECT_LINES.replace("%A%", vrefs[0]).replace("%B%", first2))
+    assert text.endswith("\n\n— 이사야 셋째 송가 1-2 (대한성공회 기도서)"), text[-80:]
+
+
+def test_verse_select_copy_on_canticle_credits_canticle_name(page):
+    """절 선택 막대의 복사도 송가 이름과 절이다(ADR-047 §2)."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    _open_chapter(page, "cant/6")
+    page.evaluate("() => enterVerseSelectMode('cant', 6)")
+    page.wait_for_selector("#verse-select-bar:not([hidden])")
+    page.click("#v1")
+    page.click("#verse-select-copy-btn")
+    page.wait_for_selector("#verse-select-bar", state="hidden", timeout=2_000)
+    text = page.evaluate("async () => await navigator.clipboard.readText()")
+    assert text.endswith("— 이사야 셋째 송가 1 (대한성공회 기도서)"), text[-80:]
+
+
 def test_psalter_copy_from_section_start_carries_heading_and_marks(page):
     """전례시편 89편 19~20절 — 부 「(2)」의 첫 절부터 고르면 「(2)」가 제 줄로 실리고, ◯ 는 선창 끝에 남고, 무번호 구절은 「¶ 」로
     시작한다(사용자 결정 2026-10-13 — 전례 표기는 복사에 남긴다, known-issues §4)."""

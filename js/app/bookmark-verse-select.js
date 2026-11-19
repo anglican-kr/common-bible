@@ -14,7 +14,7 @@
 // window.{readingContext, getBooksCache, _showSyncSnackbar, announce}, appHelpers. The snackbar also
 // announces its text, so the copy result is not announced separately.
 
-const { _$ } = window.appHelpers;
+const { _$, verseRefLabel } = window.appHelpers;
 const { readingContext } = window;
 
 import {
@@ -122,7 +122,9 @@ async function copySelectedVerses() {
   const book = (window.getBooksCache() ?? []).find((b) => b.id === readingContext.bookId);
   const bookName = book ? book.name_ko : readingContext.bookId;
   // 전례시편 · 송가는 기도서 번역 — 「(대한성공회 기도서)」(사용자 결정 2026-10-13; 종전엔 언제나 「(공동번역성서)」였다).
-  const citation = `— ${bookName} ${cite.chapter ?? readingContext.chapter}:${spec} ${citationSource(book?.division === "liturgical")}`;
+  // 송가는 송가 이름과 절이다(「이사야 셋째 송가 1-3」, ADR-047 §2).
+  const where = verseRefLabel(book, cite.chapter ?? readingContext.chapter ?? "", spec, bookName ?? "");
+  const citation = `— ${where} ${citationSource(book?.division === "liturgical")}`;
   const fullText = `${textParts.join("\n\n")}\n\n${citation}`;
 
   try {

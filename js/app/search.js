@@ -17,7 +17,7 @@
 
 import { verseNumberSpec } from "./verse-spec.js";
 
-const { _$, el, clearNode, chUnit, emptyState, barBottom, churchName, SHEET_INERT_SELECTORS } = window.appHelpers;
+const { _$, el, clearNode, chUnit, missingChapterText, emptyState, barBottom, churchName, SHEET_INERT_SELECTORS } = window.appHelpers;
 const {
   SEARCH_HISTORY_MAX,
   loadSearchHistory, loadSearchHistoryEntries,
@@ -1104,8 +1104,9 @@ function buildAnswer(result, screen) {
       let label = title || `${ref.bookNameKo} ${chapter}${unit}`;
       if (verses) label += ` ${verses}`;
       if (count !== null && chapter > count) {
-        // 장 화면이 없는 장에서 보이는 문장과 같다(views.js). 다른 장이나 절로 가는 링크는 두지 않는다(ADR-044 §2).
-        const message = `${ref.bookNameKo}에는 ${chapter}${unit}이 없습니다`;
+        // 장 화면이 없는 장에서 보이는 문장과 같다(views.js, 송가는 「…14번 송가가 없습니다」, ADR-047 §3). 다른 장이나 절로 가는
+        // 링크는 두지 않는다(ADR-044 §2).
+        const message = missingChapterText(ref.bookId, ref.bookNameKo, chapter);
         const li = el("li", { className: "search-alert-item" });
         const alert = el("div", { className: "search-alert" });
         alert.appendChild(el("p", { className: "search-alert-title" }, `${message}.`));

@@ -1297,24 +1297,29 @@ const LEGACY_BOOKS = [
   { id: "gen", name_ko: "창세기", short_name_ko: "창세", chapter_count: 50 },
   { id: "nah", name_ko: "나훔", short_name_ko: "나훔", chapter_count: 3 },
 ];
-const LABEL_BOOKS = [...LEGACY_BOOKS, { id: "ps", name_ko: "시편", short_name_ko: "시편", chapter_count: 150 }];
+const LABEL_BOOKS = [
+  ...LEGACY_BOOKS,
+  { id: "ps", name_ko: "시편", short_name_ko: "시편", chapter_count: 150 },
+  { id: "cant", name_ko: "성무일과 송가", short_name_ko: "송가", chapter_count: 13, titles: { 5: "이사야 둘째 송가", 6: "이사야 셋째 송가" } },
+];
 
-// chUnit (the chapter unit — 「편」 for the psalms) is helpers.js's: bookmark-core.js reads it from window.appHelpers.
-// The test runs that file for it rather than restate the rule.
+// chUnit (the chapter unit — 「편」 for the psalms), chapterTitle and verseRefLabel (the 송가 name, ADR-047) are helpers.js's:
+// bookmark-core.js reads them from window.appHelpers. The test runs that file for them rather than restate the rules.
 const HELPERS_SOURCE = stripEsmMarker(fs.readFileSync(path.resolve(__dirname, "../../js/app/helpers.js"), "utf8"));
-function realChUnit() {
+function realNaming() {
   const ctx = { window: {}, Object, Array, String, Math, Number, JSON, console, Error };
   vm.createContext(ctx);
   vm.runInContext(HELPERS_SOURCE, ctx, { filename: "helpers.js" });
-  return ctx.window.appHelpers.chUnit;
+  const { chUnit, chapterTitle, verseRefLabel } = ctx.window.appHelpers;
+  return { chUnit, chapterTitle, verseRefLabel };
 }
 
 // ── BOOKMARK_LABEL loader ────────────────────────────────────────────────────
-// The block calls chUnit (destructured at the top of bookmark-core.js, outside the blocks). VERSE_SPEC comes along for
+// The block calls chUnit, chapterTitle and verseRefLabel (destructured at the top of bookmark-core.js, outside the blocks). VERSE_SPEC comes along for
 // mergeVerseSpecs, so a test merges as the merge dialog does.
 
 function loadBookmarkLabel() {
-  const ctx = { Object, Array, Set, String, Math, Number, JSON, console, Error, parseInt, chUnit: realChUnit() };
+  const ctx = { Object, Array, Set, String, Math, Number, JSON, console, Error, parseInt, ...realNaming() };
   vm.createContext(ctx);
   vm.runInContext(extractBlock("VERSE_SPEC", VERSE_SPEC_SOURCE), ctx, { filename: "verse-spec.js" });
   vm.runInContext(extractBlock("BOOKMARK_LABEL", BOOKMARK_CORE_SOURCE), ctx, { filename: "bookmark-core.js" });
@@ -1327,7 +1332,7 @@ function loadBookmarkLabel() {
 
 // ── BOOKMARK_LEGACY loader ───────────────────────────────────────────────────
 // The block calls wholeVerseSpec (an import of bookmark-core.js) — the VERSE_SPEC block stands in for it —
-// changeBookmarkRange (the BOOKMARK_LABEL block, with chUnit), and the store's loadBookmarks · rewriteBookmarks
+// changeBookmarkRange (the BOOKMARK_LABEL block, with chUnit, chapterTitle and verseRefLabel), and the store's loadBookmarks · rewriteBookmarks
 // (window.appStorage) and window.loadBooks · getBooksCache, stubbed here. `calls` records what the startup move asked for.
 
 function loadBookmarkLegacy({ stored = [], books = LEGACY_BOOKS, booksCached = true, booksFail = false, storeThrows = false } = {}) {
@@ -1335,7 +1340,7 @@ function loadBookmarkLegacy({ stored = [], books = LEGACY_BOOKS, booksCached = t
   // The book list arrives a task later, as a fetch does — so a test that awaits the move sees whether it waited.
   const later = (settle) => new Promise((resolve, reject) => setTimeout(() => settle(resolve, reject), 0));
   const ctx = {
-    Object, Array, Set, String, Math, Number, JSON, console, Error, parseInt, Promise, chUnit: realChUnit(),
+    Object, Array, Set, String, Math, Number, JSON, console, Error, parseInt, Promise, ...realNaming(),
     loadBookmarks: () => { if (storeThrows) throw new TypeError("unreadable"); return stored; },
     rewriteBookmarks: (patch) => { calls.rewrites.push(patch); },
     window: {
@@ -1474,6 +1479,27 @@ test("defaultBookmarkLabel: 「책 장:범위」 with the short book name, a who
   assert.equal(name("isa", 7, "all"), "이사 7장");
   assert.equal(name("ps", 23, "all"), "시편 23편");
   assert.equal(name("ps", 23, "1-3"), "시편 23:1-3");
+});
+
+test("defaultBookmarkLabel: 송가는 책 이름과 번호 대신 송가 이름이다 — 「이사야 셋째 송가」, 「이사야 셋째 송가 1-3」(ADR-047 §4)", () => {
+  const h = loadBookmarkLabel();
+  const name = (chapter, verseSpec) => h.defaultBookmarkLabel({ bookId: "cant", chapter, verseSpec }, LABEL_BOOKS);
+  assert.equal(name(6, "all"), "이사야 셋째 송가");
+  assert.equal(name(6, "1-3"), "이사야 셋째 송가 1-3");
+  assert.equal(name(6, "1,4"), "이사야 셋째 송가 1,4");
+  // 이름이 없는 번호(그 칸이 없는 books.json)는 줄인 책 이름과 번호다. 「장」은 붙이지 않는다
+  assert.equal(name(1, "all"), "송가 1");
+  assert.equal(name(1, "2"), "송가 1:2");
+});
+
+test("changeBookmarkRange: 송가의 기본 이름도 범위를 따라가고, 이미 저장한 옛 이름(「송가 6장」)은 그대로다(ADR-047 §4)", () => {
+  const h = loadBookmarkLabel();
+  const bm = { type: "bookmark", id: "a", bookId: "cant", chapter: 6, verseSpec: "1", label: "이사야 셋째 송가 1", note: "" };
+  h.changeBookmarkRange(bm, h.mergeVerseSpecs(bm.verseSpec, "2"), LABEL_BOOKS);
+  assert.equal(bm.label, "이사야 셋째 송가 1-2");
+  const old = { type: "bookmark", id: "b", bookId: "cant", chapter: 6, verseSpec: "all", label: "송가 6장", note: "" };
+  h.changeBookmarkRange(old, "1-3", LABEL_BOOKS);
+  assert.equal(old.label, "송가 6장");
 });
 
 test("defaultBookmarkLabel: a book not in the list, or no list yet, starts with the book id — as the save dialog's did", () => {
