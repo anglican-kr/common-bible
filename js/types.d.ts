@@ -1361,13 +1361,9 @@ declare global {
     }) => SyncMachine;
     driveSync: DriveSyncFacade;
 
-    // ADR-030 P2: 탭 바 검색 모핑 — search.js 가 commitTopSearch 노출, tabbar.js 가
-    // exitTabSearch 노출(views 의 syncTabBarActive 가 라우트 변경 시 호출).
+    // search.js 가 commitTopSearch 노출.
     commitTopSearch?: (rawQuery: string) => string;
-    exitTabSearch?: () => void;
-    syncTabSearchQuery?: () => void;
     resetTabCollapse?: () => void;
-    closeTabSearch?: () => boolean;
     // ADR-030 후속⁵: 슬라이딩 인디케이터 재배치(스크롤 축소 해제·외부 트리거용).
     syncTabIndicator?: () => void;
     // ADR-034 PR3: tabbar.js 가 노출, route()(views)가 라우트마다 호출.

@@ -1401,13 +1401,12 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
 // the bottom sheet. This builds a minimal search input bar (mirroring the
 // header #search-bar markup) wired to commit via the URL (/search?q=...), so it
 // reuses the same routing + history path as the desktop top bar. Returns the
-// wrapper element; `autofocus` opens the keyboard when entering with no query.
+// wrapper element. It never takes focus by itself (ADR-048 §2).
 /**
  * @param {string} query
- * @param {boolean} [autofocus]
  * @returns {HTMLElement}
  */
-function buildInPageSearchInput(query, autofocus = false) {
+function buildInPageSearchInput(query) {
   const wrap = el("div", { id: "search-inpage-bar", role: "search" });
   const input = /** @type {HTMLInputElement} */ (el("input", {
     id: "search-inpage-input",
@@ -1431,13 +1430,27 @@ function buildInPageSearchInput(query, autofocus = false) {
     e.preventDefault();
     commitTopSearch(input.value);
   });
-  clear.addEventListener("click", () => {
+  // ⊗ clears the query and lowers the keyboard, even mid-typing: clearing means leaving the search (ADR-048 §4). The
+  // button hides, so focus moves to this bar's funnel (where the book sheet's 「적용」 returns it, ADR-033 D3) and, after
+  // the recents view redraws the bar, to the new bar's funnel. A tap or click draws no focus ring there: the input
+  // always matches :focus-visible, so the browser would otherwise ring the funnel focus moved to (`focusVisible:
+  // false`, as in helpers.js). With a keyboard press the ring shows where focus went. pointerdown's default is
+  // prevented so the input keeps focus until click moves it in one step (as on the funnel).
+  clear.addEventListener("pointerdown", (e) => e.preventDefault());
+  clear.addEventListener("click", (e) => {
     input.value = "";
     clear.hidden = true;
-    input.focus();
+    /** @type {FocusOptions & { focusVisible?: boolean }} */
+    const options = e.detail > 0 ? { preventScroll: true, focusVisible: false } : { preventScroll: true };
+    const funnel = wrap.querySelector(".token-funnel");
+    if (funnel instanceof HTMLElement) funnel.focus(options);
+    if (document.activeElement === input) input.blur();
     // Drop the query (back to the recents/empty view) but keep the book-picker
     // scope so a cleared field doesn't silently reset the filter (ADR-033).
-    if (window.parsePath().view === "search") navigateSearch({ q: "" });
+    if (window.parsePath().view === "search") {
+      navigateSearch({ q: "" });
+      _inpageFocusAfterRender = { seq: window.routeSeq?.() ?? null, target: "funnel", options };
+    }
   });
 
   wrap.appendChild(input);
@@ -1445,7 +1458,6 @@ function buildInPageSearchInput(query, autofocus = false) {
   // Mount in-field tokens (book scope) so the in-page bar is the
   // single search surface on mobile — no separate filter bar (ADR-033 개정 B).
   mountSearchField(wrap, input);
-  if (autofocus) requestAnimationFrame(() => input.focus());
   return wrap;
 }
 
@@ -1985,7 +1997,7 @@ function svgIcon(className, paths, circles) {
 // Book-scope filters render as removable chips INSIDE the search field itself
 // (HIG search tokens), so there is a single search surface — no separate filter
 // bar. Mounted on each field container (header #search-bar, mobile in-page
-// #search-inpage-bar, bottom morphing pill #tab-search-dock) and refreshed from
+// #search-inpage-bar) and refreshed from
 // the URL on every route via syncSearchFields(). The worker/URL schema (in=) is
 // unchanged — only how the filters surface.
 
@@ -2083,13 +2095,11 @@ function mountSearchField(container, input) {
   syncOneField(field);
 }
 
-// Refresh one field's chips + funnel state from the live URL. The pill is
-// only usable while the tab-bar morph is open, so it stays empty otherwise.
+// Refresh one field's chips + funnel state from the live URL.
 /** @param {SearchField} field */
 function syncOneField(field) {
-  const { container, zone, funnel } = field;
+  const { zone, funnel } = field;
   const p = window.parsePath?.() || {};
-  const isPill = container.id === "tab-search-dock";
   // Desktop bare /search (no query/scope) renders the book list, not the search
   // view — don't surface the header token zone there (mirrors routing.js's
   // render condition; the old filter bar lived in the view so it never showed on
@@ -2100,10 +2110,8 @@ function syncOneField(field) {
   // whenever the field itself is focused — so the book-filter funnel is reachable
   // from the search box on any screen, not only the search results view (user
   // request). Off the search view there's no URL scope, so the chip loop below is
-  // empty and only the funnel shows. The pill (#tab-search-dock) is only live
-  // during the tab-bar search morph, so keep that guard.
-  const allowPill = !isPill || document.body.classList.contains("tabbar-searching");
-  const active = allowPill && (searchView || field.focused === true);
+  // empty and only the funnel shows.
+  const active = searchView || field.focused === true;
 
   zone.querySelectorAll(".field-token").forEach((n) => n.remove());
 
@@ -2178,12 +2186,27 @@ let _bookSheetReturnField = null;
 // Fallback timer for the animated close (cleared on animationend / reopen).
 /** @type {ReturnType<typeof setTimeout> | null} */
 let _bookSheetCloseTimer = null;
-// The route whose results render must focus the rebuilt in-page bar's funnel: the sheet was opened from that bar and
-// its 「적용」 searched. The redraw drops the old bar with the funnel the sheet handed focus back to, so focus fell to
-// <body> (WCAG 2.4.3, ADR-033 D3). Matched against the route sequence, so a route that never drew the results (the
-// user moved on) leaves nothing behind for a later screen.
-/** @type {number | null} */
-let _inpageFunnelFocusSeq = null;
+// What the next render of the search view must focus in the rebuilt mobile in-page bar. The redraw drops the old bar,
+// so focus handed to its funnel or input fell to <body> (WCAG 2.4.3). Set by the book sheet's 「적용」 (ADR-033 D3: its
+// funnel after a search, its input when the query was empty) and the bar's ⊗ (its funnel, ADR-048 §4). Matched against
+// the route sequence, so a route that never drew the view (the user moved on) leaves nothing behind for a later screen.
+/** @type {{ seq: number | null, target: "funnel" | "input", options: FocusOptions & { focusVisible?: boolean } } | null} */
+let _inpageFocusAfterRender = null;
+
+/**
+ * Focus the rebuilt in-page bar's funnel or input when this render is the one `_inpageFocusAfterRender` waits for and
+ * the focus fell to <body> with the old bar (a focus the user put elsewhere meanwhile is left alone).
+ * @param {HTMLElement} view @param {number} seq
+ */
+function focusRebuiltInpageBar(view, seq) {
+  const want = _inpageFocusAfterRender;
+  if (!want || want.seq !== seq) return;
+  _inpageFocusAfterRender = null;
+  const at = document.activeElement;
+  if (at && at !== document.body && at.isConnected) return;
+  const target = view.querySelector(want.target === "input" ? "#search-inpage-input" : "#search-inpage-bar .token-funnel");
+  if (target instanceof HTMLElement) target.focus(want.options);
+}
 
 function ensureBookSheet() {
   if (_bookSheet) return _bookSheet;
@@ -2361,7 +2384,7 @@ function ensureBookSheet() {
     const filterBooks = Array.from(working);
     // 「적용」은 시트를 연 입력 칸에 보이는 검색어를 고른 책 안에서 찾는다(ADR-033 D3, 사용자 보고 2026-11-18). Enter를 누르지 않고
     // 친 검색어는 주소에 없으므로 칸에서 읽는다. 읽기는 이동보다 먼저다: route()가 시트를 닫기 전에 칸을 주소의 검색어로 다시 채운다
-    // (routing.js의 상단 바 칸, tabbar.js `syncInputFromUrl`의 탭 바 칸).
+    // (routing.js의 상단 바 칸).
     const field = _bookSheetReturnField;
     const typed = field && field.input.isConnected ? field.input.value.trim() : null;
     // `searched`: a keyword reached the URL. A typed `in:<alias>` alone is absorbed into
@@ -2376,19 +2399,15 @@ function ensureBookSheet() {
     }
     overlay.close();
     // With no query, focus the originating field's input so the user can type
-    // the term immediately (keyboard up on mobile). Persistent fields (header/
-    // pill) survive the re-render, so focus synchronously within this click
-    // gesture (iOS needs that for the soft keyboard). The rebuilt in-page bar
-    // autofocuses itself on render, so skip it here. With a query, the input is
-    // left unfocused so the keyboard doesn't cover the results — like Enter in
-    // the pill, which blurs the input. The overlay hands focus back to the
-    // funnel; on the header and pill it stays there, but the results render
-    // rebuilds the in-page bar and its old funnel goes with it, so that render
-    // focuses the new bar's funnel (`_inpageFunnelFocusSeq`).
-    if (searched && field && field.container.id === "search-inpage-bar") {
-      _inpageFunnelFocusSeq = window.routeSeq?.() ?? null;
-    }
-    if (!searched && field && field.container.id !== "search-inpage-bar" && field.input.isConnected) {
+    // the term immediately. The header field survives the re-render, so focus it
+    // synchronously within this click. With a query, the input is left unfocused
+    // so the keyboard doesn't cover the results — like Enter, which blurs it. The
+    // overlay hands focus back to the funnel; the header keeps it, but the mobile
+    // in-page bar is rebuilt by the render and its old funnel and input go with it,
+    // so that render focuses the new bar's funnel or input (`_inpageFocusAfterRender`).
+    if (field && field.container.id === "search-inpage-bar") {
+      _inpageFocusAfterRender = { seq: window.routeSeq?.() ?? null, target: searched ? "funnel" : "input", options: {} };
+    } else if (!searched && field && field.input.isConnected) {
       field.input.focus();
     }
   });
@@ -2678,12 +2697,10 @@ async function renderSearchView(state) {
   clearNode($app);
   const view = el("div", { className: "search-view" });
   // In-page input on mobile only — desktop uses the header search bar (mirrors
-  // renderSearchResults). During the tab-bar morph the bottom dock input owns
-  // focus; don't let the (hidden) in-page input grab it back via autofocus.
-  if (isMobile()) {
-    const morphing = document.body.classList.contains("tabbar-searching");
-    view.appendChild(buildInPageSearchInput("", !morphing));
-  }
+  // renderSearchResults). It never takes focus by itself: the keyboard shows only
+  // when the user moves focus there (the bar, or the tab bar's search circle on
+  // this screen, ADR-048 §2).
+  if (isMobile()) view.appendChild(buildInPageSearchInput(""));
   if (askKeyword) view.appendChild(el("p", { className: "search-note search-keyword-note" }, KEYWORD_NOTE));
   const dyn = el("div", { className: "search-empty-dynamic" });
   view.appendChild(dyn);
@@ -2693,6 +2710,9 @@ async function renderSearchView(state) {
   // visible/removable in the mobile in-page bar or the desktop header field.
   // Sync after the view is connected so a deep-linked scope resolves names.
   syncSearchFields();
+  // The bar's ⊗ or the book sheet's 「적용」 drew this view: focus the new bar's funnel or input (after the sync above shows
+  // the token zone).
+  focusRebuiltInpageBar(view, seq);
   _emptyDynHost = dyn;
   renderEmptyDynamic(dyn);
 }
@@ -2733,22 +2753,18 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
 
   // Both layouts share the .search-view wrapper. Filters (book scope) live as
   // in-field tokens in the search field itself (ADR-033 개정 B):
-  // the mobile in-page bar / desktop header field / bottom morphing pill. Results
+  // the mobile in-page bar / desktop header field. Results
   // render into their own box so re-rendering them never touches the field.
   const view = el("div", { className: "search-view" });
-  if (isMobile()) view.appendChild(buildInPageSearchInput(query, false));
+  if (isMobile()) view.appendChild(buildInPageSearchInput(query));
   const resultsTarget = el("div", { className: "search-view-results" });
   view.appendChild(resultsTarget);
   $app.appendChild(view);
   // Book/AND filters surface as in-field tokens (ADR-033 개정 B); sync the
-  // header/pill/in-page fields for this query + scope (after view is connected).
+  // header/in-page fields for this query + scope (after view is connected).
   syncSearchFields();
   // The book sheet's 「적용」 searched from this bar: focus its new funnel (after the sync above shows the token zone).
-  if (_inpageFunnelFocusSeq === seq) {
-    _inpageFunnelFocusSeq = null;
-    const funnel = /** @type {HTMLElement | null} */ (view.querySelector("#search-inpage-bar .token-funnel"));
-    if (funnel && document.activeElement === document.body) funnel.focus();
-  }
+  focusRebuiltInpageBar(view, seq);
 
   resultsTarget.appendChild(el("div", { className: "loading", "aria-live": "polite" }, "검색 중…"));
 
@@ -3448,13 +3464,6 @@ topSearchHistory.syncToggleVisibility();
 // Mount in-field tokens on the persistent search fields (ADR-033 개정 B). The
 // mobile in-page bar mounts on build (buildInPageSearchInput).
 mountSearchField($searchBar, $searchInput);
-{
-  const $tabDock = document.getElementById("tab-search-dock");
-  const $tabInput = document.getElementById("tab-search-input");
-  if ($tabDock && $tabInput instanceof HTMLInputElement) {
-    mountSearchField($tabDock, $tabInput);
-  }
-}
 // Preload the in:<alias> map (from prefetched books) so commitTopSearch can
 // absorb operators synchronously — keeps commit free of an async race surface.
 ensureAliasMap();
@@ -3479,16 +3488,16 @@ function consumeSearchAutoNavigate() {
 // Window facade for legacy app.js callers (route handler invokes
 // renderSearchResults / renderSearchView / isMobile / consumeSearchAutoNavigate,
 // chapter renderer calls highlightTextNodes for ?hl= highlighting).
-// ADR-030: 탭 바 하단 모핑 입력이 검색을 커밋할 때 재사용.
+// 검색 입력 칸이 검색을 커밋할 때 쓴다(상단 바, 휴대폰의 위쪽 입력창).
 window.commitTopSearch = commitTopSearch;
 window.renderSearchResults = renderSearchResults;
 window.renderSearchView = renderSearchView;
 // Refresh in-field search tokens (book scope) from the URL —
-// called by route() and the tab-bar morph (ADR-033 개정 B).
+// called by route() (ADR-033 개정 B).
 window.syncSearchFields = syncSearchFields;
-// Patch the search URL preserving the rest of the state — the morphing pill's
-// clear (tabbar.js) uses it to drop the query while KEEPING the book scope,
-// matching the header/in-page clears (ADR-033 개정 B, Bugbot).
+// Patch the search URL preserving the rest of the state — the in-page bar's
+// clear and the book sheet use it to drop the query while KEEPING the book
+// scope (ADR-033 개정 B, Bugbot).
 window.navigateSearch = navigateSearch;
 window.isMobile = isMobile;
 window.highlightTextNodes = highlightTextNodes;

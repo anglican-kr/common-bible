@@ -71,13 +71,9 @@ document.addEventListener("keydown", (e) => {
     if (window.closeCalendarPicker?.()) return;
     if (document.querySelector(".settings-popover:not([hidden])")) { window.closeSettings?.(); return; }
     if (document.querySelector(".chapter-popover:not([hidden])")) { window.closeChapterPopover?.(); return; }
-    // No higher overlay — close the tab-bar search morph if active.
-    if (window.closeTabSearch?.()) return;
     // Fallback: reset any stray aria-expanded trigger (e.g. bookmark overflow).
-    // #tab-search is excluded — its morph (expanded) state is owned by tab-search
-    // logic, so a stray Escape must not flip it to aria-expanded="false" (ADR-030).
     /** @type {NodeListOf<HTMLElement>} */ (
-      document.querySelectorAll("[aria-expanded='true']:not(#tab-search)")
+      document.querySelectorAll("[aria-expanded='true']")
     ).forEach((b) => { b.setAttribute("aria-expanded", "false"); b.focus(); });
   }
   // Space to toggle audio playback (when not in an input/button). Audio

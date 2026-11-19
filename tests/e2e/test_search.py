@@ -168,13 +168,14 @@ def _show_book_tab(page, book_id):
 
 def _apply_books_to_typed_query(page, ctx_name, typed, book_id):
     """검색 입력 칸에 `typed`를 치고 Enter는 누르지 않은 채, 깔때기로 책 선택 시트를 열어 `book_id`를 고르고 「적용」을 누른다.
-    휴대폰은 탭 바의 검색 입력(`#tab-search-dock`), 데스크톱은 상단 바의 검색 입력(`#search-bar`)이다. 그 입력 칸의 선택자를 돌려준다."""
+    휴대폰은 검색 화면 위쪽의 검색 입력(`#search-inpage-bar`, ADR-048), 데스크톱은 상단 바의 검색 입력(`#search-bar`)이다. 그 입력 칸의
+    선택자를 돌려준다."""
     page.goto(BASE_URL)
     wait_app_ready(page)
     if ctx_name == "mobile_context":
         page.locator("#tab-search").click()
-        page.wait_for_selector("#tab-search-input:not([hidden])")
-        bar, field = "#tab-search-dock", "#tab-search-input"
+        page.wait_for_selector("#search-inpage-input")
+        bar, field = "#search-inpage-bar", "#search-inpage-input"
     else:
         bar, field = "#search-bar", "#search-input"
     page.locator(field).fill(typed)
