@@ -1,4 +1,5 @@
 ---
+pr: 605
 date: 2026-11-19
 branch: feat/book-filter-tabs
 title: "feat: 책 선택 시트를 구분 탭으로 나누기"
