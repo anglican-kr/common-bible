@@ -282,10 +282,13 @@ function parsePath() {
 }
 // ── END PARSE_PATH ──
 
-/** @param {string} path */
+/**
+ * 주소를 바꾸고 화면을 그린다. 다시 그린 뒤에 할 일이 있는 호출이 기다릴 수 있게 그 약속을 돌려준다(검색어 지우기, tabbar.js).
+ * @param {string} path @returns {Promise<void>}
+ */
 function navigate(path) {
   history.pushState(null, "", path);
-  route();
+  return route();
 }
 
 /** @param {{ title?: string, description?: string }} [opts] */

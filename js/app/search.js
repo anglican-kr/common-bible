@@ -1469,13 +1469,16 @@ function currentSearchState() {
   };
 }
 
-/** @param {{ q?: string, page?: number, filterBooks?: string[] }} patch */
+/**
+ * 검색 상태를 고쳐 그 주소로 간다. 다시 그리기의 약속을 돌려준다(`navigate`).
+ * @param {{ q?: string, page?: number, filterBooks?: string[] }} patch @returns {Promise<void>}
+ */
 function navigateSearch(patch) {
   const next = Object.assign(currentSearchState(), patch);
   if (!("page" in patch)) next.page = 1;
   const url = buildSearchUrl(next);
-  if (location.pathname + location.search === url) window.route();
-  else window.navigate(url);
+  if (location.pathname + location.search === url) return window.route();
+  return window.navigate(url);
 }
 
 // Lazy book-id → 한국어 이름 map, used for filter chip labels. Resolved on
