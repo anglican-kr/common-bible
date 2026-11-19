@@ -4,7 +4,7 @@ Covers:
   - 탭 바 존재 + 탭 5개(홈·캘린더·북마크·노트(숨김)·설정, 아이콘 전용) + 분리된 검색 원형
   - 탭 네비게이션 + active 상태(aria-current="page" / .active)
   - /bookmarks · /settings 전체 화면 뷰 렌더
-  - 검색 원형 버튼 → /search 모핑(#tab-dock.searching, 하단 입력 표시)
+  - 검색 원형: 검색 화면이 아니면 검색 화면으로 가고, 검색 화면이면 위쪽 입력창에 포커스(ADR-048). 위쪽 입력창의 검색어 지우기
   - 스크롤 축소(#tab-dock.collapsed) + 축소 시 홈 탭 = 펼치기(홈 이동 아님)
   - 읽기 라우트에서 홈 탭 active 유지
   - 구분 탭이 없는 책(전례시편)에서 홈 탭 → 성서 목록 첫 화면(PR #353 리뷰)
@@ -88,89 +88,90 @@ def test_settings_tab_navigates_and_renders_view(mobile_context):
     assert "active" in (settings.get_attribute("class") or "")
 
 
-def test_search_button_morphs_to_input(mobile_context):
-    """검색 원형 버튼 클릭 → /search + #tab-dock.searching + 하단 입력 표시."""
+def test_search_button_goes_to_search_then_focuses_the_input(mobile_context):
+    """검색 원형은 검색 화면이 아닌 곳에서는 검색 화면으로 가기만 하고 입력창에 포커스를 주지 않는다(키보드가 뜨지 않는다). 검색
+    화면에서는 위쪽 입력창으로 포커스를 옮기고, 결과를 내려 보던 중이면 맨 위로 올린다. 탭 바는 입력창으로 바뀌지 않는다
+    (ADR-048 §1, §2)."""
     page = mobile_context.new_page()
     page.goto(BASE_URL)
     wait_app_ready(page)
+    active = "() => document.activeElement?.id"
 
     page.locator("#tab-search").click()
     page.wait_for_url("**/search", timeout=5_000)
-    assert page.evaluate("() => location.pathname") == "/search"
+    page.wait_for_selector("#search-inpage-input", timeout=5_000)
+    assert page.locator("#search-inpage-bar").is_visible()
+    page.wait_for_timeout(300)
+    assert page.evaluate(active) != "search-inpage-input", "검색 화면으로 가기만 한다"
+    assert page.locator("#tab-search").is_visible(), "검색 원형은 그대로 있다"
+    assert page.get_attribute("#tab-search", "aria-current") == "page"
+    assert page.locator("#tab-dock.searching").count() == 0
 
-    # 모핑 상태 + 하단 입력(모핑 입력 pill)이 보여야 한다.
-    page.wait_for_selector("#tab-dock.searching", timeout=5_000)
-    page.wait_for_selector("#tab-search-input:not([hidden])", timeout=5_000)
-    # In searching mode the search circle morphs into the input pill, so
-    # #tab-search is hidden — assert the state is set (attached), not visible.
-    page.wait_for_selector(
-        "#tab-search[aria-current='page']", state="attached", timeout=5_000
-    )
+    page.locator("#tab-search").click()
+    assert page.evaluate(active) == "search-inpage-input"
+
+    # 결과를 내려 보던 중이면 맨 위로 올린 뒤 입력창으로 옮긴다
+    page.fill("#search-inpage-input", "사랑")
+    page.press("#search-inpage-input", "Enter")
+    page.wait_for_selector(".search-result-item", timeout=20_000)
+    page.evaluate("() => window.scrollTo({ top: 800, behavior: 'instant' })")
+    page.wait_for_function("() => window.scrollY > 100", timeout=3_000)
+    page.locator("#tab-search").click()
+    assert page.evaluate(active) == "search-inpage-input"
+    page.wait_for_function("() => window.scrollY < 5", timeout=3_000)
+
+    # 다른 탭에 갔다가 돌아오면 마지막 검색 화면이고, 입력창에 포커스를 주지 않는다(ADR-031)
+    page.locator('#tab-bar [data-tab="bookmarks"]').click()
+    page.wait_for_url("**/bookmarks", timeout=5_000)
+    page.locator("#tab-search").click()
+    page.wait_for_function("() => new URLSearchParams(location.search).get('q') === '사랑'", timeout=5_000)
+    page.wait_for_selector(".search-result-item", timeout=20_000)
+    assert page.evaluate(active) != "search-inpage-input"
 
 
-def test_clear_lowers_the_keyboard_and_focuses_the_funnel(mobile_context):
-    """검색어 지우기(⊗)는 키보드를 내린다. 결과를 보던 중에 지워도, 입력 중에 지워도, 키보드로 단추를 눌러도 최근 검색 화면으로
-    돌아가고 포커스는 같은 입력창의 깔때기로 간다. 최근 검색 화면을 다 그린 뒤에도 깔때기에 남는다. 손가락이나 마우스로 눌렀으면
-    깔때기에 포커스 테두리를 그리지 않고, 키보드로 눌렀으면 그린다(ADR-030 §3, 사용자 결정 2026-11-19)."""
+def test_inpage_clear_lowers_the_keyboard_and_focuses_the_funnel(mobile_context):
+    """위쪽 입력창의 검색어 지우기(⊗)는 키보드를 내린다. 결과를 보던 중에 지워도, 입력 중에 지워도, 키보드로 단추를 눌러도 최근 검색
+    화면으로 돌아가고, 포커스는 다시 그린 입력창의 깔때기로 간다. 손가락이나 마우스로 눌렀으면 깔때기에 포커스 테두리를 그리지 않고,
+    키보드로 눌렀으면 그린다(ADR-048 §4)."""
     page = mobile_context.new_page()
     page.goto(BASE_URL)
     wait_app_ready(page)
     page.locator("#tab-search").click()
-    page.wait_for_selector("#tab-search-input:not([hidden])", timeout=5_000)
-    funnel_focused = "() => !!document.activeElement?.matches('#tab-search-dock .token-funnel')"
+    page.wait_for_selector("#search-inpage-input", timeout=5_000)
+    funnel_focused = "() => !!document.activeElement?.matches('#search-inpage-bar .token-funnel')"
     ring = "() => !!document.activeElement?.matches(':focus-visible')"
     where = "() => document.activeElement?.outerHTML.slice(0, 120)"
 
-    # 결과를 보던 중(Enter가 입력에서 포커스를 뺐다). 최근 검색 화면을 다 그린 뒤에도 깔때기에 있다
-    page.fill("#tab-search-input", "하계재")
-    page.press("#tab-search-input", "Enter")
+    # 결과를 보던 중(Enter로 찾아 입력창을 다시 그렸다)
+    page.fill("#search-inpage-input", "하계재")
+    page.press("#search-inpage-input", "Enter")
     page.wait_for_function("() => new URLSearchParams(location.search).get('q') === '하계재'", timeout=10_000)
-    page.wait_for_function("() => document.activeElement?.id !== 'tab-search-input'", timeout=5_000)
-    page.locator("#tab-search-clear").click()
+    page.wait_for_selector("#search-inpage-clear:not([hidden])", timeout=10_000)
+    page.locator("#search-inpage-clear").click()
     page.wait_for_function("() => !new URLSearchParams(location.search).get('q')", timeout=5_000)
     page.wait_for_selector("#app .search-recents", timeout=5_000)
-    assert page.input_value("#tab-search-input") == ""
-    assert page.evaluate(funnel_focused), page.evaluate(where)
+    page.wait_for_function(funnel_focused, timeout=5_000)
+    assert page.input_value("#search-inpage-input") == ""
     assert not page.evaluate(ring), "마우스로 눌렀으면 깔때기에 포커스 테두리가 없다"
 
-    # 입력 중. 누르는 사이에 입력의 포커스가 먼저 빠지지 않고(pointerdown의 기본 동작을 막는다), click에서 깔때기로 간다.
-    # 입력창은 늘 :focus-visible이라, 막지 않으면 브라우저가 옮겨 간 포커스에도 테두리를 그린다
-    page.fill("#tab-search-input", "사랑")
+    # 입력 중. 누르는 사이에 입력의 포커스가 먼저 빠지지 않고(pointerdown의 기본 동작을 막는다), 다시 그린 뒤 깔때기에 있다
+    page.fill("#search-inpage-input", "사랑")
     page.evaluate("""() => {
         document.addEventListener('click', () => { window.__focusAtClick = document.activeElement?.id; }, { capture: true, once: true });
     }""")
-    page.locator("#tab-search-clear").click()
-    assert page.evaluate("() => window.__focusAtClick") == "tab-search-input", "누르는 사이에 입력의 포커스가 빠지지 않는다"
-    assert page.input_value("#tab-search-input") == ""
-    assert page.evaluate(funnel_focused), page.evaluate(where)
+    page.locator("#search-inpage-clear").click()
+    assert page.evaluate("() => window.__focusAtClick") == "search-inpage-input", "누르는 사이에 입력의 포커스가 빠지지 않는다"
+    page.wait_for_function(funnel_focused, timeout=5_000)
+    assert page.input_value("#search-inpage-input") == ""
     assert not page.evaluate(ring), "마우스로 눌렀으면 깔때기에 포커스 테두리가 없다"
 
     # 키보드로 단추를 눌러도 같다(지우기 단추는 숨겨져 포커스가 그 자리에 남을 수 없다). 테두리가 옮겨 간 자리를 보인다
-    page.fill("#tab-search-input", "목자")
-    page.focus("#tab-search-clear")
+    page.fill("#search-inpage-input", "목자")
+    page.focus("#search-inpage-clear")
     page.keyboard.press("Enter")
-    assert page.input_value("#tab-search-input") == ""
-    assert page.evaluate(funnel_focused), page.evaluate(where)
+    page.wait_for_function(funnel_focused, timeout=5_000)
+    assert page.input_value("#search-inpage-input") == ""
     assert page.evaluate(ring), "키보드로 눌렀으면 깔때기에 포커스 테두리가 있다"
-
-
-def test_clear_falls_back_to_the_home_tab_when_the_funnel_cannot_take_focus(mobile_context):
-    """깔때기가 포커스를 받지 못하면 홈 탭으로 옮긴다(ADR-030 §3)."""
-    page = mobile_context.new_page()
-    page.goto(BASE_URL)
-    wait_app_ready(page)
-    page.locator("#tab-search").click()
-    page.wait_for_selector("#tab-search-input:not([hidden])", timeout=5_000)
-    home_focused = "() => !!document.activeElement?.matches('#tab-bar [data-tab=\"home\"]')"
-    where = "() => document.activeElement?.outerHTML.slice(0, 120)"
-
-    page.fill("#tab-search-input", "하계재")
-    page.press("#tab-search-input", "Enter")
-    page.wait_for_function("() => new URLSearchParams(location.search).get('q') === '하계재'", timeout=10_000)
-    page.evaluate("() => { document.querySelector('#tab-search-dock .token-funnel').style.display = 'none'; }")
-    page.locator("#tab-search-clear").click()
-    page.wait_for_function("() => !new URLSearchParams(location.search).get('q')", timeout=5_000)
-    assert page.evaluate(home_focused), page.evaluate(where)
 
 
 def test_scroll_collapse_and_home_expands_without_nav(mobile_context):

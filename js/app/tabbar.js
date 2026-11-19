@@ -1,84 +1,19 @@
 // @ts-check
-// ADR-030 P2 — 탭 바 검색 모핑 + 하단 입력 검색 + visualViewport 키보드 처리.
+// ADR-030 — 모바일 탭 바(아이콘 전용 탭과 따로 떨어진 검색 원형), 스크롤 축소. 검색 입력은 ADR-048.
 //
-// 검색 원형 버튼을 누르면: 비-홈 탭이 접히고(홈만 남음) 검색 dock 이 입력창으로
-// 확장된다. 입력은 하단에서 직접 검색하며, 모바일 키보드 위로 dock 을 띄운다
-// (visualViewport). 홈 탭을 누르면 default 로 복구(라우트 변경 → exitSearch).
-//
-// 검색 결과 렌더링은 기존 검색 파이프라인 재사용: Enter → window.commitTopSearch
-// → /search?q= → renderSearchResults. /search 전체뷰의 상단 입력은 모핑 중
-// body.tabbar-searching 으로 숨긴다(하단 입력이 단일 검색 필드).
+// 검색 원형은 입력창으로 바뀌지 않는다(ADR-048 §1, ADR-030 §3의 하단 입력 모핑을 대체). 휴대폰의 검색 입력창은 검색 화면
+// 위쪽의 입력창 하나(search.js `buildInPageSearchInput`)다. 검색 원형은 검색 화면이 아닌 곳에서는 검색 화면으로 가고,
+// 검색 화면에서는 그 입력창으로 포커스를 옮긴다(ADR-048 §2).
 
 const $dock = document.getElementById("tab-dock");
 const $searchBtn = document.getElementById("tab-search");
-const $searchInput = /** @type {HTMLInputElement | null} */ (
-  document.getElementById("tab-search-input")
-);
-const $searchClear = document.getElementById("tab-search-clear");
-const $searchClose = document.getElementById("tab-search-close");
 const $home = document.querySelector('#tab-bar [data-tab="home"]');
 
 /** @type {Window & typeof globalThis & Record<string, any>} */
 const W = /** @type {any} */ (window);
-const { isModifiedClick, DESKTOP_LAYOUT_QUERY } = window.appHelpers;
+const { isModifiedClick } = window.appHelpers;
 
-let searching = false;
 let collapsed = false; // ADR-030 P3: 스크롤 축소(탭 바 홈 원형) 상태
-
-// 입력 pill 안 검색어 지우기(⊗)는 텍스트가 있을 때만.
-function syncClearBtn() {
-  if ($searchClear) $searchClear.hidden = !$searchInput?.value.trim();
-}
-
-// ── BEGIN KEYBOARD ── (tests/unit/tabbar.test.js 가 이 블록을 슬라이스해 검증)
-
-// 키보드 높이(키보드가 가린 px) = 레이아웃 뷰포트 − 비주얼 뷰포트 높이. search.js
-// 의 시트 보정과 동일하게 vv.offsetTop 은 의도적으로 무시 — offsetTop 은 핀치줌
-// 팬 등 in-page 스크롤 양이라 position:fixed 요소(레이아웃 뷰포트 기준)를 잘못 민다.
-/**
- * @param {number} innerHeight
- * @param {number} vvHeight
- * @returns {number}
- */
-function keyboardOverlap(innerHeight, vvHeight) {
-  return Math.max(0, innerHeight - vvHeight);
-}
-
-// 키보드 표시 중(=입력 포커스)에만 닫기(X) 버튼 노출 + 홈 숨김 → body 상태 클래스.
-// 입력 focus/blur 가 호출한다 — iOS 의 innerHeight/visualViewport 높이 감지는
-// 불안정해서, X 노출을 그 감지에 묶으면 키보드가 떠도 X 가 안 뜨는 일이 생긴다.
-// 포커스 기준이 모바일 키보드 등장의 신뢰성 높은 프록시.
-/** @param {boolean} up */
-function setKeyboardState(up) {
-  document.body.classList.toggle("tabbar-keyboard", up);
-  if (!$searchClose) return;
-  // 키보드 없을 땐 a11y 트리에서도 제외(시각적으로도 collapse).
-  if (up) {
-    $searchClose.removeAttribute("aria-hidden");
-    $searchClose.removeAttribute("tabindex");
-  } else {
-    $searchClose.setAttribute("aria-hidden", "true");
-    $searchClose.setAttribute("tabindex", "-1");
-  }
-}
-
-// ── visualViewport: 키보드가 가리지 않게 dock 을 키보드 높이만큼 위로 ──
-function liftForKeyboard() {
-  const vv = window.visualViewport;
-  if (!vv || !$dock) return;
-  const overlap = keyboardOverlap(window.innerHeight, vv.height);
-  // 1px 미만은 반올림 오차 — 키보드 없음으로 본다.
-  const up = overlap > 1;
-  // transform 대신 실제 레이아웃 위치(bottom)로 올린다. transform 은 레이아웃
-  // 사각형을 그대로 두므로 iOS 가 포커스 입력이 키보드에 가려졌다고 보고 페이지
-  // 전체를 위로 팬(헤더·빈 상태가 화면 밖으로 밀림)한다. 입력의 실제 사각형을
-  // 키보드 위로 올리면 iOS 가 팬할 이유가 없어져 sticky 헤더·본문이 제자리에 남는다.
-  // X 노출·홈 숨김(setKeyboardState)은 여기서 다루지 않는다 — 높이 감지가 빗나가도
-  // X 가 뜨도록 입력 focus/blur 에 분리해 묶었다(아래). 여기선 위치 보정만.
-  // --kb-overlap 은 :root 에 둔다(dock 이 상속). dock 의 fixed 위치를 키보드 위로 올린다.
-  document.documentElement.style.setProperty("--kb-overlap", up ? `${overlap}px` : "0px");
-}
-// ── END KEYBOARD ──
 
 // ── BEGIN SCROLL ── (tests/unit/tabbar.test.js 가 슬라이스해 검증)
 // 스크롤 축소: 아래로 스크롤하면 탭 바를 홈 원형으로 접고, 맨 위로 올라오면 복구한다.
@@ -97,123 +32,23 @@ function nextScrollCollapsed(y, lastY, collapsed) {
   return collapsed; // 그 외(중간에서 위로 등) 유지
 }
 // ── END SCROLL ──
-function attachKeyboardTracking() {
-  const vv = window.visualViewport;
-  if (!vv) return;
-  vv.addEventListener("resize", liftForKeyboard);
-  vv.addEventListener("scroll", liftForKeyboard);
-  liftForKeyboard();
-}
-function detachKeyboardTracking() {
-  const vv = window.visualViewport;
-  if (vv) {
-    vv.removeEventListener("resize", liftForKeyboard);
-    vv.removeEventListener("scroll", liftForKeyboard);
-  }
-  document.documentElement.style.setProperty("--kb-overlap", "0px");
-  setKeyboardState(false);
-}
 
-// dock 입력을 현재 URL 의 ?q= 로 맞춘다(in-page bar 가 숨겨져 dock 입력이 단일
-// 필드이므로). 사용자가 입력 중(포커스)일 땐 덮어쓰지 않는다.
-function syncInputFromUrl() {
-  if (!$searchInput || document.activeElement === $searchInput) return;
-  $searchInput.value = new URLSearchParams(location.search).get("q") || "";
-  syncClearBtn();
-  // Refresh the pill's in-field tokens (book scope) for the
-  // current query/scope (ADR-033 개정 B).
-  W.syncSearchFields?.();
-}
-
-// ── 진입/복구 ──
-function openSearch() {
-  if (!$dock || !$searchInput) return;
-  if (searching) {
-    // preventScroll: iOS 가 포커스 입력을 키보드 위로 보이려 페이지를 pan(빈 화면 문구가
-    // 위로 밀림)하는 걸 막는다. dock 은 --kb-overlap 으로 별도로 키보드 위에 올라간다.
-    $searchInput.focus({ preventScroll: true });
-    return;
-  }
-  searching = true;
-  $dock.classList.add("searching");
-  // 검색 모핑은 스크롤 축소보다 우선 — collapsed 해제(둘 다 홈 원형이라 충돌 방지).
-  collapsed = false;
-  $dock.classList.remove("collapsed");
-  document.body.classList.remove("tabbar-collapsed");
-  document.body.classList.add("tabbar-searching");
-  $searchBtn?.setAttribute("aria-expanded", "true");
-  // 닫기(X) 버튼 노출은 키보드 등장에 묶는다(setKeyboardState). 키보드가 없는
-  // 동안엔 홈 버튼과 동작이 겹쳐 중복이므로 숨겨 둔다.
-  $searchInput.hidden = false;
-  // /search 전체뷰로 진입(이미 검색 중이면 생략). route() → syncTabBarActive 가
-  // active==='search' 를 보고 exitSearch 를 호출하지 않는다. ADR-031: 마지막 검색
-  // 경로(/search?q=…)로 복원해 이전 검색어·결과를 그대로 다시 보여준다(없으면 /search).
-  if (W.parsePath?.().view !== "search") {
-    W.tabHistory?.requestRestore(); // 탭 전환 → 마지막 검색 결과 스크롤 복원
-    W.navigate(W.tabHistory?.lastPath("search") || "/search");
-  }
-  // 모핑을 열면 in-page bar 가 숨겨지므로 그 입력값을 dock 입력으로 옮긴다. in-page
-  // 입력은 URL ?q= 로 초기화되고 사용자가 미제출(Enter 안 누름)로 고친 draft 까지
-  // 담으므로 우선 사용 — 없으면 URL ?q= 로 폴백(draft 가 사라지지 않게).
-  const $inpage = document.getElementById("search-inpage-input");
-  $searchInput.value = $inpage instanceof HTMLInputElement
-    ? $inpage.value
-    : (new URLSearchParams(location.search).get("q") || "");
-  syncClearBtn();
-  // 모핑이 열리며 pill 이 단일 검색 필드가 되므로 책/AND 토큰을 즉시 반영
-  // (이미 /search 라 navigate→route 가 없을 때도 갱신). ADR-033 개정 B.
-  W.syncSearchFields?.();
-  // 키보드는 검색 버튼 탭으로 떠야 한다. iOS Safari 는 프로그래밍 focus() 가 사용자
-  // 제스처(탭 핸들러)와 같은 동기 실행 안에서 호출될 때만 소프트 키보드를 띄운다 —
-  // rAF 로 미루면 제스처 체인이 끊겨 입력엔 포커스가 가도 키보드가 안 뜬다. openSearch
-  // 는 $searchBtn 클릭 핸들러에서 동기로 호출되므로(그 위 navigate 도 동기), 여기서 바로
-  // focus 하면 같은 제스처 턴에 머문다. preventScroll: iOS 가 포커스 입력을 키보드 위로
-  // 보이려 페이지를 pan 하는 걸 막는다(dock 은 --kb-overlap 으로 별도로 올라간다).
-  $searchInput.focus({ preventScroll: true });
-  attachKeyboardTracking();
-}
-
-// 라우트가 검색에서 벗어나면(홈 탭 등) 호출 — 모핑 복구. navigate 는 하지 않는다
-// (라우트 변경이 이미 일어난 뒤 호출되므로).
-function exitSearch() {
-  if (!$dock || !searching) return;
-  searching = false;
-  $dock.classList.remove("searching");
-  document.body.classList.remove("tabbar-searching");
-  $searchBtn?.setAttribute("aria-expanded", "false");
-  $searchClose?.setAttribute("aria-hidden", "true");
-  $searchClose?.setAttribute("tabindex", "-1");
-  if ($searchInput) {
-    $searchInput.value = "";
-    $searchInput.blur();
-    $searchInput.hidden = true;
-  }
-  syncClearBtn();
-  detachKeyboardTracking();
-}
-
-// 데스크탑 티어(넓은 화면 + 마우스 = min-width:769px and pointer:fine)로 넘어가면
-// dock 이 CSS 로 숨겨지므로, 모핑 상태(searching·body.tabbar-searching·키보드 추적)를
-// 정리한다. 같은 포인터 인식 분기라(ADR-029 개정) 가로 폰·태블릿은 여기 걸리지 않고
-// 탭 바를 유지한다. /search 뷰는 모바일 레이아웃(search-view + in-page 입력)으로 그려져
-// 있으므로 route() 를 다시 태워 데스크탑 레이아웃(헤더 검색바 + #app 직접 결과)으로 재렌더.
-window.matchMedia(DESKTOP_LAYOUT_QUERY).addEventListener("change", (e) => {
-  if (!e.matches || !searching) return;
-  exitSearch();
-  if (W.parsePath?.().view === "search") W.route?.();
-});
-
-// 검색 모드 전체 닫기 → 홈으로 복귀(route() 가 exitSearch 호출). 포커스가 body 로
-// 흘러가지 않게 다시 펼쳐진 검색 버튼으로 되돌린다(키보드 접근성).
-function closeSearchToHome() {
-  W.navigate("/");
-  $searchBtn?.focus();
-}
-
-// 검색 원형 버튼 → 모핑 진입(P1 의 단순 navigate 대체).
+// 검색 원형(ADR-048 §2): 검색 화면이 아닌 곳에서는 검색 화면으로 가기만 한다. 마지막 검색(검색어, 결과, 스크롤 위치)이
+// 있으면 그 화면이다(ADR-031). 입력창에 포커스를 주지 않아 키보드가 뜨지 않는다. 검색 화면에서는 위쪽 입력창으로 포커스를
+// 옮긴다. iOS는 누른 동작과 같은 실행 흐름에서 포커스를 줄 때만 키보드를 띄우므로(ADR-030 §6) 바로 준다. 결과를 내려 보던
+// 중이면 맨 위로 올린 뒤 옮긴다(입력창은 검색 화면 맨 위에 있다).
 $searchBtn?.addEventListener("click", (e) => {
   e.preventDefault();
-  openSearch();
+  if (W.parsePath?.().view === "search") {
+    const input = document.getElementById("search-inpage-input");
+    if (input instanceof HTMLInputElement) {
+      window.scrollTo(0, 0);
+      input.focus({ preventScroll: true });
+      return;
+    }
+  }
+  W.tabHistory?.requestRestore(); // 탭 전환 → 마지막 검색 결과 스크롤 복원
+  W.navigate(W.tabHistory?.lastPath("search") || "/search");
 });
 
 // ADR-030 P4: 스크롤 축소 상태에서 홈 탭 = 홈 이동이 아니라 "펼치기" — 탭바 복원 +
@@ -310,115 +145,11 @@ document
   .querySelector('#tab-bar [data-tab="settings"]')
   ?.addEventListener("click", (e) => restoreOnTabSwitch(e, "settings"));
 
-// 하단 입력: Enter → 기존 검색 커밋(verse ref auto-nav 포함).
-$searchInput?.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    const searched = W.commitTopSearch?.($searchInput.value);
-    // 검색 실행 → 키보드를 내려 dock 을 키보드 위 모핑(stage 2)에서 접지(grounded)
-    // 상태로 복귀. 검색 세션은 유지(결과 화면). 키보드가 내려가므로 닫기(X)는 접힌다
-    // (X 는 키보드 표시 중에만 노출 — 결과 화면에선 홈 버튼으로 종료).
-    // 찾을 낱말이 없었으면(「검색어를 입력해주세요.」, ADR-033) 키보드를 두어 바로 치게 한다.
-    if (searched) $searchInput.blur();
-  }
-});
-
-// Esc 처리는 app.js 전역 핸들러가 우선순위(검색 시트 > 팝오버 > 탭 검색)대로 호출.
-// 검색 중이면 닫고 true, 아니면 false 를 돌려 app.js 가 다음 레이어로 넘어가게 한다.
-// (capture+stopPropagation 으로 가로채던 방식은 레이어링·aria 충돌을 일으켜 폐기.)
-W.closeTabSearch = () => {
-  if (!searching) return false;
-  closeSearchToHome();
-  return true;
-};
-
-// 입력 변화 → ⊗ 지우기 버튼 표시 토글.
-$searchInput?.addEventListener("input", syncClearBtn);
-
-// X(키보드 내리기) 노출 + 홈 숨김은 입력 focus(=키보드 등장)/blur 기준 — iOS 의
-// 높이 감지(innerHeight−visualViewport) 불안정과 무관하게 확실히 토글. dock 들어올림
-// (--kb-overlap)만 visualViewport(liftForKeyboard)가 담당.
-//
-// iOS 는 포커스된 입력을 키보드 위로 보이려고 페이지를 위로 밀어 올린다(빈 화면 문구·
-// 결과가 위로 사라짐). preventScroll 로는 못 막혀서, 포커스 시 명시적으로 맨 위로
-// 스크롤한다. pan 은 키보드 애니메이션 뒤에 일어나므로 즉시 + 다음 프레임 + 지연으로
-// 여러 번 맨 위로 고정한다(dock 은 --kb-overlap 으로 키보드 위에 별도로 올라간다).
-function scrollPageTop() {
-  window.scrollTo(0, 0);
-}
-$searchInput?.addEventListener("focus", () => {
-  setKeyboardState(true);
-  // 맨 위로 스크롤은 **빈 검색(쿼리 없음 = 빈 상태 화면)** 일 때만 — iOS 키보드 pan 으로
-  // 빈 상태 문구가 밀리는 것 상쇄용. 결과가 있는(쿼리 입력된) 상태에서 입력을 다시 탭해
-  // 편집할 땐 스크롤 위치를 보존한다(Bugbot: 결과 둘러보다 재포커스 시 맨 위 점프 방지).
-  if ($searchInput.value.trim()) return;
-  scrollPageTop();
-  requestAnimationFrame(scrollPageTop);
-  setTimeout(scrollPageTop, 300);
-});
-$searchInput?.addEventListener("blur", () => setKeyboardState(false));
-
-// ⊗ 지우기 — 검색어를 비우고 키보드를 내린다(ADR-030 §3, 사용자 결정 2026-11-19). 입력 중에 지워도 검색을 그만두는
-// 뜻이라 키보드를 남기지 않는다. 결과 화면이면 빈 검색 뷰(최근 검색)로 되돌린다. 지우기 단추는 숨겨지므로 포커스를 같은
-// 입력창의 깔때기(책 선택)로 옮긴다(ADR-033 D3의 「적용」과 같은 자리, WCAG 2.4.3). 깔때기가 포커스를 받지 못하면 홈 탭이다.
-// 빈 검색 뷰를 다시 그려도 깔때기는 숨겨지지 않는다. 입력창 안에 포커스가 있는 동안 `syncOneField`(search.js)가 깔때기를 보인다.
-// pointerdown의 기본 동작을 막아, 누르는 사이에 입력의 포커스가 먼저 빠지지 않게 한다. 빠지면 키보드가 내려가며 dock이
-// 움직이는데, 포커스는 click에서 한 번에 옮긴다(깔때기의 pointerdown과 같다).
-/**
- * 지운 뒤 포커스를 깔때기로, 받지 못하면 홈 탭으로 옮긴다. 입력에서 포커스가 빠져 키보드가 내려간다. 손가락이나 마우스로
- * 눌렀으면 포커스 테두리를 그리지 않는다. 입력창은 늘 :focus-visible이라, 그대로 두면 브라우저가 옮겨 간 포커스에도 테두리를
- * 그린다(`focusVisible: false`, helpers.js와 같다). 키보드로 눌렀으면 테두리가 옮겨 간 자리를 보인다.
- * @param {boolean} pointer  손가락이나 마우스로 눌렀다(키보드면 false)
- */
-function focusAfterClear(pointer) {
-  const opts = pointer ? { preventScroll: true, focusVisible: false } : { preventScroll: true };
-  const funnel = /** @type {HTMLElement | null} */ (document.querySelector("#tab-search-dock .token-funnel"));
-  funnel?.focus(opts);
-  if (funnel && document.activeElement === funnel) return;
-  $searchInput?.blur();
-  /** @type {HTMLElement | null} */ ($home)?.focus(opts);
-}
-$searchClear?.addEventListener("pointerdown", (e) => e.preventDefault());
-$searchClear?.addEventListener("click", (e) => {
-  if (!$searchInput) return;
-  $searchInput.value = "";
-  syncClearBtn();
-  focusAfterClear(e.detail > 0);
-  // Drop the query but KEEP the book-picker scope (in=) so clearing text in the
-  // pill doesn't silently remove book tokens the header/in-page clears would
-  // keep — navigateSearch preserves filterBooks (ADR-033 개정 B, Bugbot).
-  if (W.parsePath?.().view === "search") {
-    if (W.navigateSearch) W.navigateSearch({ q: "" });
-    else W.navigate("/search");
-  }
-});
-
-// 닫기(X) — 키보드가 떠 있을 때만 보이며(setKeyboardState), 키보드만 내린다.
-// 검색 세션·입력값·결과는 유지(grounded dock) → 결과를 스크롤해 둘러볼 수 있다.
-// blur 로 키보드가 내려가면 visualViewport resize → setKeyboardState(false) 가
-// X 를 접고 body.tabbar-keyboard 를 푼다. 다시 입력을 탭하면 키보드·X 가 복귀.
-// 검색 종료(→홈)는 홈 버튼 담당(X 와 역할 분리).
-$searchClose?.addEventListener("click", () => {
-  // 키보드·스크린 리더 사용자는 X 자체에 포커스가 있다. 키보드가 내려가면 X가
-  // 곧 a11y 트리에서 제외(aria-hidden·tabindex -1)되므로, 포커스가 숨은 컨트롤에
-  // 갇히지 않게 검색 버튼으로 옮긴다(closeSearchToHome 과 동일한 복귀 타깃 —
-  // grounded dock 에서도 보이는 컨트롤). 입력에 주면 키보드가 다시 떠 제외.
-  $searchInput?.blur();
-  $searchBtn?.focus();
-});
-
-// views 의 syncTabBarActive 가 라우트 변경 시 호출(검색 외 라우트면 복구).
-W.exitTabSearch = exitSearch;
-// 검색 라우트가 바뀌면(뒤로/앞으로 등) dock 입력을 URL 쿼리에 동기화 — 모핑 중일
-// 때만(searching) 의미. route() 의 syncTabBarActive 가 매 라우트마다 호출.
-W.syncTabSearchQuery = () => { if (searching) syncInputFromUrl(); };
-
 // ── 스크롤 축소 적용 ──
 /** @param {boolean} v */
 function applyCollapsed(v) {
-  const next = searching ? false : v; // 검색 모핑 중엔 축소 안 함
-  if (next === collapsed) return;
-  collapsed = next;
+  if (v === collapsed) return;
+  collapsed = v;
   $dock?.classList.toggle("collapsed", collapsed);
   // body 클래스 — 오디오 바(별도 요소)가 축소 시 dock 행으로 들어오는 CSS 트리거.
   document.body.classList.toggle("tabbar-collapsed", collapsed);
@@ -509,11 +240,6 @@ function syncTabBarActive() {
     if (on) $searchBtn.setAttribute("aria-current", "page");
     else $searchBtn.removeAttribute("aria-current");
   }
-  // ADR-030 P2: 검색 외 라우트로 가면(홈 탭 등) 검색 모핑을 복구. tabbar.js 가
-  // 노출하는 exitTabSearch — 검색 진입 시엔 active==='search' 라 호출 안 됨.
-  // 검색 라우트면(뒤로/앞으로로 ?q= 가 바뀌어도) dock 입력을 URL 에 동기화.
-  if (active !== "search") window.exitTabSearch?.();
-  else window.syncTabSearchQuery?.();
   // ADR-030 P3: 라우트 변경 시 스크롤 축소 복구(새 뷰는 최상단에서 시작).
   window.resetTabCollapse?.();
   // ADR-030 후속⁵: 공유 슬라이딩 인디케이터를 활성 탭으로 이동(없으면 숨김).
@@ -525,7 +251,7 @@ function syncTabBarActive() {
 // division-tab 슬라이드(buildDivisionTabs)와 동일 패턴 — 단일 absolute 요소를 활성
 // 탭의 실측 위치(offsetLeft/Width; space-between 60px 슬롯이라 비선형)로 translateX.
 // 탭 사이 이동일 때만 슬라이드(CSS transition), 처음 표시/리사이즈/감속선호는 스냅.
-// 모핑(.searching)·축소(.collapsed) 중 숨김은 CSS(특이도)가 담당.
+// 축소(.collapsed) 중 숨김은 CSS(특이도)가 담당.
 /** @type {string | null} */
 let _prevTabIndic = null;   // 인디케이터가 현재 떠 있는 탭(없으면 null) — 슬라이드 판정
 let _curTabActive = "home"; // 리사이즈 재배치용 현재 활성 탭
@@ -533,12 +259,12 @@ const _tabIndicMQL = typeof window !== "undefined" && window.matchMedia
   ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
 
 // 인디케이터 지름 = 탭 슬롯의 활성 원(.tab-icon-wrap — 56px, 좁은 폭에서 슬롯이 줄면 그만큼 작다 — DESIGN.md §7).
-// 탭 바가 쉬고 있을 때만 잰다: 축소 · 검색 모핑과 그 복귀 중엔 슬롯이 애니메이트되어, 그 폭을 따라가면 펼칠 때
+// 탭 바가 쉬고 있을 때만 잰다: 축소와 그 복귀 중엔 슬롯이 애니메이트되어, 그 폭을 따라가면 펼칠 때
 // 작은 원이 커지며 나타난다(CSS 가 「탭 바 폭 / 탭 수」를 따라가던 때 — PR #348 리뷰). 그래서 라우트마다 호출하는
-// `syncTabBarActive`는 재지 않고, 처음 로드와 `reposition`(리사이즈, 회전, 모핑 끝의 max-width `transitionend`, `load`)만 잰다.
+// `syncTabBarActive`는 재지 않고, 처음 로드와 `reposition`(리사이즈, 회전, 축소가 풀릴 때의 max-width `transitionend`, `load`)만 잰다.
 function sizeTabIndicator() {
   if (!$tabBar || !$dock) return;
-  if ($dock.classList.contains("collapsed") || $dock.classList.contains("searching")) return;
+  if ($dock.classList.contains("collapsed")) return;
   const ind = $tabBar.querySelector(".tab-indicator");
   const wrap = $tabBar.querySelector(".tab-item:not([hidden]) .tab-icon-wrap");
   if (!(ind instanceof HTMLElement) || !(wrap instanceof HTMLElement)) return;
@@ -608,10 +334,10 @@ if (typeof window !== "undefined" && window.addEventListener) {
   // 스타일시트가 오기 전에 건너뛴 처음 로드의 측정과 배치를 페이지를 다 받은 뒤 다시 한다(`tabIndicatorStyled`).
   // `load` 이벤트는 문서의 스타일시트를 모두 받은 뒤에 일어난다.
   if (document.readyState !== "complete") window.addEventListener("load", reposition, { once: true });
-  // 모핑(검색/축소) 복귀 시 .tab-item max-width 가 ~0.25s 동안 애니메이트되므로,
+  // 축소 복귀 시 .tab-item max-width 가 ~0.25s 동안 애니메이트되므로,
   // syncTabBarActive 의 즉시 rAF 측정은 중간값(좁은 폭)을 읽어 인디케이터가 어긋난다.
   // → max-width transitionend 에서 활성 탭 실측으로 재배치(같은 탭이라 스냅). 한 번의
-  // 모핑이 여러 탭의 transitionend 를 내지만 모두 같은 활성 탭 스냅이라 무해(저비용).
+  // 축소 복귀가 여러 탭의 transitionend 를 내지만 모두 같은 활성 탭 스냅이라 무해(저비용).
   if ($tabBar) {
     $tabBar.addEventListener("transitionend", (e) => {
       if (e.propertyName !== "max-width") return;
@@ -629,7 +355,7 @@ if (typeof window !== "undefined" && window.addEventListener) {
 // 탭 슬롯은 --dock-control(60px) px 고정이라 폭은 '보이는 탭 수'에만 의존 — 노트 탭이
 // hidden 이라 현재 4개(홈·캘린더·북마크·설정 — 캘린더는 ADR-038 A2). 개수를 세어 :root 에
 // --tab-bar-w 를 심으면 노트가 켜져 5개가 돼도(다음 로드) 자동으로 left 가 맞는다. 측정이 아니라 개수 기반이라
-// 모핑(.collapsed/.searching 으로 탭바가 60px 로 줄어드는) 상태와 무관하게 항상 풀폭.
+// 축소(.collapsed 로 탭바가 60px 로 줄어드는) 상태와 무관하게 항상 풀폭.
 function publishTabBarWidth() {
   if (!$tabBar || typeof document === "undefined") return;
   const n = $tabBar.querySelectorAll(".tab-item:not([hidden])").length;
