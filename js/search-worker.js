@@ -15,11 +15,13 @@
  *       — localUrl is optional: the parish table, loaded with the lectionary index.
  *         Without it (or when it fails) there are no local days (ADR-044 §3).
  *     { type: "search", q: "keyword", page: 1, pageSize: 50, searchId: N,
- *       scopeBooks: ["john", ...], parish: "jqdnsv" }
+ *       scopeBooks: ["john", ...], parish: "jqdnsv", titles: { cant: { "1": "모세송가", ... } } }
  *       — scopeBooks: structured book filter (book ids) from the book picker,
  *         merged with any typed `in:<alias>` tokens (ADR-033).
  *       — parish: the church id of the user's parish, "" when none (ADR-041 §6).
  *         The name search adds its local days (ADR-044 §3).
+ *       — titles: the 송가 names per book id, from the app's book list (books.json `titles`, ADR-047 §5).
+ *         Optional: the app leaves it out while it has no book list, and the names it sent last stay.
  *     { type: "lect-names", names: [[setId, name], ...] }
  *       — this liturgical year's names of the Christmas weekdays (「성탄 1주 수요일」),
  *         which change every year and so are not in the index. The name search finds
@@ -52,7 +54,6 @@
 /**
  * @typedef BookMeta
  * @property {string} ko
- * @property {{ [chapter: string]: string }} [titles]  a chapter's own name — 송가 (「모세송가」, ADR-046 §4)
  *
  * @typedef SearchMeta
  * @property {{ [alias: string]: string }} aliases
@@ -118,6 +119,7 @@
  * @property {number} searchId
  * @property {string[]} [scopeBooks]
  * @property {string} [parish]
+ * @property {{ [bookId: string]: { [chapter: string]: string } }} [titles]  송가 이름(ADR-047 §5)
  *
  * @typedef LectNamesMessage  오늘부터 한 해 안에 오는 성탄 평일의 화면 이름(ADR-044 §3). 해마다 바뀌어 색인에 없으므로 앱이 교회력 엔진으로 계산해 보낸다.
  * @property {"lect-names"} type
@@ -258,6 +260,10 @@ let meta = null;
 let metaPromise = null;
 /** @type {string | null} */
 let metaUrl = null;
+// 송가 이름(「모세송가」) — 책 id마다, 앱의 책 목록(books.json `titles`)에서. 앱은 송가 이름을 이 목록에서만 읽고(ADR-047 §5),
+// 워커는 그 목록을 따로 받지 않고 검색 메시지에 실려 온 것을 쓴다. 앱이 목록을 받지 못한 동안에는 실려 오지 않아 비어 있다.
+/** @type {{ [bookId: string]: { [chapter: string]: string } }} */
+let chapterTitles = {};
 
 /** @type {{ [name: string]: LoadedChunk }} */
 let loadedChunks = {};
@@ -685,14 +691,17 @@ function tryVerseRef(query) {
 
 /**
  * The chapter's own name, for a book whose chapters are named rather than numbered — 송가 (「즈가리야 송가」, ADR-046
- * §4; search-meta.json `books.cant.titles`). null for every other book.
+ * §4; books.json `titles`, ADR-047 §5). null for every other book.
  * @param {string} bookId
  * @param {number} chapter
  * @returns {string | null}
  */
 function chapterTitle(bookId, chapter) {
-  const titles = /** @type {SearchMeta} */ (meta).books[bookId]?.titles;
-  return titles && Object.hasOwn(titles, String(chapter)) ? titles[String(chapter)] : null;
+  // Same rule as helpers.js chapterTitle — the chapter view and the search show the same name or none.
+  const titles = chapterTitles[bookId];
+  if (!titles || !Object.hasOwn(titles, String(chapter))) return null;
+  const title = titles[String(chapter)];
+  return typeof title === "string" && title ? title : null;
 }
 
 /**
@@ -1437,6 +1446,8 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
     const { q, page, pageSize, searchId } = msg;
     const scopeBooks = msg.scopeBooks || [];
     const parish = msg.parish || "";
+    // 앱이 책 목록을 가졌으면 검색마다 송가 이름을 싣는다. 실려 오지 않으면 마지막에 받은 이름을 그대로 쓴다(ADR-047 §5)
+    if (msg.titles && typeof msg.titles === "object") chapterTitles = msg.titles;
     currentSearchId = searchId;
 
     try {

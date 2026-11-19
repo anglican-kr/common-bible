@@ -945,12 +945,6 @@ test("wantsGloria: 전례시편은 장을 불러왔으면 언제나, 송가는 g
   assert.strictEqual(ctx.wantsGloria(slot("first", "lps", 23, "all", "시편 23"), CHAPTER), false);
 });
 
-test("canticleTitleOf: 장 제목의 한국어 부분만", () => {
-  assert.strictEqual(ctx.canticleTitleOf({ chapter_title: "즈가리야 송가 Benedictus Dominus Deus" }), "즈가리야 송가");
-  assert.strictEqual(ctx.canticleTitleOf({ chapter_title: "창조송가 Benedicite, omnia opera Domini" }), "창조송가");
-  assert.strictEqual(ctx.canticleTitleOf(null), "");
-});
-
 // ── buildLectionaryModel ──────────────────────────────────────────────────────
 
 /** 사계재 날(2026-09-16 같은 날) — 지정 전례일인 성인(공통만) · 사계재(세트 둘) · 격자(그 평일의 독서). */

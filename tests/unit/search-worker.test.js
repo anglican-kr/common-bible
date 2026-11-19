@@ -38,8 +38,10 @@ function loadSearchPure() {
   const prelude = `
     let meta = null;
     let loadedChunks = {};
+    let chapterTitles = {};
     function _setMeta(m) { meta = m; }
     function _setChunks(c) { loadedChunks = c; }
+    function _setTitles(t) { chapterTitles = t; }
   `;
   // LECTIONARY_PURE uses REF_CHAPTER_END from SEARCH_PURE, so both run as one script.
   vm.runInContext(
@@ -363,9 +365,11 @@ const PSALTER_META = {
   books: {
     ps: { ko: "시편" },
     lps: { ko: "전례시편" },
-    cant: { ko: "성무일과 송가", titles: { "1": "모세송가", "11": "즈가리야 송가" } },
+    cant: { ko: "성무일과 송가" },
   },
 };
+// 송가 이름은 검색 메타 파일이 아니라 books.json의 `titles`에서 온다(ADR-047 §5)
+const PSALTER_TITLES = { cant: { "1": "모세송가", "11": "즈가리야 송가" } };
 const PSALTER_CHUNKS_DATA = {
   ot: { books: ["ps"], bArr: [0, 0], cArr: [23, 23], vArr: [1, 2], tArr: ["야훼는 나의 목자", "푸른 풀밭에 누워 놀게 하시고"] },
   lit: {
@@ -400,6 +404,7 @@ test("groupedResults: 책 범위가 성시의 책뿐이면 성서 본문은 없�
 
 test("paginate: 송가는 송가 이름(title)을 함께 넘긴다(ADR-046 §4)", () => {
   ctx._setMeta(PSALTER_META);
+  ctx._setTitles(PSALTER_TITLES);
   const r = plain(ctx.paginate([
     { b: "cant", c: 11, v: 1, t: "주 이스라엘의" }, { b: "lps", c: 23, v: 1, t: "주님은" },
   ], 1, 10));
@@ -407,17 +412,20 @@ test("paginate: 송가는 송가 이름(title)을 함께 넘긴다(ADR-046 §4)"
     { b: "cant", c: 11, v: 1, t: "주 이스라엘의", bookNameKo: "성무일과 송가", title: "즈가리야 송가" },
     { b: "lps", c: 23, v: 1, t: "주님은", bookNameKo: "전례시편" },
   ]);
+  ctx._setTitles({});
   ctx._setMeta(META);
 });
 
 test("tryVerseRef, tryBookOnly: 전례시편과 송가도 책 이름으로 읽고, 송가는 장마다 이름을 붙인다(ADR-046 §4, §5)", () => {
   ctx._setMeta(PSALTER_META);
+  ctx._setTitles(PSALTER_TITLES);
   assert.deepEqual(plain(ctx.tryVerseRef("전례시편 23:1")), { bookId: "lps", bookNameKo: "전례시편", parts: [{ chapter: 23, verses: "1" }] });
   assert.deepEqual(plain(ctx.tryVerseRef("송가 11:1-3")),
     { bookId: "cant", bookNameKo: "성무일과 송가", parts: [{ chapter: 11, verses: "1-3", title: "즈가리야 송가" }] });
   assert.deepEqual(plain(ctx.tryVerseRef("시편 23")).bookId, "ps", "시편은 공동번역 시편이다");
   assert.deepEqual(plain(ctx.tryBookOnly("송가")), { bookId: "cant", bookNameKo: "성무일과 송가", title: "모세송가" });
   assert.deepEqual(plain(ctx.tryBookOnly("전례시편")), { bookId: "lps", bookNameKo: "전례시편" });
+  ctx._setTitles({});
   ctx._setMeta(META);
 });
 
@@ -1046,6 +1054,62 @@ test("메시지: 성시 색인을 받지 못해도 성서 본문을 찾고, 다�
   assert.equal(second.total, 1);
   assert.deepEqual(second.psalter.results.map((r) => [r.b, r.c, r.v]), [["isa", 1, 1]]);
   assert.equal(second.psalter.total, 1);
+});
+
+// 송가 이름은 앱이 책 목록(books.json `titles`)에서 꺼내 검색마다 싣는다(ADR-047 §5). 검색 메타 파일에는 이름이 없고, 워커는
+// 책 목록을 따로 받지 않는다.
+const CANT_FILES = {
+  meta: { aliases: { "송가": "cant" }, books: { cant: { ko: "성무일과 송가" } } },
+  nt: { books: [], b: [], c: [], v: [], t: [] },
+  lit: { books: ["cant"], b: [[0, 1]], c: [11], v: [1], t: ["주 이스라엘의 하느님을 찬미하여라."] },
+};
+const CANT_INIT = { type: "init", metaUrl: "meta", chunks: [{ name: "nt", url: "nt" }, { name: "lit", url: "lit" }] };
+const CANT_TITLES = { cant: { "11": "즈가리야 송가" } };
+
+test("메시지: 송가 이름은 검색 메시지에 실려 온 것을 결과와 구절 표기에 싣고, 책 목록은 따로 받지 않는다(ADR-047 §5)", async () => {
+  const w = startWorker(CANT_FILES);
+  await w.send(CANT_INIT);
+  await flush();
+  await w.send({ ...search("찬미하여라"), titles: CANT_TITLES });
+  await flush();
+  const [r] = w.results();
+  assert.deepEqual(r.psalter.results.map((x) => [x.c, x.v, x.title]), [[11, 1, "즈가리야 송가"]]);
+  await w.send({ ...search("송가 11:1"), titles: CANT_TITLES });
+  await flush();
+  assert.deepEqual(plain(w.results()[1].refMatch.parts), [{ chapter: 11, verses: "1", title: "즈가리야 송가" }]);
+  assert.deepEqual(w.fetched.slice().sort(), ["lit", "meta", "nt"], "books.json은 받지 않는다");
+});
+
+test("메시지: 이름이 실려 오지 않은 검색은 이름 없이 찾고, 다음 검색에 실려 오면 그 이름을 쓰며, 그 뒤에는 마지막 이름을 지킨다", async () => {
+  const w = startWorker(CANT_FILES);
+  await w.send(CANT_INIT);
+  await flush();
+  // 앱이 책 목록을 받지 못한 동안의 검색 — 송가 결과에 이름만 없다
+  await w.send(search("찬미하여라"));
+  await flush();
+  assert.deepEqual(w.results()[0].psalter.results.map((x) => [x.c, x.title]), [[11, undefined]]);
+  assert.equal(w.posted.filter((m) => m.type === "error").length, 0);
+  // 앱이 목록을 다시 받은 뒤의 검색 — 이름이 실려 온다
+  await w.send({ ...search("찬미하여라"), titles: CANT_TITLES });
+  await flush();
+  assert.deepEqual(w.results()[1].psalter.results.map((x) => [x.c, x.title]), [[11, "즈가리야 송가"]]);
+  // 다시 실려 오지 않아도 받은 이름은 남는다
+  await w.send(search("찬미하여라"));
+  await flush();
+  assert.deepEqual(w.results()[2].psalter.results.map((x) => [x.c, x.title]), [[11, "즈가리야 송가"]]);
+});
+
+test("chapterTitle: 빈 이름이나 문자열이 아닌 이름은 없는 것으로 본다 — 장 화면(helpers.js)과 같은 규칙", () => {
+  ctx._setTitles({ cant: { "1": "", "2": 7, "3": "창조송가" } });
+  try {
+    assert.equal(ctx.chapterTitle("cant", 1), null);
+    assert.equal(ctx.chapterTitle("cant", 2), null);
+    assert.equal(ctx.chapterTitle("cant", 3), "창조송가");
+    assert.equal(ctx.chapterTitle("cant", "toString"), null);
+    assert.equal(ctx.chapterTitle("lps", 1), null);
+  } finally {
+    ctx._setTitles({});
+  }
 });
 
 // 책은 5권까지(ADR-033 「책은 5권까지」). 책 칩과 in:을 합쳐 세고, 넘으면 일부만 찾지 않고 아무것도 찾지 않는다(사용자 결정 2026-11-18).

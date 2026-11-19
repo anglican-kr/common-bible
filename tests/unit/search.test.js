@@ -334,6 +334,8 @@ function loadWorkerBlock() {
   const ctx = {
     Promise, Object, Array, String, Number, JSON, console, Error,
     Worker: StubWorker, setTimeout, clearTimeout,
+    // 책 목록(books.json) — 송가 이름을 검색마다 싣는다(ADR-047 §5). `ctx.__books`로 바꾼다
+    window: { getBooksCache: () => ctx.__books ?? null },
   };
   vm.createContext(ctx);
   // Prelude: DATA_DIR mirrors search.js's module-level constant. Declared
@@ -848,6 +850,22 @@ test("doSearch: 검색마다 소속교회를 싣고, init은 본당 표의 주�
   assert.strictEqual(w.posts[2].parish, "", "설정을 바꾸면 다음 검색부터 새 교회다");
   w._emit({ type: "results", searchId: 2, total: 0, results: [] });
   void p;
+});
+
+test("doSearch: 책 목록을 받았으면 송가 이름을 검색마다 싣고, 받기 전에는 싣지 않으며, init은 책 목록 주소를 넘기지 않는다(ADR-047 §5)", () => {
+  const m = loadWorkerBlock();
+  m.ctx.__books = null;
+  m.doSearch("찬미", 1, 20, null);
+  const w = m.workerInstances[0];
+  assert.strictEqual(w.posts[0].booksUrl, undefined);
+  assert.strictEqual(w.posts[1].titles, undefined, "책 목록을 받기 전");
+  m.ctx.__books = [
+    { id: "gen", name_ko: "창세기" },
+    { id: "cant", name_ko: "성무일과 송가", titles: { "11": "즈가리야 송가" } },
+  ];
+  m.doSearch("찬미", 1, 20, null);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(w.posts[2].titles)), { cant: { "11": "즈가리야 송가" } });
+  m.ctx.__books = null;
 });
 
 test("doSearch: increments searchId across calls", async () => {
