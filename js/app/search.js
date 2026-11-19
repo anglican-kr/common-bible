@@ -4,7 +4,8 @@
 // /search view + history panel). Owns the Worker lifetime (`searchWorker`), all
 // `$search*` DOM anchors, and the search-internal module state
 // (`searchAutoNavigate`). The mobile bottom sheet was removed with the search
-// FAB (ADR-030) — mobile search is the tab-bar morph → /search route.
+// FAB (ADR-030) — mobile search is the /search route with its in-page input at
+// the top (ADR-048).
 //
 // Phase 5 of the app.js modularization (ADR-018). ESM-pattern (ADR-019):
 // named exports + window facade for legacy app.js callers (route handler at
@@ -2023,7 +2024,7 @@ function buildFieldToken(label, removeAria, onRemove) {
   });
   x.appendChild(el("span", { "aria-hidden": "true" }, "×"));
   // pointerdown preventDefault keeps the field input focused (no keyboard flicker
-  // on the mobile pill); click does the removal.
+  // on the mobile in-page bar); click does the removal.
   x.addEventListener("pointerdown", (e) => e.preventDefault());
   x.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); onRemove(); });
   chip.appendChild(x);
@@ -2034,8 +2035,8 @@ function buildFieldToken(label, removeAria, onRemove) {
 // `container`, wire the field-level interactions (Backspace-to-remove) and
 // register the field for
 // syncSearchFields(). The zone uses display:contents so its children flex inline
-// within the existing pill/bar row. Persistent fields (header, pill) mount once
-// at load; the in-page bar mounts each time it's rebuilt (stale ones are pruned).
+// within the existing bar row. The header field mounts once at load; the
+// in-page bar mounts each time it's rebuilt (stale ones are pruned).
 /**
  * @param {HTMLElement} container
  * @param {HTMLInputElement} input
@@ -2134,7 +2135,7 @@ function syncOneField(field) {
   funnel.classList.toggle("active", state.filterBooks.length > 0);
 }
 
-// Refresh every mounted field (called from route() and the tab-bar morph). Prune
+// Refresh every mounted field (called from route() and the search view renders). Prune
 // detached in-page containers first so the list doesn't grow per render.
 function syncSearchFields() {
   for (let i = _searchFields.length - 1; i >= 0; i--) {
