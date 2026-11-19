@@ -1,4 +1,5 @@
 ---
+pr: 606
 date: 2026-11-19
 branch: fix/book-filter-min-height
 title: "fix: 끌어내린 책 선택 시트의 가장 낮은 높이"
