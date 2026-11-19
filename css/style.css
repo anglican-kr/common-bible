@@ -2206,6 +2206,11 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
 .title-text-mobile { display: none; }
 #page-title.compact .title-text-full { display: none; }
 #page-title.compact .title-text-mobile { display: inline; }
+
+/* 휴대폰의 장 제목이 짧은 명칭으로도 들어가지 않으면 제목 글씨만 한 단계씩 줄인다(사용자 결정 2026-11-19, architecture.md §4.5).
+   views.js measureTitleCompactness가 들어갈 때까지 붙인다. 너비 320px에 글자 크기 24의 「마카베오하 15장」이 두 단계다. */
+#page-title.title-shrink-1 { font-size: var(--font-md); }
+#page-title.title-shrink-2 { font-size: var(--font-base); }
 @media (hover: none) and (pointer: coarse) {
   #page-title .title-text-full { display: none; }
   #page-title .title-text-mobile { display: inline; }
@@ -2307,7 +2312,10 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   max-height: 60vh;
   overflow-y: auto;
   overscroll-behavior: contain;
-  min-width: 15rem;
+  /* 화면보다 넓지 않게 — 너비 320px에 글자 크기 24이면 15rem이 360px라 양옆이 잘렸다(2026-11-19). 제목이 화면 가운데에
+     있으므로 가운데 맞춘 목록도 화면 안에 있다. */
+  min-width: min(15rem, calc(100vw - 2 * var(--space-4)));
+  max-width: calc(100vw - 2 * var(--space-4));
 }
 
 /* 장 목록 화면(.chapter-grid)과 동일한 카드 격자 언어를 공유 — 셀 크기만 팝오버 폭에 맞춤 */
@@ -2382,7 +2390,8 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
 /* 송가: 숫자 대신 송가 이름의 카드 두 줄(ADR-047 §2). 책 목록(.book-list a)처럼 이름이 길면 낱말 단위로 줄을 바꾼다.
    .popover-item 의 정사각형을 풀고 탭 영역은 최소 높이로 지킨다. */
 .popover-names {
-  grid-template-columns: repeat(2, minmax(7rem, 1fr));
+  /* 두 칸이 목록 폭을 나눈다. 좁은 화면에서는 이름이 낱말 사이에서 줄을 바꾼다 */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .popover-names .popover-item {

@@ -176,10 +176,9 @@ function setTitleWithChapterPicker(book, currentCh) {
   $title.appendChild(btn);
   $title.appendChild(popover);
   $title.appendChild(buildBookmarkHeaderBtn(book.id, currentCh));
-  if (mobileText) {
-    $title.setAttribute("aria-label", fullText);
-    applyTitleCompactness();
-  }
+  if (mobileText) $title.setAttribute("aria-label", fullText);
+  // Measured with or without a short name: a phone title that still does not fit takes a smaller font.
+  applyTitleCompactness();
 }
 // ── END POPOVER ──
 
@@ -476,6 +475,9 @@ function applyTitleCompactness() {
     for (const cell of [$title, document.getElementById("header-nav"), document.getElementById("header-actions")]) {
       if (cell) _titleResizeObs.observe(cell);
     }
+    // On a phone the title row keeps its size when a web font arrives late, so the observer above does not see it — and
+    // the first measure, made with the fallback font, can leave a chapter title too wide for its row. Measure again.
+    document.fonts?.addEventListener?.("loadingdone", () => applyTitleCompactness());
   }
 
   // Defer the actual measurement to the next frame. Several render paths append
@@ -496,34 +498,12 @@ function measureTitleCompactness() {
   const bar = $title.parentElement ?? null;
   const barStyle = bar && typeof getComputedStyle === "function" ? getComputedStyle(bar) : null;
   if (bar && barStyle && barStyle.display === "grid") {
+    $title.classList.remove(...TITLE_SHRINK_STEPS);   // the phone's smaller fonts (below) — the desktop bar has its own steps
     fitTopBar(bar, barStyle);
     return;
   }
   bar?.classList.remove("tight");
-
-  const full = /** @type {HTMLElement | null} */ ($title.querySelector(".title-text-full"));
-  const mobile = $title.querySelector(".title-text-mobile");
-  if (!full || !mobile) {
-    $title.classList.remove("compact");
-    return;
-  }
-  const container = full.parentElement;
-  if (!container) return;
-
-  // Reset so measurement reflects the non-compact (full) layout.
-  $title.classList.remove("compact");
-
-  const prevWs = full.style.whiteSpace;
-  const prevDisplay = full.style.display;
-  full.style.whiteSpace = "nowrap";
-  full.style.display = "inline-block";
-  const naturalWidth = full.offsetWidth;
-  full.style.whiteSpace = prevWs;
-  full.style.display = prevDisplay;
-
-  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-  // Picker button has a ~0.4em chevron after the label — allow for it.
-  const chevronAllowance = container.classList.contains("title-picker-btn") ? 0.8 * rem : 0;
+  $title.classList.remove("compact", ...TITLE_SHRINK_STEPS);
 
   // The title text is centered (text-align: center) while the home / bookmark /
   // settings buttons are absolute-positioned at the edges. A centered string
@@ -555,13 +535,49 @@ function measureTitleCompactness() {
       rightReserve = Math.max(rightReserve, titleRect.right - r.left);
     }
   }
-  const breathing = 0.8 * rem;
-  const sideReserve = Math.max(leftReserve, rightReserve) + breathing;
-  const availableWidth = $title.clientWidth - 2 * sideReserve;
+  const room = $title.clientWidth - 2 * Math.max(leftReserve, rightReserve);
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 
-  if (naturalWidth + chevronAllowance > availableWidth + 0.5) {
-    $title.classList.add("compact");
+  const full = /** @type {HTMLElement | null} */ ($title.querySelector(".title-text-full"));
+  const mobile = $title.querySelector(".title-text-mobile");
+  if (full && mobile && full.parentElement) {
+    const prevWs = full.style.whiteSpace;
+    const prevDisplay = full.style.display;
+    full.style.whiteSpace = "nowrap";
+    full.style.display = "inline-block";
+    const naturalWidth = full.offsetWidth;
+    full.style.whiteSpace = prevWs;
+    full.style.display = prevDisplay;
+    // Picker button has a ~0.4em chevron after the label — allow for it. Plus some breathing room on each side.
+    const chevronAllowance = full.parentElement.classList.contains("title-picker-btn") ? 0.8 * rem : 0;
+    if (naturalWidth + chevronAllowance > room - 2 * 0.8 * rem + 0.5) $title.classList.add("compact");
   }
+
+  // 짧은 명칭으로 바꿔도, 또는 짧은 명칭이 없어 장 제목과 꺾쇠가 양옆 단추와 겹치면 들어갈 때까지 제목 글씨를 한 단계씩
+  // 줄인다(사용자 결정 2026-11-19, architecture.md §4.5). 말줄임은 장 번호를 자르고 두 줄은 상단 바를 높인다. The
+  // button's own width (label + chevron) is measured as drawn — the short name on a phone, the long one otherwise.
+  const picker = /** @type {HTMLElement | null} */ ($title.querySelector(".title-picker-btn"));
+  if (!picker) return;
+  const fits = () => pickerNaturalWidth(picker) <= room + 0.5;
+  for (const step of TITLE_SHRINK_STEPS) {
+    if (fits()) return;
+    $title.classList.remove(...TITLE_SHRINK_STEPS);
+    $title.classList.add(step);
+  }
+}
+
+// The smaller fonts a phone chapter title steps down through (css: #page-title.title-shrink-1, -2).
+const TITLE_SHRINK_STEPS = ["title-shrink-1", "title-shrink-2"];
+
+/** The chapter picker button's one-line width, its chevron included. @param {HTMLElement} picker */
+function pickerNaturalWidth(picker) {
+  const prev = picker.style.cssText;
+  picker.style.whiteSpace = "nowrap";
+  picker.style.display = "inline-block";
+  picker.style.width = "max-content";
+  const width = picker.offsetWidth;
+  picker.style.cssText = prev;
+  return width;
 }
 
 /**
