@@ -311,7 +311,7 @@ HIG의 절제된 깊이 표현이다. 라이트 기준 값이며, **다크에서
 | 1차 버튼 | `.bm-btn-primary` | `background:--accent`, `#fff`, `--radius` | — |
 | 2차 버튼 | `.bm-btn-secondary` | `1px --border`, `--text-secondary` | — |
 | 아이콘 버튼 | `.title-back-btn`, `.title-bookmark-btn`, `.title-view-btn`, `.settings-btn` | 투명, `--accent`, **≥44px 탭 영역** | ADR-024 |
-| 구분 탭 | `.division-tab`, `.division-tab-indicator` | 슬라이드 인디케이터(트랙과 같은 색의 칩에 그림자 단계 적용) | ADR-024 |
+| 구분 탭 | `.division-tab`, `.division-tab-indicator` | 슬라이드 인디케이터(트랙과 같은 색의 칩에 그림자 단계 적용). 책 선택 시트의 구분 탭(`.book-filter-tabs`)도 같은 모양이다. 성서 목록의 탭은 주소를 바꾸는 링크이고, 시트의 탭은 시트 안에서 책을 바꿔 보이는 단추다(`role="tab"`). 고른 책이 있는 시트의 탭은 이름 뒤에 권수를 `--accent`로 보인다 | ADR-024, ADR-033 |
 | 챕터 팝오버 | `.chapter-popover`, `.popover-grid`, `.popover-item` | `--radius-lg`, 격자 카드 | ADR-024 |
 | 바텀 시트 / 사이드 패널 | `#cite-sheet`, `#bookmark-drawer`, `.book-filter-sheet`, `.sheet-close` | 모바일과 터치: 하단 시트(상단 `--radius-xl`, `--shadow-sheet`, 핸들, 높이 드래그 리사이즈, 안전 영역). `pointer:fine`이고 ≥769px: 우측 패널(`--shadow-drawer`, 좌측 가장자리 폭 리사이즈). 머리의 오른쪽 끝에 「닫기」 글자 단추(`.sheet-close`)를 둔다(「시트 vs 모달」) | ADR-022·032 |
 | 모달 | install/disconnect/bookmark 다이얼로그 | 중앙 정렬, `--radius-modal`, `--shadow-4`, scrim `rgba(0,0,0,.45)` | ADR-008 |
