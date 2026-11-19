@@ -6,22 +6,22 @@
  *
  * Protocol:
  *   Main → Worker:
- *     { type: "init", metaUrl: "data/search-meta.json", booksUrl: "data/books.json",
+ *     { type: "init", metaUrl: "data/search-meta.json",
  *       chunks: [{ name, url }, ...],
  *       lectionaryUrl: "data/lectionary/search-lectionary.json",
  *       localUrl: "data/lectionary/local-observances.json" }
- *       — booksUrl: the book list, read for the 송가 names only (`titles`, ADR-047 §5). Optional: without it, or
- *         when it fails, 송가 results carry no name.
  *       — lectionaryUrl is optional: without it the worker never loads the
  *         lectionary index and `lectionary` stays null (ADR-044).
  *       — localUrl is optional: the parish table, loaded with the lectionary index.
  *         Without it (or when it fails) there are no local days (ADR-044 §3).
  *     { type: "search", q: "keyword", page: 1, pageSize: 50, searchId: N,
- *       scopeBooks: ["john", ...], parish: "jqdnsv" }
+ *       scopeBooks: ["john", ...], parish: "jqdnsv", titles: { cant: { "1": "모세송가", ... } } }
  *       — scopeBooks: structured book filter (book ids) from the book picker,
  *         merged with any typed `in:<alias>` tokens (ADR-033).
  *       — parish: the church id of the user's parish, "" when none (ADR-041 §6).
  *         The name search adds its local days (ADR-044 §3).
+ *       — titles: the 송가 names per book id, from the app's book list (books.json `titles`, ADR-047 §5).
+ *         Optional: the app leaves it out while it has no book list, and the names it sent last stay.
  *     { type: "lect-names", names: [[setId, name], ...] }
  *       — this liturgical year's names of the Christmas weekdays (「성탄 1주 수요일」),
  *         which change every year and so are not in the index. The name search finds
@@ -107,7 +107,6 @@
  * @typedef InitMessage
  * @property {"init"} type
  * @property {string} metaUrl
- * @property {string} [booksUrl]
  * @property {ChunkConfig[]} chunks
  * @property {string} [lectionaryUrl]
  * @property {string} [localUrl]
@@ -120,6 +119,7 @@
  * @property {number} searchId
  * @property {string[]} [scopeBooks]
  * @property {string} [parish]
+ * @property {{ [bookId: string]: { [chapter: string]: string } }} [titles]  송가 이름(ADR-047 §5)
  *
  * @typedef LectNamesMessage  오늘부터 한 해 안에 오는 성탄 평일의 화면 이름(ADR-044 §3). 해마다 바뀌어 색인에 없으므로 앱이 교회력 엔진으로 계산해 보낸다.
  * @property {"lect-names"} type
@@ -260,9 +260,8 @@ let meta = null;
 let metaPromise = null;
 /** @type {string | null} */
 let metaUrl = null;
-/** @type {string | null} */
-let booksUrl = null;
-// 송가 이름(「모세송가」) — books.json 송가 항목의 `titles`, 책 id마다. 앱은 송가 이름을 이 파일에서만 읽는다(ADR-047 §5).
+// 송가 이름(「모세송가」) — 책 id마다, 앱의 책 목록(books.json `titles`)에서. 앱은 송가 이름을 이 목록에서만 읽고(ADR-047 §5),
+// 워커는 그 목록을 따로 받지 않고 검색 메시지에 실려 온 것을 쓴다. 앱이 목록을 받지 못한 동안에는 실려 오지 않아 비어 있다.
 /** @type {{ [bookId: string]: { [chapter: string]: string } }} */
 let chapterTitles = {};
 
@@ -319,22 +318,12 @@ async function loadMeta() {
   if (metaPromise) return metaPromise;
   // metaUrl is set by the "init" message before loadMeta() ever runs.
   const url = /** @type {string} */ (metaUrl);
-  const metaFetch = fetch(url).then((r) => {
-    if (!r.ok) throw new Error("meta 로드 실패: " + r.status);
-    return r.json();
-  });
-  // 송가 이름은 books.json에서 읽는다(ADR-047 §5). 받지 못해도 검색은 하고, 송가 결과에 이름만 없다.
-  const titlesFetch = booksUrl
-    ? fetch(booksUrl)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((/** @type {Array<{ id: string, titles?: { [chapter: string]: string } }>} */ books) =>
-        Object.fromEntries(books.filter((b) => b.titles).map((b) => [b.id, /** @type {{ [chapter: string]: string }} */ (b.titles)])))
-      .catch(() => ({}))
-    : Promise.resolve({});
-  metaPromise = Promise.all([metaFetch, titlesFetch]).then(([data, titles]) => {
-    chapterTitles = titles;
-    meta = /** @type {SearchMeta} */ (data);
-  });
+  metaPromise = fetch(url)
+    .then((r) => {
+      if (!r.ok) throw new Error("meta 로드 실패: " + r.status);
+      return r.json();
+    })
+    .then((data) => { meta = /** @type {SearchMeta} */ (data); });
   return metaPromise;
 }
 
@@ -708,8 +697,11 @@ function tryVerseRef(query) {
  * @returns {string | null}
  */
 function chapterTitle(bookId, chapter) {
+  // Same rule as helpers.js chapterTitle — the chapter view and the search show the same name or none.
   const titles = chapterTitles[bookId];
-  return titles && Object.hasOwn(titles, String(chapter)) ? titles[String(chapter)] : null;
+  if (!titles || !Object.hasOwn(titles, String(chapter))) return null;
+  const title = titles[String(chapter)];
+  return typeof title === "string" && title ? title : null;
 }
 
 /**
@@ -1418,7 +1410,6 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
 
   if (msg.type === "init") {
     metaUrl = msg.metaUrl;
-    booksUrl = msg.booksUrl || null;
     chunkConfig = msg.chunks;
     // A new lectionary address drops what the old one loaded or was loading.
     const nextLectionaryUrl = msg.lectionaryUrl || null;
@@ -1455,6 +1446,8 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
     const { q, page, pageSize, searchId } = msg;
     const scopeBooks = msg.scopeBooks || [];
     const parish = msg.parish || "";
+    // 앱이 책 목록을 가졌으면 검색마다 송가 이름을 싣는다. 실려 오지 않으면 마지막에 받은 이름을 그대로 쓴다(ADR-047 §5)
+    if (msg.titles && typeof msg.titles === "object") chapterTitles = msg.titles;
     currentSearchId = searchId;
 
     try {

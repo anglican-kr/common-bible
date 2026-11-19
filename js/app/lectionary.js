@@ -1907,11 +1907,12 @@ function buildReading(m, slot, chapters) {
   head.appendChild(el("h3", { className: "lect-slot" }, SLOT_LABEL[slot.slot] || slot.slot));
   head.appendChild(el("span", { className: "lect-ref" }, slot.label || ""));
   const refs = slot.refs || [];
-  const lastChapter = refs.length ? chapters.get(`${slot.bookId}:${refs[refs.length - 1].chapter}`) : null;
+  const lastRef = refs.length ? refs[refs.length - 1] : null;
+  const lastChapter = lastRef ? chapters.get(`${slot.bookId}:${lastRef.chapter}`) : null;
   if (slot.bookId === "cant") {
     // 송가 이름은 책 목록(books.json)에서만 읽는다(ADR-047 §5) — 장 화면, 검색과 같은 이름이다
     const cantBook = (getBooksCache() ?? []).find((b) => b.id === "cant");
-    const title = refs.length ? chapterTitle(cantBook, refs[refs.length - 1].chapter) : null;
+    const title = lastRef ? chapterTitle(cantBook, lastRef.chapter) : null;
     if (title && !(slot.label || "").includes(title)) head.appendChild(el("span", { className: "lect-canticle" }, title));
     // 송가는 장 번호가 성서의 장이 아니다 — 출처는 송가 이름 + 고른 절(「즈가리야 송가 1-3」)
     if (title) section.setAttribute("data-canticle", title);

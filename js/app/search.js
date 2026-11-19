@@ -93,8 +93,6 @@ function ensureSearchWorker() {
   searchWorker.postMessage({
     type: "init",
     metaUrl: `${DATA_DIR}/search-meta.json`,
-    // 송가 이름은 책 목록에서 읽는다(ADR-047 §5). 앱 껍데기와 함께 저장해 두는 파일이라 오프라인에서도 있다
-    booksUrl: `${DATA_DIR}/books.json`,
     chunks: [
       { name: "nt", url: `${DATA_DIR}/search-nt.json` },
       { name: "dc", url: `${DATA_DIR}/search-dc.json` },
@@ -138,6 +136,19 @@ function nextLectionary(searchId, ms) {
 }
 
 /**
+ * 송가 이름(「모세송가」), 책 id마다 — 앱이 받아 둔 책 목록(books.json)의 `titles`다(ADR-047 §5). 검색마다 워커에 실어 보낸다. 워커가
+ * 같은 파일을 다시 받지 않게 하려는 것이다. 책 목록을 받지 못했으면 싣지 않는다. 검색 화면이 다음 검색 전에 목록을 다시 받으므로
+ * (`ensureBookMap`) 그다음 검색부터 실린다.
+ * @returns {{ [bookId: string]: { [chapter: string]: string } } | undefined}
+ */
+function canticleTitles() {
+  const books = window.getBooksCache?.();
+  if (!books) return undefined;
+  return Object.fromEntries(
+    books.filter((b) => b.titles).map((b) => [b.id, /** @type {{ [chapter: string]: string }} */ (b.titles)]));
+}
+
+/**
  * @param {string} query
  * @param {number} page
  * @param {number} pageSize
@@ -160,6 +171,7 @@ function doSearch(query, page, pageSize, onPartial, opts) {
       scopeBooks: (opts && opts.scopeBooks) || [],
       // 소속교회(ADR-041 §6). 검색마다 실어, 설정을 바꾼 뒤의 검색이 곧 새 교회로 찾는다
       parish: loadParish(),
+      titles: canticleTitles(),
     });
   });
 }

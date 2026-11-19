@@ -407,6 +407,18 @@ test("loadBooks: falls back to fetch when no cache and no booksPromise", async (
   assert.deepEqual(JSON.parse(JSON.stringify(result)), fetched);
 });
 
+test("loadBooks: 미리 받기(window.booksPromise)가 실패하면 그 실패를 붙들지 않고 다음 호출에 다시 받는다", async () => {
+  const h = loadDataFetching();
+  h.windowStub.booksPromise = Promise.reject(new Error("Failed to pre-fetch books.json"));
+  await assert.rejects(() => h.loadBooks(), /pre-fetch/);
+  assert.equal(h.windowStub.booksPromise, undefined, "실패한 미리 받기를 지운다");
+  const fetched = [{ id: "cant", name_ko: "성무일과 송가", titles: { "6": "이사야 셋째 송가" } }];
+  h.setFetch(async () => ({ ok: true, json: async () => fetched }));
+  const result = await h.loadBooks();
+  assert.equal(h.fetchCalls.length, 1, "다음 호출은 새로 받는다");
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), fetched);
+});
+
 test("loadBooks: throws on fetch !ok response", async () => {
   const h = loadDataFetching();
   h.setFetch(async () => ({ ok: false, json: async () => null }));

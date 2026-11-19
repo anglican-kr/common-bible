@@ -34,7 +34,15 @@ async function loadBooks() {
     if (!res.ok) throw new Error("Failed to load books.json");
     return res.json();
   });
-  const data = await promise;
+  let data;
+  try {
+    data = await promise;
+  } catch (err) {
+    // A failed pre-fetch must not stay cached — the next call fetches again (the 송가 names of the lectionary view
+    // depend on this list, ADR-047 §5).
+    if (promise === window.booksPromise) window.booksPromise = undefined;
+    throw err;
+  }
   booksCache = data;
   return data;
 }
