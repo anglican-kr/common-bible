@@ -24,7 +24,9 @@ import { showAudioPlayer, hideAudioBar } from "./audio-player.js";
 // and the verse instance keys a tapped verse is looked up by (verse-spec.js).
 import { citationSource, halfVerseMark, selectionCitation, formatVerseRanges, verseInstanceKeys } from "./verse-spec.js";
 
-const { _$, el, clearNode, chUnit, hangingQuoteClass, emptyState, scrollUnderBar } = window.appHelpers;
+const {
+  _$, el, clearNode, chUnit, chUnitNoun, chapterTitle, chapterLabel, missingChapterText, hangingQuoteClass, emptyState, scrollUnderBar,
+} = window.appHelpers;
 const { createOverlay } = window.appOverlay;
 const {
   loadBookOrder, loadStartupBehavior,
@@ -87,10 +89,11 @@ function setTitleWithChapterPicker(book, currentCh) {
   clearNode($title);
   $title.removeAttribute("aria-label");
   $title.classList.remove("compact");
-  const unit = chUnit(book.id);
-  const fullText = `${book.name_ko} ${currentCh}${unit}`;
+  // 송가는 번호 대신 송가 이름이고, 단위를 이름으로 쓰는 자리는 「송가 선택」이다(ADR-047 §2, §3)
+  const unit = chUnitNoun(book.id);
+  const fullText = chapterLabel(book, currentCh);
   const mobileBookName = NT_MOBILE_NAME[book.id];
-  const mobileText = mobileBookName ? `${mobileBookName} ${currentCh}${unit}` : null;
+  const mobileText = mobileBookName ? chapterLabel(book, currentCh, mobileBookName) : null;
   document.title = `${fullText} — 공동번역성서`;
   announce(fullText);
 
@@ -108,7 +111,9 @@ function setTitleWithChapterPicker(book, currentCh) {
   const popover = el("div", { className: "chapter-popover", role: "listbox", "aria-label": `${unit} 선택` });
   popover.hidden = true;
 
-  const grid = el("div", { className: "popover-grid" });
+  // 송가는 숫자 격자 대신 송가 이름의 목록이다(ADR-047 §2)
+  const named = chapterTitle(book, 1) !== null;
+  const grid = el("div", { className: named ? "popover-grid popover-names" : "popover-grid" });
   if (book.has_prologue) {
     grid.appendChild(
       el("a", { className: "popover-item popover-prologue", href: `/${book.id}/prologue` }, "머리말")
@@ -116,7 +121,11 @@ function setTitleWithChapterPicker(book, currentCh) {
   }
   for (let i = 1; i <= book.chapter_count; i++) {
     const isCurrent = i === currentCh;
-    const item = el("a", { className: isCurrent ? "popover-item current" : "popover-item", href: `/${book.id}/${i}` }, String(i));
+    const item = el(
+      "a",
+      { className: isCurrent ? "popover-item current" : "popover-item", href: `/${book.id}/${i}` },
+      chapterTitle(book, i) ?? String(i)
+    );
     if (isCurrent) item.setAttribute("aria-current", "true");
     grid.appendChild(item);
   }
@@ -725,10 +734,12 @@ function renderResumeBanner(books) {
   if (!lastBook) return;
   const isPrologue = pos.chapter === "prologue";
   const href = `/${pos.bookId}/${pos.chapter}?resume=1`;
-  const suffix = isPrologue ? "머리말" : `${pos.chapter}${chUnit(lastBook.id)}`;
-  const fullLabel = `이어읽기: ${lastBook.name_ko} ${suffix}`;
+  // 송가는 송가 이름이다(「이어읽기: 이사야 셋째 송가」, ADR-047 §2)
+  /** @param {string} bookName */
+  const where = (bookName) => (isPrologue ? `${bookName} 머리말` : chapterLabel(lastBook, pos.chapter, bookName));
+  const fullLabel = `이어읽기: ${where(lastBook.name_ko)}`;
   const mobileBookName = NT_MOBILE_NAME[lastBook.id];
-  const mobileLabel = mobileBookName ? `이어읽기: ${mobileBookName} ${suffix}` : null;
+  const mobileLabel = mobileBookName ? `이어읽기: ${where(mobileBookName)}` : null;
 
   const wrapper = el("div", { className: "resume-banner" });
   const link = el("a", { className: "resume-banner-link", href });
@@ -845,9 +856,14 @@ function renderChapterList(book, books) {
     );
   }
 
+  // 송가는 숫자 격자 대신 송가 이름의 목록이다(ADR-047 §2)
+  if (chapterTitle(book, 1) !== null) grid.classList.add("chapter-names");
   for (let i = 1; i <= book.chapter_count; i++) {
+    const title = chapterTitle(book, i);
     grid.appendChild(
-      el("a", { href: `/${book.id}/${i}`, "aria-label": `${book.name_ko} ${i}${chUnit(book.id)}` }, String(i))
+      title
+        ? el("a", { href: `/${book.id}/${i}` }, title)
+        : el("a", { href: `/${book.id}/${i}`, "aria-label": chapterLabel(book, i) }, String(i))
     );
   }
 
@@ -1815,10 +1831,13 @@ function renderPrologue(data, book) {
 /** @param {BookEntry} book @param {number} currentCh @returns {HTMLElement} */
 function buildChapterNav(book, currentCh) {
   const unit = chUnit(book.id);
-  const nav = el("nav", { className: "chapter-nav", "aria-label": `${unit} 이동` });
+  const nav = el("nav", { className: "chapter-nav", "aria-label": `${chUnitNoun(book.id)} 이동` });
+  // 송가는 가는 송가의 이름이다(「← 이사야 둘째 송가」, ADR-047 §2)
+  /** @param {number} ch */
+  const target = (ch) => chapterTitle(book, ch) ?? `${ch}${unit}`;
 
   if (currentCh > 1) {
-    nav.appendChild(el("a", { href: `/${book.id}/${currentCh - 1}` }, `← ${currentCh - 1}${unit}`));
+    nav.appendChild(el("a", { href: `/${book.id}/${currentCh - 1}` }, `← ${target(currentCh - 1)}`));
   } else if (book.has_prologue) {
     nav.appendChild(el("a", { href: `/${book.id}/prologue` }, "← 머리말"));
   } else {
@@ -1826,7 +1845,7 @@ function buildChapterNav(book, currentCh) {
   }
 
   if (currentCh < book.chapter_count) {
-    nav.appendChild(el("a", { href: `/${book.id}/${currentCh + 1}` }, `${currentCh + 1}${unit} →`));
+    nav.appendChild(el("a", { href: `/${book.id}/${currentCh + 1}` }, `${target(currentCh + 1)} →`));
   } else {
     nav.appendChild(el("span", { className: "placeholder" }));
   }
@@ -1874,7 +1893,7 @@ const RELOAD_SUBTITLE = `네트워크 연결을 확인한 뒤 「${RELOAD_LABEL}
  * - `"load"`: 자료를 받지 못했다. 그 자리에서 다시 하므로 링크가 아니라 「다시 불러오기」 단추다(`link`는 `null`). 캘린더와 같은
  *   화면은 사용자 결정 2026-11-07이고, 제목의 「성서 자료」는 구현하며 정했다.
  * 장 단위는 `chUnit`을 따라 시편과 전례시편은 「시편에는 151편이 없습니다」다. 링크와 부제의 「편」(「편 목록」)은 장 선택 단추의 이름
- * 「편 선택」에 맞춰 구현하며 정했다.
+ * 「편 선택」에 맞춰 구현하며 정했다. 송가는 「성무일과 송가에는 14번 송가가 없습니다」와 「송가 목록」이다(ADR-047 §3).
  * @param {BibleFailureKind} kind
  * @param {BookEntry | null} book  머리의 책. `null`이면 성서 목록의 머리다
  * @param {number} [chapter]  `"no-chapter"`의 장 번호
@@ -1889,16 +1908,18 @@ function bibleFailureText(kind, book, chapter) {
       link: { label: BOOK_LIST_LABEL, href: "/" },
     };
   }
-  const unit = chUnit(book.id);
+  // 송가는 「송가 목록」, 「다른 송가를」이다(ADR-047 §3)
+  const unit = chUnitNoun(book.id);
+  const unitObject = `${unit}${book.id === "cant" ? "를" : "을"}`;
   const link = { label: `${unit} 목록`, href: `/${book.id}` };
   if (kind === "no-chapter") {
     return {
-      message: `${book.name_ko}에는 ${chapter}${unit}이 없습니다`,
-      subtitle: `「${link.label}」을 눌러 다른 ${unit}을 골라 주세요.`,
+      message: missingChapterText(book.id, book.name_ko, chapter ?? 0),
+      subtitle: `「${link.label}」을 눌러 다른 ${unitObject} 골라 주세요.`,
       link,
     };
   }
-  return { message: "없는 주소입니다", subtitle: `「${link.label}」을 눌러 ${unit}을 골라 주세요.`, link };
+  return { message: "없는 주소입니다", subtitle: `「${link.label}」을 눌러 ${unitObject} 골라 주세요.`, link };
 }
 // ── END FAILURE_TEXT ──
 

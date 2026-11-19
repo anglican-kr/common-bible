@@ -9,7 +9,8 @@
 //
 // Sections:
 //   - _$ (getElementById wrapper)
-//   - chUnit (psalms and 전례시편 vs everything else)
+//   - chUnit (psalms and 전례시편 vs everything else, no unit for the canticles), chUnitNoun, chapterTitle, chapterLabel,
+//     missingChapterText (the 송가 name in place of a chapter number, ADR-047)
 //   - el (createElement + attrs + children)
 //   - clearNode (firstChild loop)
 //   - hangingQuoteClass (leading quote → gutter class, straight + curly)
@@ -352,6 +353,60 @@ test("chUnit: any other book id returns '장'", () => {
   assert.equal(h.helpers.chUnit("rev"), "장");
   assert.equal(h.helpers.chUnit(""), "장");
   assert.equal(h.helpers.chUnit("PS"), "장");  // case-sensitive
+});
+
+test("chUnit: 송가 'cant'에는 단위가 없다(ADR-047 §1)", () => {
+  const h = loadHelpers();
+  assert.equal(h.helpers.chUnit("cant"), "");
+});
+
+// ── chUnitNoun, chapterTitle, chapterLabel, missingChapterText (ADR-047) ─────
+
+const CANTICLES = {
+  id: "cant", name_ko: "성무일과 송가", short_name_ko: "송가", chapter_count: 13,
+  titles: { 1: "모세송가", 5: "이사야 둘째 송가", 6: "이사야 셋째 송가", 7: "참회송가" },
+};
+
+test("chUnitNoun: 단위를 이름으로 쓰는 자리는 「장」, 「편」이고 송가는 「송가」다", () => {
+  const h = loadHelpers();
+  assert.equal(h.helpers.chUnitNoun("gen"), "장");
+  assert.equal(h.helpers.chUnitNoun("ps"), "편");
+  assert.equal(h.helpers.chUnitNoun("lps"), "편");
+  assert.equal(h.helpers.chUnitNoun("cant"), "송가");
+});
+
+test("chapterTitle: books.json의 송가 이름을 읽고, 다른 책이나 없는 번호는 null이다", () => {
+  const h = loadHelpers();
+  const { chapterTitle } = h.helpers;
+  assert.equal(chapterTitle(CANTICLES, 6), "이사야 셋째 송가");
+  assert.equal(chapterTitle(CANTICLES, "6"), "이사야 셋째 송가");
+  assert.equal(chapterTitle(CANTICLES, 14), null);
+  assert.equal(chapterTitle(CANTICLES, "toString"), null);   // only its own keys
+  assert.equal(chapterTitle(CANTICLES, null), null);
+  assert.equal(chapterTitle({ id: "gen", name_ko: "창세기" }, 1), null);
+  assert.equal(chapterTitle(null, 1), null);
+  assert.equal(chapterTitle(undefined, 1), null);
+  assert.equal(chapterTitle({ id: "cant", titles: { 6: "" } }, 6), null);
+});
+
+test("chapterLabel: 「책 N장」, 「시편 N편」이고 송가는 책 이름 없이 송가 이름이다", () => {
+  const h = loadHelpers();
+  const { chapterLabel } = h.helpers;
+  assert.equal(chapterLabel({ id: "gen", name_ko: "창세기" }, 3), "창세기 3장");
+  assert.equal(chapterLabel({ id: "ps", name_ko: "시편" }, 23), "시편 23편");
+  assert.equal(chapterLabel({ id: "mark", name_ko: "마르코의 복음서" }, 1, "마르코"), "마르코 1장");
+  assert.equal(chapterLabel(CANTICLES, 6), "이사야 셋째 송가");
+  assert.equal(chapterLabel(CANTICLES, 6, "송가"), "이사야 셋째 송가");
+  // 이름이 없으면(그 칸이 없는 books.json) 번호만 남는다 — 「장」은 붙이지 않는다
+  assert.equal(chapterLabel({ id: "cant", name_ko: "성무일과 송가" }, 6), "성무일과 송가 6");
+});
+
+test("missingChapterText: 없는 장의 안내 — 송가는 「14번 송가가 없습니다」", () => {
+  const h = loadHelpers();
+  const { missingChapterText } = h.helpers;
+  assert.equal(missingChapterText("john", "요한의 복음서", 99), "요한의 복음서에는 99장이 없습니다");
+  assert.equal(missingChapterText("ps", "시편", 151), "시편에는 151편이 없습니다");
+  assert.equal(missingChapterText("cant", "성무일과 송가", 14), "성무일과 송가에는 14번 송가가 없습니다");
 });
 
 // ── el ──────────────────────────────────────────────────────────────────────

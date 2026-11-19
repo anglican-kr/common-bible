@@ -19,7 +19,7 @@
 
 import { wholeVerseSpec } from "./verse-spec.js";
 
-const { chUnit } = window.appHelpers;
+const { chUnit, chapterTitle } = window.appHelpers;
 const { loadBookmarks, saveBookmarks, rewriteBookmarks } = window.appStorage;
 
 // Shared guidance copy for "how bookmarks are created" — used by the empty-state
@@ -403,8 +403,9 @@ function _hasActiveDescendant(folder, pathname = _renderPathname) {
 // ── END BOOKMARK_ACTIVE ──
 
 // ── BEGIN BOOKMARK_LABEL ──
-// Exercised by tests/unit/bookmark.test.js, with helpers.js's chUnit. A bookmark's default name is its reference with
-// the short book name: 「이사 7:14」, a whole chapter 「이사 7장」(시편과 전례시편은 「시편 23편」). The save dialog fills it in, the
+// Exercised by tests/unit/bookmark.test.js, with helpers.js's chUnit and chapterTitle. A bookmark's default name is its
+// reference with the short book name: 「이사 7:14」, a whole chapter 「이사 7장」(시편과 전례시편은 「시편 23편」). 송가는 책 이름과
+// 번호 대신 송가 이름이다: 「이사야 셋째 송가」, 「이사야 셋째 송가 1-3」(ADR-047 §4). The save dialog fills it in, the
 // list shows it under the name (bookmark-tree.js), and a range change makes it again only where the name still is it.
 // One function makes it, so the check and the name it checks against cannot drift apart (the formula sat in four
 // places before known-issues §19.1 was fixed).
@@ -417,6 +418,8 @@ function _hasActiveDescendant(folder, pathname = _renderPathname) {
 function defaultBookmarkLabel(bm, books) {
   const book = books?.find((b) => b.id === bm.bookId);
   const bookName = book ? (book.short_name_ko || book.name_ko) : bm.bookId;
+  const title = chapterTitle(book, bm.chapter);
+  if (title) return bm.verseSpec === "all" ? title : `${title} ${bm.verseSpec}`;
   return bm.verseSpec === "all"
     ? `${bookName} ${bm.chapter}${chUnit(bm.bookId ?? "")}`
     : `${bookName} ${bm.chapter}:${bm.verseSpec}`;

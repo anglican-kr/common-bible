@@ -32,9 +32,55 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
 
   // Psalms use "편" instead of "장" as the chapter unit.
   // 전례시편(`lps`)도 시편이라 「편」이다(「전례시편 23편」, 사용자 결정 2026-11-18, ADR-046 §4).
+  // 송가(`cant`)에는 단위가 없다. 번호가 아니라 송가 이름으로 보인다(`chapterLabel`, ADR-047 §1).
   /** @param {string} bookId */
   function chUnit(bookId) {
+    if (bookId === "cant") return "";
     return bookId === "ps" || bookId === "lps" ? "편" : "장";
+  }
+
+  /**
+   * 단위를 이름으로 쓰는 자리의 낱말이다(「장 선택」, 「편 목록」). 송가는 「송가」다(「송가 이동」, ADR-047 §3).
+   * @param {string} bookId
+   */
+  function chUnitNoun(bookId) {
+    return bookId === "cant" ? "송가" : chUnit(bookId);
+  }
+
+  /**
+   * 송가 이름이다. books.json 송가 항목의 `titles`에서 읽는다(데이터 ADR-039 「`books.json` · 송가」, ADR-047 §5).
+   * 다른 책이거나 이름이 없으면 null이다.
+   * @param {{ titles?: { [chapter: string]: string } } | null | undefined} book
+   * @param {number | string | null | undefined} chapter
+   * @returns {string | null}
+   */
+  function chapterTitle(book, chapter) {
+    const titles = book?.titles;
+    if (!titles || chapter == null || !Object.hasOwn(titles, String(chapter))) return null;
+    const title = titles[String(chapter)];
+    return typeof title === "string" && title ? title : null;
+  }
+
+  /**
+   * 장 하나를 가리키는 이름이다. 「요한의 복음서 3장」, 「시편 23편」이고, 송가는 책 이름 없이 송가 이름만이다(「이사야 셋째 송가」,
+   * ADR-047 §1). `bookName`은 책 이름 자리에 쓸 이름이다(휴대폰의 짧은 이름 「마르코」). 송가 이름이 없으면 「성무일과 송가 6」이다.
+   * @param {{ id: string, name_ko: string, titles?: { [chapter: string]: string } }} book
+   * @param {number | string} chapter
+   * @param {string} [bookName]
+   */
+  function chapterLabel(book, chapter, bookName = book.name_ko) {
+    return chapterTitle(book, chapter) ?? `${bookName} ${chapter}${chUnit(book.id)}`;
+  }
+
+  /**
+   * 없는 장의 안내다. 「요한의 복음서에는 99장이 없습니다」, 「시편에는 151편이 없습니다」, 「성무일과 송가에는 14번 송가가 없습니다」
+   * (ADR-047 §3). 장 화면(views.js)과 검색의 구절 바로가기(search.js)가 같은 문장을 쓴다.
+   * @param {string} bookId @param {string} bookName @param {number} chapter
+   */
+  function missingChapterText(bookId, bookName, chapter) {
+    return bookId === "cant"
+      ? `${bookName}에는 ${chapter}번 송가가 없습니다`
+      : `${bookName}에는 ${chapter}${chUnit(bookId)}이 없습니다`;
   }
 
   /**
@@ -509,7 +555,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   }
 
   return {
-    _$, chUnit, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
+    _$, chUnit, chUnitNoun, chapterTitle, chapterLabel, missingChapterText, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
     HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot, SCROLL_ANCHORING, barBottom, scrollUnderBar,
     publishBarHeight, isFormerNorthChurch, churchName, parishGroups, DESKTOP_LAYOUT_QUERY, isDesktopLayout, SHEET_INERT_SELECTORS,
     DATE_PICKER_FOCUS_KEY, datePickerTrigger,

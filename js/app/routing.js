@@ -41,7 +41,7 @@ import {
 // header control, failure screen) lives in views.js. sw.js still precaches all
 // three for offline, and tests/unit/sw.test.js follows these import() calls.
 
-const { _$, clearNode, chUnit, isModifiedClick, focusSpotOf, restoreFocusSpot, barBottom } = window.appHelpers;
+const { _$, clearNode, chapterLabel, isModifiedClick, focusSpotOf, restoreFocusSpot, barBottom } = window.appHelpers;
 const {
   START_PAGES, loadStartupBehavior, loadStartPage, loadReadingPosition, saveReadingPosition, loadBookOrder,
   loadLectionaryAltShow, loadParish, loadBaptismalSaint,
@@ -763,9 +763,10 @@ async function route() {
       });
       saveReadingPosition(bookId, chapter, resumeVerse);
       startScrollTracking(bookId, chapter);
+      // 송가는 송가 이름이다(「이사야 셋째 송가」, ADR-047 §2)
       updatePageMeta({
-        title: `${book.name_ko} ${chapter}${chUnit(book.id)}`,
-        description: `${book.name_ko} ${chapter}${chUnit(book.id)} — 공동번역성서`,
+        title: chapterLabel(book, chapter),
+        description: `${chapterLabel(book, chapter)} — 공동번역성서`,
       });
       trackPageView();
     }

@@ -157,3 +157,46 @@ def test_일반_성서_장에는_전례_표기가_없다(desktop_context):
     ids = page.eval_on_selector_all(
         "article.chapter-text .verse[id]", "els => els.map(e => e.id)")
     assert "v1" in ids and "v31" in ids, ids
+
+
+# ── ⑥ 송가는 번호 대신 이름으로 보인다 (ADR-047) ──
+
+def test_송가_장_화면의_제목과_앞뒤_이동은_송가_이름이다(mobile_context):
+    page = mobile_context.new_page()
+    _open(page, "cant/6")
+    btn = page.locator(".title-picker-btn")
+    assert btn.inner_text().strip() == "이사야 셋째 송가"
+    assert btn.get_attribute("aria-label") == "송가 선택"
+    assert page.title().startswith("이사야 셋째 송가")
+    nav = page.locator("nav.chapter-nav")
+    assert nav.get_attribute("aria-label") == "송가 이동"
+    assert nav.locator("a").all_inner_texts() == ["← 이사야 둘째 송가", "참회송가 →"]
+
+
+def test_송가_고르기_목록은_송가_이름이다(mobile_context):
+    page = mobile_context.new_page()
+    _open(page, "cant/6")
+    page.click(".title-picker-btn")
+    items = page.locator(".chapter-popover .popover-names .popover-item")
+    assert items.count() == 13
+    assert items.first.inner_text() == "모세송가"
+    current = page.locator(".chapter-popover .popover-item.current")
+    assert current.inner_text() == "이사야 셋째 송가"
+    assert current.get_attribute("href") == "/cant/6"
+
+
+def test_송가_목록_화면은_송가_이름이다(mobile_context):
+    page = mobile_context.new_page()
+    page.goto(f"{BASE}/cant")
+    page.wait_for_selector(".chapter-grid.chapter-names a")
+    links = page.locator(".chapter-grid.chapter-names a")
+    assert links.count() == 13
+    assert links.nth(10).inner_text() == "즈가리야 송가"
+    assert links.nth(10).get_attribute("href") == "/cant/11"
+
+
+def test_없는_송가는_번호와_송가로_알린다(mobile_context):
+    page = mobile_context.new_page()
+    page.goto(f"{BASE}/cant/14")
+    page.wait_for_selector("text=성무일과 송가에는 14번 송가가 없습니다")
+    assert page.locator("a", has_text="송가 목록").count() == 1

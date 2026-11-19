@@ -557,6 +557,8 @@ export interface BookEntry {
   division: "old_testament" | "new_testament" | "deuterocanon" | "liturgical";
   chapter_count: number;
   has_prologue: boolean;
+  /** 송가(`cant`)만: 장 번호마다 송가 이름(「6」: 「이사야 셋째 송가」). 데이터 ADR-039 「`books.json` · 송가」, ADR-047 §5. */
+  titles?: { [chapter: string]: string };
 }
 
 export type BooksData = ReadonlyArray<BookEntry>;
@@ -954,6 +956,14 @@ export interface AppHelpers {
   parishGroups: (table: any) => ParishGroup[];
   _$: (id: string) => HTMLElement;
   chUnit: (bookId: string) => string;
+  /** 단위를 이름으로 쓰는 자리의 낱말 — 「장」, 「편」, 송가는 「송가」(ADR-047 §3). */
+  chUnitNoun: (bookId: string) => string;
+  /** 송가 이름(books.json `titles`). 다른 책이거나 이름이 없으면 null(ADR-047 §5). */
+  chapterTitle: (book: { titles?: { [chapter: string]: string } } | null | undefined, chapter: number | string | null | undefined) => string | null;
+  /** 장 하나의 이름 — 「요한의 복음서 3장」, 송가는 「이사야 셋째 송가」(ADR-047 §1). */
+  chapterLabel: (book: { id: string; name_ko: string; titles?: { [chapter: string]: string } }, chapter: number | string, bookName?: string) => string;
+  /** 없는 장의 안내 — 「성무일과 송가에는 14번 송가가 없습니다」(ADR-047 §3). */
+  missingChapterText: (bookId: string, bookName: string, chapter: number) => string;
   el: <K extends keyof HTMLElementTagNameMap>(
     tag: K,
     attrs?: Record<string, any> | null,

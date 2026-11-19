@@ -2379,6 +2379,21 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   color: var(--bg);
 }
 
+/* 송가: 숫자 대신 송가 이름의 카드 두 줄(ADR-047 §2). 책 목록(.book-list a)처럼 이름이 길면 낱말 단위로 줄을 바꾼다.
+   .popover-item 의 정사각형을 풀고 탭 영역은 최소 높이로 지킨다. */
+.popover-names {
+  grid-template-columns: repeat(2, minmax(7rem, 1fr));
+}
+
+.popover-names .popover-item {
+  aspect-ratio: auto;
+  min-height: var(--icon-btn-touch);
+  padding: var(--space-2);
+  font-size: var(--font-sm);
+  text-align: center;
+  word-break: keep-all;
+}
+
 /* ── Search Bar (Desktop inline) ── */
 /* The width follows the window so the three cells of the top bar fit on a narrow desktop (ADR-043 §8). On
    focus the field widens to the left, over the title, with a negative margin of the same amount: its place in
@@ -4147,6 +4162,20 @@ mark.search-highlight {
 .prologue-link:hover,
 .prologue-link:focus-visible {
   color: var(--bg) !important;
+}
+
+/* 송가 목록 화면: 숫자 격자 대신 송가 이름의 카드(ADR-047 §2). 책 목록(.book-list)과 같은 칸 너비와 글씨다. */
+.chapter-grid.chapter-names {
+  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+}
+
+.chapter-grid.chapter-names a {
+  aspect-ratio: auto;
+  min-height: var(--icon-btn-touch);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-sm);
+  text-align: center;
+  word-break: keep-all;
 }
 
 /* ── Chapter View (verses) ── */

@@ -123,6 +123,19 @@ test("_isContinuous: an unloaded whole chapter does not merge into the next chap
 
 // ── _combinedRef ───────────────────────────────────────────────────────────────
 
+test("_combinedRef: 송가는 책 이름과 번호 대신 송가 이름이다 — 「이사야 셋째 송가」, 「이사야 셋째 송가 1–3」(ADR-047 §4)", () => {
+  const titleOf = (ch) => ({ 5: "이사야 둘째 송가", 6: "이사야 셋째 송가" })[ch] ?? null;
+  const whole = { startCh: 6, startV: 1, endCh: 6, endV: 10, endDisplay: "10" };
+  assert.strictEqual(ctx._combinedRef("송가", "", whole, whole, true, titleOf), "이사야 셋째 송가");
+  const range = { startCh: 6, startV: 1, endCh: 6, endV: 3, endDisplay: "3" };
+  assert.strictEqual(ctx._combinedRef("송가", "", range, range, false, titleOf), "이사야 셋째 송가 1–3");
+  const one = { startCh: 6, startV: 4, endCh: 6, endV: 4, endDisplay: "4" };
+  assert.strictEqual(ctx._combinedRef("송가", "", one, one, false, titleOf), "이사야 셋째 송가 4");
+  const first = { startCh: 5, startV: 7, endCh: 5, endV: 9, endDisplay: "9" };
+  const last = { startCh: 6, startV: 1, endCh: 6, endV: 2, endDisplay: "2" };
+  assert.strictEqual(ctx._combinedRef("송가", "", first, last, false, titleOf), "이사야 둘째 송가 7–이사야 셋째 송가 2");
+});
+
 test("_combinedRef: a lone whole chapter reads as 창세 1장", () => {
   const r = ctx._bmRange({ bookId: "gen", chapter: 1, verseSpec: "all" }, 31);
   assert.strictEqual(ctx._combinedRef("창세", "장", r, r, true), "창세 1장");
