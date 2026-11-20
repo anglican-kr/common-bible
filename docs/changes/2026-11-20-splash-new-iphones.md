@@ -1,4 +1,5 @@
 ---
+pr: 617
 date: 2026-11-20
 branch: chore/splash-new-iphones
 title: "fix: 아이폰 홈 화면 앱을 열 때의 흰 화면"
