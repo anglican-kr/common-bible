@@ -38,3 +38,14 @@ title: "feat: 검색할 책을 검색창 아래 알약으로"
 - `docs/decisions/048-mobile-search-input-on-top.md`, `docs/decisions/005-search-indexing-strategy.md`, `docs/decisions/014-search-history.md`: 책 칩을 고른 책과 책 알약으로
 - `docs/architecture.md`: 부록 A에 ADR-049
 - `docs/topics/search.md`: 「지금 동작」에 「고른 책의 알약」, 검색 옵션의 칩 문장, 주소의 `book`, 「결정」에 ADR-049
+
+## 리뷰 반영
+
+1회차(로컬 `/code-review medium --fix`, 2026-11-20). 다섯 건 가운데 네 건을 리뷰가 고쳤다.
+
+- 1번: 색인을 받는 동안의 부분 결과에서 고른 책에 아직 결과가 없으면 워커가 「전체」로 바꿨다. 새로 연 앱에서 `book=gen`으로 열면 신약 색인만 받은 동안 다른 책의 결과가 잠깐 보였다. 받는 동안에는 바꾸지 않는다(`scopedResults`의 `pending`). 유닛 단언을 하나 더했다.
+- 2번: 수를 받기 전의 알약 줄이 주소의 책만 그리고 입력 칸에 친 `in:`의 책을 빼, 검색이 끝나면 알약이 늘고 ×를 누른 뒤 포커스가 다음 알약 대신 깔때기로 갔다. 그 책도 처음부터 그린다. 다섯 권을 넘으면 주소의 책만 그린다(처음 고친 판은 여섯째도 그려 e2e `test_typed_in_cannot_add_a_sixth_book`가 실패했다).
+- 4번: 알약마다 수를 배열에서 찾던 것을 `Map`으로 바꿨다.
+- 5번: 알약의 이름과 수, 스크린 리더의 「건」을 붙이는 세 줄이 세 곳에 있어 `appendPillLabel` 하나로 묶었다.
+- 3번(고치지 않음): 별칭 표(`_aliasMap`)가 없으면 입력 칸에 친 `in:`의 책을 ×로 빼지 못한다. 별칭 표는 앱을 켤 때 받고, `search-meta.json`을 받지 못해도 책 목록으로 만들어 실제로는 드물다.
+- 고친 뒤 유닛 1,960개와 타입 검사가 통과했다. 리뷰가 관련 e2e 42개를 작업 폴더 서버(8097)에서 돌려 모두 통과했다.
