@@ -1,4 +1,5 @@
 ---
+pr: 621
 date: 2026-11-21
 branch: claude/practical-albattani-d5wihy
 title: "docs: 왕이신 그리스도 주일을 연중34주일로 찾는 결정 적기"
