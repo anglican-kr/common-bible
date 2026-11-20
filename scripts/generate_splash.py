@@ -3,11 +3,11 @@
 
 Usage: python scripts/generate_splash.py
 Output:
-  assets/splash/dark-{device}.png   — iOS apple-touch-startup-image (16 devices)
+  assets/splash/dark-{device}.png   — iOS apple-touch-startup-image (22 screen sizes)
   assets/icons/icon-512-maskable.png — Android maskable icon / iOS Media Session artwork
 
 The splash images draw the launch screen's own cross (the inline SVG in index.html's #launch-screen) at the launch
-screen's size (css/style.css `#launch-screen svg`: 30vmin wide, aspect-ratio 494 / 671), centered. iOS shows the image
+screen's size (the width in vmin and the aspect-ratio of css/style.css `#launch-screen svg`), centered. iOS shows the image
 until the page paints #launch-screen over it, so any difference shows as the cross jumping at the handoff (ADR-007).
 """
 
@@ -24,14 +24,15 @@ DARK_BG        = (26, 26, 46)    # #1a1a2e
 LIGHT_CROSS_HEX = "#faf8f5"      # cross color on dark splash
 
 # ── Device targets ──────────────────────────────────────────────────────────
-# (px_w, px_h, css_w, css_h, dpr, label)
+# (px_w, px_h, css_w, css_h, dpr, label). Sizes in points from Apple's Human Interface Guidelines, Layout,
+# "iOS, iPadOS device screen dimensions" (the table was dropped on 2026-09-09; read from the 2026-06 copy).
 DEVICES = [
     (750,  1334, 375, 667,  2, "iphone-8"),
     (1242, 2208, 414, 736,  3, "iphone-8plus"),
     (1125, 2436, 375, 812,  3, "iphone-x"),
     (828,  1792, 414, 896,  2, "iphone-xr"),
     (1242, 2688, 414, 896,  3, "iphone-xsmax"),
-    (1080, 2340, 360, 780,  3, "iphone-12mini"),
+    (1080, 2340, 360, 780,  3, "iphone-12mini"),    # 12 mini, 13 mini (HIG). If one reports 375×812, iphone-x
     (1170, 2532, 390, 844,  3, "iphone-12"),
     (1284, 2778, 428, 926,  3, "iphone-12promax"),
     (1179, 2556, 393, 852,  3, "iphone-14pro"),
@@ -39,9 +40,15 @@ DEVICES = [
     (1206, 2622, 402, 874,  3, "iphone-16pro"),     # 16 Pro, 17, 17 Pro
     (1260, 2736, 420, 912,  3, "iphone-air"),
     (1320, 2868, 440, 956,  3, "iphone-16promax"),  # 16 Pro Max, 17 Pro Max
-    (1536, 2048, 768, 1024, 2, "ipad-mini"),
-    (1668, 2388, 834, 1194, 2, "ipad-pro-11"),
-    (2048, 2732, 1024, 1366, 2, "ipad-pro-129"),
+    (1536, 2048, 768, 1024, 2, "ipad-mini"),         # mini 7.9", 9.7"
+    (1488, 2266, 744, 1133, 2, "ipad-mini-83"),      # mini 8.3"
+    (1620, 2160, 810, 1080, 2, "ipad-102"),          # iPad 10.2"
+    (1640, 2360, 820, 1180, 2, "ipad-air-11"),       # Air 10.9", Air 11", iPad 11"
+    (1668, 2224, 834, 1112, 2, "ipad-pro-105"),      # Pro 10.5", Air 10.5"
+    (1668, 2388, 834, 1194, 2, "ipad-pro-11"),       # Pro 11" 1st-4th generation
+    (1668, 2420, 834, 1210, 2, "ipad-pro-11-m4"),    # Pro 11" 5th, 6th generation
+    (2048, 2732, 1024, 1366, 2, "ipad-pro-129"),     # Pro 12.9", Air 13"
+    (2064, 2752, 1032, 1376, 2, "ipad-pro-13"),      # Pro 13"
 ]
 
 # ── SVG source ───────────────────────────────────────────────────────────────
@@ -53,9 +60,17 @@ SVG_NATURAL_H = 671  # px (from SVG height attribute)
 # Bumped whenever the images change, so a phone that cached the old image (max-age one day) fetches the new one
 SPLASH_VERSION = 2
 
-# The launch screen's cross box: css/style.css `#launch-screen svg { width: 30vmin; aspect-ratio: 494 / 671 }`.
-LAUNCH_VMIN = 0.30
-LAUNCH_ASPECT = 494 / 671
+
+def launch_box() -> tuple[float, float]:
+    """The launch screen's cross box, read from css/style.css `#launch-screen svg`: (width as a fraction of the
+    screen's short side, width / height). Read rather than copied, so the images follow the page's size."""
+    css = (ROOT / "css" / "style.css").read_text(encoding="utf-8")
+    rule = re.search(r"#launch-screen svg\s*\{([^}]*)\}", css)
+    width = rule and re.search(r"\bwidth:\s*([\d.]+)vmin", rule.group(1))
+    aspect = rule and re.search(r"aspect-ratio:\s*([\d.]+)\s*/\s*([\d.]+)", rule.group(1))
+    if not (width and aspect):
+        raise SystemExit("css/style.css: #launch-screen svg needs width in vmin and aspect-ratio")
+    return float(width.group(1)) / 100, float(aspect.group(1)) / float(aspect.group(2))
 
 
 def launch_svg() -> str:
@@ -67,14 +82,14 @@ def launch_svg() -> str:
     return m.group(1)
 
 
-def make_splash(px_w: int, px_h: int, css_w: int, css_h: int, bg: tuple,
-                svg: str, out_path: Path) -> None:
-    # The launch screen's box (30vmin wide, 494:671) in device pixels, centered on the screen. The viewBox is fit
+def make_splash(px_w: int, px_h: int, css_w: int, css_h: int, dpr: int, bg: tuple,
+                svg: str, box: tuple[float, float], out_path: Path) -> None:
+    # The launch screen's box (launch_box) in device pixels, centered on the screen. The viewBox is fit
     # inside it and centered (preserveAspectRatio's default, xMidYMid meet). Drawn at the whole box, not the viewBox
     # alone: the cross reaches a little past the viewBox's sides, and the page paints that part inside the box.
-    dpr = px_w / css_w
-    cross_w = round(LAUNCH_VMIN * min(css_w, css_h) * dpr)
-    cross_h = round(cross_w / LAUNCH_ASPECT)
+    vmin, aspect = box
+    cross_w = round(vmin * min(css_w, css_h) * dpr)
+    cross_h = round(cross_w / aspect)
 
     png_data = cairosvg.svg2png(
         bytestring=svg.encode(),
@@ -135,6 +150,7 @@ def main():
 
     svg_src = SVG_PATH.read_text(encoding="utf-8")
     svg = launch_svg()
+    box = launch_box()
 
     # The inline SVG carries its own fill (the cream of LIGHT_CROSS_HEX)
     themes = [
@@ -144,10 +160,10 @@ def main():
     total = len(DEVICES) * len(themes)
     done  = 0
 
-    for px_w, px_h, css_w, css_h, _dpr, label in DEVICES:
+    for px_w, px_h, css_w, css_h, dpr, label in DEVICES:
         for scheme, bg in themes:
             out_path = out_dir / f"{scheme}-{label}.png"
-            make_splash(px_w, px_h, css_w, css_h, bg, svg, out_path)
+            make_splash(px_w, px_h, css_w, css_h, dpr, bg, svg, box, out_path)
             done += 1
             print(f"[{done:>2}/{total}] {out_path.name}  ({px_w}×{px_h})")
 
