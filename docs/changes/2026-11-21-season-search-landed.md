@@ -1,4 +1,5 @@
 ---
+pr: 627
 date: 2026-11-21
 branch: claude/blissful-babbage-yciqx3
 title: "docs: 절기 이름 검색을 검색 문서의 지금 동작으로 옮기기"
