@@ -1,4 +1,5 @@
 ---
+pr: 623
 date: 2026-11-21
 branch: claude/peaceful-mccarthy-6by150
 title: "fix: 하단 알림이 탭 바를 가리지 않고 한 열에 쌓이게"
