@@ -1,4 +1,5 @@
 ---
+pr: 619
 date: 2026-11-21
 branch: fix/search-pill-hover
 title: "fix: 검색 화면에서 누른 알약에 남는 호버 바탕"
