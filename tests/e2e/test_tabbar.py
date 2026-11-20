@@ -4,7 +4,8 @@ Covers:
   - 탭 바 존재 + 탭 5개(홈·캘린더·북마크·노트(숨김)·설정, 아이콘 전용) + 분리된 검색 원형
   - 탭 네비게이션 + active 상태(aria-current="page" / .active)
   - /bookmarks · /settings 전체 화면 뷰 렌더
-  - 검색 원형: 검색 화면이 아니면 검색 화면으로 가고, 검색 화면이면 위쪽 입력창에 포커스(ADR-048). 위쪽 입력창의 검색어 지우기
+  - 검색 원형: 검색 화면이 아니면 검색 화면으로 가고, 검색 화면이면 위쪽 입력창에 포커스(ADR-048). 위쪽 입력창의 검색어 지우기와
+    그 대비책(홈 탭), Esc
   - 스크롤 축소(#tab-dock.collapsed) + 축소 시 홈 탭 = 펼치기(홈 이동 아님)
   - 읽기 라우트에서 홈 탭 active 유지
   - 구분 탭이 없는 책(전례시편)에서 홈 탭 → 성서 목록 첫 화면(PR #353 리뷰)
@@ -172,6 +173,71 @@ def test_inpage_clear_lowers_the_keyboard_and_focuses_the_funnel(mobile_context)
     page.wait_for_function(funnel_focused, timeout=5_000)
     assert page.input_value("#search-inpage-input") == ""
     assert page.evaluate(ring), "키보드로 눌렀으면 깔때기에 포커스 테두리가 있다"
+
+
+def test_inpage_clear_focuses_the_home_tab_when_the_funnel_cannot_take_focus(mobile_context):
+    """깔때기가 포커스를 받지 못하면 ⊗는 포커스를 홈 탭으로 옮긴다. 페이지 맨 앞으로 떨어뜨리지 않는다(ADR-048 §4)."""
+    page = mobile_context.new_page()
+    page.goto(f"{BASE_URL}/search")
+    wait_app_ready(page)
+    page.wait_for_selector("#search-inpage-input", timeout=5_000)
+    # 콘텐츠 보안 정책(CSP)이 끼워 넣은 <style>을 막으므로 스크립트로 숨긴다. 입력창을 다시 그려도 새 깔때기를 숨긴다
+    page.evaluate("""() => {
+        const hide = () => document.querySelectorAll('#search-inpage-bar .token-funnel')
+            .forEach((f) => f.style.setProperty('display', 'none', 'important'));
+        hide();
+        new MutationObserver(hide).observe(document.getElementById('app'), { childList: true, subtree: true });
+    }""")
+
+    # 찾은 뒤에 지운다(입력창을 다시 그린다)
+    page.fill("#search-inpage-input", "사랑")
+    page.press("#search-inpage-input", "Enter")
+    page.wait_for_function("() => new URLSearchParams(location.search).get('q') === '사랑'", timeout=10_000)
+    page.wait_for_selector("#search-inpage-clear:not([hidden])", timeout=10_000)
+    page.locator("#search-inpage-clear").click()
+    page.wait_for_function("() => !new URLSearchParams(location.search).get('q')", timeout=5_000)
+    page.wait_for_timeout(300)
+    assert page.evaluate("() => !!document.activeElement?.matches('#tab-bar [data-tab=\"home\"]')"), \
+        page.evaluate("() => document.activeElement?.outerHTML.slice(0, 120)")
+    assert page.input_value("#search-inpage-input") == ""
+
+
+def test_inpage_escape_lowers_the_keyboard_and_keeps_the_search(mobile_context):
+    """위쪽 입력창의 Esc는 키보드만 내린다. 검색어와 결과, 주소는 그대로이고 포커스는 깔때기로 간다. Chrome이 검색 입력창에서
+    Esc로 검색어를 지우는 기본 동작은 막는다. 한글을 조합하는 중의 Esc는 건드리지 않는다(ADR-048 §5)."""
+    page = mobile_context.new_page()
+    page.goto(BASE_URL)
+    wait_app_ready(page)
+    page.locator("#tab-search").click()
+    page.wait_for_selector("#search-inpage-input", timeout=5_000)
+    funnel_focused = "() => !!document.activeElement?.matches('#search-inpage-bar .token-funnel')"
+    ring = "() => !!document.activeElement?.matches(':focus-visible')"
+    query = "() => new URLSearchParams(location.search).get('q')"
+
+    # 결과를 보던 중
+    page.fill("#search-inpage-input", "사랑")
+    page.press("#search-inpage-input", "Enter")
+    page.wait_for_selector(".search-result-item", timeout=20_000)
+    page.focus("#search-inpage-input")
+    page.keyboard.press("Escape")
+    assert page.evaluate(funnel_focused)
+    assert page.evaluate(ring), "키보드로 옮겼으므로 깔때기에 포커스 테두리가 있다"
+    assert page.input_value("#search-inpage-input") == "사랑", "검색어를 지우지 않는다"
+    assert page.evaluate(query) == "사랑"
+    assert page.locator(".search-result-item").count() > 0, "결과는 그대로다"
+
+    # 입력 중(아직 찾지 않았다). 친 글자가 남고 주소는 바뀌지 않는다
+    page.fill("#search-inpage-input", "목자")
+    page.keyboard.press("Escape")
+    assert page.evaluate(funnel_focused)
+    assert page.input_value("#search-inpage-input") == "목자"
+    assert page.evaluate(query) == "사랑"
+
+    # 한글을 조합하는 중의 Esc는 입력기의 몫이다
+    page.focus("#search-inpage-input")
+    page.evaluate("""() => document.querySelector('#search-inpage-input').dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', isComposing: true, bubbles: true, cancelable: true }))""")
+    assert page.evaluate("() => document.activeElement?.id") == "search-inpage-input"
 
 
 def test_scroll_collapse_and_home_expands_without_nav(mobile_context):

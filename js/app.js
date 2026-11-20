@@ -59,9 +59,9 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     // The list of an open <select> takes this key for itself: settings stay up for the next one (ADR-041 §9).
     if (isOpenSelect(e.target)) return;
-    // Escape closes the topmost layer first: open popovers → tab-bar search
-    // morph (ADR-030). Each layer returns so a single Escape never collapses
-    // two layers at once.
+    // Escape closes the topmost layer first, and each layer returns so a single
+    // Escape never collapses two layers at once. The mobile search input takes
+    // its own Escape before this runs (search.js, ADR-048 §5).
     //
     // Popovers own their lifecycle via the overlay controller (ADR-032): close
     // them through their controller (window.close{Settings,ChapterPopover}) so
