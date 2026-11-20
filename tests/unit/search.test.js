@@ -13,6 +13,7 @@
 //   - PURE HELPERS block (appendTextWithHighlight/highlightTextNodes/buildSnippet/
 //     buildSearchPagination) — minimal Element + el shim
 //   - IS_MOBILE block — isMobileLayout stub
+//   - PAGE_SIZE block (searchPageSize) — window and barBottom stubs
 //   - AUTO_NAVIGATE block (consumeSearchAutoNavigate) — pure state
 //   - HISTORY_CONTROLLER block (createSearchHistoryController) — extended
 //     StubElement with querySelectorAll/contains/closest/focus/dispatch and
@@ -743,6 +744,33 @@ test("isMobile: reads the one shared mobile query, not a copy of it (#612 review
   assert.match(block, /return isMobileLayout\(\);/);
   const helpers = fs.readFileSync(path.resolve(__dirname, "../../js/app/helpers.js"), "utf8");
   assert.match(helpers, /const MOBILE_LAYOUT_QUERY = "\(max-width: 768px\), \(pointer: coarse\)";/);
+});
+
+// ── searchPageSize ───────────────────────────────────────────────────────────
+
+function loadPageSize(win, bar) {
+  const ctx = { window: win, barBottom: () => bar, JSON, Math, Object, console };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("PAGE_SIZE"), ctx, { filename: "search-page-size.js" });
+  return ctx;
+}
+
+test("searchPageSize: the height below the top bar over 80px a result, at least 5", () => {
+  assert.strictEqual(loadPageSize({ innerHeight: 900 }, 100).searchPageSize("사랑", []), 9); // (900 - 100 - 40) / 80
+  assert.strictEqual(loadPageSize({ innerHeight: 300 }, 100).searchPageSize("사랑", []), 5);
+});
+
+test("searchPageSize: kept for the same search after the window changes size (#618 review)", () => {
+  // Page 2 starts at the size × 1: a size estimated again after a resize skipped or repeated results.
+  const win = { innerHeight: 900 };
+  const ctx = loadPageSize(win, 100);
+  assert.strictEqual(ctx.searchPageSize("사랑", ["mat"]), 9);
+  win.innerHeight = 600;
+  assert.strictEqual(ctx.searchPageSize("사랑", ["mat"]), 9, "same words and books: same size");
+  assert.strictEqual(ctx.searchPageSize("사랑", ["mrk"]), 5, "other books: a new search, estimated again");
+  assert.strictEqual(ctx.searchPageSize("믿음", ["mrk"]), 5);
+  win.innerHeight = 900;
+  assert.strictEqual(ctx.searchPageSize("목자", []), 9, "other words: estimated again");
 });
 
 // ── consumeSearchAutoNavigate ────────────────────────────────────────────────

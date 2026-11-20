@@ -130,7 +130,7 @@ def test_search_button_goes_to_search_then_focuses_the_input(mobile_context):
     assert page.evaluate(active) != "search-inpage-input"
 
 
-def test_crossing_the_desktop_tier_keeps_the_search_view(desktop_context):
+def test_crossing_the_mobile_layout_keeps_the_search_view(desktop_context):
     """창 폭이 데스크톱과 휴대폰의 경계를 넘으면 검색 화면을 다시 그리지 않고 위쪽 입력창만 넣거나 뺀다. 결과와 주소가 그대로이고,
     찾지 않은 채 친 글자와 포커스는 새 배치의 입력창으로 옮긴다. 검색어 없는 /search는 데스크톱에서 성서 목록, 휴대폰에서 최근
     검색 화면이라 다시 그리되, 친 글자와 포커스는 옮긴다(#612 리뷰)."""
@@ -182,6 +182,45 @@ def test_crossing_the_desktop_tier_keeps_the_search_view(desktop_context):
     page.wait_for_function("() => document.getElementById('search-input').value === '사랑은'", timeout=5_000)
     assert page.evaluate(active) == "search-input"
     assert page.url.endswith("/search")
+
+
+def test_crossing_to_mobile_with_only_spaces_hides_the_clear_button(desktop_context):
+    """공백만 친 채 휴대폰 배치로 바꾸면 새 위쪽 입력창의 ⊗는 숨는다. 다른 곳처럼 앞뒤 공백을 뺀 값으로 본다(#618 리뷰)."""
+    page = desktop_context.new_page()
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.goto(f"{BASE_URL}/search?q=%EC%82%AC%EB%9E%91")  # 사랑
+    wait_app_ready(page)
+    page.wait_for_selector(".search-result-item", timeout=20_000)
+    page.fill("#search-input", "  ")
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.wait_for_selector("#search-inpage-bar", timeout=5_000)
+    assert page.input_value("#search-inpage-input") == "  "
+    assert page.locator("#search-inpage-clear").is_hidden()
+
+
+def test_paging_after_a_resize_keeps_the_page_size(desktop_context):
+    """창 크기를 바꾼 뒤 다음 쪽으로 가도 한 쪽의 결과 수는 1쪽과 같다. 쪽마다 결과 수를 그 창 높이로 다시 세면, 2쪽이 1쪽과 다른
+    자리에서 시작해 결과가 빠지거나 두 번 나왔다(#618 리뷰). 휴대폰과 데스크톱 배치를 넘나들 때와 같은 배치에서 높이만 바꿀 때를 본다."""
+    page = desktop_context.new_page()
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.goto(f"{BASE_URL}/search?q=%EC%82%AC%EB%9E%91")  # 사랑
+    wait_app_ready(page)
+    page.wait_for_selector(".search-pagination", timeout=20_000)
+    refs = lambda: page.locator(".search-result-ref").all_inner_texts()
+    first = refs()
+    size = len(first)
+    seen = set(first)
+
+    for n, viewport in ((2, {"width": 390, "height": 844}), (3, {"width": 1280, "height": 500})):
+        page.set_viewport_size(viewport)
+        page.locator(".search-pagination a", has_text="다음").click()
+        page.wait_for_function(f"() => new URLSearchParams(location.search).get('page') === '{n}'", timeout=5_000)
+        page.wait_for_function(
+            f"() => document.querySelector('h2.search-count')?.textContent.includes('({n}/')", timeout=20_000)
+        now = refs()
+        assert len(now) == size, (n, len(now), size)
+        assert not seen & set(now), f"{n}쪽이 앞 쪽의 결과를 다시 보인다: {sorted(seen & set(now))}"
+        seen |= set(now)
 
 
 def test_inpage_clear_lowers_the_keyboard_and_focuses_the_funnel(mobile_context):

@@ -1516,7 +1516,7 @@ function buildInPageSearchInput(query) {
   }));
   input.value = query || "";
   const clear = el("button", { id: "search-inpage-clear", type: "button", "aria-label": "검색어 지우기" }, "×");
-  clear.hidden = !query;
+  clear.hidden = !query.trim();
 
   input.addEventListener("input", () => { clear.hidden = !input.value.trim(); });
   input.addEventListener("keydown", (e) => {
@@ -2572,7 +2572,11 @@ function ensureBookSheet() {
     // 「적용」은 시트를 연 입력 칸에 보이는 검색어를 고른 책 안에서 찾는다(ADR-033 D3, 사용자 보고 2026-11-18). Enter를 누르지 않고
     // 친 검색어는 주소에 없으므로 칸에서 읽는다. 읽기는 이동보다 먼저다: route()가 시트를 닫기 전에 칸을 주소의 검색어로 다시 채운다
     // (routing.js의 상단 바 칸).
-    const field = _bookSheetReturnField;
+    // The window may have crossed the mobile layout while the sheet was open (onLayoutTierChange): the field it opened
+    // from is then gone (the in-page bar taken out) or hidden (the header field on mobile), and the typed text moved to
+    // the field the layout shows now. Read from that one and hand focus back to it.
+    const opened = _bookSheetReturnField;
+    const field = opened && !isShownSearchField(opened) ? shownSearchField() : opened;
     const typed = field && field.input.isConnected ? field.input.value.trim() : null;
     // `searched`: a keyword reached the URL. A typed `in:<alias>` alone is absorbed into
     // chips and lands on the empty-query view, so it counts as no query for focus.
@@ -2592,6 +2596,9 @@ function ensureBookSheet() {
     // overlay hands focus back to the funnel; the header keeps it, but the mobile
     // in-page bar is rebuilt by the render and its old funnel and input go with it,
     // so that render focuses the new bar's funnel or input (`_inpageFocusAfterRender`).
+    // The overlay handed focus back to the funnel that opened the sheet. After a layout change that funnel is gone or
+    // hidden and focus stayed in the closing sheet: give it to the shown field's funnel (the render then moves it on).
+    if (field && field !== opened) field.funnel.focus();
     if (field && field.container.id === "search-inpage-bar") {
       _inpageFocusAfterRender = { seq: window.routeSeq?.() ?? 0, target: searched ? "funnel" : "input", options: {} };
     } else if (!searched && field && field.input.isConnected) {
@@ -2689,6 +2696,20 @@ function renderBookFilterList(sheet, books) {
   tabbar.hidden = !tabs.length;
   const firstChosen = tabs.findIndex((t) => t.panel.querySelector('.book-filter-option[aria-selected="true"]'));
   sheet.showTab(Math.max(0, firstChosen));
+}
+
+/**
+ * Whether `field` is the search field the current layout shows: the mobile in-page bar, or the desktop header field
+ * (CSS hides it on mobile).
+ * @param {SearchField} field
+ */
+function isShownSearchField(field) {
+  return field.container.isConnected && (field.container.id === "search-inpage-bar") === isMobile();
+}
+
+/** The search field the current layout shows, if it is drawn. @returns {SearchField | null} */
+function shownSearchField() {
+  return _searchFields.find(isShownSearchField) || null;
 }
 
 /** @param {HTMLElement} [returnFocusEl] */
@@ -2913,6 +2934,27 @@ async function renderSearchView(state) {
 // A cached index arrives at once; three seconds only run out on a first download or a slow network.
 const LECTIONARY_WAIT_MS = 3000;
 
+// ── BEGIN PAGE_SIZE ──
+// Exercised by tests/unit/search.test.js (barBottom and window stubbed).
+// The page size of the search on screen. Estimated from the viewport height below the top bar (helpers.js barBottom:
+// #app-header alone left out the status-bar inset, which is padding on #sticky-group), then kept while the user pages
+// through the same search (its words and books): a page starts at (page - 1) × size, so a size estimated again for page 2
+// after the window changed size skipped or repeated results (#618 review). A new search estimates it again.
+/** @type {{ key: string, size: number } | null} */
+let _searchPageSize = null;
+
+/** @param {string} query @param {string[]} filterBooks @returns {number} */
+function searchPageSize(query, filterBooks) {
+  const key = JSON.stringify([query, filterBooks]);
+  if (_searchPageSize && _searchPageSize.key === key) return _searchPageSize.size;
+  const availH = window.innerHeight - barBottom() - 40;
+  const itemH = 80;
+  const size = Math.max(5, Math.floor(availH / itemH));
+  _searchPageSize = { key, size };
+  return size;
+}
+// ── END PAGE_SIZE ──
+
 /**
  * @param {string} query
  * @param {number} page
@@ -2966,11 +3008,7 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
 
   resultsTarget.appendChild(el("div", { className: "loading", "aria-live": "polite" }, "검색 중…"));
 
-  // Estimate page size from the viewport height below the top bar. The bar is measured (helpers.js barBottom):
-  // #app-header alone left out the status-bar inset, which is padding on #sticky-group.
-  const availH = window.innerHeight - barBottom() - 40;
-  const itemH = 80;
-  const pageSize = Math.max(5, Math.floor(availH / itemH));
+  const pageSize = searchPageSize(query, filterBooks);
 
   // Pagination links must carry the active book filters (ADR-033) and stay in the group shown (ADR-046 §3); the
   // closure binds the current state so renderSearchResultList stays filter-agnostic.
