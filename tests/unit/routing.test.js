@@ -91,10 +91,15 @@ test("parsePath: /settings → settings 뷰", () => {
 
 // ── search route ──
 
-test("parsePath: /search 빈 쿼리는 기본값(page 1, filterBooks [], group null)", () => {
+test("parsePath: /search 빈 쿼리는 기본값(page 1, filterBooks [], group null, book null)", () => {
   assert.deepEqual(parse("/search"), {
-    view: "search", query: "", page: 1, filterBooks: [], group: null,
+    view: "search", query: "", page: 1, filterBooks: [], group: null, book: null,
   });
+});
+
+test("parsePath: /search book은 고른 책 알약이고 빈 값은 null(ADR-049 §2)", () => {
+  assert.strictEqual(parse("/search", "?q=사랑&in=luke&in=john&book=john").book, "john");
+  assert.strictEqual(parse("/search", "?q=사랑&in=luke&book=").book, null);
 });
 
 test("parsePath: /search group은 전례일 알약만 읽고 나머지 값은 null(ADR-044 §1)", () => {

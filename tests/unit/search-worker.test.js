@@ -402,6 +402,60 @@ test("groupedResults: 책 범위가 성시의 책뿐이면 성서 본문은 없�
   ctx._setMeta(META);
 });
 
+// ── 책을 고른 검색: 책마다 세고 고른 책의 결과를 한 목록에 둔다(ADR-049 §2) ──
+
+// 색인의 차례(신약, 외경, 구약, 성시)와 성경의 차례가 다르다. 성경의 차례는 메타 파일의 책 차례다
+const SCOPE_META = {
+  aliases: {},
+  books: { gen: { ko: "창세기" }, ps: { ko: "시편" }, luke: { ko: "루가의 복음서" }, john: { ko: "요한의 복음서" }, lps: { ko: "전례시편" } },
+};
+const SCOPE_CHUNKS = {
+  nt: { books: ["luke", "john"], bArr: [0, 0, 1], cArr: [6, 6, 3], vArr: [27, 32, 16], tArr: ["원수를 사랑하여라", "사랑하는 사람만 사랑한다면", "이처럼 사랑하시어"] },
+  ot: { books: ["gen", "ps"], bArr: [0, 1], cArr: [29, 23], vArr: [20, 1], tArr: ["라헬을 사랑하였으므로", "야훼는 나의 목자"] },
+  lit: { books: ["lps"], bArr: [0], cArr: [23], vArr: [1], tArr: ["주님은 나의 목자시니"] },
+};
+
+test("scopedResults: 고른 책마다의 수를 성경의 차례로 세고, 「전체」는 성서 본문과 성시를 성경의 차례로 한 목록에 둔다", () => {
+  ctx._setMeta(SCOPE_META);
+  ctx._setChunks(SCOPE_CHUNKS);
+  const r = plain(ctx.scopedResults("사랑", ["nt", "ot", "lit"], new Set(["john", "gen", "luke", "lps"]), null, 1, 10));
+  assert.deepEqual(r.books, [["gen", 1], ["luke", 2], ["john", 1], ["lps", 0]]);
+  assert.deepEqual(r.results.map((x) => [x.b, x.c, x.v]), [["gen", 29, 20], ["luke", 6, 27], ["luke", 6, 32], ["john", 3, 16]]);
+  assert.equal(r.total, 4);
+  assert.equal(r.shownBook, null);
+  assert.deepEqual([r.psalter.total, r.psalter.results.length], [0, 0]);
+  const both = plain(ctx.scopedResults("목자", ["nt", "ot", "lit"], new Set(["lps", "ps"]), null, 1, 10));
+  assert.deepEqual(both.results.map((x) => x.b), ["ps", "lps"]);
+  ctx._setMeta(META);
+});
+
+test("scopedResults: 고른 책 알약은 그 책만 쪽으로 자르고, 결과가 없거나 범위 밖의 책이면 「전체」다", () => {
+  ctx._setMeta(SCOPE_META);
+  ctx._setChunks(SCOPE_CHUNKS);
+  const scope = new Set(["luke", "john", "lps"]);
+  const luke = plain(ctx.scopedResults("사랑", ["nt", "ot", "lit"], scope, "luke", 2, 1));
+  assert.deepEqual([luke.shownBook, luke.total, luke.results.map((x) => x.v)], ["luke", 2, [32]]);
+  // 책마다의 수는 보이는 알약과 상관없이 모든 책의 수다
+  assert.deepEqual(luke.books, [["luke", 2], ["john", 1], ["lps", 0]]);
+  const empty = plain(ctx.scopedResults("사랑", ["nt", "ot", "lit"], scope, "lps", 1, 10));
+  assert.deepEqual([empty.shownBook, empty.total], [null, 3]);
+  const outside = plain(ctx.scopedResults("사랑", ["nt", "ot", "lit"], scope, "gen", 1, 10));
+  assert.deepEqual([outside.shownBook, outside.total], [null, 3]);
+  ctx._setMeta(META);
+});
+
+test("scopedResults: 받은 색인만 찾고, 색인에 없는 책 id는 차례의 끝에 0이다", () => {
+  ctx._setMeta(SCOPE_META);
+  ctx._setChunks(SCOPE_CHUNKS);
+  const partial = plain(ctx.scopedResults("사랑", ["nt"], new Set(["gen", "nope", "luke"]), null, 1, 10));
+  assert.deepEqual(partial.books, [["gen", 0], ["luke", 2], ["nope", 0]]);
+  assert.equal(partial.total, 2);
+  // 받는 동안에는 아직 결과가 없는 책 알약도 「전체」로 바꾸지 않는다(그 책의 색인이 아직 없을 수 있다)
+  const waiting = plain(ctx.scopedResults("사랑", ["nt"], new Set(["gen", "luke"]), "gen", 1, 10, true));
+  assert.deepEqual([waiting.shownBook, waiting.total], ["gen", 0]);
+  ctx._setMeta(META);
+});
+
 test("paginate: 송가는 송가 이름(title)을 함께 넘긴다(ADR-046 §4)", () => {
   ctx._setMeta(PSALTER_META);
   ctx._setTitles(PSALTER_TITLES);

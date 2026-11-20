@@ -1561,8 +1561,6 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
 
 #search-inpage-input {
   flex: 1 1 auto;
-  /* Keep a usable width so the token zone scrolls instead of the query input
-     crushing when several book chips are present (Bugbot). */
   min-width: 5rem;
   border: none;
   background: none;
@@ -2533,39 +2531,20 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   color: var(--accent);
 }
 
-/* ── In-field search tokens (ADR-033 개정 B) ───────────────────────────────
-   Book scope surfaces as chips INSIDE the search field (HIG search tokens).
-   .token-zone uses display:contents so the funnel/chips flex inline within each
-   field row — the header #search-bar and the mobile in-page #search-inpage-bar. */
-/* Horizontal-scroll strip for the funnel + chips — so many book tokens scroll
-   instead of crushing the query input or overflowing the bar (Bugbot). The main
-   input and trailing clear/toggle stay OUTSIDE this scroller, so they're always
-   reachable. align-self:stretch makes the zone the full bar height so the 44px
-   tap-target ::after overlays aren't clipped by overflow. */
+/* ── Search field funnel (ADR-033, ADR-049 §1) ─────────────────────────────
+   The book-picker funnel leads each search field — the header #search-bar and the mobile in-page #search-inpage-bar.
+   The chosen books are pills under the field (.scope-row), not chips inside it. */
 .token-zone {
   display: flex;
   align-items: center;
   align-self: stretch;
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
+  flex: 0 0 auto;
 }
-.token-zone::-webkit-scrollbar { display: none; }
 .token-zone[hidden] { display: none; }
-/* Chips inherit this Sans stack (display:contents passes inheritance to
-   children) so tokens don't pick up the body Serif. */
-.field-token {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-}
 
-/* Header bar becomes a flex row so tokens sit inline with the input; the
+/* Header bar becomes a flex row so the funnel sits inline with the input; the
    toggle/clear/history stay position:absolute (out of flow), unaffected. */
 #search-bar { display: flex; align-items: center; }
-/* The funnel keeps its width when the top bar narrows the field (ADR-043 §8): the zone may give up its chips to
-   scrolling, but not the button that opens the book picker. The input takes the shrinking instead. */
-#search-bar .token-zone { min-width: 2.05rem; }
 #search-bar #search-input { flex: 1 1 auto; width: auto; min-width: 4rem; }
 
 /* Funnel (book picker) — leading icon button inside the field. */
@@ -2587,11 +2566,8 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
 }
 
 /* Keep the compact visual size but expand the tap area to the 44px touch target
-   via a transparent overlay so the in-field funnel
-   and chip × meet --touch-target (ADR-028 / WCAG) without growing the inline
-   pill (Bugbot). */
-.token-funnel::after,
-.field-token-remove::after {
+   via a transparent overlay so the in-field funnel meets --touch-target (ADR-028 / WCAG). */
+.token-funnel::after {
   content: "";
   position: absolute;
   top: 50%;
@@ -2608,44 +2584,71 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
 }
 .token-funnel-icon { width: 1.05rem; height: 1.05rem; }
 
-/* A removable in-field token (book scope). */
-.field-token {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.1rem;
-  max-width: 9rem;
-  height: 1.7rem;
-  margin-right: 0.3rem;
-  padding: 0 0.15rem 0 var(--space-2);
-  font-size: var(--font-2xs);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  border-radius: var(--radius-pill);
+/* ── Book pills under the search field (ADR-049) ──
+   결과 묶음의 알약(.search-pill)과 같은 테두리 알약이다. 알약 안의 이름 부분(.scope-pill-main, 링크 또는 글)과 ×(.scope-pill-remove)는
+   따로 누르는 자리이고, 둘 다 높이가 누를 자리(44px)다. 고른 알약은 바탕이 강조색이다. 결과가 없는 책은 흐리게 둔다(§4). */
+.scope-row[hidden] { display: none; }
+.scope-pill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
 }
-.field-token-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
+.scope-pill {
+  display: inline-flex;
+  align-items: stretch;
+  min-height: var(--touch-target);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text);
+  font-size: var(--font-sm);
   white-space: nowrap;
 }
-.field-token-remove {
-  position: relative;
-  flex: 0 0 auto;
+.scope-pill-main {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-1) 0 var(--space-4);
+  border-radius: var(--radius-pill) 0 0 var(--radius-pill);
+  color: inherit;
+  text-decoration: none;
+}
+/* 「전체」에는 ×가 없어 오른쪽도 둥글고 여백이 같다 */
+.scope-pill-all .scope-pill-main { padding-right: var(--space-4); border-radius: var(--radius-pill); }
+a.scope-pill-main:hover,
+a.scope-pill-main:focus-visible { background: var(--bg-card); }
+.scope-pill-remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.4rem;
-  height: 1.4rem;
-  padding: 0;
+  width: var(--touch-target);
+  padding: 0 var(--space-1) 0 0;
   border: none;
+  border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
   background: none;
-  color: inherit;
-  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  font-size: var(--font-lg);
   line-height: 1;
   cursor: pointer;
-  border-radius: 50%;
 }
-.field-token-remove:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.scope-pill-remove:hover,
+.scope-pill-remove:focus-visible { background: var(--bg-card); color: var(--text); }
+.scope-pill-current {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 500;
+}
+.scope-pill-current .search-pill-count,
+.scope-pill-current .scope-pill-remove { color: var(--bg); }
+.scope-pill-current a.scope-pill-main:hover,
+.scope-pill-current a.scope-pill-main:focus-visible,
+.scope-pill-current .scope-pill-remove:hover,
+.scope-pill-current .scope-pill-remove:focus-visible { background: color-mix(in srgb, var(--bg) 18%, transparent); color: var(--bg); }
+.scope-pill-empty .scope-pill-main,
+.scope-pill-empty .search-pill-count { color: var(--text-tertiary); }
 
 /* ── Search history panel ── */
 #search-history {

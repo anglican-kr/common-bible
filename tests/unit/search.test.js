@@ -289,6 +289,7 @@ function loadPureHelpers() {
     fillLectRow: ctx.fillLectRow,
     lectDayText: ctx.lectDayText,
     buildSearchPills: ctx.buildSearchPills,
+    buildScopePills: ctx.buildScopePills,
     partialAnnouncement: ctx.partialAnnouncement,
     SEARCHED_GROUPS: vm.runInContext("SEARCHED_GROUPS", ctx),
   };
@@ -610,6 +611,12 @@ test("buildSearchUrl: group writes 성시 and 전례일, not 성서 본문 (ADR-
   assert.strictEqual(h.buildSearchUrl({ q: "x", group: "psalter" }), "/search?q=x&group=psalter");
   assert.strictEqual(h.buildSearchUrl({ q: "x", page: 2, group: "lectionary" }), "/search?q=x&page=2&group=lectionary");
   assert.strictEqual(h.buildSearchUrl({ q: "x", group: "bible" }), "/search?q=x");
+});
+
+test("buildSearchUrl: 고른 책 알약(book=)은 범위와 묶음 뒤에 적는다(ADR-049 §2)", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.buildSearchUrl({ q: "x", page: 2, filterBooks: ["luke", "john"], book: "john" }), "/search?q=x&page=2&in=luke&in=john&book=john");
+  assert.strictEqual(h.buildSearchUrl({ q: "x", filterBooks: ["luke"], book: null }), "/search?q=x&in=luke");
 });
 
 test("buildSearchUrl: empty state → bare /search", () => {
@@ -1416,6 +1423,8 @@ function loadScopeHelpers() {
 }
 
 const scope = loadScopeHelpers();
+// 다른 realm의 배열을 이 realm의 값으로 바꿔 deepEqual로 비교한다
+const plainScope = (r) => ({ q: r.q, filterBooks: Array.from(r.filterBooks) });
 const ALIASES = new Map([["요한", "john"], ["창세", "genesis"], ["gen", "genesis"]]);
 
 test("extractInScope: 연산자 없으면 키워드 그대로, ids 빈 배열", () => {
@@ -1470,6 +1479,18 @@ test("bookName: 없는 id는 id 그대로 폴백", () => {
 test("bookName: _bookMap이 null이어도 id 폴백(안전)", () => {
   scope._setBookMap(null);
   assert.equal(scope.bookName("john"), "john");
+});
+
+test("withoutScopeBook: 고른 책에서 빼고, 입력 칸에 친 `in:`의 그 책도 검색어에서 뺀다(ADR-049 §3)", () => {
+  assert.deepEqual(plainScope(scope.withoutScopeBook("사랑", ["john", "genesis"], "john", ALIASES)), { q: "사랑", filterBooks: ["genesis"] });
+  assert.deepEqual(plainScope(scope.withoutScopeBook("사랑 in:요한 in:창세", [], "john", ALIASES)), { q: "사랑 in:창세", filterBooks: [] });
+  assert.deepEqual(plainScope(scope.withoutScopeBook("in:요한", [], "john", ALIASES)), { q: "", filterBooks: [] });
+  // 별칭 표를 아직 받지 못했으면 검색어는 그대로다
+  assert.deepEqual(plainScope(scope.withoutScopeBook("사랑 in:요한", ["john"], "john", null)), { q: "사랑 in:요한", filterBooks: [] });
+});
+
+test("canonOrder: 책 id를 성경의 차례로, 겹친 것은 하나로, 모르는 id는 끝에 둔다(ADR-049 §1)", () => {
+  assert.deepEqual(Array.from(scope.canonOrder(["lps", "john", "x", "luke", "john"], ["gen", "luke", "john", "lps"])), ["luke", "john", "lps", "x"]);
 });
 
 // 최근 검색의 글은 찾은 낱말 뒤에 그때의 책 범위를 `in:<짧은 이름>`으로 붙인다(ADR-014 D1). 깔때기로 마르코를 고르고 「세리」를
@@ -2490,11 +2511,76 @@ test("partialAnnouncement: 검색 중 알림은 묶음마다 알약의 이름과
   assert.strictEqual(h.partialAnnouncement("사랑", { total: 12, psalter: { total: 0 } }), "\"사랑\" 검색 중… 현재 성서 본문 12건");
   // 옛 워커나 성시 색인을 아직 받지 못한 결과에는 `psalter`가 없다
   assert.strictEqual(h.partialAnnouncement("사랑", { total: 12 }), "\"사랑\" 검색 중… 현재 성서 본문 12건");
+  // 책을 고른 검색은 고른 책을 한 목록에 센다(ADR-049 §2)
+  assert.strictEqual(h.partialAnnouncement("사랑", { total: 7, psalter: { total: 0 }, books: [["luke", 7]] }), "\"사랑\" 검색 중… 현재 7건");
 });
 
 test("SEARCHED_GROUPS: 결과 없음과 책 이름만 친 안내는 알약의 세 묶음을 그 차례로 적는다", () => {
   const h = loadPureHelpers();
   assert.strictEqual(h.SEARCHED_GROUPS, "성서 본문, 성시, 전례일");
+});
+
+// ── 고른 책의 알약 줄(ADR-049) ──
+const SCOPE_BOOKS = [{ id: "luke", name: "루가" }, { id: "john", name: "요한" }, { id: "lps", name: "전례시편" }];
+/** @param {any} h @param {any} opts */
+function scopePills(h, opts) {
+  const removed = [];
+  const row = h.buildScopePills(opts.books || SCOPE_BOOKS, {
+    counts: opts.counts ?? null, shown: opts.shown ?? null,
+    hrefOf: (id) => h.buildSearchUrl({ q: "사랑", filterBooks: ["luke", "john", "lps"], book: id }),
+    onRemove: (id) => removed.push(id),
+  });
+  const items = row.children[0].children;
+  return { row, items, removed };
+}
+
+test("buildScopePills: 수를 모르면 이름과 ×만 두고, 이름은 링크가 아니다(ADR-049 §5)", () => {
+  const h = loadPureHelpers();
+  const { row, items, removed } = scopePills(h, {});
+  assert.strictEqual(row.getAttribute("role"), "group");
+  assert.strictEqual(row.getAttribute("aria-label"), "검색할 책");
+  assert.deepStrictEqual(items.map((li) => li.children[0].tagName), ["SPAN", "SPAN", "SPAN"]);
+  assert.deepStrictEqual(items.map((li) => recursiveText(li.children[0])), ["루가", "요한", "전례시편"]);
+  const xs = items.map((li) => li.children[1]);
+  assert.deepStrictEqual(xs.map((x) => x.getAttribute("aria-label")), ["검색할 책에서 루가 빼기", "검색할 책에서 요한 빼기", "검색할 책에서 전례시편 빼기"]);
+  xs[1].eventListeners.click[0]({ detail: 1 });
+  assert.deepStrictEqual(removed, ["john"]);
+});
+
+test("buildScopePills: 두 권 이상이면 맨 앞에 「전체」, 알약마다 수와 그 책의 주소, 결과가 없는 책은 흐린 글(ADR-049 §2, §4)", () => {
+  const h = loadPureHelpers();
+  const { items } = scopePills(h, { counts: [["luke", 23], ["john", 48], ["lps", 0]], shown: "john" });
+  assert.strictEqual(items.length, 4);
+  const mains = items.map((li) => li.children[0]);
+  assert.deepStrictEqual(mains.map((n) => recursiveText(n)), ["전체 71건", "루가 23건", "요한 48건", "전례시편 0건"]);
+  assert.deepStrictEqual(mains.map((n) => n.tagName), ["A", "A", "A", "SPAN"]);
+  assert.deepStrictEqual(mains.slice(0, 3).map((a) => a.getAttribute("href")), [
+    "/search?q=%EC%82%AC%EB%9E%91&in=luke&in=john&in=lps",
+    "/search?q=%EC%82%AC%EB%9E%91&in=luke&in=john&in=lps&book=luke",
+    "/search?q=%EC%82%AC%EB%9E%91&in=luke&in=john&in=lps&book=john",
+  ]);
+  assert.deepStrictEqual(mains.slice(0, 3).map((a) => a.getAttribute("data-focus-key")), ["book:all", "book:luke", "book:john"]);
+  assert.deepStrictEqual(mains.map((n) => n.getAttribute("aria-current")), [null, null, "true", null]);
+  assert.deepStrictEqual(items.map((li) => li.classList.contains("scope-pill-current")), [false, false, true, false]);
+  assert.ok(items[3].classList.contains("scope-pill-empty"));
+  // 「전체」에는 ×가 없고, 결과가 없는 책도 뺄 수 있다
+  assert.strictEqual(items[0].children.length, 1);
+  assert.strictEqual(items[3].children[1].getAttribute("data-remove-book"), "lps");
+});
+
+test("buildScopePills: 「전체」를 고르면 「전체」가 고른 알약이다", () => {
+  const h = loadPureHelpers();
+  const { items } = scopePills(h, { counts: [["luke", 23], ["john", 48], ["lps", 0]], shown: null });
+  assert.deepStrictEqual(items.map((li) => li.children[0].getAttribute("aria-current")), ["true", null, null, null]);
+});
+
+test("buildScopePills: 한 권이면 「전체」 없이 그 책이 늘 고른 알약이고 주소에 책을 적지 않는다(ADR-049 §2)", () => {
+  const h = loadPureHelpers();
+  const { items } = scopePills(h, { books: [{ id: "mark", name: "마르" }], counts: [["mark", 6]] });
+  assert.strictEqual(items.length, 1);
+  const a = items[0].children[0];
+  assert.deepStrictEqual([recursiveText(a), a.getAttribute("aria-current"), a.getAttribute("href")],
+    ["마르 6건", "true", "/search?q=%EC%82%AC%EB%9E%91&in=luke&in=john&in=lps"]);
 });
 
 test("buildSearchPills: 고른 알약에 aria-current, 알약마다 주소와 포커스 키, 스크린 리더에는 「건」", () => {
