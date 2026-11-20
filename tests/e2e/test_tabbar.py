@@ -129,6 +129,60 @@ def test_search_button_goes_to_search_then_focuses_the_input(mobile_context):
     assert page.evaluate(active) != "search-inpage-input"
 
 
+def test_crossing_the_desktop_tier_keeps_the_search_view(desktop_context):
+    """창 폭이 데스크톱과 휴대폰의 경계를 넘으면 검색 화면을 다시 그리지 않고 위쪽 입력창만 넣거나 뺀다. 결과와 주소가 그대로이고,
+    찾지 않은 채 친 글자와 포커스는 새 배치의 입력창으로 옮긴다. 검색어 없는 /search는 데스크톱에서 성서 목록, 휴대폰에서 최근
+    검색 화면이라 다시 그리되, 친 글자와 포커스는 옮긴다(#612 리뷰)."""
+    page = desktop_context.new_page()
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.goto(f"{BASE_URL}/search?q=%EC%82%AC%EB%9E%91")  # 사랑
+    wait_app_ready(page)
+    page.wait_for_selector(".search-result-item", timeout=20_000)
+    assert page.locator("#search-inpage-bar").count() == 0
+    # 다시 그리면 사라질 표시를 남긴다
+    page.evaluate("() => { document.querySelector('#app > .search-view').dataset.mark = 'kept'; }")
+    kept = "#app > .search-view[data-mark='kept']"
+    url = page.url
+    active = "() => document.activeElement?.id"
+
+    page.fill("#search-input", "목자")
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.wait_for_selector("#search-inpage-bar", timeout=5_000)
+    assert page.locator(kept).count() == 1, "검색 화면을 다시 그리지 않는다"
+    assert page.locator(f"{kept} > #search-inpage-bar:first-child").count() == 1, "위쪽 입력창은 검색 화면의 맨 위다"
+    assert page.locator(".search-result-item").count() > 0
+    assert page.input_value("#search-inpage-input") == "목자"
+    assert page.locator("#search-inpage-clear").is_visible()
+    assert page.evaluate(active) == "search-inpage-input"
+    assert page.url == url
+
+    page.fill("#search-inpage-input", "목자는")
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.wait_for_function("() => !document.getElementById('search-inpage-bar')", timeout=5_000)
+    assert page.locator(kept).count() == 1, "검색 화면을 다시 그리지 않는다"
+    assert page.input_value("#search-input") == "목자는"
+    assert page.evaluate(active) == "search-input"
+    assert page.url == url
+
+    # 검색어 없는 /search: 데스크톱은 성서 목록이다
+    page.goto(f"{BASE_URL}/search")
+    wait_app_ready(page)
+    page.wait_for_selector(".book-list", timeout=8_000)
+    page.fill("#search-input", "사랑")
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.wait_for_selector("#search-inpage-input", timeout=5_000)
+    page.wait_for_function("() => document.getElementById('search-inpage-input').value === '사랑'", timeout=5_000)
+    assert page.evaluate(active) == "search-inpage-input"
+    assert page.locator("#search-inpage-clear").is_visible()
+
+    page.fill("#search-inpage-input", "사랑은")
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.wait_for_selector(".book-list", timeout=8_000)
+    page.wait_for_function("() => document.getElementById('search-input').value === '사랑은'", timeout=5_000)
+    assert page.evaluate(active) == "search-input"
+    assert page.url.endswith("/search")
+
+
 def test_inpage_clear_lowers_the_keyboard_and_focuses_the_funnel(mobile_context):
     """위쪽 입력창의 검색어 지우기(⊗)는 키보드를 내린다. 결과를 보던 중에 지워도, 입력 중에 지워도, 키보드로 단추를 눌러도 최근 검색
     화면으로 돌아가고, 포커스는 다시 그린 입력창의 깔때기로 간다. 손가락이나 마우스로 눌렀으면 깔때기에 포커스 테두리를 그리지 않고,

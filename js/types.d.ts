@@ -1010,6 +1010,8 @@ export interface AppHelpers {
   // The desktop-layout condition (ADR-029 §1) — a wide window and a mouse. One string for every module that asks.
   DESKTOP_LAYOUT_QUERY: string;
   isDesktopLayout: () => boolean;
+  MOBILE_LAYOUT_QUERY: string;
+  isMobileLayout: () => boolean;
   /** 바텀 시트가 열린 동안 막아 두는(inert) 뒤 화면. 책 고르기 시트와 캘린더 날짜 고르기 판이 같이 쓴다. */
   SHEET_INERT_SELECTORS: string;
   /** 날짜 고르기 판의 제목 단추와 판의 링크가 함께 다는 포커스 열쇠. 고른 뒤 새 화면의 제목 단추로 포커스가 돌아온다. */
@@ -1361,7 +1363,7 @@ declare global {
     }) => SyncMachine;
     driveSync: DriveSyncFacade;
 
-    // search.js 가 commitTopSearch 노출.
+    // search.js가 commitTopSearch를 노출한다.
     commitTopSearch?: (rawQuery: string) => string;
     resetTabCollapse?: () => void;
     // ADR-030 후속⁵: 슬라이딩 인디케이터 재배치(스크롤 축소 해제·외부 트리거용).

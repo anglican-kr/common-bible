@@ -137,9 +137,9 @@ let _swipedRow = null;
 let _dragState = null;
 
 function _isMobileViewport() {
-  // Mobile/touch tier — same query as isMobile() (ADR-029 개정) so the header
+  // Mobile/touch tier — the same query as isMobile() (helpers.js MOBILE_LAYOUT_QUERY, ADR-029 개정) so the header
   // bookmark / swipe gating tracks the tab bar's presence on every device.
-  return window.matchMedia("(max-width: 768px), (pointer: coarse)").matches;
+  return window.appHelpers.isMobileLayout();
 }
 
 // Clear any open-swipe state + inline slide transform on a row.

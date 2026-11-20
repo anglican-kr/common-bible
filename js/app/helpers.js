@@ -357,6 +357,17 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     return typeof window.matchMedia === "function" && window.matchMedia(DESKTOP_LAYOUT_QUERY).matches;
   }
 
+  // The mobile layout's own condition, a narrow window OR a touch screen (ADR-029 §1). CSS hides the top bar's search
+  // field with it, and JS draws the mobile search field (search.js `isMobile`) and the bookmark gestures with it, so
+  // there is always exactly one search field. It is not quite the complement of DESKTOP_LAYOUT_QUERY: a wide window
+  // whose primary pointer is `none`, or a width between 768 and 769px (browser zoom), matches neither.
+  const MOBILE_LAYOUT_QUERY = "(max-width: 768px), (pointer: coarse)";
+
+  /** @returns {boolean} whether the mobile layout's own condition holds right now */
+  function isMobileLayout() {
+    return typeof window.matchMedia === "function" && window.matchMedia(MOBILE_LAYOUT_QUERY).matches;
+  }
+
   // What a bottom sheet over the current screen blocks (inert) while it is open: the top bar, the screen, the tab dock
   // and the docked bars. The book-filter sheet (search.js) and the calendar date picker (calendar.js) share it, so a
   // new fixed bar only needs adding here.
@@ -581,7 +592,8 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   return {
     _$, chUnit, chUnitNoun, chapterTitle, chapterLabel, verseRefLabel, missingChapterText, hasBatchim, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
     HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot, SCROLL_ANCHORING, barBottom, scrollUnderBar,
-    publishBarHeight, isFormerNorthChurch, churchName, parishGroups, DESKTOP_LAYOUT_QUERY, isDesktopLayout, SHEET_INERT_SELECTORS,
+    publishBarHeight, isFormerNorthChurch, churchName, parishGroups, DESKTOP_LAYOUT_QUERY, isDesktopLayout, MOBILE_LAYOUT_QUERY, isMobileLayout,
+    SHEET_INERT_SELECTORS,
     DATE_PICKER_FOCUS_KEY, datePickerTrigger,
   };
 })();

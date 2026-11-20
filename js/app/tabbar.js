@@ -11,7 +11,7 @@ const $home = document.querySelector('#tab-bar [data-tab="home"]');
 
 /** @type {Window & typeof globalThis & Record<string, any>} */
 const W = /** @type {any} */ (window);
-const { isModifiedClick, DESKTOP_LAYOUT_QUERY } = window.appHelpers;
+const { isModifiedClick } = window.appHelpers;
 
 let collapsed = false; // ADR-030 P3: 스크롤 축소(탭 바 홈 원형) 상태
 
@@ -44,20 +44,15 @@ $searchBtn?.addEventListener("click", (e) => {
     // is still drawing, the bar is not there yet and the press does nothing.
     const input = document.getElementById("search-inpage-input");
     if (input instanceof HTMLInputElement) {
-      window.scrollTo(0, 0);
+      // `instant`: html sets scroll-behavior: smooth, so a plain scrollTo would still be animating when focus and the
+      // keyboard arrive (as lectionary.js, calendar.js and search.js scroll to the top).
+      window.scrollTo({ top: 0, behavior: "instant" });
       input.focus({ preventScroll: true });
     }
     return;
   }
   W.tabHistory?.requestRestore(); // 탭 전환 → 마지막 검색 결과 스크롤 복원
   W.navigate(W.tabHistory?.lastPath("search") || "/search");
-});
-
-// The search view is drawn for one layout: the mobile in-page bar, or the desktop header field with no bar. When the
-// window crosses the desktop tier (DESKTOP_LAYOUT_QUERY, the same split as search.js `isMobile`), redraw it so the
-// page never shows both fields or neither.
-window.matchMedia(DESKTOP_LAYOUT_QUERY).addEventListener("change", () => {
-  if (W.parsePath?.().view === "search") W.route?.();
 });
 
 // ADR-030 P4: 스크롤 축소 상태에서 홈 탭 = 홈 이동이 아니라 "펼치기" — 탭바 복원 +
@@ -343,10 +338,10 @@ if (typeof window !== "undefined" && window.addEventListener) {
   // 스타일시트가 오기 전에 건너뛴 처음 로드의 측정과 배치를 페이지를 다 받은 뒤 다시 한다(`tabIndicatorStyled`).
   // `load` 이벤트는 문서의 스타일시트를 모두 받은 뒤에 일어난다.
   if (document.readyState !== "complete") window.addEventListener("load", reposition, { once: true });
-  // 축소 복귀 시 .tab-item max-width 가 ~0.25s 동안 애니메이트되므로,
+  // 축소 복귀 시 .tab-item max-width가 ~0.25s 동안 애니메이트되므로,
   // syncTabBarActive 의 즉시 rAF 측정은 중간값(좁은 폭)을 읽어 인디케이터가 어긋난다.
   // → max-width transitionend 에서 활성 탭 실측으로 재배치(같은 탭이라 스냅). 한 번의
-  // 축소 복귀가 여러 탭의 transitionend 를 내지만 모두 같은 활성 탭 스냅이라 무해(저비용).
+  // 축소 복귀가 여러 탭의 transitionend를 내지만 모두 같은 활성 탭 스냅이라 무해(저비용).
   if ($tabBar) {
     $tabBar.addEventListener("transitionend", (e) => {
       if (e.propertyName !== "max-width") return;
@@ -364,7 +359,7 @@ if (typeof window !== "undefined" && window.addEventListener) {
 // 탭 슬롯은 --dock-control(60px) px 고정이라 폭은 '보이는 탭 수'에만 의존 — 노트 탭이
 // hidden 이라 현재 4개(홈·캘린더·북마크·설정 — 캘린더는 ADR-038 A2). 개수를 세어 :root 에
 // --tab-bar-w 를 심으면 노트가 켜져 5개가 돼도(다음 로드) 자동으로 left 가 맞는다. 측정이 아니라 개수 기반이라
-// 축소(.collapsed 로 탭바가 60px 로 줄어드는) 상태와 무관하게 항상 풀폭.
+// 축소(.collapsed로 탭바가 60px로 줄어드는) 상태와 무관하게 항상 풀폭.
 function publishTabBarWidth() {
   if (!$tabBar || typeof document === "undefined") return;
   const n = $tabBar.querySelectorAll(".tab-item:not([hidden])").length;

@@ -18,7 +18,10 @@
 
 import { verseNumberSpec } from "./verse-spec.js";
 
-const { _$, el, clearNode, chUnit, missingChapterText, emptyState, barBottom, churchName, SHEET_INERT_SELECTORS } = window.appHelpers;
+const {
+  _$, el, clearNode, chUnit, missingChapterText, emptyState, barBottom, churchName, SHEET_INERT_SELECTORS, isMobileLayout,
+  MOBILE_LAYOUT_QUERY,
+} = window.appHelpers;
 const {
   SEARCH_HISTORY_MAX,
   loadSearchHistory, loadSearchHistoryEntries,
@@ -3324,10 +3327,10 @@ $searchClear.addEventListener("click", () => {
 
 // ── BEGIN IS_MOBILE ──
 function isMobile() {
-  // Mobile/touch tier = narrow window OR a touch device (phones in any
-  // orientation, tablets). Pointer-aware so landscape phones/tablets keep the
-  // app layout instead of flipping to the desktop overlay (ADR-029 개정).
-  return window.matchMedia("(max-width: 768px), (pointer: coarse)").matches;
+  // Mobile/touch tier = narrow window OR a touch device (phones in any orientation, tablets), so landscape phones and
+  // tablets keep the app layout (ADR-029 개정). The query is helpers.js MOBILE_LAYOUT_QUERY, the one CSS hides the
+  // header search field with, so the page always shows exactly one search field.
+  return isMobileLayout();
 }
 // ── END IS_MOBILE ──
 
@@ -3621,6 +3624,76 @@ mountSearchField($searchBar, $searchInput);
 // Preload the in:<alias> map (from prefetched books) so commitTopSearch can
 // absorb operators synchronously — keeps commit free of an async race surface.
 ensureAliasMap();
+
+// ── Crossing the mobile layout's condition on the search view ──
+// The search view is drawn for one layout: the mobile in-page bar at its top, or the desktop header field and no bar
+// (ADR-048 §1). When the window crosses MOBILE_LAYOUT_QUERY (the condition `isMobile` reads and CSS hides the header
+// field with), put the bar in or take it out instead of drawing the view
+// again, so the results, the scroll position and text typed but not searched yet all stay. The typed text, and focus
+// if it was in the old field, move to the field the new layout shows. A bare /search is the recents view on mobile but
+// the book list on desktop (routing.js), so there the view is drawn again and the typed text carried over.
+
+/** Show `typed` in the desktop header field, with its clear button when there is text (as route() sets it). */
+function setHeaderField(/** @type {string} */ typed) {
+  $searchInput.value = typed;
+  const hidden = !typed.trim();
+  $searchClear.hidden = hidden;
+  $searchBar.dataset.clearHidden = String(hidden);
+}
+
+// The search field that lost focus because the new layout hid it. The browser drops focus from a field that stops
+// being rendered, before the media query's change event runs (Chrome: focusout with no related target, then resize,
+// then change), so the handler can't see that focus was there. A field the user leaves is still rendered at focusout.
+/** @type {Element | null} */
+let _fieldHiddenWithFocus = null;
+document.addEventListener("focusin", () => { _fieldHiddenWithFocus = null; });
+document.addEventListener("focusout", (e) => {
+  _fieldHiddenWithFocus = null;
+  const t = e.target;
+  if (e.relatedTarget !== null || !(t instanceof Element)) return;
+  const field = t.closest("#search-bar, #search-inpage-bar");
+  if (field && t.getClientRects().length === 0) _fieldHiddenWithFocus = field;
+});
+
+async function onLayoutTierChange() {
+  const hiddenWithFocus = _fieldHiddenWithFocus;
+  _fieldHiddenWithFocus = null;
+  const p = window.parsePath();
+  if (p.view !== "search") return;
+  const mobile = isMobile();
+  const bar = document.getElementById("search-inpage-bar");
+  const barInput = document.getElementById("search-inpage-input");
+  // The field the old layout showed: the header field before going mobile, the in-page bar before going desktop.
+  const oldField = mobile ? $searchBar : bar;
+  const typed = mobile ? $searchInput.value : (barInput instanceof HTMLInputElement ? barInput.value : "");
+  const at = document.activeElement;
+  const hadFocus = !!oldField && (oldField.contains(at) || ((!at || at === document.body) && hiddenWithFocus === oldField));
+  if (mobile && topSearchHistory.isOpen()) topSearchHistory.close();
+  const view = $app.querySelector(":scope > .search-view");
+  if (view && (p.query || p.filterBooks.length)) {
+    if (mobile && !bar) view.insertBefore(buildInPageSearchInput(typed), view.firstChild);
+    if (!mobile) bar?.remove();
+    setHeaderField(mobile ? "" : typed);
+    syncSearchFields();
+  } else {
+    await window.route();
+    if (window.parsePath().view !== "search" || isMobile() !== mobile) return;
+    if (mobile) {
+      const input = document.getElementById("search-inpage-input");
+      const clear = document.getElementById("search-inpage-clear");
+      if (input instanceof HTMLInputElement) input.value = typed;
+      if (clear) clear.hidden = !typed.trim();
+    } else {
+      setHeaderField(typed);
+    }
+  }
+  if (!hadFocus) return;
+  const input = mobile ? document.getElementById("search-inpage-input") : $searchInput;
+  if (input instanceof HTMLElement) input.focus({ preventScroll: true });
+}
+if (typeof window.matchMedia === "function") {
+  window.matchMedia(MOBILE_LAYOUT_QUERY).addEventListener("change", () => { void onLayoutTierChange(); });
+}
 
 
 // ── BEGIN AUTO_NAVIGATE ──

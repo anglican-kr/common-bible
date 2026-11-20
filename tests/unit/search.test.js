@@ -12,7 +12,7 @@
 //   - WORKER block (ensureSearchWorker/doSearch + state) — Worker stub
 //   - PURE HELPERS block (appendTextWithHighlight/highlightTextNodes/buildSnippet/
 //     buildSearchPagination) — minimal Element + el shim
-//   - IS_MOBILE block — window.matchMedia stub
+//   - IS_MOBILE block — isMobileLayout stub
 //   - AUTO_NAVIGATE block (consumeSearchAutoNavigate) — pure state
 //   - HISTORY_CONTROLLER block (createSearchHistoryController) — extended
 //     StubElement with querySelectorAll/contains/closest/focus/dispatch and
@@ -357,11 +357,9 @@ function loadWorkerBlock() {
 
 // ── IS_MOBILE loader ─────────────────────────────────────────────────────────
 
-function loadIsMobile(matches) {
+function loadIsMobile(mobile) {
   const ctx = {
-    window: {
-      matchMedia: (q) => ({ media: q, matches: !!matches }),
-    },
+    isMobileLayout: () => !!mobile,
     Object, console,
   };
   vm.createContext(ctx);
@@ -727,28 +725,24 @@ test("buildSearchPagination: nav has aria-label", () => {
 
 // ── isMobile ─────────────────────────────────────────────────────────────────
 
-test("isMobile: matchMedia.matches=true → true", () => {
+test("isMobile: the mobile layout's condition holds → true", () => {
   const isMobile = loadIsMobile(true);
   assert.strictEqual(isMobile(), true);
 });
 
-test("isMobile: matchMedia.matches=false → false", () => {
+test("isMobile: the mobile layout's condition doesn't hold → false", () => {
   const isMobile = loadIsMobile(false);
   assert.strictEqual(isMobile(), false);
 });
 
-test("isMobile: queries the pointer-aware mobile-tier media query (ADR-029 개정)", () => {
-  let lastQuery = null;
-  const ctx = {
-    window: { matchMedia: (q) => { lastQuery = q; return { matches: false }; } },
-    Object, console,
-  };
-  vm.createContext(ctx);
-  vm.runInContext(extractBlock("IS_MOBILE"), ctx, { filename: "search-is-mobile-q.js" });
-  ctx.isMobile();
-  // Mobile/touch tier = narrow window OR touch device — so landscape phones and
-  // tablets (pointer:coarse) stay on the app layout instead of the desktop overlay.
-  assert.strictEqual(lastQuery, "(max-width: 768px), (pointer: coarse)");
+test("isMobile: reads the one shared mobile query, not a copy of it (#612 review)", () => {
+  // helpers.js MOBILE_LAYOUT_QUERY is the condition CSS hides the header search field with, so the page always shows
+  // exactly one search field. A copy of the query here could drift from it.
+  const block = extractBlock("IS_MOBILE");
+  assert.ok(!block.includes("matchMedia"), "isMobile has no query of its own");
+  assert.match(block, /return isMobileLayout\(\);/);
+  const helpers = fs.readFileSync(path.resolve(__dirname, "../../js/app/helpers.js"), "utf8");
+  assert.match(helpers, /const MOBILE_LAYOUT_QUERY = "\(max-width: 768px\), \(pointer: coarse\)";/);
 });
 
 // ── consumeSearchAutoNavigate ────────────────────────────────────────────────
