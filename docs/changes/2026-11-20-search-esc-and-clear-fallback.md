@@ -1,4 +1,5 @@
 ---
+pr: 616
 date: 2026-11-20
 branch: feat/search-clear-esc
 title: "feat: 휴대폰 검색 입력창의 Esc와 지우기 포커스의 대비책"
