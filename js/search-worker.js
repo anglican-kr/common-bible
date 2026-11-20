@@ -837,23 +837,26 @@ function groupedResults(q, chunkNames, restrictBooks, page, pageSize) {
  * 책을 고른 검색의 결과(ADR-049 §2). 고른 책마다 찾은 절의 수(`books`, 성경의 차례)를 세고, 보이는 알약의 목록을 쪽으로
  * 자른다. `showBook`이 고른 책이고 결과가 있으면 그 책만, 아니면(「전체」) 고른 책의 결과를 성경의 차례로 한 목록에 둔다.
  * 성서 본문과 성시를 나누지 않으므로 `psalter`는 비어 있다. `shownBook`은 실제로 보인 책이고, 「전체」면 null이다.
- * 색인에 없는 책 id는 결과가 없어 차례의 끝에 0으로 둔다.
+ * 색인에 없는 책 id는 결과가 없어 차례의 끝에 0으로 둔다. 색인을 받는 동안(`pending`)에는 결과가 아직 없는 책이라도
+ * 「전체」로 바꾸지 않는다. 그 책의 색인을 아직 받지 못했을 수 있어, 다른 책의 결과가 잠깐 보였다가 바뀌기 때문이다.
  * @param {string} q
  * @param {string[]} chunkNames  the chunks to search: all of them, or those loaded so far
  * @param {Set<string>} restrictBooks  the chosen books, never empty
  * @param {string | null} showBook
  * @param {number} page
  * @param {number} pageSize
+ * @param {boolean} [pending]  some chunks are still loading (a partial result)
  * @returns {PaginatedResult & { psalter: PaginatedResult, books: Array<[string, number]>, shownBook: string | null }}
  */
-function scopedResults(q, chunkNames, restrictBooks, showBook, page, pageSize) {
+function scopedResults(q, chunkNames, restrictBooks, showBook, page, pageSize, pending = false) {
   const m = /** @type {SearchMeta} */ (meta);
   const order = Object.keys(m.books).filter((id) => restrictBooks.has(id));
   for (const id of restrictBooks) if (!order.includes(id)) order.push(id);
   /** @type {Map<string, MatchedRow[]>} */
   const byBook = new Map(order.map((id) => [id, []]));
   for (const row of gatherResults(q, chunkNames, restrictBooks)) byBook.get(row.b)?.push(row);
-  const shownBook = showBook && (byBook.get(showBook)?.length ?? 0) > 0 ? showBook : null;
+  const shownRows = showBook ? byBook.get(showBook) : undefined;
+  const shownBook = showBook && shownRows && (shownRows.length > 0 || pending) ? showBook : null;
   const rows = shownBook ? /** @type {MatchedRow[]} */ (byBook.get(shownBook)) : Array.from(byBook.values()).flat();
   return {
     ...paginate(rows, page, pageSize),
@@ -1581,15 +1584,15 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       const pendingNames = chunkConfig.map((c) => c.name).filter((n) => !loadedChunks[n]);
 
       // 책을 고르면 책마다 세고 고른 책의 결과를 한 목록에 둔다(ADR-049 §2). 고르지 않으면 성서 본문과 성시를 따로 센다
-      /** @param {string[]} names */
-      const found = (names) => (scoped
-        ? scopedResults(keyword, names, restrictBooks, showBook, page, pageSize)
+      /** @param {string[]} names @param {boolean} [pending] */
+      const found = (names, pending = false) => (scoped
+        ? scopedResults(keyword, names, restrictBooks, showBook, page, pageSize, pending)
         : groupedResults(keyword, names, restrictBooks, page, pageSize));
 
       // Send partial results if some chunks are still loading
       if (pendingNames.length > 0) {
         post("partial-results", {
-          searchId, q: trimmed, keyword, ...found(loadedNames), page, pageSize,
+          searchId, q: trimmed, keyword, ...found(loadedNames, true), page, pageSize,
           loadedChunks: loadedNames, pendingChunks: pendingNames,
           unmatchedScopes: unmatched,
           // Only what is loaded already — a partial result never waits for the lectionary index.

@@ -1028,6 +1028,19 @@ const SEARCH_GROUPS = /** @type {const} */ ([["bible", "성서 본문"], ["psalt
 const SEARCHED_GROUPS = SEARCH_GROUPS.map(([, name]) => name).join(", ");
 
 /**
+ * A pill's name and its result count (「루가 23」), the count read as 「23건」. Shared by the result-group pills and the
+ * book pills (ADR-049 §2).
+ * @param {HTMLElement} node @param {string} label @param {number} count
+ * @returns {HTMLElement} node
+ */
+function appendPillLabel(node, label, count) {
+  node.appendChild(document.createTextNode(`${label} `));
+  node.appendChild(el("span", { className: "search-pill-count" }, String(count)));
+  node.appendChild(el("span", { className: "sr-only" }, "건"));
+  return node;
+}
+
+/**
  * 결과 묶음의 알약(「성서 본문」, 「성시」, 「전례일」, ADR-044 §1, ADR-046 §3). 결과가 있는 묶음만 `counts`에 둔다. 고른
  * 알약에 `aria-current`를 달고, 누른 뒤 다시 그려도 포커스가 그 알약에 남는다(`data-focus-key`, routing.js).
  * @param {SearchGroup} group
@@ -1042,9 +1055,7 @@ function buildSearchPills(group, counts, hrefOf) {
     if (count === undefined) continue;
     const a = el("a", { className: "search-pill", href: hrefOf(g), "data-focus-key": `group:${g}` });
     if (g === group) a.setAttribute("aria-current", "true");
-    a.appendChild(document.createTextNode(`${name} `));
-    a.appendChild(el("span", { className: "search-pill-count" }, String(count)));
-    a.appendChild(el("span", { className: "sr-only" }, "건"));
+    appendPillLabel(a, name, count);
     const li = el("li", {});
     li.appendChild(a);
     list.appendChild(li);
@@ -1067,11 +1078,9 @@ function buildScopePills(books, opts) {
   const wrap = el("div", { className: "scope-pills", role: "group", "aria-label": "검색할 책" });
   const list = el("ul", { className: "scope-pill-list", role: "list" });
   const counts = opts.counts;
+  const countById = new Map(counts || []);
   /** @param {string} id */
-  const countOf = (id) => {
-    const entry = counts ? counts.find(([b]) => b === id) : null;
-    return entry ? entry[1] : 0;
-  };
+  const countOf = (id) => countById.get(id) ?? 0;
   /**
    * @param {string} label @param {number} count @param {string} href @param {string} key @param {boolean} current
    * @returns {HTMLElement}
@@ -1079,10 +1088,7 @@ function buildScopePills(books, opts) {
   const link = (label, count, href, key, current) => {
     const a = el("a", { className: "scope-pill-main", href, "data-focus-key": key });
     if (current) a.setAttribute("aria-current", "true");
-    a.appendChild(document.createTextNode(`${label} `));
-    a.appendChild(el("span", { className: "search-pill-count" }, String(count)));
-    a.appendChild(el("span", { className: "sr-only" }, "건"));
-    return a;
+    return appendPillLabel(a, label, count);
   };
   if (counts && books.length > 1) {
     const all = el("li", { className: "scope-pill scope-pill-all" });
@@ -1098,10 +1104,7 @@ function buildScopePills(books, opts) {
     } else if (countOf(b.id) === 0) {
       // 결과가 없는 책: 흐리게 두고 누를 수 없다(§4)
       li.classList.add("scope-pill-empty");
-      const span = el("span", { className: "scope-pill-main" }, `${b.name} `);
-      span.appendChild(el("span", { className: "search-pill-count" }, "0"));
-      span.appendChild(el("span", { className: "sr-only" }, "건"));
-      li.appendChild(span);
+      li.appendChild(appendPillLabel(el("span", { className: "scope-pill-main" }), b.name, 0));
     } else {
       // 한 권이면 「전체」와 같은 목록이라 그 주소로 가고 늘 고른 알약이다(§2)
       const one = books.length === 1;
@@ -2285,7 +2288,12 @@ let _scopeFocusAfterRender = null;
 function drawScopeRow(row, query, filterBooks, result) {
   /** @type {Array<[string, number]> | null} */
   const counts = result && Array.isArray(result.books) ? result.books : null;
-  const ids = counts ? counts.map(([id]) => id) : canonOrder(filterBooks, _bookOrder);
+  // Without counts, the books typed as `in:` in the query too (the worker counts them), so the row keeps its pills and
+  // a removed pill's neighbour (`focusRebuiltScopeRow`) when the counts arrive. Not past the limit: those `in:` stay
+  // text in the query and search nothing (ADR-033 「책은 5권까지」).
+  const typed = !counts && _aliasMap && query ? extractInScope(query, _aliasMap).ids : [];
+  const named = canonOrder(filterBooks.concat(typed), _bookOrder);
+  const ids = counts ? counts.map(([id]) => id) : named.length > MAX_SCOPE_BOOKS ? canonOrder(filterBooks, _bookOrder) : named;
   const at = document.activeElement;
   const focusKey = at instanceof HTMLElement && row.contains(at)
     ? at.dataset.removeBook ? `x:${at.dataset.removeBook}` : at.dataset.focusKey || null

@@ -450,6 +450,9 @@ test("scopedResults: 받은 색인만 찾고, 색인에 없는 책 id는 차례�
   const partial = plain(ctx.scopedResults("사랑", ["nt"], new Set(["gen", "nope", "luke"]), null, 1, 10));
   assert.deepEqual(partial.books, [["gen", 0], ["luke", 2], ["nope", 0]]);
   assert.equal(partial.total, 2);
+  // 받는 동안에는 아직 결과가 없는 책 알약도 「전체」로 바꾸지 않는다(그 책의 색인이 아직 없을 수 있다)
+  const waiting = plain(ctx.scopedResults("사랑", ["nt"], new Set(["gen", "luke"]), "gen", 1, 10, true));
+  assert.deepEqual([waiting.shownBook, waiting.total], ["gen", 0]);
   ctx._setMeta(META);
 });
 
