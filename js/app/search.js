@@ -1519,9 +1519,10 @@ function buildInPageSearchInput(query) {
   input.addEventListener("keydown", (e) => {
     // Esc lowers the keyboard and leaves the query, the results and the chosen books as they are (ADR-048 §5): focus
     // moves to this bar's funnel. Its default would empty a search input (Chrome) while the results stay, and the
-    // document's Escape handler (app.js) must not reset some other control. Mid-composition the key is the IME's.
+    // document's Escape handler (app.js) must not reset some other control. Mid-composition the key is the IME's
+    // (Safari can report it with isComposing false but keyCode 229).
     if (e.key === "Escape") {
-      if (e.isComposing) return;
+      if (e.isComposing || e.keyCode === 229) return;
       e.preventDefault();
       e.stopPropagation();
       focusFunnelOrHome(wrap.querySelector(".token-funnel"), { preventScroll: true });
@@ -2277,7 +2278,8 @@ function focusRebuiltInpageBar(view, seq) {
 
 /**
  * Focus the mobile in-page bar's funnel, or the tab bar's home tab when the funnel can't take focus (missing, hidden),
- * so focus never falls to <body> (ADR-048 §4, WCAG 2.4.3).
+ * so focus doesn't fall to <body> (ADR-048 §4, WCAG 2.4.3). Best effort: if the home tab can't take it either, focus
+ * stays where it was.
  * @param {Element | null} funnel @param {FocusOptions & { focusVisible?: boolean }} options
  */
 function focusFunnelOrHome(funnel, options) {

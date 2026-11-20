@@ -233,11 +233,22 @@ def test_inpage_escape_lowers_the_keyboard_and_keeps_the_search(mobile_context):
     assert page.input_value("#search-inpage-input") == "목자"
     assert page.evaluate(query) == "사랑"
 
-    # 한글을 조합하는 중의 Esc는 입력기의 몫이다
-    page.focus("#search-inpage-input")
-    page.evaluate("""() => document.querySelector('#search-inpage-input').dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'Escape', isComposing: true, bubbles: true, cancelable: true }))""")
-    assert page.evaluate("() => document.activeElement?.id") == "search-inpage-input"
+    # 한글을 조합하는 중의 Esc는 입력기의 몫이다. 키를 막지 않고, 포커스와 친 글자, 주소가 그대로다. Chrome은 isComposing을
+    # 참으로 보내고, Safari는 거짓인 채 keyCode 229로 보낼 수 있어 둘 다 본다
+    send_esc = """(init) => {
+        const ev = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true, ...init });
+        const notCancelled = document.querySelector('#search-inpage-input').dispatchEvent(ev);
+        return { notCancelled, isComposing: ev.isComposing, keyCode: ev.keyCode };
+    }"""
+    for init in ({"isComposing": True}, {"keyCode": 229}):
+        page.focus("#search-inpage-input")
+        sent = page.evaluate(send_esc, init)
+        assert sent["isComposing"] == init.get("isComposing", False), sent
+        assert sent["keyCode"] == init.get("keyCode", 0), sent
+        assert sent["notCancelled"], f"조합 중의 Esc를 막지 않는다 {init}"
+        assert page.evaluate("() => document.activeElement?.id") == "search-inpage-input", init
+        assert page.input_value("#search-inpage-input") == "목자", init
+        assert page.evaluate(query) == "사랑", init
 
 
 def test_scroll_collapse_and_home_expands_without_nav(mobile_context):
