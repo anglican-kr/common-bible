@@ -1959,6 +1959,46 @@ def test_book_pill_remove_searches_again_and_moves_focus(mobile_context):
     assert page.evaluate(_SCOPE_PILLS) == [{"text": "마르", "link": False, "current": False, "empty": False, "x": True}]
 
 
+def test_book_pills_clear_all_searches_every_book(mobile_context):
+    """두 권 이상이면 마지막 알약 뒤의 「모두 지우기」가 고른 책을 모두 빼고 같은 검색어로 모든 책에서 다시 찾는다. 입력 칸에 친
+    `in:`도 검색어에서 뺀다. 포커스는 깔때기로 옮기고 결과 묶음의 알약이 돌아온다. 한 권이면 「모두 지우기」가 없다(ADR-049 §3,
+    사용자 결정 2026-11-21)."""
+    page = mobile_context.new_page()
+    _goto_search(page, "사랑 in:요한", "&in=luke&in=lps")
+    clear = page.locator(".scope-clear-btn")
+    assert clear.inner_text() == "모두 지우기"
+    assert clear.get_attribute("aria-label") == "고른 책 모두 지우기"
+    # 줄의 맨 끝, 마지막 책 알약 뒤
+    assert page.evaluate("() => document.querySelector('.scope-pill-list').lastElementChild.classList.contains('scope-clear')")
+    box = clear.bounding_box()
+    assert box and box["height"] >= 44, box
+
+    clear.focus()
+    page.keyboard.press("Enter")
+    page.wait_for_function("() => !new URLSearchParams(location.search).has('in')")
+    assert page.evaluate("new URLSearchParams(location.search).get('q')") == "사랑"
+    page.wait_for_function("() => document.activeElement?.classList.contains('token-funnel')")
+    page.wait_for_selector(".search-pill", timeout=20_000)
+    assert page.locator(".scope-pill").count() == 0
+    assert page.locator(".scope-clear-btn").count() == 0
+    assert page.input_value("#search-inpage-input") == "사랑"
+
+    # 뒤로 가기가 고른 책을 되돌린다
+    page.go_back()
+    page.wait_for_selector(".scope-clear-btn", timeout=20_000)
+
+    _goto_search(page, "사랑", "&in=luke")
+    assert page.locator(".scope-pill").count() == 1
+    assert page.locator(".scope-clear-btn").count() == 0
+    # 검색어 없이 책만 고른 화면에도 있다
+    page.goto(f"{BASE_URL}/search?in=mark&in=luke")
+    page.wait_for_selector(".scope-clear-btn", timeout=20_000)
+    page.locator(".scope-clear-btn").click()
+    page.wait_for_function("() => !new URLSearchParams(location.search).has('in')")
+    page.wait_for_function("() => document.activeElement?.classList.contains('token-funnel')")
+    assert page.locator(".scope-pill").count() == 0
+
+
 @pytest.mark.parametrize("touch", [True, False])
 def test_book_pill_and_page_link_leave_no_hover_after_a_tap(browser, touch):
     """책 알약과 「다음」을 누르면 같은 자리에 다시 그린 알약과 링크에 호버의 바탕이 남지 않는다. iOS는 마지막으로 누른 자리에 :hover를
