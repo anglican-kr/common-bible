@@ -1070,11 +1070,13 @@ function buildSearchPills(group, counts, hrefOf) {
 /**
  * 고른 책의 알약 줄(ADR-049). 검색창 바로 아래에 둔다. 결과 수(`counts`, 워커의 `books`)를 알면 알약마다 수를 적고 그 책의
  * 결과로 가는 링크로 둔다. 두 권 이상이면 맨 앞에 「전체」를 둔다(§2). 결과가 없는 책은 흐린 글이다(§4). 수를 모르면 이름만
- * 적는다(§5). 알약마다 ×(그 책 빼기, §3)가 있고, 누르면 `onRemove`가 그 책 id를 받는다. 링크는 누른 뒤 다시 그려도 포커스가
- * 그 알약에 남는다(`data-focus-key`, routing.js).
+ * 적는다(§5). 알약마다 ×(그 책 빼기, §3)가 있고, 누르면 `onRemove`가 그 책 id를 받는다. 두 권 이상이면 마지막 알약 뒤에
+ * 「모두 지우기」(`onClear`, §3)를 둔다. 한 권이면 그 알약의 ×가 같은 일을 한다. 링크와 「모두 지우기」는 누른 뒤 다시 그려도
+ * 포커스가 그 자리에 남는다(`data-focus-key`, routing.js).
  * @param {Array<{ id: string, name: string }>} books  in pill order
  * @param {{ counts: Array<[string, number]> | null, shown: string | null, hrefOf: (id: string | null) => string,
- *   onRemove: (id: string, e: MouseEvent) => void }} opts  shown: the book pill shown, null for 「전체」
+ *   onRemove: (id: string, e: MouseEvent) => void, onClear: (e: MouseEvent) => void }} opts
+ *   shown: the book pill shown, null for 「전체」
  * @returns {HTMLElement}
  */
 function buildScopePills(books, opts) {
@@ -1121,6 +1123,16 @@ function buildScopePills(books, opts) {
     x.appendChild(el("span", { "aria-hidden": "true" }, "×"));
     x.addEventListener("click", (e) => opts.onRemove(b.id, /** @type {MouseEvent} */ (e)));
     li.appendChild(x);
+    list.appendChild(li);
+  }
+  if (books.length > 1) {
+    // 알약이 아니라 글자 단추다. 알약 모양이면 결과를 거르는 단추로 읽힌다(§3). 스크린 리더의 이름은 보이는 글자를 담는다(WCAG 2.5.3).
+    const clear = el("button", {
+      type: "button", className: "scope-clear-btn", "aria-label": "고른 책 모두 지우기", "data-focus-key": "book:clear",
+    }, "모두 지우기");
+    clear.addEventListener("click", (e) => opts.onClear(/** @type {MouseEvent} */ (e)));
+    const li = el("li", { className: "scope-clear" });
+    li.appendChild(clear);
     list.appendChild(li);
   }
   wrap.appendChild(list);
@@ -2089,6 +2101,17 @@ function withoutScopeBook(q, filterBooks, id, aliasMap) {
 }
 
 /**
+ * The search with every chosen book taken out (「모두 지우기」 on the book pills, ADR-049 §3): no URL books, and the
+ * `in:<alias>` the query names a book with taken out of it. An `in:` no book answers to stays (the worker tells it).
+ * @param {string} q @param {Map<string, string> | null} aliasMap
+ * @returns {{ q: string, filterBooks: string[] }}
+ */
+function withoutAllScopeBooks(q, aliasMap) {
+  if (!aliasMap || !/(?:^|\s)in:/.test(q)) return { q, filterBooks: [] };
+  return { q: extractInScope(q, aliasMap).keyword, filterBooks: [] };
+}
+
+/**
  * Book ids in canon order (the book pills, ADR-049 §1), duplicates dropped; ids `order` does not know go last.
  * @param {string[]} ids @param {string[]} order  every book id in canon order
  * @returns {string[]}
@@ -2314,7 +2337,8 @@ function focusFunnelOrHome(funnel, options) {
 // The chosen books show as a row of pills right under the search field: under the mobile in-page bar, at the top of
 // the search view on desktop (the header field is the input there). The row is drawn with the view, names only, and
 // drawn again with each book's count once the search ends (`drawScopeRow`). The × on a pill takes that book out and
-// searches again; focus then goes to the next pill's ×, the one before, or the funnel (§3).
+// searches again; focus then goes to the next pill's ×, the one before, or the funnel (§3). With two books or more,
+// 「모두 지우기」 after the last pill takes them all out; focus then goes to the funnel.
 
 // What the next render of the search view must focus after a pill's × took its book out: the × of the first of `ids`
 // still there (the next book, then the one before), else the funnel. Matched against the route sequence like
@@ -2352,6 +2376,7 @@ function drawScopeRow(row, query, filterBooks, result) {
     shown: counts ? result.shownBook || null : null,
     hrefOf: (id) => buildSearchUrl({ q: query, filterBooks, book: id }),
     onRemove: (id, e) => removeScopeBook(ids, id, e),
+    onClear: (e) => clearScopeBooks(e),
   }));
   if (focusKey) {
     const same = Array.from(row.querySelectorAll("[data-remove-book], [data-focus-key]")).find((n) => n instanceof HTMLElement
@@ -2374,6 +2399,19 @@ function removeScopeBook(ids, id, e) {
   const options = e.detail > 0 ? { preventScroll: true, focusVisible: false } : { preventScroll: true };
   navigateSearch(withoutScopeBook(cur.q, cur.filterBooks, id, _aliasMap));
   _scopeFocusAfterRender = { seq: window.routeSeq?.() ?? 0, ids: [ids[i + 1], ids[i - 1]].filter(Boolean), options };
+}
+
+/**
+ * 「모두 지우기」 on the book pills: search again in every book (ADR-049 §3), from page 1. Focus goes to the funnel once
+ * the view redraws, as after the last pill's ×.
+ * @param {MouseEvent} e
+ */
+function clearScopeBooks(e) {
+  const cur = currentSearchState();
+  /** @type {FocusOptions & { focusVisible?: boolean }} */
+  const options = e.detail > 0 ? { preventScroll: true, focusVisible: false } : { preventScroll: true };
+  navigateSearch(withoutAllScopeBooks(cur.q, _aliasMap));
+  _scopeFocusAfterRender = { seq: window.routeSeq?.() ?? 0, ids: [], options };
 }
 
 /**

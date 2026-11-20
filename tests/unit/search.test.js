@@ -1503,6 +1503,16 @@ test("bookName: _bookMap이 null이어도 id 폴백(안전)", () => {
   assert.equal(scope.bookName("john"), "john");
 });
 
+test("withoutAllScopeBooks: 고른 책을 모두 빼고, 입력 칸에 친 `in:`도 검색어에서 뺀다(ADR-049 §3 「모두 지우기」)", () => {
+  assert.deepEqual(plainScope(scope.withoutAllScopeBooks("사랑", ALIASES)), { q: "사랑", filterBooks: [] });
+  assert.deepEqual(plainScope(scope.withoutAllScopeBooks("사랑 in:요한 in:창세", ALIASES)), { q: "사랑", filterBooks: [] });
+  assert.deepEqual(plainScope(scope.withoutAllScopeBooks("in:요한 in:창세", ALIASES)), { q: "", filterBooks: [] });
+  // 모르는 책의 `in:`은 남긴다(워커가 모르는 책이라고 알린다)
+  assert.deepEqual(plainScope(scope.withoutAllScopeBooks("사랑 in:요한 in:없는책", ALIASES)), { q: "사랑 in:없는책", filterBooks: [] });
+  // 별칭을 받기 전에는 검색어를 그대로 둔다
+  assert.deepEqual(plainScope(scope.withoutAllScopeBooks("사랑 in:요한", null)), { q: "사랑 in:요한", filterBooks: [] });
+});
+
 test("withoutScopeBook: 고른 책에서 빼고, 입력 칸에 친 `in:`의 그 책도 검색어에서 뺀다(ADR-049 §3)", () => {
   assert.deepEqual(plainScope(scope.withoutScopeBook("사랑", ["john", "genesis"], "john", ALIASES)), { q: "사랑", filterBooks: ["genesis"] });
   assert.deepEqual(plainScope(scope.withoutScopeBook("사랑 in:요한 in:창세", [], "john", ALIASES)), { q: "사랑 in:창세", filterBooks: [] });
@@ -2547,13 +2557,19 @@ const SCOPE_BOOKS = [{ id: "luke", name: "루가" }, { id: "john", name: "요한
 /** @param {any} h @param {any} opts */
 function scopePills(h, opts) {
   const removed = [];
+  const cleared = [];
   const row = h.buildScopePills(opts.books || SCOPE_BOOKS, {
     counts: opts.counts ?? null, shown: opts.shown ?? null,
     hrefOf: (id) => h.buildSearchUrl({ q: "사랑", filterBooks: ["luke", "john", "lps"], book: id }),
     onRemove: (id) => removed.push(id),
+    onClear: (e) => cleared.push(e),
   });
-  const items = row.children[0].children;
-  return { row, items, removed };
+  const all = row.children[0].children;
+  // 스텁의 classList는 className을 읽지 않아 class 속성으로 가린다
+  const isClear = (li) => li.getAttribute("class") === "scope-clear";
+  const items = all.filter((li) => !isClear(li));
+  const clear = all.find(isClear) || null;
+  return { row, items, removed, clear, cleared, all };
 }
 
 test("buildScopePills: 수를 모르면 이름과 ×만 두고, 이름은 링크가 아니다(ADR-049 §5)", () => {
@@ -2596,10 +2612,32 @@ test("buildScopePills: 「전체」를 고르면 「전체」가 고른 알약�
   assert.deepStrictEqual(items.map((li) => li.children[0].getAttribute("aria-current")), ["true", null, null, null]);
 });
 
+test("buildScopePills: 두 권 이상이면 마지막 알약 뒤에 「모두 지우기」가 있다(ADR-049 §3)", () => {
+  const h = loadPureHelpers();
+  for (const counts of [null, [["luke", 23], ["john", 48], ["lps", 0]]]) {
+    const { all, clear, cleared } = scopePills(h, { counts });
+    assert.strictEqual(all[all.length - 1], clear, "줄의 맨 끝");
+    const btn = clear.children[0];
+    assert.strictEqual(btn.tagName, "BUTTON");
+    assert.strictEqual(btn.getAttribute("type"), "button");
+    assert.strictEqual(recursiveText(btn), "모두 지우기");
+    // 스크린 리더의 이름은 보이는 글자를 담는다(WCAG 2.5.3)
+    assert.strictEqual(btn.getAttribute("aria-label"), "고른 책 모두 지우기");
+    assert.strictEqual(btn.getAttribute("data-focus-key"), "book:clear");
+    btn.eventListeners.click[0]({ detail: 1 });
+    assert.strictEqual(cleared.length, 1);
+  }
+  const two = scopePills(h, { books: SCOPE_BOOKS.slice(0, 2) });
+  assert.ok(two.clear);
+});
+
 test("buildScopePills: 한 권이면 「전체」 없이 그 책이 늘 고른 알약이고 주소에 책을 적지 않는다(ADR-049 §2)", () => {
   const h = loadPureHelpers();
-  const { items } = scopePills(h, { books: [{ id: "mark", name: "마르" }], counts: [["mark", 6]] });
+  const { items, clear } = scopePills(h, { books: [{ id: "mark", name: "마르" }], counts: [["mark", 6]] });
   assert.strictEqual(items.length, 1);
+  // 한 권이면 그 알약의 ×가 같은 일을 하므로 「모두 지우기」가 없다(§3)
+  assert.strictEqual(clear, null);
+  assert.strictEqual(scopePills(h, { books: [{ id: "mark", name: "마르" }] }).clear, null);
   const a = items[0].children[0];
   assert.deepStrictEqual([recursiveText(a), a.getAttribute("aria-current"), a.getAttribute("href")],
     ["마르 6건", "true", "/search?q=%EC%82%AC%EB%9E%91&in=luke&in=john&in=lps"]);

@@ -2662,6 +2662,28 @@ a.scope-pill-main:active,
 }
 .scope-pill-empty .scope-pill-main,
 .scope-pill-empty .search-pill-count { color: var(--text-tertiary); }
+/* 「모두 지우기」(§3): 마지막 알약 뒤의 글자 단추다. 결과를 거르는 알약으로 읽히지 않게 테두리 없이 흐린 글자에 밑줄을 긋는다.
+   누를 자리의 높이는 알약과 같은 44px다. */
+.scope-clear { display: inline-flex; }
+.scope-clear-btn {
+  min-height: var(--touch-target);
+  padding: 0 var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.scope-clear-btn:focus-visible { background: var(--bg-card); color: var(--text); }
+.scope-clear-btn:active { opacity: 0.7; }
+@media (hover: hover) {
+  .scope-clear-btn:hover { background: var(--bg-card); color: var(--text); }
+}
 
 /* ── Search history panel ── */
 #search-history {
