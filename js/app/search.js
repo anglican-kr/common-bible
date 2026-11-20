@@ -18,7 +18,10 @@
 
 import { verseNumberSpec } from "./verse-spec.js";
 
-const { _$, el, clearNode, chUnit, missingChapterText, emptyState, barBottom, churchName, SHEET_INERT_SELECTORS } = window.appHelpers;
+const {
+  _$, el, clearNode, chUnit, missingChapterText, emptyState, barBottom, churchName, SHEET_INERT_SELECTORS, isMobileLayout,
+  MOBILE_LAYOUT_QUERY,
+} = window.appHelpers;
 const {
   SEARCH_HISTORY_MAX,
   loadSearchHistory, loadSearchHistoryEntries,
@@ -1513,7 +1516,7 @@ function buildInPageSearchInput(query) {
   }));
   input.value = query || "";
   const clear = el("button", { id: "search-inpage-clear", type: "button", "aria-label": "검색어 지우기" }, "×");
-  clear.hidden = !query;
+  clear.hidden = !query.trim();
 
   input.addEventListener("input", () => { clear.hidden = !input.value.trim(); });
   input.addEventListener("keydown", (e) => {
@@ -1526,6 +1529,8 @@ function buildInPageSearchInput(query) {
       e.preventDefault();
       e.stopPropagation();
       focusFunnelOrHome(wrap.querySelector(".token-funnel"), { preventScroll: true });
+      // Neither took focus (both hidden): still lower the keyboard, as ⊗ does.
+      if (document.activeElement === input) input.blur();
       return;
     }
     if (e.key !== "Enter") return;
@@ -1554,7 +1559,7 @@ function buildInPageSearchInput(query) {
       navigateSearch({ q: "" });
       // The home tab only stands in until the redraw: the new bar's funnel takes focus back from it.
       const standIn = focused && focused !== funnel ? focused : null;
-      _inpageFocusAfterRender = { seq: window.routeSeq?.() ?? null, target: "funnel", options, standIn };
+      _inpageFocusAfterRender = { seq: window.routeSeq?.() ?? 0, target: "funnel", options, standIn };
     }
   });
 
@@ -2260,10 +2265,11 @@ let _bookSheetCloseTimer = null;
 // so focus handed to its funnel or input fell to <body> (WCAG 2.4.3). Set by the book sheet's 「적용」 (ADR-033 D3: its
 // funnel after a search, its input when the query was empty) and the bar's ⊗ (its funnel, ADR-048 §4). Matched against
 // the route sequence, so a route that never drew the view (the user moved on) leaves nothing behind for a later screen.
+// Read as `window.routeSeq?.() ?? 0` here and in the renders alike, or a booking made before routing.js loads never matches.
 // `standIn` is where ⊗ put focus because the old funnel couldn't take it (the home tab): the new funnel takes it back.
 /**
  * @type {{
- *   seq: number | null, target: "funnel" | "input", options: FocusOptions & { focusVisible?: boolean },
+ *   seq: number, target: "funnel" | "input", options: FocusOptions & { focusVisible?: boolean },
  *   standIn?: Element | null,
  * } | null}
  */
@@ -2313,7 +2319,7 @@ function focusFunnelOrHome(funnel, options) {
 // What the next render of the search view must focus after a pill's × took its book out: the × of the first of `ids`
 // still there (the next book, then the one before), else the funnel. Matched against the route sequence like
 // `_inpageFocusAfterRender`.
-/** @type {{ seq: number | null, ids: string[], options: FocusOptions & { focusVisible?: boolean } } | null} */
+/** @type {{ seq: number, ids: string[], options: FocusOptions & { focusVisible?: boolean } } | null} */
 let _scopeFocusAfterRender = null;
 
 /**
@@ -2367,7 +2373,7 @@ function removeScopeBook(ids, id, e) {
   /** @type {FocusOptions & { focusVisible?: boolean }} */
   const options = e.detail > 0 ? { preventScroll: true, focusVisible: false } : { preventScroll: true };
   navigateSearch(withoutScopeBook(cur.q, cur.filterBooks, id, _aliasMap));
-  _scopeFocusAfterRender = { seq: window.routeSeq?.() ?? null, ids: [ids[i + 1], ids[i - 1]].filter(Boolean), options };
+  _scopeFocusAfterRender = { seq: window.routeSeq?.() ?? 0, ids: [ids[i + 1], ids[i - 1]].filter(Boolean), options };
 }
 
 /**
@@ -2566,7 +2572,11 @@ function ensureBookSheet() {
     // 「적용」은 시트를 연 입력 칸에 보이는 검색어를 고른 책 안에서 찾는다(ADR-033 D3, 사용자 보고 2026-11-18). Enter를 누르지 않고
     // 친 검색어는 주소에 없으므로 칸에서 읽는다. 읽기는 이동보다 먼저다: route()가 시트를 닫기 전에 칸을 주소의 검색어로 다시 채운다
     // (routing.js의 상단 바 칸).
-    const field = _bookSheetReturnField;
+    // The window may have crossed the mobile layout while the sheet was open (onLayoutTierChange): the field it opened
+    // from is then gone (the in-page bar taken out) or hidden (the header field on mobile), and the typed text moved to
+    // the field the layout shows now. Read from that one and hand focus back to it.
+    const opened = _bookSheetReturnField;
+    const field = opened && !isShownSearchField(opened) ? shownSearchField() : opened;
     const typed = field && field.input.isConnected ? field.input.value.trim() : null;
     // `searched`: a keyword reached the URL. A typed `in:<alias>` alone is absorbed into
     // chips and lands on the empty-query view, so it counts as no query for focus.
@@ -2586,8 +2596,11 @@ function ensureBookSheet() {
     // overlay hands focus back to the funnel; the header keeps it, but the mobile
     // in-page bar is rebuilt by the render and its old funnel and input go with it,
     // so that render focuses the new bar's funnel or input (`_inpageFocusAfterRender`).
+    // The overlay handed focus back to the funnel that opened the sheet. After a layout change that funnel is gone or
+    // hidden and focus stayed in the closing sheet: give it to the shown field's funnel (the render then moves it on).
+    if (field && field !== opened) field.funnel.focus();
     if (field && field.container.id === "search-inpage-bar") {
-      _inpageFocusAfterRender = { seq: window.routeSeq?.() ?? null, target: searched ? "funnel" : "input", options: {} };
+      _inpageFocusAfterRender = { seq: window.routeSeq?.() ?? 0, target: searched ? "funnel" : "input", options: {} };
     } else if (!searched && field && field.input.isConnected) {
       field.input.focus();
     }
@@ -2683,6 +2696,20 @@ function renderBookFilterList(sheet, books) {
   tabbar.hidden = !tabs.length;
   const firstChosen = tabs.findIndex((t) => t.panel.querySelector('.book-filter-option[aria-selected="true"]'));
   sheet.showTab(Math.max(0, firstChosen));
+}
+
+/**
+ * Whether `field` is the search field the current layout shows: the mobile in-page bar, or the desktop header field
+ * (CSS hides it on mobile).
+ * @param {SearchField} field
+ */
+function isShownSearchField(field) {
+  return field.container.isConnected && (field.container.id === "search-inpage-bar") === isMobile();
+}
+
+/** The search field the current layout shows, if it is drawn. @returns {SearchField | null} */
+function shownSearchField() {
+  return _searchFields.find(isShownSearchField) || null;
 }
 
 /** @param {HTMLElement} [returnFocusEl] */
@@ -2907,6 +2934,27 @@ async function renderSearchView(state) {
 // A cached index arrives at once; three seconds only run out on a first download or a slow network.
 const LECTIONARY_WAIT_MS = 3000;
 
+// ── BEGIN PAGE_SIZE ──
+// Exercised by tests/unit/search.test.js (barBottom and window stubbed).
+// The page size of the search on screen. Estimated from the viewport height below the top bar (helpers.js barBottom:
+// #app-header alone left out the status-bar inset, which is padding on #sticky-group), then kept while the user pages
+// through the same search (its words and books): a page starts at (page - 1) × size, so a size estimated again for page 2
+// after the window changed size skipped or repeated results (#618 review). A new search estimates it again.
+/** @type {{ key: string, size: number } | null} */
+let _searchPageSize = null;
+
+/** @param {string} query @param {string[]} filterBooks @returns {number} */
+function searchPageSize(query, filterBooks) {
+  const key = JSON.stringify([query, filterBooks]);
+  if (_searchPageSize && _searchPageSize.key === key) return _searchPageSize.size;
+  const availH = window.innerHeight - barBottom() - 40;
+  const itemH = 80;
+  const size = Math.max(5, Math.floor(availH / itemH));
+  _searchPageSize = { key, size };
+  return size;
+}
+// ── END PAGE_SIZE ──
+
 /**
  * @param {string} query
  * @param {number} page
@@ -2960,11 +3008,7 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
 
   resultsTarget.appendChild(el("div", { className: "loading", "aria-live": "polite" }, "검색 중…"));
 
-  // Estimate page size from the viewport height below the top bar. The bar is measured (helpers.js barBottom):
-  // #app-header alone left out the status-bar inset, which is padding on #sticky-group.
-  const availH = window.innerHeight - barBottom() - 40;
-  const itemH = 80;
-  const pageSize = Math.max(5, Math.floor(availH / itemH));
+  const pageSize = searchPageSize(query, filterBooks);
 
   // Pagination links must carry the active book filters (ADR-033) and stay in the group shown (ADR-046 §3); the
   // closure binds the current state so renderSearchResultList stays filter-agnostic.
@@ -3364,10 +3408,10 @@ $searchClear.addEventListener("click", () => {
 
 // ── BEGIN IS_MOBILE ──
 function isMobile() {
-  // Mobile/touch tier = narrow window OR a touch device (phones in any
-  // orientation, tablets). Pointer-aware so landscape phones/tablets keep the
-  // app layout instead of flipping to the desktop overlay (ADR-029 개정).
-  return window.matchMedia("(max-width: 768px), (pointer: coarse)").matches;
+  // Mobile/touch tier = narrow window OR a touch device (phones in any orientation, tablets), so landscape phones and
+  // tablets keep the app layout (ADR-029 개정). The query is helpers.js MOBILE_LAYOUT_QUERY, the one CSS hides the
+  // header search field with, so the page always shows exactly one search field.
+  return isMobileLayout();
 }
 // ── END IS_MOBILE ──
 
@@ -3661,6 +3705,76 @@ mountSearchField($searchBar, $searchInput);
 // Preload the in:<alias> map (from prefetched books) so commitTopSearch can
 // absorb operators synchronously — keeps commit free of an async race surface.
 ensureAliasMap();
+
+// ── Crossing the mobile layout's condition on the search view ──
+// The search view is drawn for one layout: the mobile in-page bar at its top, or the desktop header field and no bar
+// (ADR-048 §1). When the window crosses MOBILE_LAYOUT_QUERY (the condition `isMobile` reads and CSS hides the header
+// field with), put the bar in or take it out instead of drawing the view
+// again, so the results, the scroll position and text typed but not searched yet all stay. The typed text, and focus
+// if it was in the old field, move to the field the new layout shows. A bare /search is the recents view on mobile but
+// the book list on desktop (routing.js), so there the view is drawn again and the typed text carried over.
+
+/** Show `typed` in the desktop header field, with its clear button when there is text (as route() sets it). */
+function setHeaderField(/** @type {string} */ typed) {
+  $searchInput.value = typed;
+  const hidden = !typed.trim();
+  $searchClear.hidden = hidden;
+  $searchBar.dataset.clearHidden = String(hidden);
+}
+
+// The search field that lost focus because the new layout hid it. The browser drops focus from a field that stops
+// being rendered, before the media query's change event runs (Chrome: focusout with no related target, then resize,
+// then change), so the handler can't see that focus was there. A field the user leaves is still rendered at focusout.
+/** @type {Element | null} */
+let _fieldHiddenWithFocus = null;
+document.addEventListener("focusin", () => { _fieldHiddenWithFocus = null; });
+document.addEventListener("focusout", (e) => {
+  _fieldHiddenWithFocus = null;
+  const t = e.target;
+  if (e.relatedTarget !== null || !(t instanceof Element)) return;
+  const field = t.closest("#search-bar, #search-inpage-bar");
+  if (field && t.getClientRects().length === 0) _fieldHiddenWithFocus = field;
+});
+
+async function onLayoutTierChange() {
+  const hiddenWithFocus = _fieldHiddenWithFocus;
+  _fieldHiddenWithFocus = null;
+  const p = window.parsePath();
+  if (p.view !== "search") return;
+  const mobile = isMobile();
+  const bar = document.getElementById("search-inpage-bar");
+  const barInput = document.getElementById("search-inpage-input");
+  // The field the old layout showed: the header field before going mobile, the in-page bar before going desktop.
+  const oldField = mobile ? $searchBar : bar;
+  const typed = mobile ? $searchInput.value : (barInput instanceof HTMLInputElement ? barInput.value : "");
+  const at = document.activeElement;
+  const hadFocus = !!oldField && (oldField.contains(at) || ((!at || at === document.body) && hiddenWithFocus === oldField));
+  if (mobile && topSearchHistory.isOpen()) topSearchHistory.close();
+  const view = $app.querySelector(":scope > .search-view");
+  if (view && (p.query || p.filterBooks.length)) {
+    if (mobile && !bar) view.insertBefore(buildInPageSearchInput(typed), view.firstChild);
+    if (!mobile) bar?.remove();
+    setHeaderField(mobile ? "" : typed);
+    syncSearchFields();
+  } else {
+    await window.route();
+    if (window.parsePath().view !== "search" || isMobile() !== mobile) return;
+    if (mobile) {
+      const input = document.getElementById("search-inpage-input");
+      const clear = document.getElementById("search-inpage-clear");
+      if (input instanceof HTMLInputElement) input.value = typed;
+      if (clear) clear.hidden = !typed.trim();
+    } else {
+      setHeaderField(typed);
+    }
+  }
+  if (!hadFocus) return;
+  const input = mobile ? document.getElementById("search-inpage-input") : $searchInput;
+  if (input instanceof HTMLElement) input.focus({ preventScroll: true });
+}
+if (typeof window.matchMedia === "function") {
+  window.matchMedia(MOBILE_LAYOUT_QUERY).addEventListener("change", () => { void onLayoutTierChange(); });
+}
 
 
 // ── BEGIN AUTO_NAVIGATE ──

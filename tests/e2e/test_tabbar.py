@@ -130,6 +130,99 @@ def test_search_button_goes_to_search_then_focuses_the_input(mobile_context):
     assert page.evaluate(active) != "search-inpage-input"
 
 
+def test_crossing_the_mobile_layout_keeps_the_search_view(desktop_context):
+    """창 폭이 데스크톱과 휴대폰의 경계를 넘으면 검색 화면을 다시 그리지 않고 위쪽 입력창만 넣거나 뺀다. 결과와 주소가 그대로이고,
+    찾지 않은 채 친 글자와 포커스는 새 배치의 입력창으로 옮긴다. 검색어 없는 /search는 데스크톱에서 성서 목록, 휴대폰에서 최근
+    검색 화면이라 다시 그리되, 친 글자와 포커스는 옮긴다(#612 리뷰)."""
+    page = desktop_context.new_page()
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.goto(f"{BASE_URL}/search?q=%EC%82%AC%EB%9E%91")  # 사랑
+    wait_app_ready(page)
+    page.wait_for_selector(".search-result-item", timeout=20_000)
+    assert page.locator("#search-inpage-bar").count() == 0
+    # 다시 그리면 사라질 표시를 남긴다
+    page.evaluate("() => { document.querySelector('#app > .search-view').dataset.mark = 'kept'; }")
+    kept = "#app > .search-view[data-mark='kept']"
+    url = page.url
+    active = "() => document.activeElement?.id"
+
+    page.fill("#search-input", "목자")
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.wait_for_selector("#search-inpage-bar", timeout=5_000)
+    assert page.locator(kept).count() == 1, "검색 화면을 다시 그리지 않는다"
+    assert page.locator(f"{kept} > #search-inpage-bar:first-child").count() == 1, "위쪽 입력창은 검색 화면의 맨 위다"
+    assert page.locator(".search-result-item").count() > 0
+    assert page.input_value("#search-inpage-input") == "목자"
+    assert page.locator("#search-inpage-clear").is_visible()
+    assert page.evaluate(active) == "search-inpage-input"
+    assert page.url == url
+
+    page.fill("#search-inpage-input", "목자는")
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.wait_for_function("() => !document.getElementById('search-inpage-bar')", timeout=5_000)
+    assert page.locator(kept).count() == 1, "검색 화면을 다시 그리지 않는다"
+    assert page.input_value("#search-input") == "목자는"
+    assert page.evaluate(active) == "search-input"
+    assert page.url == url
+
+    # 검색어 없는 /search: 데스크톱은 성서 목록이다
+    page.goto(f"{BASE_URL}/search")
+    wait_app_ready(page)
+    page.wait_for_selector(".book-list", timeout=8_000)
+    page.fill("#search-input", "사랑")
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.wait_for_selector("#search-inpage-input", timeout=5_000)
+    page.wait_for_function("() => document.getElementById('search-inpage-input').value === '사랑'", timeout=5_000)
+    assert page.evaluate(active) == "search-inpage-input"
+    assert page.locator("#search-inpage-clear").is_visible()
+
+    page.fill("#search-inpage-input", "사랑은")
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.wait_for_selector(".book-list", timeout=8_000)
+    page.wait_for_function("() => document.getElementById('search-input').value === '사랑은'", timeout=5_000)
+    assert page.evaluate(active) == "search-input"
+    assert page.url.endswith("/search")
+
+
+def test_crossing_to_mobile_with_only_spaces_hides_the_clear_button(desktop_context):
+    """공백만 친 채 휴대폰 배치로 바꾸면 새 위쪽 입력창의 ⊗는 숨는다. 다른 곳처럼 앞뒤 공백을 뺀 값으로 본다(#618 리뷰)."""
+    page = desktop_context.new_page()
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.goto(f"{BASE_URL}/search?q=%EC%82%AC%EB%9E%91")  # 사랑
+    wait_app_ready(page)
+    page.wait_for_selector(".search-result-item", timeout=20_000)
+    page.fill("#search-input", "  ")
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.wait_for_selector("#search-inpage-bar", timeout=5_000)
+    assert page.input_value("#search-inpage-input") == "  "
+    assert page.locator("#search-inpage-clear").is_hidden()
+
+
+def test_paging_after_a_resize_keeps_the_page_size(desktop_context):
+    """창 크기를 바꾼 뒤 다음 쪽으로 가도 한 쪽의 결과 수는 1쪽과 같다. 쪽마다 결과 수를 그 창 높이로 다시 세면, 2쪽이 1쪽과 다른
+    자리에서 시작해 결과가 빠지거나 두 번 나왔다(#618 리뷰). 휴대폰과 데스크톱 배치를 넘나들 때와 같은 배치에서 높이만 바꿀 때를 본다."""
+    page = desktop_context.new_page()
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.goto(f"{BASE_URL}/search?q=%EC%82%AC%EB%9E%91")  # 사랑
+    wait_app_ready(page)
+    page.wait_for_selector(".search-pagination", timeout=20_000)
+    refs = lambda: page.locator(".search-result-ref").all_inner_texts()
+    first = refs()
+    size = len(first)
+    seen = set(first)
+
+    for n, viewport in ((2, {"width": 390, "height": 844}), (3, {"width": 1280, "height": 500})):
+        page.set_viewport_size(viewport)
+        page.locator(".search-pagination a", has_text="다음").click()
+        page.wait_for_function(f"() => new URLSearchParams(location.search).get('page') === '{n}'", timeout=5_000)
+        page.wait_for_function(
+            f"() => document.querySelector('h2.search-count')?.textContent.includes('({n}/')", timeout=20_000)
+        now = refs()
+        assert len(now) == size, (n, len(now), size)
+        assert not seen & set(now), f"{n}쪽이 앞 쪽의 결과를 다시 보인다: {sorted(seen & set(now))}"
+        seen |= set(now)
+
+
 def test_inpage_clear_lowers_the_keyboard_and_focuses_the_funnel(mobile_context):
     """위쪽 입력창의 검색어 지우기(⊗)는 키보드를 내린다. 결과를 보던 중에 지워도, 입력 중에 지워도, 키보드로 단추를 눌러도 최근 검색
     화면으로 돌아가고, 포커스는 다시 그린 입력창의 깔때기로 간다. 손가락이나 마우스로 눌렀으면 깔때기에 포커스 테두리를 그리지 않고,
@@ -229,6 +322,19 @@ def test_inpage_clear_focuses_the_home_tab_when_the_new_funnel_cannot_take_focus
     page.wait_for_function("() => !new URLSearchParams(location.search).get('q')", timeout=5_000)
     page.wait_for_function(HOME_FOCUSED, timeout=5_000)
     assert page.input_value("#search-inpage-input") == ""
+
+
+def test_inpage_escape_lowers_the_keyboard_when_nothing_can_take_focus(mobile_context):
+    """깔때기도 홈 탭도 포커스를 받지 못해도 Esc는 입력창의 포커스를 빼 키보드를 내린다. 친 글자는 그대로다(ADR-048 §5)."""
+    page = mobile_context.new_page()
+    page.goto(f"{BASE_URL}/search")
+    wait_app_ready(page)
+    page.wait_for_selector("#search-inpage-input", timeout=5_000)
+    page.evaluate(ADD_STYLE_RULE, "#search-inpage-bar .token-funnel, #tab-dock { display: none !important; }")
+    page.fill("#search-inpage-input", "목자")
+    page.keyboard.press("Escape")
+    assert page.evaluate("() => document.activeElement?.id") != "search-inpage-input"
+    assert page.input_value("#search-inpage-input") == "목자"
 
 
 def test_inpage_escape_lowers_the_keyboard_and_keeps_the_search(mobile_context):

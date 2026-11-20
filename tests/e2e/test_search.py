@@ -413,6 +413,35 @@ def test_book_filter_apply_from_the_in_page_bar_focuses_the_home_tab_when_the_ne
     page.wait_for_function("() => !!document.activeElement?.matches('#tab-bar [data-tab=\"home\"]')", timeout=5_000)
 
 
+@pytest.mark.parametrize("start, end, opener, shown", [
+    ({"width": 390, "height": 844}, {"width": 1280, "height": 800}, "#search-inpage-input", "#search-bar .token-funnel"),
+    ({"width": 1280, "height": 800}, {"width": 390, "height": 844}, "#search-input", "#search-inpage-bar .token-funnel"),
+])
+def test_book_filter_apply_after_the_layout_changed_uses_the_shown_field(start, end, opener, shown, desktop_context):
+    """책 선택 시트를 연 채 창 폭이 휴대폰과 데스크톱 배치를 넘나든 뒤 「적용」을 누르면, 지금 배치가 보이는 검색창의 글자로 찾고 그
+    검색창의 깔때기에 포커스를 준다. 시트를 연 위쪽 입력창이 빠져 포커스가 페이지 맨 앞으로 떨어지고, 상단 바 검색창은 숨어 친 글자를 읽지
+    못하던 때가 있었다(#618 리뷰)."""
+    page = desktop_context.new_page()
+    page.set_viewport_size(start)
+    page.goto(f"{BASE_URL}/search?q={quote('사랑')}")
+    page.wait_for_selector(".search-count", timeout=20_000)
+    page.fill(opener, "아들")
+    bar = "#search-inpage-bar" if opener == "#search-inpage-input" else "#search-bar"
+    page.locator(f"{bar} .token-funnel").click()
+    _show_book_tab(page, "mark").click()
+    page.set_viewport_size(end)
+    # 배치가 바뀌어 위쪽 입력창이 빠지거나 들어올 때까지 기다린다
+    bar_wanted = "true" if end["width"] < 769 else "false"
+    page.wait_for_function(f"() => !!document.getElementById('search-inpage-bar') === {bar_wanted}", timeout=5_000)
+    page.locator("#book-filter-sheet .book-filter-apply").click()
+    page.wait_for_function("""() => {
+        const refs = [...document.querySelectorAll('.search-result-ref')].map((n) => n.textContent);
+        return refs.length > 0 && refs.every((r) => r.startsWith('마르코의 복음서 '));
+    }""", timeout=20_000)
+    assert page.evaluate("() => new URLSearchParams(location.search).get('q')") == "아들"
+    page.wait_for_function(f"() => document.activeElement === document.querySelector('{shown}')", timeout=5_000)
+
+
 def test_book_filter_apply_keeps_a_typed_verse_reference_on_the_results(desktop_context):
     """「적용」이 친 검색어를 함께 찾아도 구절 표기로 장을 바로 열지 않는다. 장으로 바로 가는 것은 Enter뿐이다(ADR-033 D3).
     요한 7:16은 읽는 전례일이 없어 Enter면 장을 연다(`test_verse_reference_navigates_to_chapter`)."""
