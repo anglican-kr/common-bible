@@ -1520,16 +1520,28 @@ function buildInPageSearchInput(query) {
 
   input.addEventListener("input", () => { clear.hidden = !input.value.trim(); });
   input.addEventListener("keydown", (e) => {
+    // Esc lowers the keyboard and leaves the query, the results and the chosen books as they are (ADR-048 §5): focus
+    // moves to this bar's funnel. Its default would empty a search input (Chrome) while the results stay, and the
+    // document's Escape handler (app.js) must not reset some other control. Mid-composition the key is the IME's
+    // (Safari can report it with isComposing false but keyCode 229).
+    if (e.key === "Escape") {
+      if (e.isComposing || e.keyCode === 229) return;
+      e.preventDefault();
+      e.stopPropagation();
+      focusFunnelOrHome(wrap.querySelector(".token-funnel"), { preventScroll: true });
+      return;
+    }
     if (e.key !== "Enter") return;
     e.preventDefault();
     commitTopSearch(input.value);
   });
   // ⊗ clears the query and lowers the keyboard, even mid-typing: clearing means leaving the search (ADR-048 §4). The
   // button hides, so focus moves to this bar's funnel (where the book sheet's 「적용」 returns it, ADR-033 D3) and, after
-  // the recents view redraws the bar, to the new bar's funnel. A tap or click draws no focus ring there: the input
-  // always matches :focus-visible, so the browser would otherwise ring the funnel focus moved to (`focusVisible:
-  // false`, as in helpers.js). With a keyboard press the ring shows where focus went. pointerdown's default is
-  // prevented so the input keeps focus until click moves it in one step (as on the funnel).
+  // the recents view redraws the bar, to the new bar's funnel; to the home tab when a funnel can't take it. A tap or
+  // click draws no focus ring there: the input always matches :focus-visible, so the browser would otherwise ring the
+  // control focus moved to (`focusVisible: false`, as in helpers.js). With a keyboard press the ring shows where focus
+  // went. pointerdown's default is prevented so the input keeps focus until click moves it in one step (as on the
+  // funnel).
   clear.addEventListener("pointerdown", (e) => e.preventDefault());
   clear.addEventListener("click", (e) => {
     input.value = "";
@@ -1537,13 +1549,15 @@ function buildInPageSearchInput(query) {
     /** @type {FocusOptions & { focusVisible?: boolean }} */
     const options = e.detail > 0 ? { preventScroll: true, focusVisible: false } : { preventScroll: true };
     const funnel = wrap.querySelector(".token-funnel");
-    if (funnel instanceof HTMLElement) funnel.focus(options);
+    const focused = focusFunnelOrHome(funnel, options);
     if (document.activeElement === input) input.blur();
     // Drop the query (back to the recents/empty view) but keep the book-picker
     // scope so a cleared field doesn't silently reset the filter (ADR-033).
     if (window.parsePath().view === "search") {
       navigateSearch({ q: "" });
-      _inpageFocusAfterRender = { seq: window.routeSeq?.() ?? null, target: "funnel", options };
+      // The home tab only stands in until the redraw: the new bar's funnel takes focus back from it.
+      const standIn = focused && focused !== funnel ? focused : null;
+      _inpageFocusAfterRender = { seq: window.routeSeq?.() ?? null, target: "funnel", options, standIn };
     }
   });
 
@@ -2249,12 +2263,19 @@ let _bookSheetCloseTimer = null;
 // so focus handed to its funnel or input fell to <body> (WCAG 2.4.3). Set by the book sheet's 「적용」 (ADR-033 D3: its
 // funnel after a search, its input when the query was empty) and the bar's ⊗ (its funnel, ADR-048 §4). Matched against
 // the route sequence, so a route that never drew the view (the user moved on) leaves nothing behind for a later screen.
-/** @type {{ seq: number | null, target: "funnel" | "input", options: FocusOptions & { focusVisible?: boolean } } | null} */
+// `standIn` is where ⊗ put focus because the old funnel couldn't take it (the home tab): the new funnel takes it back.
+/**
+ * @type {{
+ *   seq: number | null, target: "funnel" | "input", options: FocusOptions & { focusVisible?: boolean },
+ *   standIn?: Element | null,
+ * } | null}
+ */
 let _inpageFocusAfterRender = null;
 
 /**
  * Focus the rebuilt in-page bar's funnel or input when this render is the one `_inpageFocusAfterRender` waits for and
- * the focus fell to <body> with the old bar (a focus the user put elsewhere meanwhile is left alone).
+ * the focus fell to <body> with the old bar, or still sits where ⊗ put it in the old funnel's stead (a focus the user put
+ * elsewhere meanwhile is left alone).
  * @param {HTMLElement} view @param {number} seq
  */
 function focusRebuiltInpageBar(view, seq) {
@@ -2262,9 +2283,28 @@ function focusRebuiltInpageBar(view, seq) {
   if (!want || want.seq !== seq) return;
   _inpageFocusAfterRender = null;
   const at = document.activeElement;
-  if (at && at !== document.body && at.isConnected) return;
-  const target = view.querySelector(want.target === "input" ? "#search-inpage-input" : "#search-inpage-bar .token-funnel");
-  if (target instanceof HTMLElement) target.focus(want.options);
+  if (at && at !== document.body && at.isConnected && at !== want.standIn) return;
+  if (want.target === "funnel") { focusFunnelOrHome(view.querySelector("#search-inpage-bar .token-funnel"), want.options); return; }
+  const input = view.querySelector("#search-inpage-input");
+  if (input instanceof HTMLElement) input.focus(want.options);
+}
+
+/**
+ * Focus the mobile in-page bar's funnel, or the tab bar's home tab when the funnel can't take focus (missing, hidden),
+ * so focus doesn't fall to <body> (ADR-048 §4, WCAG 2.4.3). Best effort: if the home tab can't take it either, focus
+ * stays where it was.
+ * @param {Element | null} funnel @param {FocusOptions & { focusVisible?: boolean }} options
+ * @returns {HTMLElement | null} the funnel or the home tab, whichever took focus
+ */
+function focusFunnelOrHome(funnel, options) {
+  if (funnel instanceof HTMLElement) {
+    funnel.focus(options);
+    if (document.activeElement === funnel) return funnel;
+  }
+  const home = document.querySelector('#tab-bar [data-tab="home"]');
+  if (!(home instanceof HTMLElement)) return null;
+  home.focus(options);
+  return document.activeElement === home ? home : null;
 }
 
 // ── Book pills under the search field (ADR-049) ──
