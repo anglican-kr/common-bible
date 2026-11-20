@@ -5944,6 +5944,9 @@ html.cite-sheet-open {
 #launch-screen svg {
   width: 30vmin;
   aspect-ratio: 494 / 671;
+  /* 홈 화면 앱은 화면이 상태 표시줄 아래에서 시작해, 화면 전체를 덮는 iOS 시작 이미지와 십자가의 높이를 맞추려고 올린다
+     (`--launch-shift`, js/pre-fetch.js `launchShift`, ADR-007 §8). 그 밖에는 0이다. */
+  transform: translateY(calc(-1 * var(--launch-shift, 0px)));
   will-change: transform, opacity;
 }
 
