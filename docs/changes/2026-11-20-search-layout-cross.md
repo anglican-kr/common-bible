@@ -1,4 +1,5 @@
 ---
+pr: 618
 date: 2026-11-20
 branch: fix/search-tab-review
 title: "fix: 창 폭이 바뀌어도 검색 화면의 친 글자와 결과 지키기"
