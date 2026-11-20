@@ -9,6 +9,7 @@
 // Coverage:
 //   - nextScrollCollapsed (SCROLL): 스크롤 축소의 접기와 펴기
 //   - syncHeaderNav (HEADER_NAV): 데스크톱 상단 바의 목적지 탭 표시
+//   - noticeBottom (NOTICE): 하단 알림 열을 화면 아래 막대 가운데 가장 위의 것보다 위에 두는 거리
 // The bottom-dock keyboard handling (KEYBOARD) went with the search morph (ADR-048).
 
 import test from "node:test";
@@ -106,4 +107,39 @@ test("syncHeaderNav: 화면을 옮기면 앞의 표시를 지운다 — 표시�
   assert.deepEqual(current(), ["home"]);
   syncHeaderNav("calendar");
   assert.deepEqual(current(), ["calendar"]);
+});
+
+// ── NOTICE — 하단 알림 열의 자리(2026-11-21) ─────────────────────────────────────
+// 순수 함수 — 자유 변수 없이 vm 에서 단독 실행.
+
+function noticeCtx() {
+  const ctx = {};
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("NOTICE"), ctx, { filename: "tabbar-notice.js" });
+  return ctx;
+}
+const box = (top, bottom) => ({ top, bottom, height: bottom - top });
+
+test("noticeBottom: 탭 dock 위 8px — 업데이트 토스트가 탭 바를 가리지 않는다", () => {
+  const { noticeBottom } = noticeCtx();
+  // iPhone 13 세로(높이 664): dock 600-660.
+  assert.equal(noticeBottom([box(600, 660)], 664), 72);
+});
+
+test("noticeBottom: 여러 막대 가운데 가장 위의 것 — 탭 dock 위에 뜬 오디오 바, 선택 바 위의 카운트 칩", () => {
+  const { noticeBottom } = noticeCtx();
+  assert.equal(noticeBottom([box(600, 660), box(522, 583)], 664), 150);
+  assert.equal(noticeBottom([box(600, 660), box(554, 592)], 664), 118);
+});
+
+test("noticeBottom: 숨은 막대(빈 상자)와 화면 위쪽 절반의 상자는 세지 않는다", () => {
+  const { noticeBottom } = noticeCtx();
+  // 세로의 이어 읽기 배너는 헤더 아래에 붙어 있다.
+  assert.equal(noticeBottom([box(0, 0), box(56, 100), box(600, 660)], 664), 72);
+});
+
+test("noticeBottom: 화면 아래에 막대가 없으면(데스크톱) null — CSS의 기본 자리를 쓴다", () => {
+  const { noticeBottom } = noticeCtx();
+  assert.equal(noticeBottom([], 800), null);
+  assert.equal(noticeBottom([box(0, 0)], 800), null);
 });

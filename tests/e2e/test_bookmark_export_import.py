@@ -87,11 +87,10 @@ def _get_bookmarks(page) -> list:
 
 
 def _wait_visible_notice(page, text: str) -> None:
-    """Wait for the on-screen snackbar with exactly `text` — the live region (#a11y-announce, sr-only)
-    carries the same words, so it is left out."""
+    """Wait for the on-screen snackbar with exactly `text` (the live region #a11y-announce carries the same words)."""
     page.wait_for_function(
-        """(t) => [...document.querySelectorAll('body > div')].some(
-            (d) => d.id !== 'a11y-announce' && d.textContent === t && d.checkVisibility())""",
+        """(t) => [...document.querySelectorAll('#notice-stack > .snackbar')].some(
+            (d) => d.textContent === t && d.checkVisibility())""",
         arg=text,
     )
 

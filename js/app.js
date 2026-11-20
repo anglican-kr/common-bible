@@ -230,7 +230,7 @@ function registerServiceWorker() {
       waitingSW.postMessage({ type: "SKIP_WAITING" });
       toast.remove();
     });
-    document.body.appendChild(toast);
+    (document.getElementById("notice-stack") ?? document.body).appendChild(toast);
   }
 
   /** @param {ServiceWorkerRegistration} reg */

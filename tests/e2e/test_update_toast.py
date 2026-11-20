@@ -183,3 +183,47 @@ def test_update_toast_falls_back_when_sw_does_not_respond(browser):
         )
     finally:
         ctx.close()
+
+
+# ── 자리: 탭 바 위, 다른 알림과 겹치지 않게 ─────────────────────────────────────
+# 토스트가 화면 아래 1rem에 떠 휴대폰의 탭 바를 가렸고, 스낵바가 따로 떠 토스트와 겹쳤다(2026-11-21).
+# 두 알림은 #notice-stack 한 열에 쌓이고, 그 열은 화면 아래 막대 가운데 가장 위의 것보다 위에 있다(tabbar.js placeNotices).
+
+def _box(page, selector):
+    return page.evaluate(
+        "(s) => { const r = document.querySelector(s).getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; }",
+        selector,
+    )
+
+
+def test_update_toast_sits_above_tab_bar_and_snackbar_stacks(browser):
+    """휴대폰 폭에서 토스트는 탭 dock보다 위에 있고, 스낵바가 함께 떠도 서로 겹치지 않는다."""
+    ctx = browser.new_context(service_workers="block", viewport={"width": 390, "height": 664}, has_touch=True)
+    ctx.add_init_script(_SW_WAITING_STUB)
+    page = ctx.new_page()
+    page.goto(BASE)
+    try:
+        page.wait_for_selector("#sw-update-toast", timeout=5_000)
+        page.evaluate("() => window._showSyncSnackbar('동기화했습니다.')")
+        page.wait_for_selector("#notice-stack > .snackbar")
+        page.wait_for_timeout(600)  # the entrance animation and the measuring frame
+        dock = _box(page, "#tab-dock")
+        toast = _box(page, "#sw-update-toast")
+        snack = _box(page, "#notice-stack > .snackbar")
+        assert max(toast["bottom"], snack["bottom"]) <= dock["top"], (toast, snack, dock)
+        assert toast["bottom"] <= snack["top"] or snack["bottom"] <= toast["top"], (toast, snack)
+    finally:
+        ctx.close()
+
+
+def test_same_snackbar_twice_shows_once(browser):
+    """같은 글의 스낵바를 또 띄우면 하나만 남는다(이전 것을 지우고 3.5초를 다시 센다)."""
+    ctx = browser.new_context(service_workers="block")
+    page = ctx.new_page()
+    page.goto(BASE)
+    try:
+        page.wait_for_function("() => typeof window._showSyncSnackbar === 'function'")
+        page.evaluate("() => { window._showSyncSnackbar('같은 알림'); window._showSyncSnackbar('같은 알림'); }")
+        assert page.locator("#notice-stack > .snackbar").count() == 1
+    finally:
+        ctx.close()

@@ -698,7 +698,7 @@ def test_merge_refused_by_full_storage_keeps_drive_as_it_was(browser, fake_drive
         _sync_now(page_b)
 
         page_b.locator(
-            "body > div:not(#a11y-announce)",
+            "#notice-stack > .snackbar",
             has_text="저장 공간이 부족합니다. 불필요한 북마크를 지워야 동기화할 수 있습니다.",
         ).wait_for(state="visible")
         _wait_idle(page_b)                               # the cycle has ended — an upload would have landed by now
@@ -875,11 +875,11 @@ def test_drive_disconnect_delete_failure_says_so(browser, fake_drive, fake_oauth
         page.evaluate("openDriveDisconnectModal()")
         page.wait_for_selector("#drive-disconnect-modal:not([hidden])")
         page.click("#drive-disconnect-delete")
-        # The snackbar (a plain div) for sighted users, and the same text in the live region for screen
+        # The snackbar for sighted users, and the same text in the live region for screen
         # readers (Copilot review 1 — the snackbar alone was never announced).
         page.wait_for_function(
-            "() => [...document.body.children].some((n) => n.id !== 'a11y-announce'"
-            " && n.textContent.includes('동기화 파일은 삭제하지 못했습니다'))",
+            "() => [...document.querySelectorAll('#notice-stack > .snackbar')]"
+            ".some((n) => n.textContent.includes('동기화 파일은 삭제하지 못했습니다'))",
             timeout=5_000,
         )
         page.wait_for_function(
