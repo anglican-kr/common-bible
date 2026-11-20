@@ -16,7 +16,7 @@ from urllib.parse import quote
 
 import pytest
 
-from .conftest import CLEAR_APP_STORAGE, assert_sheet_close_button, emulate_status_bar, wait_app_ready
+from .conftest import ADD_STYLE_RULE, CLEAR_APP_STORAGE, assert_sheet_close_button, emulate_status_bar, wait_app_ready
 
 BASE_URL = "http://localhost:8080"
 SEARCH_URL = f"{BASE_URL}/search?q=%EC%B0%BD%EC%84%B8%201%3A1"
@@ -392,6 +392,25 @@ def test_book_filter_apply_from_the_in_page_bar_focuses_its_new_funnel(typed, mo
     })""")
     assert state["q"] == (typed or "사랑"), state
     assert state["funnelFocused"], state
+
+
+def test_book_filter_apply_from_the_in_page_bar_focuses_the_home_tab_when_the_new_funnel_cannot(mobile_context):
+    """휴대폰의 위쪽 입력창에서 연 시트로 찾았는데 다시 그린 입력창의 깔때기가 포커스를 받지 못하면, 포커스를 홈 탭으로 옮긴다. 페이지
+    맨 앞으로 떨어뜨리지 않는다(ADR-048 §4, ADR-033 D3, #616 리뷰)."""
+    page = mobile_context.new_page()
+    page.goto(f"{BASE_URL}/search?q={quote('사랑')}")
+    page.wait_for_selector(".search-count", timeout=20_000)
+    bar = "#search-inpage-bar"
+    page.evaluate("() => document.querySelector('#search-inpage-bar .token-funnel').setAttribute('data-old', '')")
+    page.evaluate(ADD_STYLE_RULE, "#search-inpage-bar .token-funnel:not([data-old]) { display: none !important; }")
+    page.locator(f"{bar} .token-funnel").click()
+    _show_book_tab(page, "mark").click()
+    page.locator("#book-filter-sheet .book-filter-apply").click()
+    page.wait_for_function("""() => {
+        const refs = [...document.querySelectorAll('.search-result-ref')].map((n) => n.textContent);
+        return refs.length > 0 && refs.every((r) => r.startsWith('마르코의 복음서 '));
+    }""", timeout=20_000)
+    page.wait_for_function("() => !!document.activeElement?.matches('#tab-bar [data-tab=\"home\"]')", timeout=5_000)
 
 
 def test_book_filter_apply_keeps_a_typed_verse_reference_on_the_results(desktop_context):

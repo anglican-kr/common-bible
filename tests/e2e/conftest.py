@@ -99,6 +99,15 @@ def fill_storage(page, keys, grow_only=False, longer_than=None) -> None:
     )
 
 
+# 콘텐츠 보안 정책(CSP)이 끼워 넣은 <style>을 막으므로, 스크립트로 만든 스타일시트(adoptedStyleSheets)로 규칙을 더한다.
+# `page.evaluate(ADD_STYLE_RULE, "<규칙>")`. 규칙이라 나중에 그린 요소에도 그리는 순간부터 적용된다.
+ADD_STYLE_RULE = """(rule) => {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(rule);
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+}"""
+
+
 @pytest.fixture(scope="session")
 def base_url() -> str:
     return BASE_URL

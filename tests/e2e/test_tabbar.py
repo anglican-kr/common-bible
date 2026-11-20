@@ -15,7 +15,7 @@ Covers:
 데스크탑(≥769px)에서는 탭 dock 이 숨겨지고 기존 헤더/오버레이를 유지한다.
 """
 
-from .conftest import BASE_URL, CLEAR_APP_STORAGE, IPHONE_UA, wait_app_ready
+from .conftest import ADD_STYLE_RULE, BASE_URL, CLEAR_APP_STORAGE, IPHONE_UA, wait_app_ready
 
 
 def test_tab_bar_present_and_search_separated(mobile_context):
@@ -175,30 +175,59 @@ def test_inpage_clear_lowers_the_keyboard_and_focuses_the_funnel(mobile_context)
     assert page.evaluate(ring), "키보드로 눌렀으면 깔때기에 포커스 테두리가 있다"
 
 
-def test_inpage_clear_focuses_the_home_tab_when_the_funnel_cannot_take_focus(mobile_context):
-    """깔때기가 포커스를 받지 못하면 ⊗는 포커스를 홈 탭으로 옮긴다. 페이지 맨 앞으로 떨어뜨리지 않는다(ADR-048 §4)."""
-    page = mobile_context.new_page()
+# 깔때기는 ADD_STYLE_RULE로 숨긴다. 숨길 깔때기는 선택자로 고른다(옛 깔때기에는 data-old를 붙인다)
+HOME_FOCUSED = "() => !!document.activeElement?.matches('#tab-bar [data-tab=\"home\"]')"
+NEW_FUNNEL_FOCUSED = "() => !!document.activeElement?.matches('#search-inpage-bar .token-funnel:not([data-old])')"
+
+
+def _search_then_mark_old_funnel(page):
+    """찾아서 위쪽 입력창을 그린 뒤, 지금 깔때기에 data-old를 붙인다. 이어서 ⊗를 누르면 최근 검색 화면이 입력창을 다시 그린다."""
     page.goto(f"{BASE_URL}/search")
     wait_app_ready(page)
-    page.wait_for_selector("#search-inpage-input", timeout=5_000)
-    # 콘텐츠 보안 정책(CSP)이 끼워 넣은 <style>을 막으므로 스크립트로 숨긴다. 입력창을 다시 그려도 새 깔때기를 숨긴다
-    page.evaluate("""() => {
-        const hide = () => document.querySelectorAll('#search-inpage-bar .token-funnel')
-            .forEach((f) => f.style.setProperty('display', 'none', 'important'));
-        hide();
-        new MutationObserver(hide).observe(document.getElementById('app'), { childList: true, subtree: true });
-    }""")
-
-    # 찾은 뒤에 지운다(입력창을 다시 그린다)
     page.fill("#search-inpage-input", "사랑")
     page.press("#search-inpage-input", "Enter")
     page.wait_for_function("() => new URLSearchParams(location.search).get('q') === '사랑'", timeout=10_000)
     page.wait_for_selector("#search-inpage-clear:not([hidden])", timeout=10_000)
+    page.evaluate("() => document.querySelector('#search-inpage-bar .token-funnel').setAttribute('data-old', '')")
+
+
+def test_inpage_clear_focuses_the_home_tab_when_the_funnel_cannot_take_focus(mobile_context):
+    """옛 깔때기도 다시 그린 깔때기도 포커스를 받지 못하면 ⊗는 포커스를 홈 탭으로 옮긴다. 페이지 맨 앞으로 떨어뜨리지 않는다
+    (ADR-048 §4)."""
+    page = mobile_context.new_page()
+    _search_then_mark_old_funnel(page)
+    page.evaluate(ADD_STYLE_RULE, "#search-inpage-bar .token-funnel { display: none !important; }")
     page.locator("#search-inpage-clear").click()
     page.wait_for_function("() => !new URLSearchParams(location.search).get('q')", timeout=5_000)
-    page.wait_for_timeout(300)
-    assert page.evaluate("() => !!document.activeElement?.matches('#tab-bar [data-tab=\"home\"]')"), \
-        page.evaluate("() => document.activeElement?.outerHTML.slice(0, 120)")
+    page.wait_for_function(HOME_FOCUSED, timeout=5_000)
+    assert page.input_value("#search-inpage-input") == ""
+
+
+def test_inpage_clear_gives_focus_back_to_the_new_funnel(mobile_context):
+    """⊗를 누른 순간 옛 깔때기만 포커스를 받지 못하면 홈 탭이 잠시 받고, 최근 검색 화면이 입력창을 다시 그리면 새 깔때기가 포커스를
+    가져간다(ADR-048 §4, #616 리뷰). 홈 탭에 남던 때가 있었다."""
+    page = mobile_context.new_page()
+    _search_then_mark_old_funnel(page)
+    page.evaluate(ADD_STYLE_RULE, "#search-inpage-bar .token-funnel[data-old] { display: none !important; }")
+    page.evaluate("""() => {
+        window.__focusLog = [];
+        document.addEventListener('focusin', (e) => __focusLog.push(
+            e.target.matches('#tab-bar [data-tab="home"]') ? 'home' : e.target.matches('.token-funnel') ? 'funnel' : e.target.id));
+    }""")
+    page.locator("#search-inpage-clear").click()
+    page.wait_for_function(NEW_FUNNEL_FOCUSED, timeout=5_000)
+    log = page.evaluate("() => __focusLog")
+    assert log[-2:] == ["home", "funnel"], log
+
+
+def test_inpage_clear_focuses_the_home_tab_when_the_new_funnel_cannot_take_focus(mobile_context):
+    """옛 깔때기는 포커스를 받고 다시 그린 깔때기가 받지 못하면, 다시 그린 뒤에 포커스를 홈 탭으로 옮긴다(ADR-048 §4)."""
+    page = mobile_context.new_page()
+    _search_then_mark_old_funnel(page)
+    page.evaluate(ADD_STYLE_RULE, "#search-inpage-bar .token-funnel:not([data-old]) { display: none !important; }")
+    page.locator("#search-inpage-clear").click()
+    page.wait_for_function("() => !new URLSearchParams(location.search).get('q')", timeout=5_000)
+    page.wait_for_function(HOME_FOCUSED, timeout=5_000)
     assert page.input_value("#search-inpage-input") == ""
 
 
