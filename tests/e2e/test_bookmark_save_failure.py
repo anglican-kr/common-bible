@@ -85,7 +85,7 @@ def _announced(page):
 
 
 def _snackbar(page, msg=FULL_MSG):
-    return page.locator("body > div:not(#a11y-announce)", has_text=msg)
+    return page.locator("#notice-stack > .snackbar", has_text=msg)
 
 
 def _ids(nodes):

@@ -397,6 +397,10 @@
     </div>
   </div>
 
+  <!-- 하단 알림(업데이트 토스트, 스낵바)을 쌓는 자리. 알림끼리 겹치지 않게 한 열로 쌓고, 탭 바, 오디오 바,
+       선택 바 가운데 가장 위에 있는 것보다 위에 둔다(tabbar.js의 placeNotices). -->
+  <div id="notice-stack"></div>
+
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-CWVVPW11TE"></script>
   <!-- Drive sync modules (load order matters: debug-log → refresh-store → transport → state-machine → facade) -->

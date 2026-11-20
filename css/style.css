@@ -6015,22 +6015,60 @@ html.cite-sheet-open {
   }
 }
 
-/* ── SW Update Toast ── */
+/* ── Bottom notices: SW update toast, snackbar ──
+   하단 알림은 모두 #notice-stack 한 열에 쌓여 서로 겹치지 않는다. 자리(--notice-bottom)는 tabbar.js
+   placeNotices가 탭 바, 오디오 바, 선택 바 가운데 가장 위의 것을 재서 그 위로 넣는다. 그런 막대가 없으면
+   (데스크톱) 화면 아래에서 1rem 위다. 예전에는 토스트가 화면 아래 1rem에 떠 휴대폰의 탭 바를 가렸고,
+   스낵바는 따로 80px 위에 떠 토스트나 다른 스낵바와 겹쳤다(2026-11-21). */
+#notice-stack {
+  position: fixed;
+  left: 50%;
+  bottom: var(--notice-bottom, calc(env(safe-area-inset-bottom, 0px) + 1rem));
+  transform: translateX(-50%);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: max-content;
+  max-width: calc(100vw - 2rem);
+  /* The stack box itself must not swallow taps on the content behind its gaps. */
+  pointer-events: none;
+  transition: bottom var(--duration-base) var(--ease-standard);
+}
+
+#notice-stack > * {
+  max-width: 100%;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #notice-stack { transition: none; }
+  #notice-stack > * { animation: none; }
+}
+
+.snackbar {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  padding: var(--space-3) var(--space-5);
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  font-size: var(--font-sm);
+  line-height: 1.4;
+  text-align: center;
+  animation: toast-in var(--duration-base) ease-out;
+}
 
 #sw-update-toast {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  position: fixed;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10000;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
   gap: var(--space-2) var(--space-3);
   padding: var(--space-3) var(--space-4);
-  max-width: calc(100vw - 2rem);
   background: var(--bg-card);
   color: var(--text);
   border: 1px solid var(--border);
@@ -6064,8 +6102,8 @@ html.cite-sheet-open {
 }
 
 @keyframes toast-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(1rem); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from { opacity: 0; transform: translateY(1rem); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* ── Search Reference Match Card ── */
