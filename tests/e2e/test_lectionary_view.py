@@ -2522,7 +2522,6 @@ def test_date_step_leaves_no_hover_circle_after_a_tap(browser, touch):
         ctx.close()
 
 
-
 @pytest.mark.parametrize("touch", [True, False])
 def test_collect_number_and_fold_keep_their_color_after_a_tap(browser, touch):
     """본기도 번호를 누르면 같은 자리에 다시 그려지고, 독서의 접기 단추는 누른 자리에 남는다. iOS는 그 자리에 :hover를 남기므로 호버의
@@ -2568,6 +2567,7 @@ def test_collect_number_and_fold_keep_their_color_after_a_tap(browser, touch):
         hover_keeps_color("document.querySelector('.lect-cards-fold')")
     finally:
         ctx.close()
+
 
 # ── 날짜 고르기(ADR-038 §2 「날짜 고르기」, 사용자 결정 2026-11-18) ──
 
