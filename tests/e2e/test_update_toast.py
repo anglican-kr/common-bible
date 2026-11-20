@@ -197,7 +197,7 @@ def _box(page, selector):
 
 
 def test_update_toast_sits_above_tab_bar_and_snackbar_stacks(browser):
-    """휴대폰 폭에서 토스트는 탭 dock보다 위에 있고, 스낵바가 함께 떠도 서로 겹치지 않는다."""
+    """휴대폰 폭에서 토스트는 탭 독보다 위에 있고, 스낵바가 함께 떠도 서로 겹치지 않는다."""
     ctx = browser.new_context(service_workers="block", viewport={"width": 390, "height": 664}, has_touch=True)
     ctx.add_init_script(_SW_WAITING_STUB)
     page = ctx.new_page()

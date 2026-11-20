@@ -120,13 +120,13 @@ function noticeCtx() {
 }
 const box = (top, bottom) => ({ top, bottom, height: bottom - top });
 
-test("noticeBottom: 탭 dock 위 8px — 업데이트 토스트가 탭 바를 가리지 않는다", () => {
+test("noticeBottom: 탭 독 위 8px — 업데이트 토스트가 탭 바를 가리지 않는다", () => {
   const { noticeBottom } = noticeCtx();
   // iPhone 13 세로(높이 664): dock 600-660.
   assert.equal(noticeBottom([box(600, 660)], 664), 72);
 });
 
-test("noticeBottom: 여러 막대 가운데 가장 위의 것 — 탭 dock 위에 뜬 오디오 바, 선택 바 위의 카운트 칩", () => {
+test("noticeBottom: 여러 막대 가운데 가장 위의 것 — 탭 독 위에 뜬 오디오 바, 선택 바 위의 카운트 칩", () => {
   const { noticeBottom } = noticeCtx();
   assert.equal(noticeBottom([box(600, 660), box(522, 583)], 664), 150);
   assert.equal(noticeBottom([box(600, 660), box(554, 592)], 664), 118);

@@ -372,7 +372,7 @@ publishTabBarWidth();
 sizeTabIndicator();
 
 // ── 하단 알림의 자리(2026-11-21) ──
-// 업데이트 토스트와 스낵바는 #notice-stack 한 열에 쌓인다(app.js, drive-sync.js). 그 열을 화면 아래의 막대(탭 dock,
+// 업데이트 토스트와 스낵바는 #notice-stack 한 열에 쌓인다(app.js, drive-sync.js). 그 열을 화면 아래의 막대(탭 독,
 // 오디오 바, 절 선택과 북마크 선택 바와 그 카운트 칩, 가로의 이어 읽기 알약) 가운데 가장 위의 것보다 위에 둔다. 예전에는
 // 토스트가 화면 아래 1rem에 떠 탭 바를 가렸다. 막대의 자리는 화면 방향, 스크롤 축소, 오디오 재생, 선택 모드에 따라
 // 여러 가지라, 그 경우를 CSS로 모두 적지 않고 보이는 막대를 잰다.
@@ -398,33 +398,51 @@ function noticeBottom(rects, viewportH) {
 const $notices = document.getElementById("notice-stack");
 const BOTTOM_BARS = "#tab-dock, #audio-bar, #verse-select-bar, #verse-select-count, #bm-select-bar, #bm-select-count, .resume-banner";
 let _noticeFrame = 0;
+function measureNotices() {
+  if (!$notices?.childElementCount) return;
+  const rects = [...document.querySelectorAll(BOTTOM_BARS)].map((e) => e.getBoundingClientRect());
+  const px = noticeBottom(rects, window.innerHeight);
+  if (px === null) $notices.style.removeProperty("--notice-bottom");
+  else $notices.style.setProperty("--notice-bottom", `${px}px`);
+}
 function placeNotices() {
   if (!$notices || _noticeFrame) return;
   _noticeFrame = requestAnimationFrame(() => {
     _noticeFrame = 0;
-    if (!$notices.childElementCount) return;
-    const rects = [...document.querySelectorAll(BOTTOM_BARS)].map((e) => e.getBoundingClientRect());
-    const px = noticeBottom(rects, window.innerHeight);
-    if (px === null) $notices.style.removeProperty("--notice-bottom");
-    else $notices.style.setProperty("--notice-bottom", `${px}px`);
+    measureNotices();
   });
 }
 if ($notices) {
   // The bars move when the body's mode classes (tabbar-collapsed, verse-select-active, bm-select-active) or a bar's
-  // `hidden` change, and slide there by transition or animation, so measure again when one ends. Only while a notice
-  // is up.
+  // `hidden` change, when a bar is inserted or removed (the landscape resume pill), and when the page scrolls (the
+  // desktop audio bar is sticky), and slide there by transition or animation, so measure again when one ends. Only
+  // while a notice is up.
   const barWatch = new MutationObserver(placeNotices);
   const onMove = () => placeNotices();
+  const scrollOpts = { capture: true, passive: true };
+  let watching = false;
   const watch = () => {
     if ($notices.childElementCount) {
-      placeNotices();
-      barWatch.observe(document.body, { attributes: true, subtree: true, attributeFilter: ["class", "hidden"] });
+      if (watching) return;
+      watching = true;
+      // The first notice after an empty spell: place the stack now, before it paints, without sliding from where the
+      // bars were last time.
+      $notices.style.transition = "none";
+      measureNotices();
+      void $notices.offsetHeight;
+      $notices.style.removeProperty("transition");
+      barWatch.observe(document.body, {
+        attributes: true, childList: true, subtree: true, attributeFilter: ["class", "hidden"],
+      });
       window.addEventListener("resize", onMove);
+      document.addEventListener("scroll", onMove, scrollOpts);
       document.addEventListener("transitionend", onMove);
       document.addEventListener("animationend", onMove);
     } else {
+      watching = false;
       barWatch.disconnect();
       window.removeEventListener("resize", onMove);
+      document.removeEventListener("scroll", onMove, scrollOpts);
       document.removeEventListener("transitionend", onMove);
       document.removeEventListener("animationend", onMove);
     }
