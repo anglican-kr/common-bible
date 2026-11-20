@@ -21,7 +21,7 @@ iOS 홈 화면에서 실행된 PWA에는 브라우저 UI가 없어서, 이 구�
 - 장점: 구현이 단순하고, OS가 직접 스플래시 이미지를 보여 준다.
 - 단점:
   - 안드로이드와 데스크톱 PWA에는 스플래시가 없다.
-  - 기기별로 13가지 해상도의 PNG를 관리해야 한다.
+  - 기기별로 16가지 해상도의 PNG를 관리해야 한다.
   - OS 스플래시가 사라진 직후 웹뷰를 초기화하는 구간은 여전히 흰 화면이다.
   - 런치 스크린에서 앱 UI로 넘어가는 시점을 제어할 수 없다.
 
@@ -99,12 +99,12 @@ HTML 파싱이 `<body>` 태그까지 진행됐지만 `<div id="launch-screen">` 
 ### 5. 렌더를 막는 리소스를 비동기로
 
 - Google Fonts 스타일시트: `preload as="style"`과 일반 `stylesheet` 링크로 `@font-face` 규칙을 첫 페인트 전에 확보한다(`d61f879`). `display=swap`을 써서 폰트를 다 받는 즉시 본문에 적용한다. 런치 스크린 오버레이가 다운로드 구간을 가려 FOUT은 보이지 않는다(2026-05-01에 `display=optional`을 되돌렸다. 「검토한 대안」 참고).
-- 폰트가 도착하기를 기다려 런치 스크린을 닫는다(2026-05-01). 페이드아웃 시간(2.4s)은 보통 네트워크에서는 폰트 다운로드를 충분히 덮는다. 그러나 캐시가 비어 있는 상태로 느린 LTE나 3G에서 폰트가 페이드아웃이 끝난 뒤에 오면, 본문이 다 보인 상태에서 폰트가 바뀌어 FOUT(레이아웃 시프트 포함)이 보일 수 있다. 그래서 `dismissLaunchScreen()`을 `Promise.race([document.fonts.ready, timeout(1500ms)])`의 결과가 나온 뒤에 호출한다(`js/app.js`).
+- 폰트가 도착하기를 기다려 런치 스크린을 닫는다(2026-05-01). 페이드아웃 시간(2.4s)은 보통 네트워크에서는 폰트 다운로드를 충분히 덮는다. 그러나 캐시가 비어 있는 상태로 느린 LTE나 3G에서 폰트가 페이드아웃이 끝난 뒤에 오면, 본문이 다 보인 상태에서 폰트가 바뀌어 FOUT(레이아웃 시프트 포함)이 보일 수 있다. 그래서 `dismissLaunchScreen()`을 `Promise.race([document.fonts.ready, timeout(1500ms)])`의 결과가 나온 뒤에 호출한다(`js/app/settings-ui.js`).
   - 캐시에 있으면 `document.fonts.ready`가 바로 끝나 지연이 없다.
   - 캐시에 폰트가 없으면 폰트가 올 때까지 런치 스크린이 본문을 가린 채 기다리다가 페이드아웃을 시작한다.
   - 1.5s 타임아웃은 아주 느린 네트워크에서 끝없이 기다리지 않게 하는 안전망이다. 이 경우에는 폰트 교체가 본문에 보이지만, 기존 동작과 같은 정도의 회귀로 그친다.
 - `app.js`, `gtag-init.js`: `defer` 속성을 단다.
-- `js/pre-fetch.js`: `<head>`에서 동기로 불러오되, 세 줄짜리 스크립트로 `books.json` 받기를 앱 코드를 불러오는 것과 동시에 시작한다(`7d1b204`).
+- `js/pre-fetch.js`: `<head>`에서 동기로 불러오는 짧은 스크립트다. `books.json` 받기를 앱 코드를 불러오는 것과 동시에 시작한다(`7d1b204`). iOS 홈 화면 앱에서는 런치 스크린의 십자가를 올릴 거리도 여기서 잰다(§8).
 
 ### 6. 런치 스크린을 일찍 닫고 부드럽게 전환하기
 
@@ -118,11 +118,18 @@ HTML 파싱이 `<body>` 태그까지 진행됐지만 `<div id="launch-screen">` 
 
 ### 7. SVG 경량화
 
-인라인 로고 SVG는 `svgo --multipass --precision=2`로 좌표 정밀도를 두 자리로 줄였다(`07eeda6`). `index.html`이 37KB에서 15KB가 됐다. 25vmin 표시 크기에서는 픽셀보다 작은 차이라 눈에 보이는 회귀가 없다.
+인라인 로고 SVG는 `svgo --multipass --precision=2`로 좌표 정밀도를 두 자리로 줄였다(`07eeda6`). `index.html`이 37KB에서 15KB가 됐다. 30vmin 표시 크기에서는 픽셀보다 작은 차이라 눈에 보이는 회귀가 없다.
 
 ### 8. iOS 네이티브 스플래시 병행
 
-기기별 `apple-touch-startup-image` 13개(`2f0e7d3`)와 `manifest.webmanifest`의 `background_color: #1a1a2e`로 OS 수준 스플래시도 같은 색조로 맞췄다. C안과 충돌하지 않고, **OS 스플래시, 웹뷰 초기화 구간, `#launch-screen`, 앱 UI** 모든 구간이 끊김 없이 다크 색조로 이어진다.
+iOS 홈 화면 앱은 페이지를 그리기 전에, 기기 화면 크기에 맞는 시작 이미지(`apple-touch-startup-image`)를 화면 전체에 보인다. 이 이미지와 `manifest.webmanifest`의 `background_color: #1a1a2e`로 OS 수준 스플래시도 같은 색조로 맞췄다(`2f0e7d3`). C안과 충돌하지 않고, **OS 스플래시, 웹뷰 초기화 구간, `#launch-screen`, 앱 UI** 모든 구간이 끊김 없이 다크 색조로 이어진다.
+
+- **기기 16종**(2026-11-20). iOS는 화면 크기가 정확히 맞는 이미지만 보인다. 2026-11-20에 아이폰 16 Pro, 17, 17 Pro(402×874), Air(420×912), 16 Pro Max, 17 Pro Max(440×956)의 세 크기를 더했다. 기기 목록, 이미지, `<link>` 태그는 `scripts/generate_splash.py`가 만든다.
+- **`apple-mobile-web-app-capable` 메타 태그를 둔다**(2026-11-20). 매니페스트가 있어도 이 태그가 없으면 iOS가 시작 이미지를 보이지 않는다(firt.dev 2026-10-13. Apple 문서로는 확인하지 못했다). `index.html`에 처음부터 이 태그가 없어, 아이폰에서 앱을 열면 흰 화면이 한동안 보였다. 태그를 넣은 뒤로는 흰 화면이 보이지 않았다(아이폰 실기기, 2026-11-20).
+- **이미지의 십자가는 `#launch-screen`의 십자가와 같다**(2026-11-20). 생성기가 `index.html`의 `#launch-screen` SVG를 읽어, 페이지와 같은 크기(화면 짧은 변의 30%)로 화면 한가운데에 그린다. 전에는 옛 로고를 짧은 변의 25%로 그려, 시작 이미지에서 `#launch-screen`으로 넘어갈 때 십자가가 커졌다.
+- **그림을 다시 만들면 주소를 바꾼다.** 서버가 시작 이미지를 하루 동안 캐시하게 해, 주소가 같으면 휴대폰이 옛 그림을 보인다. 그래서 생성기의 `SPLASH_VERSION`을 올려 `<link>` 주소의 `?v=` 값을 바꾼다.
+- **십자가의 높이를 맞춘다**(2026-11-20). 시작 이미지는 상태 표시줄까지 화면 전체를 덮는데, 홈 화면 앱의 페이지는 보통 상태 표시줄 아래에서 시작한다. 그래서 `#launch-screen`의 한가운데가 상태 표시줄 높이의 절반만큼 아래에 있었고, 넘어갈 때 십자가가 내려갔다. `js/pre-fetch.js`의 `launchShift`가 첫 페인트 전에 화면 높이에서 페이지 높이를 뺀 값의 절반을 재어 `--launch-shift` 변수에 적고, `css/style.css`가 십자가를 그만큼 올린다. 홈 화면 앱의 세로 화면에서만 올린다. iOS가 페이지를 상태 표시줄 밑까지 그리면 차이가 0이라 움직이지 않는다. 페이지가 화면 아래 끝까지 그린다고 가정한 계산이다.
+- **넘어가는 순간의 짧은 깜빡임은 그대로 둔다**(사용자 결정 2026-11-20). iOS가 시작 이미지를 치우고 페이지를 보이는 순간 화면 전체가 아주 짧게 깜빡인다. 페이지의 첫 화면은 이미 시작 이미지와 같은 색과 같은 십자가라, 앱 쪽에서 더 막을 곳이 없다.
 
 ## 타임라인 요약
 
@@ -130,12 +137,12 @@ HTML 파싱이 `<body>` 태그까지 진행됐지만 `<div id="launch-screen">` 
 T=0    홈 화면 아이콘 탭
        ├─ OS 스플래시 (iOS: apple-touch-startup-image, Android: manifest)
 T≈100  HTML 파싱 시작
+       ├─ pre-fetch.js: books.json 받기 시작, 홈 화면 앱이면 십자가를 올릴 거리(--launch-shift) 기록
        ├─ <html> 태그: 인라인 CSS의 html { background: #1a1a2e } 적용
        ├─ <body> 파싱 도중: body::before 다크 오버레이 활성
 T≈150  launch-screen 마크업 도달, SVG 즉시 표시
 T≈200  Google Fonts 비동기 로드 시작 (폰트 swap)
        app.js 파싱 (defer)
-       pre-fetch.js가 books.json 페칭 병렬 시작
 T≈400  DOMContentLoaded → route() 실행
        뷰 렌더 직전 dismissLaunchScreen() 호출
        ├─ rAF: .fade-out 클래스 → 2s 페이드아웃 시작
@@ -146,10 +153,10 @@ T≈2500 launch-screen DOM 제거 (animationend)
 
 ## 트레이드오프와 주의 사항
 
-1. **방어 계층이 겹친다**: HTML 배경, `body::before`, `#launch-screen`의 세 겹이 같은 다크 배경을 그린다. 한 레이어를 고칠 때 나머지와 색이 어긋나지 않게 `#1a1a2e` 상수를 함께 맞춰야 한다. 디자인 토큰으로 만들지는 따로 검토한다.
+1. **방어 계층이 겹친다**: HTML 배경, `body::before`, `#launch-screen`의 세 겹과 iOS 시작 이미지가 같은 다크 배경을 그린다. 한 레이어를 고칠 때 나머지와 색이 어긋나지 않게 `#1a1a2e` 상수를 함께 맞춰야 한다(시작 이미지는 `scripts/generate_splash.py`의 `DARK_BG`). `#launch-screen`의 SVG나 크기(`30vmin`)를 바꾸면 시작 이미지도 다시 만든다(§8). 디자인 토큰으로 만들지는 따로 검토한다.
 2. **인라인 CSS를 고치면 CSP 해시를 꼭 갱신한다**: `index.html`의 `<style>` 블록을 고치면 `style-src` sha256 해시를 다시 계산해야 한다(`4a57a15`). 외부 `css/style.css`를 고칠 때는 해시를 갱신하지 않아도 된다.
 3. **`requestAnimationFrame + setTimeout(50ms)` 조합**: 애니메이션 반영과 배경 전환의 시점이 어긋나면 다시 깜박일 수 있다. 50ms는 실측으로 찾은 안정점이다.
-4. **pre-fetch.js는 동기 스크립트다**: `<head>` 안의 동기 스크립트지만, 세 줄짜리 `fetch` 호출뿐이라 파싱을 막는 영향은 무시할 만하다. 커지면 `defer`로 바꾸는 것을 검토한다.
+4. **pre-fetch.js는 동기 스크립트다**: `<head>` 안의 동기 스크립트지만, `fetch` 호출 하나와 십자가를 올릴 거리의 계산뿐이라 파싱을 막는 영향은 무시할 만하다. 십자가의 높이는 첫 페인트 전에 정해야 하므로 `defer`로 옮기지 않는다. 다른 일은 더 넣지 않는다.
 5. **`launch-done` 클래스가 붙지 않을 위험**: 라우트 렌더가 실패하면 런치 스크린이 계속 남을 수 있다. 그래서 `route()`의 `catch`와 안전 폴백에서 `dismissLaunchScreen()`을 거듭 호출한다(멱등).
 
 ## 관련 커밋
@@ -175,7 +182,8 @@ T≈2500 launch-screen DOM 제거 (animationend)
 ## 참고
 
 - `index.html`: 인라인 critical CSS, 런치 스크린 마크업, pre-fetch.js
-- `js/app.js`의 `dismissLaunchScreen` 함수: 런치 스크린을 닫는 코드
-- `css/style.css`의 `#launch-screen`: 페이드아웃 애니메이션
-- `js/pre-fetch.js`: books.json 조기 받기
+- `js/app/settings-ui.js`의 `dismissLaunchScreen` 함수: 런치 스크린을 닫는 코드
+- `css/style.css`의 `#launch-screen`: 페이드아웃 애니메이션과 십자가의 높이(`--launch-shift`)
+- `js/pre-fetch.js`: books.json 조기 받기와 십자가를 올릴 거리(`launchShift`)
+- `scripts/generate_splash.py`: iOS 시작 이미지와 `<link>` 태그 만들기
 - `sw.js`의 `SHELL_FILES`: critical 리소스 프리캐시 목록
