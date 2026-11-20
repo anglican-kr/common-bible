@@ -24,7 +24,10 @@ from pathlib import Path
 
 import pytest
 
-from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, SHOW_ALT_READINGS, emulate_status_bar, open_settings, press_center
+from .conftest import (
+    CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, SHOW_ALT_READINGS, emulate_status_bar, open_settings, press_center, pseudo_session,
+    style_in_state,
+)
 
 BASE = "http://localhost:8080"
 
@@ -2510,12 +2513,58 @@ def test_date_step_leaves_no_hover_circle_after_a_tap(browser, touch):
         else:
             page.mouse.click(x, y)
         page.wait_for_selector("#page-title .lect-date time[datetime='2027-05-03']")
-        # iOS가 남기는 상태: 누른 자리에 :hover가 남아 있다. 터치 환경의 Chromium은 탭 뒤에 :hover를 남기지 않으므로 포인터를 그 자리에 둔다
+        # iOS가 남기는 상태: 누른 자리에 :hover가 남아 있다. 전에는 포인터를 그 자리에 두어 만들었지만, 터치 환경의 Chromium이 탭 직후
+        # 한동안 :hover를 주지 않아 다른 시험과 함께 돌리면 실패했다(2026-11-21). 그래서 개발자 도구 프로토콜로 켠다(style_in_state)
         assert page.evaluate("matchMedia('(hover: hover)').matches") is not touch
-        page.mouse.move(x, y)
-        page.wait_for_timeout(300)
-        state = page.evaluate("s => { const a = document.querySelector(s); return [a.matches(':hover'), getComputedStyle(a).backgroundColor]; }", nxt)
-        assert state[0] is True and (state[1] == "rgba(0, 0, 0, 0)") is touch, state
+        bg = style_in_state(pseudo_session(page), f"document.querySelector(\"{nxt}\")", "backgroundColor")
+        assert (bg == "rgba(0, 0, 0, 0)") is touch, bg
+    finally:
+        ctx.close()
+
+
+@pytest.mark.parametrize("touch", [True, False])
+def test_collect_number_and_fold_keep_their_color_after_a_tap(browser, touch):
+    """본기도 번호를 누르면 같은 자리에 다시 그려지고, 독서의 접기 단추는 누른 자리에 남는다. iOS는 그 자리에 :hover를 남기므로 호버의
+    글자색은 호버할 수 있는 기기(마우스)에서만 바꾼다(DESIGN.md 「포인터 분기」, 코드 리뷰 2026-11-21). 그래서 터치에서는 :hover가 남아도
+    글자색이 그대로이고, 마우스는 올려 둔 동안 진해진다."""
+    opts = dict(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA, has_touch=True, is_mobile=True) if touch else {}
+    ctx = browser.new_context(**opts)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        cdp = pseudo_session(page)
+
+        def tap(selector):
+            target = page.locator(selector)
+            target.evaluate("e => e.scrollIntoView({ block: 'center', behavior: 'instant' })")
+            box = target.bounding_box()
+            x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+            if touch:
+                page.touchscreen.tap(x, y)
+            else:
+                page.mouse.click(x, y)
+
+        def hover_keeps_color(expression):
+            page.mouse.move(1, 1)   # 마우스로 눌렀으면 포인터가 아직 그 위에 있다. 비켜 둔 글자색을 먼저 읽는다
+            page.wait_for_function(f"() => !({expression}).matches(':hover')")
+            plain = page.evaluate(f"getComputedStyle({expression}).color")
+            hovered = style_in_state(cdp, expression, "color")
+            assert (hovered == plain) is touch, (expression, plain, hovered)
+
+        _open(page, "lectionary/2026-04-05")
+        assert page.evaluate("matchMedia('(hover: hover)').matches") is not touch
+        tap(".lect-collects [data-focus-key='collect:2']")
+        page.wait_for_url("**/lectionary/2026-04-05?collect=2")
+        # 다시 그린 뒤 라우터가 누른 번호로 포커스를 돌려준다. 그 번호가 iOS가 :hover를 남기는 자리의 번호다
+        page.wait_for_function("() => document.activeElement?.dataset.focusKey === 'collect:2'")
+        hover_keeps_color("document.activeElement")
+
+        _open(page, "lectionary/2026-06-14")
+        tap(".lect-cards-fold")
+        page.wait_for_selector(".lect-cards-fold[aria-expanded='false']")
+        tap(".lect-cards-fold")
+        page.wait_for_selector(".lect-cards-fold[aria-expanded='true']")
+        hover_keeps_color("document.querySelector('.lect-cards-fold')")
     finally:
         ctx.close()
 

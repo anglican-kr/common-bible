@@ -861,7 +861,6 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   color: var(--text-secondary);
   text-decoration: none;
 }
-.lect-collect-num:hover { color: var(--text); }
 .lect-collect-num.active { font-weight: 600; }
 .lect-collect-num-mark {
   display: inline-flex;
@@ -879,6 +878,12 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   color: var(--bg);
 }
 .lect-collect-num:active .lect-collect-num-mark { opacity: 0.7; }
+/* 호버의 글자색은 호버할 수 있는 기기에서만 바꾼다(DESIGN.md 「포인터 분기」). 번호는 누르면 같은 자리에 다시 그려지고, 접기 단추는 그 자리에
+   남는다. iOS는 누른 자리에 :hover를 남겨, 펼친 뒤의 「접기」가 다른 약화 글자보다 진하게 남았다(코드 리뷰 2026-11-21). */
+@media (hover: hover) {
+  .lect-collect-num:hover,
+  .lect-cards-fold:hover { color: var(--text); }
+}
 /* 독서 카드 — 「또는」이 있는 날의 독서를 고른다(사용자 결정 2026-11-05). 독서만 바꾸므로 본기도 아래에 있다. 접으면 카드 대신 제목 옆에
    본기도 번호와 같은 부품이 남는다. 이름이 있으면 알약(.lect-cards-pills)이고, 「독서 N」이면 번호다. */
 .lect-cards .lect-section-head { margin-bottom: var(--space-2); }
@@ -911,7 +916,6 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   font-size: var(--font-sm);
   cursor: pointer;
 }
-.lect-cards-fold:hover { color: var(--text); }
 .lect-cards-fold::after {
   content: "";
   flex: none;
@@ -923,6 +927,8 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   transform: translateY(20%) rotate(-45deg);
 }
 .lect-cards-fold[aria-expanded="false"]::after { transform: translateY(-20%) rotate(135deg); }
+/* 호버를 마우스 기기로 한정했으므로 터치에서는 누르는 동안 흐리게 한다(DESIGN.md 「활성 피드백」, 독서 카드와 같은 값) */
+.lect-cards-fold:active { opacity: 0.7; }
 /* 카드 두 장을 나란히 — 같은 항목끼리 줄이 맞도록 카드가 부모의 줄을 나눠 쓴다(subgrid. 지원하지 않는 브라우저에서는 줄만 어긋난다).
    7.5rem은 320px 화면의 기본 글자에서 두 칸이 들어가는 폭이다. 글자가 커져 두 칸이 들어가지 않으면 한 칸씩 쌓는다(WCAG 1.4.10). */
 .lect-cards-list {
@@ -2617,7 +2623,6 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
 }
 /* 「전체」에는 ×가 없어 오른쪽도 둥글고 여백이 같다 */
 .scope-pill-all .scope-pill-main { padding-right: var(--space-4); border-radius: var(--radius-pill); }
-a.scope-pill-main:hover,
 a.scope-pill-main:focus-visible { background: var(--bg-card); }
 .scope-pill-remove {
   display: inline-flex;
@@ -2633,7 +2638,6 @@ a.scope-pill-main:focus-visible { background: var(--bg-card); }
   line-height: 1;
   cursor: pointer;
 }
-.scope-pill-remove:hover,
 .scope-pill-remove:focus-visible { background: var(--bg-card); color: var(--text); }
 .scope-pill-current {
   border-color: var(--accent);
@@ -2643,10 +2647,19 @@ a.scope-pill-main:focus-visible { background: var(--bg-card); }
 }
 .scope-pill-current .search-pill-count,
 .scope-pill-current .scope-pill-remove { color: var(--bg); }
-.scope-pill-current a.scope-pill-main:hover,
 .scope-pill-current a.scope-pill-main:focus-visible,
-.scope-pill-current .scope-pill-remove:hover,
 .scope-pill-current .scope-pill-remove:focus-visible { background: color-mix(in srgb, var(--bg) 18%, transparent); color: var(--bg); }
+/* 터치 기기에는 호버가 없으므로 누르는 동안 흐리게 해 눌린 것을 알린다(DESIGN.md 「활성 피드백」, 독서 카드와 같은 값) */
+a.scope-pill-main:active,
+.scope-pill-remove:active { opacity: 0.7; }
+/* 호버의 바탕은 호버할 수 있는 기기에서만 그린다(DESIGN.md 「포인터 분기」). iOS는 누른 자리에 :hover를 남겨, 책 알약을 누른 뒤
+   같은 자리에 다시 그린 고른 알약의 이름 부분만 바탕이 옅게 남았다(사용자 확인 2026-11-21). */
+@media (hover: hover) {
+  a.scope-pill-main:hover { background: var(--bg-card); }
+  .scope-pill-remove:hover { background: var(--bg-card); color: var(--text); }
+  .scope-pill-current a.scope-pill-main:hover,
+  .scope-pill-current .scope-pill-remove:hover { background: color-mix(in srgb, var(--bg) 18%, transparent); color: var(--bg); }
+}
 .scope-pill-empty .scope-pill-main,
 .scope-pill-empty .search-pill-count { color: var(--text-tertiary); }
 
@@ -3719,11 +3732,16 @@ mark.search-highlight {
   transition: background var(--duration-fast);
 }
 
-.search-pagination a:hover {
-  background: var(--accent);
-  color: var(--bg);
-  border-color: var(--accent);
+/* 「다음」을 누르면 다음 쪽의 「다음」이 같은 자리에 다시 그려진다. iOS가 그 자리에 :hover를 남기므로 호버의 채움은 호버할 수 있는
+   기기에서만 그린다(DESIGN.md 「포인터 분기」). */
+@media (hover: hover) {
+  .search-pagination a:hover {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+  }
 }
+.search-pagination a:active { opacity: 0.7; }
 
 /* ── Lectionary results (ADR-044 §1, docs/design/lectionary-search.md §9) ── */
 /* 답 카드(구절 바로가기, 책 바로가기, 없는 장)와 그 아래 결과 사이 */
@@ -3753,8 +3771,11 @@ mark.search-highlight {
   text-decoration: none;
   white-space: nowrap;
 }
-.search-pill:hover,
 .search-pill:focus-visible { background: var(--bg-card); }
+@media (hover: hover) {
+  .search-pill:hover { background: var(--bg-card); }
+}
+.search-pill:active { opacity: 0.7; }
 .search-pill-count { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .search-pill[aria-current="true"] {
   border-color: var(--accent);

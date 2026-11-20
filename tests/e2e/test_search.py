@@ -16,7 +16,10 @@ from urllib.parse import quote
 
 import pytest
 
-from .conftest import ADD_STYLE_RULE, CLEAR_APP_STORAGE, assert_sheet_close_button, emulate_status_bar, wait_app_ready
+from .conftest import (
+    ADD_STYLE_RULE, CLEAR_APP_STORAGE, IPHONE_UA, MOBILE_VIEWPORT, assert_sheet_close_button, emulate_status_bar, pseudo_session,
+    style_in_state, wait_app_ready,
+)
 
 BASE_URL = "http://localhost:8080"
 SEARCH_URL = f"{BASE_URL}/search?q=%EC%B0%BD%EC%84%B8%201%3A1"
@@ -1954,6 +1957,45 @@ def test_book_pill_remove_searches_again_and_moves_focus(mobile_context):
     page.wait_for_timeout(300)
     assert page.evaluate("new URLSearchParams(location.search).getAll('in')") == ["mark"]
     assert page.evaluate(_SCOPE_PILLS) == [{"text": "마르", "link": False, "current": False, "empty": False, "x": True}]
+
+
+@pytest.mark.parametrize("touch", [True, False])
+def test_book_pill_and_page_link_leave_no_hover_after_a_tap(browser, touch):
+    """책 알약과 「다음」을 누르면 같은 자리에 다시 그린 알약과 링크에 호버의 바탕이 남지 않는다. iOS는 마지막으로 누른 자리에 :hover를
+    남기므로 호버의 바탕은 호버할 수 있는 기기(마우스)에서만 그린다(DESIGN.md 「포인터 분기」). 고른 알약의 이름 부분만 바탕이 옅게
+    남았다(사용자 확인 2026-11-21). 마우스는 올려 둔 동안 바탕이 있다. 누르는 동안은 어느 기기에서나 흐려진다(「활성 피드백」)."""
+    opts = dict(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA, has_touch=True, is_mobile=True) if touch else {}
+    ctx = browser.new_context(**opts)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _goto_search(page, "사랑", "&in=lps&in=cant")
+        assert page.evaluate("matchMedia('(hover: hover)').matches") is not touch
+        page.evaluate(ADD_STYLE_RULE, "* { transition: none !important; }")   # 쪽 넘기기 링크의 바탕은 전환으로 바뀐다
+        cdp = pseudo_session(page)
+
+        def press_and_hover(key, url):
+            target = page.locator(f"[data-focus-key='{key}']:visible")
+            target.evaluate("a => a.scrollIntoView({ block: 'center', behavior: 'instant' })")   # 「다음」은 목록 아래, 탭 바 뒤에 있을 수 있다
+            box = target.bounding_box()
+            x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+            if touch:
+                page.touchscreen.tap(x, y)
+            else:
+                page.mouse.click(x, y)
+            page.wait_for_url(url)
+            # 다시 그린 뒤 라우터가 누른 컨트롤로 포커스를 돌려준다. 그 컨트롤이 iOS가 :hover를 남기는 자리의 컨트롤이다
+            page.wait_for_function("k => document.activeElement?.dataset.focusKey === k", arg=key)
+            _wait_search_done(page)
+            bg = style_in_state(cdp, "document.activeElement", "backgroundColor")
+            assert (bg == "rgba(0, 0, 0, 0)") is touch, (key, bg)
+            assert style_in_state(cdp, "document.activeElement", "opacity", "active") == "0.7", key
+
+        press_and_hover("book:lps", "**book=lps")
+        assert page.locator(".scope-pill-current a[data-focus-key='book:lps']").count() == 1
+        press_and_hover("page:next", "**page=2**")
+    finally:
+        ctx.close()
 
 
 def test_three_pills_in_order(page):

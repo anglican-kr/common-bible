@@ -108,6 +108,34 @@ ADD_STYLE_RULE = """(rule) => {
 }"""
 
 
+def pseudo_session(page):
+    """`style_in_state`가 쓰는 개발자 도구 프로토콜(CDP) 세션. Chromium에서만 열린다."""
+    cdp = page.context.new_cdp_session(page)
+    cdp.send("DOM.enable")
+    cdp.send("CSS.enable")
+    return cdp
+
+
+def style_in_state(cdp, expression, prop, state="hover"):
+    """`expression`(자바스크립트 식)이 가리키는 요소에 `state`(:hover, :active 등)를 켜고, 그 요소의 계산된 스타일 `prop`을 읽는다.
+    iOS는 마지막으로 누른 자리에 :hover를 남긴다(DESIGN.md 「포인터 분기」). 터치 환경의 Chromium은 탭 뒤에 :hover를 남기지 않고, 탭 직후에는
+    포인터를 옮겨도 한동안 :hover를 주지 않는다. 그래서 그 상태를 CDP의 `CSS.forcePseudoState`로 만든다. 상태를 켠 요소에서 그대로 읽는다.
+    전환(transition)이 있는 속성은 시험에서 전환을 꺼 두고 읽는다."""
+    found = cdp.send("Runtime.evaluate", {"expression": expression})
+    object_id = found["result"].get("objectId")
+    assert object_id, f"요소를 찾지 못했다: {expression}"
+    cdp.send("DOM.getDocument")   # requestNode는 문서를 먼저 받아야 노드 번호를 준다
+    node = cdp.send("DOM.requestNode", {"objectId": object_id})["nodeId"]
+    cdp.send("CSS.forcePseudoState", {"nodeId": node, "forcedPseudoClasses": [state]})
+    try:
+        return cdp.send("Runtime.callFunctionOn", {
+            "objectId": object_id, "returnByValue": True,
+            "functionDeclaration": f"function () {{ return getComputedStyle(this)[{prop!r}]; }}",
+        })["result"]["value"]
+    finally:
+        cdp.send("CSS.forcePseudoState", {"nodeId": node, "forcedPseudoClasses": []})
+
+
 @pytest.fixture(scope="session")
 def base_url() -> str:
     return BASE_URL
