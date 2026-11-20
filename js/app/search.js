@@ -1529,6 +1529,8 @@ function buildInPageSearchInput(query) {
       e.preventDefault();
       e.stopPropagation();
       focusFunnelOrHome(wrap.querySelector(".token-funnel"), { preventScroll: true });
+      // Neither took focus (both hidden): still lower the keyboard, as ⊗ does.
+      if (document.activeElement === input) input.blur();
       return;
     }
     if (e.key !== "Enter") return;
@@ -1557,7 +1559,7 @@ function buildInPageSearchInput(query) {
       navigateSearch({ q: "" });
       // The home tab only stands in until the redraw: the new bar's funnel takes focus back from it.
       const standIn = focused && focused !== funnel ? focused : null;
-      _inpageFocusAfterRender = { seq: window.routeSeq?.() ?? null, target: "funnel", options, standIn };
+      _inpageFocusAfterRender = { seq: window.routeSeq?.() ?? 0, target: "funnel", options, standIn };
     }
   });
 
@@ -2263,10 +2265,11 @@ let _bookSheetCloseTimer = null;
 // so focus handed to its funnel or input fell to <body> (WCAG 2.4.3). Set by the book sheet's 「적용」 (ADR-033 D3: its
 // funnel after a search, its input when the query was empty) and the bar's ⊗ (its funnel, ADR-048 §4). Matched against
 // the route sequence, so a route that never drew the view (the user moved on) leaves nothing behind for a later screen.
+// Read as `window.routeSeq?.() ?? 0` here and in the renders alike, or a booking made before routing.js loads never matches.
 // `standIn` is where ⊗ put focus because the old funnel couldn't take it (the home tab): the new funnel takes it back.
 /**
  * @type {{
- *   seq: number | null, target: "funnel" | "input", options: FocusOptions & { focusVisible?: boolean },
+ *   seq: number, target: "funnel" | "input", options: FocusOptions & { focusVisible?: boolean },
  *   standIn?: Element | null,
  * } | null}
  */
@@ -2316,7 +2319,7 @@ function focusFunnelOrHome(funnel, options) {
 // What the next render of the search view must focus after a pill's × took its book out: the × of the first of `ids`
 // still there (the next book, then the one before), else the funnel. Matched against the route sequence like
 // `_inpageFocusAfterRender`.
-/** @type {{ seq: number | null, ids: string[], options: FocusOptions & { focusVisible?: boolean } } | null} */
+/** @type {{ seq: number, ids: string[], options: FocusOptions & { focusVisible?: boolean } } | null} */
 let _scopeFocusAfterRender = null;
 
 /**
@@ -2370,7 +2373,7 @@ function removeScopeBook(ids, id, e) {
   /** @type {FocusOptions & { focusVisible?: boolean }} */
   const options = e.detail > 0 ? { preventScroll: true, focusVisible: false } : { preventScroll: true };
   navigateSearch(withoutScopeBook(cur.q, cur.filterBooks, id, _aliasMap));
-  _scopeFocusAfterRender = { seq: window.routeSeq?.() ?? null, ids: [ids[i + 1], ids[i - 1]].filter(Boolean), options };
+  _scopeFocusAfterRender = { seq: window.routeSeq?.() ?? 0, ids: [ids[i + 1], ids[i - 1]].filter(Boolean), options };
 }
 
 /**
@@ -2590,7 +2593,7 @@ function ensureBookSheet() {
     // in-page bar is rebuilt by the render and its old funnel and input go with it,
     // so that render focuses the new bar's funnel or input (`_inpageFocusAfterRender`).
     if (field && field.container.id === "search-inpage-bar") {
-      _inpageFocusAfterRender = { seq: window.routeSeq?.() ?? null, target: searched ? "funnel" : "input", options: {} };
+      _inpageFocusAfterRender = { seq: window.routeSeq?.() ?? 0, target: searched ? "funnel" : "input", options: {} };
     } else if (!searched && field && field.input.isConnected) {
       field.input.focus();
     }

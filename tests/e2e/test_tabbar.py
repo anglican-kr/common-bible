@@ -285,6 +285,19 @@ def test_inpage_clear_focuses_the_home_tab_when_the_new_funnel_cannot_take_focus
     assert page.input_value("#search-inpage-input") == ""
 
 
+def test_inpage_escape_lowers_the_keyboard_when_nothing_can_take_focus(mobile_context):
+    """깔때기도 홈 탭도 포커스를 받지 못해도 Esc는 입력창의 포커스를 빼 키보드를 내린다. 친 글자는 그대로다(ADR-048 §5)."""
+    page = mobile_context.new_page()
+    page.goto(f"{BASE_URL}/search")
+    wait_app_ready(page)
+    page.wait_for_selector("#search-inpage-input", timeout=5_000)
+    page.evaluate(ADD_STYLE_RULE, "#search-inpage-bar .token-funnel, #tab-dock { display: none !important; }")
+    page.fill("#search-inpage-input", "목자")
+    page.keyboard.press("Escape")
+    assert page.evaluate("() => document.activeElement?.id") != "search-inpage-input"
+    assert page.input_value("#search-inpage-input") == "목자"
+
+
 def test_inpage_escape_lowers_the_keyboard_and_keeps_the_search(mobile_context):
     """위쪽 입력창의 Esc는 키보드만 내린다. 검색어와 결과, 주소는 그대로이고 포커스는 깔때기로 간다. Chrome이 검색 입력창에서
     Esc로 검색어를 지우는 기본 동작은 막는다. 한글을 조합하는 중의 Esc는 건드리지 않는다(ADR-048 §5)."""
