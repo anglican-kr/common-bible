@@ -1,4 +1,5 @@
 ---
+pr: 625
 date: 2026-11-21
 branch: claude/blissful-babbage-yciqx3
 title: "docs: 절기 이름으로 그 절기의 날을 찾는 결정 적기"
