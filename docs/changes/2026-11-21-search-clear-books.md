@@ -1,4 +1,5 @@
 ---
+pr: 622
 date: 2026-11-21
 branch: claude/charming-sagan-qiwxfk
 title: "feat: 검색의 고른 책을 한 번에 지우는 「모두 지우기」"
