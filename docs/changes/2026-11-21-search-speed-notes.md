@@ -1,4 +1,5 @@
 ---
+pr: 629
 date: 2026-11-21
 branch: claude/blissful-babbage-yciqx3
 title: "docs: 검색 속도를 손볼 조건 적기"
