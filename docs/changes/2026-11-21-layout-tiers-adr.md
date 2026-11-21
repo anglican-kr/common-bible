@@ -1,4 +1,5 @@
 ---
+pr: 630
 date: 2026-11-21
 branch: docs/layout-tiers-adr
 title: "docs: 화면 레이아웃을 앱 화면의 크기로 정하는 결정 적기"
