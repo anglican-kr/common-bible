@@ -246,7 +246,8 @@ def test_widening_the_window_brings_the_full_title_back(browser):
 
 
 def test_today_moves_with_the_layout_when_the_window_crosses_the_breakpoint(desktop_context):
-    """⑨ 그린 뒤 창 폭이 769px 경계를 넘으면 「오늘」이 그 배치의 칸으로 옮겨 간다 — 다시 그리지 않아도."""
+    """⑨ 그린 뒤 창 크기가 작은 화면과 큰 화면의 경계(ADR-050 §2)를 넘으면 「오늘」이 그 레이아웃의 칸으로 옮겨 간다 — 다시 그리지
+    않아도."""
     page = desktop_context.new_page()
     page.goto(f"{BASE}/calendar/2026-12")
     page.wait_for_selector(".cal-grid", timeout=20_000)

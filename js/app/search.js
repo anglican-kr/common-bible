@@ -19,8 +19,8 @@
 import { verseNumberSpec } from "./verse-spec.js";
 
 const {
-  _$, el, clearNode, chUnit, missingChapterText, emptyState, barBottom, churchName, SHEET_INERT_SELECTORS, isMobileLayout,
-  MOBILE_LAYOUT_QUERY,
+  _$, el, clearNode, chUnit, missingChapterText, emptyState, barBottom, churchName, SHEET_INERT_SELECTORS, isSmallLayout,
+  LARGE_LAYOUT_QUERY,
 } = window.appHelpers;
 const {
   SEARCH_HISTORY_MAX,
@@ -3458,10 +3458,10 @@ $searchClear.addEventListener("click", () => {
 
 // ── BEGIN IS_MOBILE ──
 function isMobile() {
-  // Mobile/touch tier = narrow window OR a touch device (phones in any orientation, tablets), so landscape phones and
-  // tablets keep the app layout (ADR-029 개정). The query is helpers.js MOBILE_LAYOUT_QUERY, the one CSS hides the
-  // header search field with, so the page always shows exactly one search field.
-  return isMobileLayout();
+  // The small layout (ADR-050 §2): the app's area narrower than 700px or lower than 600px, whatever the device. It is
+  // the exact complement of helpers.js LARGE_LAYOUT_QUERY, the condition CSS hides the header search field with, so
+  // the page always shows exactly one search field.
+  return isSmallLayout();
 }
 // ── END IS_MOBILE ──
 
@@ -3756,10 +3756,10 @@ mountSearchField($searchBar, $searchInput);
 // absorb operators synchronously — keeps commit free of an async race surface.
 ensureAliasMap();
 
-// ── Crossing the mobile layout's condition on the search view ──
+// ── Crossing the layout condition on the search view ──
 // The search view is drawn for one layout: the mobile in-page bar at its top, or the desktop header field and no bar
-// (ADR-048 §1). When the window crosses MOBILE_LAYOUT_QUERY (the condition `isMobile` reads and CSS hides the header
-// field with), put the bar in or take it out instead of drawing the view
+// (ADR-048 §1). When the app's area crosses LARGE_LAYOUT_QUERY (ADR-050 §2; `isMobile` reads its complement and CSS
+// hides the header field with it), put the bar in or take it out instead of drawing the view
 // again, so the results, the scroll position and text typed but not searched yet all stay. The typed text, and focus
 // if it was in the old field, move to the field the new layout shows. A bare /search is the recents view on mobile but
 // the book list on desktop (routing.js), so there the view is drawn again and the typed text carried over.
@@ -3823,7 +3823,7 @@ async function onLayoutTierChange() {
   if (input instanceof HTMLElement) input.focus({ preventScroll: true });
 }
 if (typeof window.matchMedia === "function") {
-  window.matchMedia(MOBILE_LAYOUT_QUERY).addEventListener("change", () => { void onLayoutTierChange(); });
+  window.matchMedia(LARGE_LAYOUT_QUERY).addEventListener("change", () => { void onLayoutTierChange(); });
 }
 
 

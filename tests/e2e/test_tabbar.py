@@ -12,7 +12,7 @@ Covers:
   - 슬라이딩 인디케이터 크기 — 축소에서 펼칠 때 그대로 · 320px 에서 줄어든 슬롯에 맞춤(PR #348 리뷰)
   - 수정 키(⌘ · Ctrl) 탭 클릭은 새 탭 몫 — 이 화면에 스크롤 복원 요청을 남기지 않는다(PR #348 리뷰)
 
-데스크탑(≥769px)에서는 탭 dock 이 숨겨지고 기존 헤더/오버레이를 유지한다.
+큰 화면(앱 화면이 폭 700px 이상이고 높이 600px 이상, ADR-050 §2)에서는 탭 dock 이 숨겨지고 상단 바와 옆 패널을 쓴다.
 """
 
 from .conftest import ADD_STYLE_RULE, BASE_URL, CLEAR_APP_STORAGE, IPHONE_UA, wait_app_ready

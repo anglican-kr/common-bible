@@ -347,25 +347,32 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   // which publishBarHeight keeps up to date. The bar is pinned at `top: 0` and sits at the very top of the
   // document, so its height and its bottom edge on screen are the same number.
 
-  // ── Desktop or mobile layout (ADR-029 §1) ──
-  // Desktop = a wide window AND a mouse; everything else (phones, tablets, a narrow desktop window) is the mobile
-  // layout with the tab bar. CSS writes the same condition in its media queries.
-  const DESKTOP_LAYOUT_QUERY = "(min-width: 769px) and (pointer: fine)";
+  // ── Small or large layout (ADR-050 §2) ──
+  // The large layout (top bar, side panels) shows when the app's own area is at least 700px wide AND 600px tall;
+  // every other size is the small layout (bottom tab bar, bottom sheets). Neither the kind of device nor the mouse is
+  // looked at: an iPad's Safari reports itself as a Mac, and a window shared with another app has its own size. CSS
+  // writes the same condition, `@media (min-width: 700px) and (min-height: 600px)` for the large layout and
+  // `@media not all and (min-width: 700px) and (min-height: 600px)` for the small one, so exactly one of the two holds
+  // at every size (helpers.test.js checks that the stylesheet writes no other layout condition).
+  const LARGE_LAYOUT_QUERY = "(min-width: 700px) and (min-height: 600px)";
 
-  /** @returns {boolean} whether the desktop layout (top bar, side panels) is showing right now */
-  function isDesktopLayout() {
-    return typeof window.matchMedia === "function" && window.matchMedia(DESKTOP_LAYOUT_QUERY).matches;
+  /** @returns {boolean} whether the large layout (top bar, side panels) is showing right now */
+  function isLargeLayout() {
+    return typeof window.matchMedia === "function" && window.matchMedia(LARGE_LAYOUT_QUERY).matches;
   }
 
-  // The mobile layout's own condition, a narrow window OR a touch screen (ADR-029 §1). CSS hides the top bar's search
-  // field with it, and JS draws the mobile search field (search.js `isMobile`) and the bookmark gestures with it, so
-  // there is always exactly one search field. It is not quite the complement of DESKTOP_LAYOUT_QUERY: a wide window
-  // whose primary pointer is `none`, or a width between 768 and 769px (browser zoom), matches neither.
-  const MOBILE_LAYOUT_QUERY = "(max-width: 768px), (pointer: coarse)";
+  /** @returns {boolean} whether the small layout (tab bar, bottom sheets) is showing right now — the exact complement */
+  function isSmallLayout() {
+    return !isLargeLayout();
+  }
 
-  /** @returns {boolean} whether the mobile layout's own condition holds right now */
-  function isMobileLayout() {
-    return typeof window.matchMedia === "function" && window.matchMedia(MOBILE_LAYOUT_QUERY).matches;
+  // Touch input (ADR-050 §3): the primary pointer is a finger and cannot hover. What is made for fingers follows this
+  // as well as the layout, so an iPad keeps it in the large layout (the bookmark swipe: small layout OR touch).
+  const TOUCH_INPUT_QUERY = "(hover: none) and (pointer: coarse)";
+
+  /** @returns {boolean} whether the primary input is touch right now */
+  function isTouchInput() {
+    return typeof window.matchMedia === "function" && window.matchMedia(TOUCH_INPUT_QUERY).matches;
   }
 
   // What a bottom sheet over the current screen blocks (inert) while it is open: the top bar, the screen, the tab dock
@@ -592,7 +599,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   return {
     _$, chUnit, chUnitNoun, chapterTitle, chapterLabel, verseRefLabel, missingChapterText, hasBatchim, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
     HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot, SCROLL_ANCHORING, barBottom, scrollUnderBar,
-    publishBarHeight, isFormerNorthChurch, churchName, parishGroups, DESKTOP_LAYOUT_QUERY, isDesktopLayout, MOBILE_LAYOUT_QUERY, isMobileLayout,
+    publishBarHeight, isFormerNorthChurch, churchName, parishGroups, LARGE_LAYOUT_QUERY, isLargeLayout, isSmallLayout, TOUCH_INPUT_QUERY, isTouchInput,
     SHEET_INERT_SELECTORS,
     DATE_PICKER_FOCUS_KEY, datePickerTrigger,
   };

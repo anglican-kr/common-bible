@@ -22,6 +22,7 @@
 //   - focusSpotOf · restoreFocusSpot (the router puts focus back on the pressed control after a redraw)
 //   - barBottom · publishBarHeight (the top bar's measured bottom for JS, its height as `--top-bar-h` for CSS)
 //   - isFormerNorthChurch · parishGroups (the 소속교회 list from the parish table, ADR-041 §6)
+//   - LARGE_LAYOUT_QUERY (the layout condition is written once in JS and only as two queries in CSS, ADR-050 §2)
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -1326,5 +1327,31 @@ test("parishGroups: 같은 식별자는 한 항목이고, 북한에 있던 성�
 test("parishGroups: 표가 없거나 형식이 깨졌으면 빈 목록이다", () => {
   for (const table of [null, undefined, {}, { parishes: "x" }, { parishes: [] }]) {
     assert.deepEqual(plainOf(parishGroups(table)), [], JSON.stringify(table));
+  }
+});
+
+// ── Layout condition (ADR-050 §2) ───────────────────────────────────────────
+
+test("layout condition: one string in JS, and only that query and its exact complement in CSS (ADR-050 §2)", () => {
+  const large = SOURCE.match(/const LARGE_LAYOUT_QUERY = "([^"]+)";/)?.[1];
+  assert.equal(large, "(min-width: 700px) and (min-height: 600px)");
+  const root = path.resolve(__dirname, "../..");
+  // Comments are dropped first: some mention `@media` in prose.
+  const css = fs.readFileSync(path.join(root, "css/style.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const queries = [...css.matchAll(/@media\s+([^{]+?)\s*\{/g)].map((m) => m[1].replace(/\s+/g, " "));
+  // Any query at the layout's scale (the old 768/769px boundary or the new 700 × 600) must be one of the two, so
+  // exactly one layout holds at every size. Finer rules (900px tab labels, landscape phones) nest inside them.
+  // A query list (`A, B`) is several queries; each one at the layout's scale is checked on its own.
+  const layoutScale = queries.flatMap((q) => q.split(/\s*,\s*/)).filter((q) => /\b(700|600|768|769)px\b/.test(q));
+  for (const q of layoutScale) {
+    assert.ok(q === large || q === `not all and ${large}`, `unexpected layout query: @media ${q}`);
+  }
+  assert.ok(layoutScale.includes(large), "the large layout's query is used");
+  assert.ok(layoutScale.includes(`not all and ${large}`), "the small layout's query is used");
+  // JS modules ask helpers.js (isLargeLayout, isSmallLayout) instead of writing a size query of their own.
+  const dir = path.join(root, "js/app");
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".js") && n !== "helpers.js")) {
+    const src = fs.readFileSync(path.join(dir, f), "utf8");
+    assert.ok(!/matchMedia\(\s*["'`][^"'`]*\b(700|600|768|769)px/.test(src), `${f} writes its own layout query`);
   }
 });

@@ -136,10 +136,12 @@ let _swipedRow = null;
 /** @type {DragState | null} */
 let _dragState = null;
 
-function _isMobileViewport() {
-  // Mobile/touch tier — the same query as isMobile() (helpers.js MOBILE_LAYOUT_QUERY, ADR-029 개정) so the header
-  // bookmark / swipe gating tracks the tab bar's presence on every device.
-  return window.appHelpers.isMobileLayout();
+function _canSwipeRows() {
+  // The small layout OR touch input (ADR-050 §3), the condition CSS draws the swipe rows under: an iPad keeps the swipe
+  // in the large layout's side panel, and the small layout keeps its one finger-shaped list for any pointer. Only a
+  // mouse in the large layout uses the hover buttons instead.
+  const { isSmallLayout, isTouchInput } = window.appHelpers;
+  return isSmallLayout() || isTouchInput();
 }
 
 // Clear any open-swipe state + inline slide transform on a row.
@@ -292,7 +294,7 @@ function _setupDragHandle(li, row) {
     const origRect = li.getBoundingClientRect();
     const isTouch = e.pointerType !== "mouse";
     const contentEl = /** @type {HTMLElement | null} */ (row.querySelector(".bm-row-content"));
-    const canSwipe = _isMobileViewport() && isTouch && !!contentEl;
+    const canSwipe = _canSwipeRows() && isTouch && !!contentEl;
     // Pointer started on the reorder handle (≡, manual mode only). This is the
     // ONLY entry into drag-to-reorder (ADR-010 개정 2026-06-11) — the row body no
     // longer grabs via long-press (touch) or immediate move (mouse). The handle
@@ -503,6 +505,6 @@ function _setupDragHandle(li, row) {
 
 export {
   initBookmarkGestures,
-  moveBookmarkItem, _setupDragHandle, _isMobileViewport,
+  moveBookmarkItem, _setupDragHandle,
   closeSwipedRow, resetSwipedRow, closeSwipedRowIfOutside,
 };
