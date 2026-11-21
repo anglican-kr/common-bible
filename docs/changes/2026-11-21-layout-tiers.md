@@ -1,4 +1,5 @@
 ---
+pr: 631
 date: 2026-11-21
 branch: feat/layout-tiers
 title: "feat: 화면 레이아웃을 앱 화면의 크기로 정하기"
