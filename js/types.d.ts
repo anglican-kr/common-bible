@@ -1007,11 +1007,14 @@ export interface AppHelpers {
    * 캘린더 목록의 주소 줄과 이어 읽기의 절이 쓴다.
    */
   scrollUnderBar: (target: Element) => void;
-  // The desktop-layout condition (ADR-029 §1) — a wide window and a mouse. One string for every module that asks.
-  DESKTOP_LAYOUT_QUERY: string;
-  isDesktopLayout: () => boolean;
-  MOBILE_LAYOUT_QUERY: string;
-  isMobileLayout: () => boolean;
+  // The large-layout condition (ADR-050 §2) — the app's area at least 700px wide and 600px tall. The small layout is
+  // its exact complement. One string for every module that asks.
+  LARGE_LAYOUT_QUERY: string;
+  isLargeLayout: () => boolean;
+  isSmallLayout: () => boolean;
+  // Touch input (ADR-050 §3) — a finger that cannot hover. Gestures follow this, not the layout.
+  TOUCH_INPUT_QUERY: string;
+  isTouchInput: () => boolean;
   /** 바텀 시트가 열린 동안 막아 두는(inert) 뒤 화면. 책 고르기 시트와 캘린더 날짜 고르기 판이 같이 쓴다. */
   SHEET_INERT_SELECTORS: string;
   /** 날짜 고르기 판의 제목 단추와 판의 링크가 함께 다는 포커스 열쇠. 고른 뒤 새 화면의 제목 단추로 포커스가 돌아온다. */

@@ -1529,7 +1529,7 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
 
 /* 마우스를 쓰는 넓은 화면: 제목 아래 팝오버(장 고르기 팝오버 .chapter-popover와 같은 반경, 그림자, 테두리). 다른 시트는 이 조건에서 오른쪽
    패널로 바뀌지만, 이 판은 작아서 팝오버로 둔다(DESIGN.md §6). 자리(top, left)는 calendar.js placePicker가 제목 단추로 잰다. */
-@media (min-width: 769px) and (pointer: fine) {
+@media (min-width: 700px) and (min-height: 600px) {
   .cal-picker-scrim { display: none; }
   .cal-picker {
     right: auto;
@@ -2205,8 +2205,9 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
 /* Title swap: NT chapter/prologue headers emit .title-text-full and
    .title-text-mobile spans. JS adds .compact to #page-title when the full
    title would overflow the room remaining between the absolute-positioned
-   back and bookmark buttons. On touch devices we also force the mobile
-   variant unconditionally (mirrors `.book-list` below) — measurement alone
+   back and bookmark buttons. On touch devices in the small layout (phones) we
+   also force the mobile variant unconditionally (mirrors `.book-list` below);
+   an iPad in the large layout shows the full title as a desktop does (ADR-050) — measurement alone
    often left the full "○○의 복음서 N장" form intact on phones because it
    technically fit, which felt verbose in the tight header. */
 .title-text-mobile { display: none; }
@@ -2231,9 +2232,11 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   white-space: nowrap;
 }
 #page-title.title-clip .title-picker-btn::after { flex-shrink: 0; }
-@media (hover: none) and (pointer: coarse) {
-  #page-title .title-text-full { display: none; }
-  #page-title .title-text-mobile { display: inline; }
+@media not all and (min-width: 700px) and (min-height: 600px) {
+  @media (hover: none) and (pointer: coarse) {
+    #page-title .title-text-full { display: none; }
+    #page-title .title-text-mobile { display: inline; }
+  }
 }
 
 /* ── Chapter Title Back Button ── */
@@ -2988,7 +2991,7 @@ a.scope-pill-main:active,
 /* Desktop: right-side slide-in panel (mirrors #cite-sheet / #bookmark-drawer)
    rather than a centered modal — keeps the bookmark/cite/filter panels visually
    consistent. Resize grip on the left edge; slides over the right viewport edge. */
-@media (min-width: 769px) and (pointer: fine) {
+@media (min-width: 700px) and (min-height: 600px) {
   .book-filter-sheet {
     top: 2.5vh;
     right: 0;
@@ -3012,32 +3015,34 @@ a.scope-pill-main:active,
 /* Left-edge resize handle (desktop only) mirrors #cite-sheet-resize. */
 .book-filter-resize { display: none; }
 
-@media (min-width: 769px) and (pointer: fine) {
-  .book-filter-resize {
-    display: flex;
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: calc(0.22rem + 0.5rem * 2);
-    cursor: ew-resize;
-    align-items: center;
-    justify-content: center;
-    touch-action: none;
-    z-index: 1;
-  }
+@media (min-width: 700px) and (min-height: 600px) {
+  @media (pointer: fine) {
+    .book-filter-resize {
+      display: flex;
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: calc(0.22rem + 0.5rem * 2);
+      cursor: ew-resize;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+      z-index: 1;
+    }
 
-  .book-filter-resize::after {
-    content: '';
-    width: 0.22rem;
-    height: 2.2rem;
-    background: var(--border);
-    border-radius: 2px;
-    transition: background var(--duration-fast);
-  }
+    .book-filter-resize::after {
+      content: '';
+      width: 0.22rem;
+      height: 2.2rem;
+      background: var(--border);
+      border-radius: 2px;
+      transition: background var(--duration-fast);
+    }
 
-  .book-filter-resize:hover::after {
-    background: var(--accent);
+    .book-filter-resize:hover::after {
+      background: var(--accent);
+    }
   }
 }
 
@@ -3058,7 +3063,7 @@ a.scope-pill-main:active,
   background: color-mix(in srgb, var(--text) 25%, transparent);
 }
 
-@media (min-width: 769px) and (pointer: fine) {
+@media (min-width: 700px) and (min-height: 600px) {
   .book-filter-handle { display: none; }
 }
 
@@ -3971,9 +3976,11 @@ mark.search-highlight {
 .resume-text-mobile { display: none; }
 .resume-banner.compact .resume-text-full { display: none; }
 .resume-banner.compact .resume-text-mobile { display: inline; }
-@media (hover: none) and (pointer: coarse) {
-  .resume-banner .resume-text-full { display: none; }
-  .resume-banner .resume-text-mobile { display: inline; }
+@media not all and (min-width: 700px) and (min-height: 600px) {
+  @media (hover: none) and (pointer: coarse) {
+    .resume-banner .resume-text-full { display: none; }
+    .resume-banner .resume-text-mobile { display: inline; }
+  }
 }
 
 .resume-banner-close {
@@ -4001,40 +4008,41 @@ mark.search-highlight {
    배너를 sticky 그룹 띠에서 빼내 하단 dock 행(미니 오디오와 동일 자리 — 탭바 우측~검색
    사이, --tab-bar-w 재사용)에 pill 로 띄운다. 책 목록 뷰 전용이라 오디오(chapter 뷰)와
    같은 자리를 다른 뷰에서 공유 — 충돌 없음. 테마색 솔리드 채움은 유지(주요 CTA 강조).
-   세로는 무변경. 데스크탑은 탭바·dock 이 없어 제외 — 넓은 가로 아이폰(>768)은 pointer:coarse
-   로 포착(ADR-030 가로 오디오 규칙과 동일 게이트). */
-@media (orientation: landscape) and (max-width: 768px),
-       (orientation: landscape) and (pointer: coarse) {
-  .resume-banner {
-    position: fixed;
-    bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
-    left: calc(var(--space-4) + var(--tab-bar-w, calc(var(--dock-control) * 4)) + var(--space-2));
-    right: calc(var(--space-4) + var(--dock-control) + var(--space-2));
-    height: var(--dock-control);
-    margin: 0;
-    /* dock 캡슐(탭바·검색·미니 오디오)과 동일 — 둥근 사각 --radius 대신 반원 캡 pill. */
-    border-radius: var(--radius-pill);
-    z-index: var(--nav-z);
-  }
-  /* 배치만 맡는 투명한 `#tab-dock` 요소가 가운데 빈 영역의 클릭을 가로채, 그 아래의 이어 읽기
-     알약 단추(링크와 ×)가 눌리지 않았다. `#tab-dock` 요소는 DOM 순서로 배너보다 뒤에 있고 쌓임
-     순서(`z-index` 속성)가 같다. 또 `#resume-banner-slot` 요소의 `z-index: 10`이 쌓임 맥락을
-     만들어, 알약 단추의 쌓임 순서는 그 안에서만 비교된다. 그래서 알약 단추가 실제로 `#tab-dock`
-     요소와 같은 줄에 보일 때만(배너가 있을 때) `#tab-dock` 요소가 클릭을 받지 않게 하고
-     (`pointer-events: none`) 실제 컨트롤만 다시 받게 한다. 배너가 없는 책 목록과 다른 화면에서는
-     `#tab-dock` 요소가 가운데 빈 영역의 클릭을 그대로 받아야 하므로, `:has()` 선택자로 배너가
-     있을 때만 이 규칙을 적용한다(Bugbot 지적, 낮음). 미니 오디오 플레이어는 별도 요소다. */
-  body:has(#resume-banner-slot .resume-banner) #tab-dock { pointer-events: none; }
-  body:has(#resume-banner-slot .resume-banner) #tab-bar,
-  body:has(#resume-banner-slot .resume-banner) #tab-search-dock { pointer-events: auto; }
-  /* 닫기 × — 세로 구분선 제거 + × 키움 + 중심을 우측 반원 캡 중심에 정렬.
-     버튼 폭을 --dock-control(60px)로 두고 × 를 가운데 정렬하면 × 중심 = 버튼 중심 =
-     pill 우측 끝 −30px = 반원 캡(반지름 --dock-control/2=30px) 중심과 일치. */
-  .resume-banner-close {
-    align-self: stretch;
-    border-left: none;
-    width: var(--dock-control);
-    font-size: var(--font-2xl);
+   세로는 무변경. 큰 화면은 탭 바와 dock 이 없어 제외한다. 가로로 든 휴대폰은 폭이 넓어도 높이가
+   600px보다 낮아 작은 화면이다(ADR-050 §2, ADR-030 가로 오디오 규칙과 같은 조건). */
+@media not all and (min-width: 700px) and (min-height: 600px) {
+  @media (orientation: landscape) {
+    .resume-banner {
+      position: fixed;
+      bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
+      left: calc(var(--space-4) + var(--tab-bar-w, calc(var(--dock-control) * 4)) + var(--space-2));
+      right: calc(var(--space-4) + var(--dock-control) + var(--space-2));
+      height: var(--dock-control);
+      margin: 0;
+      /* dock 캡슐(탭바·검색·미니 오디오)과 동일 — 둥근 사각 --radius 대신 반원 캡 pill. */
+      border-radius: var(--radius-pill);
+      z-index: var(--nav-z);
+    }
+    /* 배치만 맡는 투명한 `#tab-dock` 요소가 가운데 빈 영역의 클릭을 가로채, 그 아래의 이어 읽기
+       알약 단추(링크와 ×)가 눌리지 않았다. `#tab-dock` 요소는 DOM 순서로 배너보다 뒤에 있고 쌓임
+       순서(`z-index` 속성)가 같다. 또 `#resume-banner-slot` 요소의 `z-index: 10`이 쌓임 맥락을
+       만들어, 알약 단추의 쌓임 순서는 그 안에서만 비교된다. 그래서 알약 단추가 실제로 `#tab-dock`
+       요소와 같은 줄에 보일 때만(배너가 있을 때) `#tab-dock` 요소가 클릭을 받지 않게 하고
+       (`pointer-events: none`) 실제 컨트롤만 다시 받게 한다. 배너가 없는 책 목록과 다른 화면에서는
+       `#tab-dock` 요소가 가운데 빈 영역의 클릭을 그대로 받아야 하므로, `:has()` 선택자로 배너가
+       있을 때만 이 규칙을 적용한다(Bugbot 지적, 낮음). 미니 오디오 플레이어는 별도 요소다. */
+    body:has(#resume-banner-slot .resume-banner) #tab-dock { pointer-events: none; }
+    body:has(#resume-banner-slot .resume-banner) #tab-bar,
+    body:has(#resume-banner-slot .resume-banner) #tab-search-dock { pointer-events: auto; }
+    /* 닫기 × — 세로 구분선 제거 + × 키움 + 중심을 우측 반원 캡 중심에 정렬.
+       버튼 폭을 --dock-control(60px)로 두고 × 를 가운데 정렬하면 × 중심 = 버튼 중심 =
+       pill 우측 끝 −30px = 반원 캡(반지름 --dock-control/2=30px) 중심과 일치. */
+    .resume-banner-close {
+      align-self: stretch;
+      border-left: none;
+      width: var(--dock-control);
+      font-size: var(--font-2xl);
+    }
   }
 }
 
@@ -4190,15 +4198,18 @@ mark.search-highlight {
 
 /* Book-name swap: NT books with long `name_ko` also render a shortened
    .book-name-mobile span. Default state shows .book-name-full; we swap to
-   .book-name-mobile on touch devices (phones/tablets) and on any device
+   .book-name-mobile on touch devices in the small layout (phones; an iPad in
+   the large layout shows the full name as a desktop does, ADR-050) and on any device
    when JS measurement marks the anchor .compact because the full name
    would wrap inside the button (e.g. desktop with enlarged text). */
 .book-name-mobile { display: none; }
 .book-list a.compact > .book-name-full { display: none; }
 .book-list a.compact > .book-name-mobile { display: inline; }
-@media (hover: none) and (pointer: coarse) {
-  .book-list a > .book-name-full { display: none; }
-  .book-list a > .book-name-mobile { display: inline; }
+@media not all and (min-width: 700px) and (min-height: 600px) {
+  @media (hover: none) and (pointer: coarse) {
+    .book-list a > .book-name-full { display: none; }
+    .book-list a > .book-name-mobile { display: inline; }
+  }
 }
 
 /* ── Chapter Grid ── */
@@ -4710,7 +4721,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
 /* Desktop: right-side panel (mirrors bookmark-drawer pattern). Slides over the
    right edge of the viewport; centered main content stays readable on the
    left. Resize handle on the left edge lets the user widen the panel. */
-@media (min-width: 769px) and (pointer: fine) {
+@media (min-width: 700px) and (min-height: 600px) {
   #cite-sheet {
     top: 2.5vh;
     right: 0;
@@ -4744,7 +4755,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
 }
 
 /* Hide drag handle on desktop — width-resize replaces height-resize there. */
-@media (min-width: 769px) and (pointer: fine) {
+@media (min-width: 700px) and (min-height: 600px) {
   #cite-sheet-handle {
     display: none;
   }
@@ -4755,32 +4766,34 @@ body.cites-shown .note-anchor--variant:focus-visible {
   display: none;
 }
 
-@media (min-width: 769px) and (pointer: fine) {
-  #cite-sheet-resize {
-    display: flex;
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: calc(0.22rem + 0.5rem * 2);
-    cursor: ew-resize;
-    align-items: center;
-    justify-content: center;
-    touch-action: none;
-    z-index: 1;
-  }
+@media (min-width: 700px) and (min-height: 600px) {
+  @media (pointer: fine) {
+    #cite-sheet-resize {
+      display: flex;
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: calc(0.22rem + 0.5rem * 2);
+      cursor: ew-resize;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+      z-index: 1;
+    }
 
-  #cite-sheet-resize::after {
-    content: '';
-    width: 0.22rem;
-    height: 2.2rem;
-    background: var(--border);
-    border-radius: 2px;
-    transition: background var(--duration-fast);
-  }
+    #cite-sheet-resize::after {
+      content: '';
+      width: 0.22rem;
+      height: 2.2rem;
+      background: var(--border);
+      border-radius: 2px;
+      transition: background var(--duration-fast);
+    }
 
-  #cite-sheet-resize:hover::after {
-    background: var(--accent);
+    #cite-sheet-resize:hover::after {
+      background: var(--accent);
+    }
   }
 }
 
@@ -5137,8 +5150,8 @@ html.cite-sheet-open {
 /* ── Tab bar (ADR-029, ADR-030) — 모바일 하단 내비, iOS Liquid Glass ────────
    플로팅 캡슐. ADR-030: fixed 요소는 #tab-dock(투명) 하나뿐이라 Safari 26 home-indicator
    틴팅 샘플링 문제 없음 → frosted glass 는 #tab-bar·#tab-search 요소에 직접(::before 우회 불필요).
-   데스크탑(넓은 화면 + 마우스 = ≥769px and pointer:fine)은 사이드바 단계 전까지 숨김.
-   터치 기기는 가로 폰·태블릿 포함 탭 바를 유지(ADR-029 개정 2026-06-09). */
+   큰 화면(앱 화면이 폭 700px 이상이고 높이 600px 이상, ADR-050 §2)은 숨긴다.
+   휴대폰은 어느 방향이든 탭 바를 쓰고, 화면 전체를 쓰는 iPad는 상단 바를 쓴다. */
 /* ADR-030: 탭 pill + 검색 원형을 한 플로팅 dock 으로 — 좌측 정렬, 근접 배치.
    gap 으로 둘 사이 간격만 두고 화면 우측 여백은 비운다(짧은 3탭 pill 기준). */
 #tab-dock {
@@ -5411,19 +5424,19 @@ html.cite-sheet-open {
 }
 
 /* 데스크탑: 사이드바 단계 전까지 탭 dock(탭바+검색) 숨김. */
-@media (min-width: 769px) and (pointer: fine) {
+@media (min-width: 700px) and (min-height: 600px) {
   #tab-dock { display: none; }
 }
 
 /* 모바일: 설정 기어·홈(성서 목록으로) 버튼은 탭 바로 이전 — 헤더에서 숨김
    (데스크탑은 탭바가 없어 유지). 챕터 북마크 추가 버튼은 보존. */
-@media (max-width: 768px), (pointer: coarse) {
+@media not all and (min-width: 700px) and (min-height: 600px) {
   .title-settings-btn,
   .title-home-btn { display: none; }
 }
 
 /* 탭 바 하단 공존 (ADR-029 P4). 데스크탑은 탭바가 없어 적용 안 함. */
-@media (max-width: 768px), (pointer: coarse) {
+@media not all and (min-width: 700px) and (min-height: 600px) {
   /* 탭 바가 보이는 뷰에서만 하단 콘텐츠 자리 확보. 절 선택 모드는 탭 바를 숨기고
      전용 하단 바가 차지하므로 reserve 를 적용하지 않는다(빈 띠 방지). */
   body:not(.verse-select-active) #app { padding-bottom: var(--tabbar-reserve); }
@@ -5826,7 +5839,7 @@ html.cite-sheet-open {
    the right edge. The side cells take the leftover width in equal shares (never less than their content), so the
    title sits at the centre of the window, which is the centre of the reading column too. The middle cell can
    shrink below the title's width; views.js measureTitleCompactness then swaps in the short title. */
-@media (min-width: 769px) and (pointer: fine) {
+@media (min-width: 700px) and (min-height: 600px) {
   #app-header {
     display: grid;
     grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
@@ -5924,20 +5937,22 @@ html.cite-sheet-open {
 
 /* Narrow desktop (ADR-043 §8): the tabs keep only their icons; the label stays for screen readers and
    views.js fitTopBar gives the tab a title for the hover name. */
-@media (min-width: 769px) and (max-width: 899px) and (pointer: fine) {
-  .header-nav-link { padding: 0 var(--space-2); }
-  .header-nav-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
+@media (min-width: 700px) and (min-height: 600px) {
+  @media (max-width: 899px) {
+    .header-nav-link { padding: 0 var(--space-2); }
+    .header-nav-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
   }
 }
 
 /* Mobile: hide inline search (replaced by the bottom tab bar's 검색 tab) */
-@media (max-width: 768px), (pointer: coarse) {
+@media not all and (min-width: 700px) and (min-height: 600px) {
   #search-bar {
     display: none;
   }
@@ -6186,7 +6201,7 @@ html.cite-sheet-open {
    데스크탑(넓은 화면 + 마우스)에서는 헤더가 유일한 북마크 진입점이라 유지 — 분기가
    포인터 인식 미디어 쿼리라(ADR-029 개정) 폰을 가로로 돌리거나 마우스를 붙여도 탭 바
    유무에 자동으로 따라간다(ADR-010 개정 2026-06-09). */
-@media (max-width: 768px), (pointer: coarse) {
+@media not all and (min-width: 700px) and (min-height: 600px) {
   .title-bookmark-btn.has-bookmark,
   .title-bookmark-btn.is-list { display: none; }
 }
@@ -6207,13 +6222,13 @@ html.cite-sheet-open {
   padding: 0;
 }
 
-@media (min-width: 769px) and (pointer: fine) {
+@media (min-width: 700px) and (min-height: 600px) {
   .title-settings-btn {
     display: none;
   }
 }
 
-@media (max-width: 768px), (pointer: coarse) {
+@media not all and (min-width: 700px) and (min-height: 600px) {
   #settings-anchor {
     display: none;
   }
@@ -6889,7 +6904,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 /* ── Bookmark drawer (desktop: right side panel) ── */
-@media (min-width: 769px) and (pointer: fine) {
+@media (min-width: 700px) and (min-height: 600px) {
   #bookmark-drawer {
     top: 2.5vh;
     right: 0;
@@ -6951,7 +6966,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 /* Hide drag handle on desktop (must come after the base style above) */
-@media (min-width: 769px) and (pointer: fine) {
+@media (min-width: 700px) and (min-height: 600px) {
   #bookmark-drawer-handle {
     display: none;
   }
@@ -6961,32 +6976,34 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   display: none;
 }
 
-@media (min-width: 769px) and (pointer: fine) {
-  #bookmark-drawer-resize {
-    display: flex;
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: calc(0.22rem + 0.5rem * 2);
-    cursor: ew-resize;
-    align-items: center;
-    justify-content: center;
-    touch-action: none;
-    z-index: 1;
-  }
+@media (min-width: 700px) and (min-height: 600px) {
+  @media (pointer: fine) {
+    #bookmark-drawer-resize {
+      display: flex;
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: calc(0.22rem + 0.5rem * 2);
+      cursor: ew-resize;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+      z-index: 1;
+    }
 
-  #bookmark-drawer-resize::after {
-    content: '';
-    width: 0.22rem;
-    height: 2.2rem;
-    background: var(--border);
-    border-radius: 2px;
-    transition: background var(--duration-fast);
-  }
+    #bookmark-drawer-resize::after {
+      content: '';
+      width: 0.22rem;
+      height: 2.2rem;
+      background: var(--border);
+      border-radius: 2px;
+      transition: background var(--duration-fast);
+    }
 
-  #bookmark-drawer-resize:hover::after {
-    background: var(--accent);
+    #bookmark-drawer-resize:hover::after {
+      background: var(--accent);
+    }
   }
 }
 
@@ -7035,7 +7052,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 /* Mobile: toolbar moves below the list */
-@media (max-width: 768px), (pointer: coarse) {
+@media not all and (min-width: 700px) and (min-height: 600px) {
   #bookmark-drawer-toolbar {
     order: 1;
   }
@@ -8189,12 +8206,17 @@ body.bm-select-active .bm-folder-read-btn { display: none; }
   border-radius: var(--radius);
 }
 
-/* ── Mobile: swipe-to-reveal bookmark actions (ADR-010, 2026-05-03) ──
+/* ── Swipe-to-reveal bookmark actions (ADR-010, 2026-05-03; ADR-050 §3) ──
+   The small layout OR touch input: an iPad keeps it in the large layout's side
+   panel, and the small layout keeps one finger-shaped list for any pointer (its
+   select mode lives here too). Only a mouse in the large layout gets the hover
+   buttons. JS gates the swipe with the same condition (bookmark-gestures.js
+   `_canSwipeRows`).
    On touch viewports, hover-revealed action buttons stick open after the first
    tap (iOS Safari treats first tap as :hover), forcing a double-tap to reach
    edit/delete. Replace with swipe-left or long-press to reveal a slide-out
    action panel; single tap navigates as expected. */
-@media (max-width: 768px), (pointer: coarse) {
+@media not all and (min-width: 700px) and (min-height: 600px), (hover: none) and (pointer: coarse) {
   .bm-folder-row .bm-item-actions,
   .bm-bookmark-row .bm-item-actions {
     display: none;

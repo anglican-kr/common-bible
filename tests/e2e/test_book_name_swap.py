@@ -106,21 +106,25 @@ def test_book_list_touch_phone_shows_mobile_names(browser):
     ctx.close()
 
 
-def test_book_list_touch_tablet_shows_mobile_names(browser):
-    """Touch tablets in landscape still get mobile names (touch trumps width)."""
-    ctx = browser.new_context(
-        viewport={"width": 1024, "height": 768},
-        is_mobile=True,
-        has_touch=True,
-    )
-    page = ctx.new_page()
-    page.goto(f"{BASE}/new_testament")
-    page.wait_for_selector(".book-list a")
-
-    assert _book_list_link_state(page, "rom")["visible"] == "로마서"
-    assert _book_list_link_state(page, "2thess")["visible"] == "2데살로니카"
-
-    ctx.close()
+def test_book_list_touch_tablet_matches_desktop(browser):
+    """A touch tablet in the large layout (ADR-050 §2) shows the names a desktop of the same size shows: the full name
+    where it fits, the short one only where the measurement finds the full name would wrap. Forcing short names is for
+    touch screens in the small layout (phones)."""
+    script = """() => [...document.querySelectorAll('.book-list a')]
+      .filter((a) => a.querySelector('.book-name-mobile'))
+      .map((a) => (getComputedStyle(a.querySelector('.book-name-full')).display !== 'none' ? 'full:' : 'short:')
+        + a.getAttribute('aria-label'))"""
+    shown = {}
+    for kind, options in (("tablet", {"is_mobile": True, "has_touch": True}), ("desktop", {})):
+        ctx = browser.new_context(viewport={"width": 1024, "height": 768}, **options)
+        page = ctx.new_page()
+        page.goto(f"{BASE}/new_testament")
+        page.wait_for_selector(".book-list a")
+        page.wait_for_timeout(300)  # the wrap measurement runs after layout
+        shown[kind] = page.evaluate(script)
+        ctx.close()
+    assert shown["tablet"] == shown["desktop"]
+    assert any(name.startswith("full:") for name in shown["tablet"]), shown["tablet"]
 
 
 # ── Book-list: non-touch falls back to wrap-detection ──────────────────────

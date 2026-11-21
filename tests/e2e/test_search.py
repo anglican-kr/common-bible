@@ -434,7 +434,7 @@ def test_book_filter_apply_after_the_layout_changed_uses_the_shown_field(start, 
     _show_book_tab(page, "mark").click()
     page.set_viewport_size(end)
     # 배치가 바뀌어 위쪽 입력창이 빠지거나 들어올 때까지 기다린다
-    bar_wanted = "true" if end["width"] < 769 else "false"
+    bar_wanted = "true" if end["width"] < 700 or end["height"] < 600 else "false"  # 작은 화면(ADR-050 §2)
     page.wait_for_function(f"() => !!document.getElementById('search-inpage-bar') === {bar_wanted}", timeout=5_000)
     page.locator("#book-filter-sheet .book-filter-apply").click()
     page.wait_for_function("""() => {

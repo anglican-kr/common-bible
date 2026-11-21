@@ -585,7 +585,11 @@ def test_import_merge_too_big_says_so_in_the_dialog(browser, tmp_path):
 
     ctx = browser.new_context(service_workers="block", viewport={"width": 844, "height": 390})   # 새로 고침 · 가로 화면
     page = ctx.new_page()
-    _open_bookmark_drawer(page)
+    # 가로로 든 휴대폰 크기는 작은 화면이라(ADR-050 §2) 헤더의 북마크 단추가 저장 모달을 연다. 북마크 시트는 직접 연다
+    page.goto(f"{BASE}/gen/1")
+    page.wait_for_selector("article.chapter-text .verse")
+    page.evaluate("() => window.openBookmarkDrawer('gen', 1)")
+    page.wait_for_selector("#bookmark-drawer:not([hidden])")
     page.evaluate(
         f"() => window.appStorage.saveBookmarks([{json.dumps({**_BM_A, 'note': 'y' * 700_000})}])"
     )

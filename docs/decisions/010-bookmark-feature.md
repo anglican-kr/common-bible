@@ -163,11 +163,11 @@ const isHighlightedSpan = hlSegments
 
 탭 바에 북마크 탭이 있으니 **탐색과 관리는 탭 바로 통일**하고, 헤더는 탭 바가 하지 못하는 **맥락 동작(「지금 이 장 추가」)**만 맡는다.
 
-- **모바일과 터치: 탭 바가 있는 화면(`(max-width: 768px), (pointer: coarse)`)**
+- **작은 화면: 탭 바가 있는 화면(ADR-050 §2. `not all and (min-width: 700px) and (min-height: 600px)`)**
   - 저장되지 않은 장에서는 헤더에 「추가」 아이콘(윤곽선과 `+`)이 보인다. 탭하면 **폴더 위치를 고르는 저장 모달**(`openSaveModal("chapter")`)을 연다.
   - 이미 북마크된 장과 책의 장 목록 화면(추가할 장 맥락이 없다. `.is-list`, `chapter == null`)에서는 헤더 북마크를 **숨긴다**. 관리와 해제는 탭 바의 북마크 탭(행 스와이프, 선택 모드)이 맡는다.
-- **데스크톱(`(min-width: 769px) and (pointer: fine)`)**: 헤더 북마크가 **유일한 진입점**이라 상태(채워짐 또는 빔, `.has-bookmark`)를 표시하고, 탭하면 북마크 드로어를 연다.
-- **구현**: 보이고 숨기는 일은 JS가 한 번 검사해서 하는 것이 아니라 **CSS 미디어 쿼리**가 한다(`.title-bookmark-btn.has-bookmark, .title-bookmark-btn.is-list { display: none }`). 클릭 분기만 `_isMobileViewport()`(같은 쿼리)로 판정한다(저장 모달이냐 드로어냐). 미디어 쿼리라 화면이 바뀌어도 JS의 `resize` 리스너 없이 자동으로 적용된다. 폭만이 아니라 포인터로도 구별하므로, 가로로 든 폰과 태블릿도 탭 바와 「추가」를 유지한다(ADR-029).
+- **큰 화면(`(min-width: 700px) and (min-height: 600px)`, ADR-050 §2)**: 헤더 북마크가 **유일한 진입점**이라 상태(채워짐 또는 빔, `.has-bookmark`)를 표시하고, 탭하면 북마크 드로어를 연다.
+- **구현**: 보이고 숨기는 일은 JS가 한 번 검사해서 하는 것이 아니라 **CSS 미디어 쿼리**가 한다(`.title-bookmark-btn.has-bookmark, .title-bookmark-btn.is-list { display: none }`). 클릭 분기만 `isSmallLayout()`(`helpers.js`, 같은 조건)으로 판정한다(저장 모달이냐 드로어냐). 미디어 쿼리라 화면이 바뀌어도 JS의 `resize` 리스너 없이 자동으로 적용된다. 폭만이 아니라 포인터로도 구별하므로, 가로로 든 폰과 태블릿도 탭 바와 「추가」를 유지한다(ADR-029).
 
 ### 절 선택 모드 (`#verse-select-bar`)
 
@@ -191,7 +191,7 @@ const isHighlightedSpan = hlSegments
 
 ### 모바일 행의 스와이프 (`js/app/bookmark-gestures.js`, `js/app/bookmark-tree.js`)
 
-모바일과 터치 화면에서만이다(`_isMobileViewport()`, 위 헤더 북마크와 같은 쿼리). 데스크톱은 `:hover`나 `:focus-within`으로 나타나는 `.bm-item-actions`(수정과 삭제 버튼)를 그대로 쓴다. iOS Safari는 첫 탭을 호버로 처리하기 때문에, 그 방식으로는 모바일에서 북마크 항목으로 이동하려면 **두 번 탭**이 필요했다(첫 탭은 액션 버튼을 나타나게만 하고, 두 번째 탭에서야 이동). 그래서 모바일 행은 아래 제스처로 동작을 나눈다.
+작은 화면이거나 터치 화면일 때다(ADR-050 §3. JS는 `bookmark-gestures.js`의 `_canSwipeRows()`, CSS는 작은 화면의 조건과 `(hover: none) and (pointer: coarse)`를 함께 쓴다). 그래서 큰 화면의 iPad에서도 옆 패널의 줄을 밀 수 있다. 큰 화면에서 마우스를 쓰는 화면은 `:hover`나 `:focus-within`으로 나타나는 `.bm-item-actions`(수정과 삭제 버튼)를 그대로 쓴다. iOS Safari는 첫 탭을 호버로 처리하기 때문에, 그 방식으로는 모바일에서 북마크 항목으로 이동하려면 **두 번 탭**이 필요했다(첫 탭은 액션 버튼을 나타나게만 하고, 두 번째 탭에서야 이동). 그래서 모바일 행은 아래 제스처로 동작을 나눈다.
 
 - **한 번 탭하면** 바로 이동한다(폴더는 펼친다).
 - **왼쪽으로 스와이프하면** 콘텐츠가 왼쪽으로 밀리며 오른쪽 끝(trailing)에 **삭제**(`.bm-swipe-delete`, 빨강)가 나타난다. **오른쪽으로 스와이프하면** 왼쪽 끝(leading)에 **수정**(`.bm-swipe-edit`, 강조색)이 나타난다. 삭제 동작을 오른쪽 끝에 두는 것은 iOS 관례다(Mail, 메시지, 메모의 「왼쪽으로 밀어 삭제」).

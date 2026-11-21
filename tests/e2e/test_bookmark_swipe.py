@@ -1,14 +1,17 @@
 """E2E: 모바일 북마크 행 스와이프 / 롱프레스 액션 — v1.3.0 신규 기능.
 
-모바일 viewport(390px)에서 _isMobileViewport() = true 조건으로
-canSwipe가 활성화되어야 스와이프/롱프레스 동작이 트리거된다.
-데스크톱 viewport(>768px)에서는 canSwipe = false이므로 동작하지 않는다.
+줄 밀기는 작은 화면이거나 터치일 때 된다(ADR-050 §3, bookmark-gestures.js `_canSwipeRows`).
+휴대폰(390px)과 큰 화면의 iPad에서는 동작하고, 큰 화면에서 마우스를 쓰는 데스크톱에서는 동작하지 않는다.
 
 Playwright mouse API는 setPointerCapture와 함께 동작이 불안정하므로
 PointerEvent를 JS에서 직접 dispatch하는 방식을 사용한다.
 """
 import json
 from .conftest import IPHONE_UA, MOBILE_VIEWPORT, CLEAR_APP_STORAGE
+
+# iPadOS Safari reports itself as a Mac (ADR-008); the large layout does not look at it (ADR-050 §2).
+IPAD_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+            "(KHTML, like Gecko) Version/18.0 Safari/605.1.15")
 
 BASE = "http://localhost:8080"
 
@@ -127,7 +130,7 @@ def test_swipe_left_reveals_delete(browser):
 
     양방향 스와이프(ADR-010 개정): 왼쪽(trailing) = 삭제(우측 가장자리·빨강),
     오른쪽(leading) = 수정(좌측 가장자리)."""
-    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA, is_mobile=True, has_touch=True)
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:
@@ -139,9 +142,25 @@ def test_swipe_left_reveals_delete(browser):
         ctx.close()
 
 
+def test_swipe_works_in_the_large_layout_with_touch(browser):
+    """가로로 든 iPad(1180×820, 터치)는 큰 화면이라 북마크가 오른쪽 옆 패널로 열린다. 그 안에서도 줄을 밀어 동작을 연다(ADR-050 §3).
+    줄 밀기가 레이아웃 조건을 따르면 큰 화면에서 꺼진다."""
+    ctx = browser.new_context(viewport={"width": 1180, "height": 820}, is_mobile=True, has_touch=True, user_agent=IPAD_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open_drawer(page, [_BM_A])
+        assert page.evaluate("() => window.appHelpers.isLargeLayout()") is True
+        _swipe(page, idx=0, dx=-160)
+        page.wait_for_selector(".bm-bookmark-row.bm-swiped-delete", timeout=2_000)
+        assert page.locator(".bm-swipe-delete").count() > 0
+    finally:
+        ctx.close()
+
+
 def test_swipe_right_reveals_edit(browser):
     """오른쪽으로 스와이프하면 수정 액션이 노출된다 (leading edge)."""
-    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA, is_mobile=True, has_touch=True)
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:
@@ -155,7 +174,7 @@ def test_swipe_right_reveals_edit(browser):
 
 def test_swipe_other_row_closes_previous(browser):
     """두 번째 행을 스와이프하면 첫 번째 행의 액션이 자동으로 닫힌다."""
-    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA, is_mobile=True, has_touch=True)
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:
@@ -172,7 +191,7 @@ def test_swipe_other_row_closes_previous(browser):
 def test_longpress_does_not_start_drag(browser):
     """롱프레스(행 본문)는 더 이상 드래그를 시작하지 않는다 — 재정렬은 ≡ 핸들
     전용(ADR-010 개정 2026-06-11). 액션 패널도 열리지 않는다(스와이프는 수평 전용)."""
-    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA, is_mobile=True, has_touch=True)
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:
@@ -190,7 +209,7 @@ def test_longpress_does_not_start_drag(browser):
 
 def test_handle_drag_starts_reorder(browser):
     """≡ 핸들에서 시작한 드래그는 즉시 재정렬 모드로 진입한다 (롱프레스 없이)."""
-    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA, is_mobile=True, has_touch=True)
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:
@@ -211,7 +230,7 @@ def test_handle_drag_starts_reorder(browser):
 
 def test_short_press_does_not_start_drag(browser):
     """짧은 press(<500ms)는 드래그를 시작하지 않고 액션 패널도 열리지 않는다."""
-    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA, is_mobile=True, has_touch=True)
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:
@@ -225,7 +244,7 @@ def test_short_press_does_not_start_drag(browser):
 
 
 def test_swipe_no_effect_on_desktop(browser):
-    """데스크톱 viewport(>768px)에서는 canSwipe=false이므로 스와이프가 동작하지 않는다."""
+    """큰 화면에서 마우스를 쓰는 데스크톱에서는 줄 밀기가 동작하지 않는다(ADR-050 §3)."""
     ctx = browser.new_context(viewport={"width": 1280, "height": 800})
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
@@ -244,7 +263,7 @@ def test_delete_via_swipe(browser):
     삭제는 왼쪽 스와이프로 노출(우측 가장자리, iOS 관례). 노출된 삭제 라벨을
     클릭하면 (겹친 수정 버튼이 가로채지 않고) 삭제가 실행돼야 한다 — pointer-events
     수정 회귀."""
-    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA, is_mobile=True, has_touch=True)
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:
@@ -276,7 +295,7 @@ def test_cancel_delete_confirm_closes_swipe(browser):
     회귀: 삭제는 onConfirm 안에서만 스와이프를 닫아, 확인을 취소하면 삭제 액션이
     그대로 노출된 채 행이 열려 있었다(수정은 탭 즉시 닫혀 정상). 이제 삭제도 탭
     즉시 닫는다."""
-    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA, is_mobile=True, has_touch=True)
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:

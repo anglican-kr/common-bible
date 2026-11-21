@@ -50,7 +50,7 @@ import {
 
 const {
   _$, el, clearNode, emptyState, isModifiedClick, headerIcon, HEADER_ICON_PATHS, isFormerNorthChurch,
-  DESKTOP_LAYOUT_QUERY, isDesktopLayout, datePickerTrigger, chapterTitle,
+  LARGE_LAYOUT_QUERY, isLargeLayout, datePickerTrigger, chapterTitle,
 } = window.appHelpers;
 const { loadLectionaryTrack, saveLectionaryTrack, loadLectionaryCardsFolded, saveLectionaryCardsFolded, loadLectionaryAltShow, loadParish, loadBaptismalSaint } = window.appStorage;
 
@@ -1346,22 +1346,22 @@ function commitDateBar(o) {
 }
 
 /**
- * 「오늘」의 자리. 데스크톱의 한 줄 상단 바에서는 다음 단추(›)의 오른쪽, 곧 오른쪽 칸의 맨 앞이다(ADR-043 §1, 사용자 결정 2026-11-14).
- * 모바일은 왼쪽 칸이다(ADR-038 §1). 요소를 옮기므로 화면의 차례와 포커스의 차례가 같고, 포커스를 돌려줄 자리(`data-focus-key`)도 하나다.
+ * 「오늘」의 자리. 큰 화면의 한 줄 상단 바에서는 다음 단추(›)의 오른쪽, 곧 오른쪽 칸의 맨 앞이다(ADR-043 §1, 사용자 결정 2026-11-14).
+ * 작은 화면은 왼쪽 칸이다(ADR-038 §1). 요소를 옮기므로 화면의 차례와 포커스의 차례가 같고, 포커스를 돌려줄 자리(`data-focus-key`)도 하나다.
  * @param {Element} today @param {Element} start @param {Element} end
  */
 function placeToday(today, start, end) {
   const focused = document.activeElement === today;
-  if (isDesktopLayout()) end.insertBefore(today, end.firstChild);
+  if (isLargeLayout()) end.insertBefore(today, end.firstChild);
   else start.appendChild(today);
   // 요소를 떼었다 붙이면 포커스가 사라진다. 「오늘」에 포커스가 있었으면 돌려준다.
   if (focused && today instanceof HTMLElement) today.focus({ preventScroll: true });
 }
 
-// 창 폭이 데스크톱과 모바일의 경계를 넘으면 이미 그린 줄의 「오늘」을 그 배치의 칸으로 옮긴다. 다시 그리지 않으므로 스크롤이 그대로이고,
+// 앱 화면의 크기가 작은 화면과 큰 화면의 경계를 넘으면(ADR-050 §2) 이미 그린 줄의 「오늘」을 그 레이아웃의 칸으로 옮긴다. 다시 그리지 않으므로 스크롤이 그대로이고,
 // 포커스는 placeToday 가 돌려준다.
 if (typeof window.matchMedia === "function") {
-  window.matchMedia(DESKTOP_LAYOUT_QUERY).addEventListener("change", () => {
+  window.matchMedia(LARGE_LAYOUT_QUERY).addEventListener("change", () => {
     const today = $title.querySelector(":scope .lect-today");
     const start = $title.querySelector(":scope > .lect-bar-start");
     const end = $title.querySelector(":scope > .lect-bar-end");

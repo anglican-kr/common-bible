@@ -504,7 +504,7 @@ def test_info_and_close_buttons_have_a_hit_area_wider_than_the_glyph_that_covers
         (".settings-view", {"viewport": {"width": 360, "height": 640}, "user_agent": IPHONE_UA}, 22, False, None),
         (".settings-view", {"viewport": {"width": 320, "height": 640}, "user_agent": IPHONE_UA}, 16, False, True),
         (".settings-view", {"viewport": {"width": 320, "height": 640}, "user_agent": IPHONE_UA}, 24, False, False),
-        (".settings-view", {"viewport": {"width": 768, "height": 1024}, "user_agent": IPHONE_UA}, 16, True, True),  # 설명이 한 줄이다
+        (".settings-view", {"viewport": {"width": 699, "height": 1024}, "user_agent": IPHONE_UA}, 16, True, True),  # 작은 화면의 가장 넓은 폭. 설명이 한 줄이다
     ):
         case = (root, options.get("viewport"), font)
         ctx = browser.new_context(**options)

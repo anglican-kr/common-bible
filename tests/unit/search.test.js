@@ -12,7 +12,7 @@
 //   - WORKER block (ensureSearchWorker/doSearch + state) — Worker stub
 //   - PURE HELPERS block (appendTextWithHighlight/highlightTextNodes/buildSnippet/
 //     buildSearchPagination) — minimal Element + el shim
-//   - IS_MOBILE block — isMobileLayout stub
+//   - IS_MOBILE block — isSmallLayout stub
 //   - PAGE_SIZE block (searchPageSize) — window and barBottom stubs
 //   - AUTO_NAVIGATE block (consumeSearchAutoNavigate) — pure state
 //   - HISTORY_CONTROLLER block (createSearchHistoryController) — extended
@@ -360,7 +360,7 @@ function loadWorkerBlock() {
 
 function loadIsMobile(mobile) {
   const ctx = {
-    isMobileLayout: () => !!mobile,
+    isSmallLayout: () => !!mobile,
     Object, console,
   };
   vm.createContext(ctx);
@@ -736,14 +736,14 @@ test("isMobile: the mobile layout's condition doesn't hold → false", () => {
   assert.strictEqual(isMobile(), false);
 });
 
-test("isMobile: reads the one shared mobile query, not a copy of it (#612 review)", () => {
-  // helpers.js MOBILE_LAYOUT_QUERY is the condition CSS hides the header search field with, so the page always shows
+test("isMobile: reads the one shared layout condition, not a copy of it (#612 review, ADR-050 §2)", () => {
+  // helpers.js LARGE_LAYOUT_QUERY is the condition CSS hides the header search field with, so the page always shows
   // exactly one search field. A copy of the query here could drift from it.
   const block = extractBlock("IS_MOBILE");
   assert.ok(!block.includes("matchMedia"), "isMobile has no query of its own");
-  assert.match(block, /return isMobileLayout\(\);/);
+  assert.match(block, /return isSmallLayout\(\);/);
   const helpers = fs.readFileSync(path.resolve(__dirname, "../../js/app/helpers.js"), "utf8");
-  assert.match(helpers, /const MOBILE_LAYOUT_QUERY = "\(max-width: 768px\), \(pointer: coarse\)";/);
+  assert.match(helpers, /const LARGE_LAYOUT_QUERY = "\(min-width: 700px\) and \(min-height: 600px\)";/);
 });
 
 // ── searchPageSize ───────────────────────────────────────────────────────────

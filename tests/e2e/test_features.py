@@ -40,7 +40,7 @@ READERS = pytest.mark.parametrize("width, inset", [(390, 0), (390, 62), (1280, 0
 
 
 def _reader(browser, width, inset, startup=None):
-    ctx = browser.new_context(viewport={"width": width, "height": 800}, user_agent=IPHONE_UA if width < 769 else None)
+    ctx = browser.new_context(viewport={"width": width, "height": 800}, user_agent=IPHONE_UA if width < 700 else None)
     ctx.add_init_script(NO_INSTALL_NUDGE)
     if startup:
         ctx.add_init_script(f"localStorage.setItem('bible-startup', '{startup}');")

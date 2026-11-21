@@ -22,7 +22,7 @@
 // The return type is declared so a member missing from `AppOverlay` (types.d.ts) fails typecheck here, not
 // later in whichever module destructures it (helpers.js does the same for `AppHelpers`).
 window.appOverlay = (/** @returns {AppOverlay} */ () => {
-  const { setInert, trapFocus, dragReleaseAction } = window.appHelpers;
+  const { setInert, trapFocus, dragReleaseAction, isLargeLayout } = window.appHelpers;
 
   /**
    * @typedef {Object} OverlayOptions
@@ -267,15 +267,14 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
   // `dragReleaseAction`). The lifecycle (open/close, scrim, focus) is the
   // overlay's / caller's concern; this only wires the drag gesture.
 
-  // Desktop tier = wide window AND a mouse (pointer:fine). Touch devices (phones
-  // in any orientation, tablets) stay on the bottom-sheet path regardless of
-  // width — same pointer-aware boundary as isMobile()/CSS (ADR-029 개정).
-  const _isDesktopPanel = () =>
-    window.matchMedia("(min-width: 769px) and (pointer: fine)").matches;
+  // The large layout shows these sheets as fixed-size side panels, the small
+  // layout as bottom sheets (ADR-050 §2). helpers.js LARGE_LAYOUT_QUERY is the
+  // condition CSS writes, so the gesture and the look always agree.
+  const _isSidePanel = () => isLargeLayout();
 
   /**
    * Drag the sheet's top handle to resize, and release to close / snap-min /
-   * stay (touch/narrow only; desktop = wide + mouse uses a fixed side panel and
+   * stay (small layout only; the large layout uses a fixed side panel and this
    * is a no-op).
    * The move clamp's lower bound is 0 (NOT the rest min) so the user can drag
    * visually below the rest height — that's the affordance the snap-close
@@ -311,7 +310,7 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
       else if (action === "snap-min") sheet.style.height = `${restMin}px`;
     }
     handle.addEventListener("pointerdown", (e) => {
-      if (_isDesktopPanel()) return; // desktop (wide + mouse): fixed-size side panel
+      if (_isSidePanel()) return; // large layout: fixed-size side panel
       e.preventDefault();
       startY = e.clientY;
       startH = sheet.offsetHeight;
@@ -324,7 +323,7 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
   /**
    * Desktop-only (wide + mouse): drag a left-edge handle to resize the side
    * panel's width. Drag left widens; clamp to [minWidth, maxRatio·viewport-width].
-   * Touch/narrow is a no-op (the sheet is a bottom drawer there).
+   * The small layout is a no-op (the sheet is a bottom drawer there).
    *
    * @param {HTMLElement} handle
    * @param {HTMLElement} sheet
@@ -343,7 +342,7 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
       handle.removeEventListener("pointermove", onPointerMove);
     }
     handle.addEventListener("pointerdown", (e) => {
-      if (!_isDesktopPanel()) return; // touch/narrow: bottom sheet, no width resize
+      if (!_isSidePanel()) return; // small layout: bottom sheet, no width resize
       e.preventDefault();
       startX = e.clientX;
       startW = sheet.offsetWidth;

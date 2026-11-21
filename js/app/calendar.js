@@ -41,7 +41,7 @@ import {
 // barBottom: 상단 바의 아래쪽(화면 위에서 잰 값).
 const {
   _$, el, clearNode, HEADER_ICON_PATHS, SCROLL_ANCHORING, focusSpotOf, restoreFocusSpot, barBottom, scrollUnderBar, headerIcon,
-  isModifiedClick, DESKTOP_LAYOUT_QUERY, SHEET_INERT_SELECTORS, DATE_PICKER_FOCUS_KEY, datePickerTrigger,
+  isModifiedClick, LARGE_LAYOUT_QUERY, SHEET_INERT_SELECTORS, DATE_PICKER_FOCUS_KEY, datePickerTrigger,
 } = window.appHelpers;
 
 const $app = _$("app");
@@ -835,7 +835,7 @@ function placePicker() {
   const s = pickerState;
   const p = picker;
   if (!s || !p) return;
-  if (!window.matchMedia(DESKTOP_LAYOUT_QUERY).matches) {
+  if (!window.matchMedia(LARGE_LAYOUT_QUERY).matches) {
     clearPickerPlace(p.panel);
     return;
   }
@@ -861,14 +861,14 @@ function clearPickerPlace(panel) {
  * 끌어 내린 만큼은 `translate` 속성으로 옮긴다. 여는 움직임과 닫는 움직임은 `transform`을 쓰므로, 여는 움직임 중에 끌어도 서로 덮지 않는다.
  * 인용 시트와 북마크 패널의 끌기(overlay.js `attachSheetDrag`)는 시트의 높이를 바꾸고 놓은 높이에 그대로 두는 것이라 쓰지 않는다. 이 판은
  * 내용만큼의 높이라 높이를 줄이면 칸이 잘린다.
- * @param {HTMLElement} handle @param {HTMLElement} panel @param {() => void} onClose @param {MediaQueryList} desktop
+ * @param {HTMLElement} handle @param {HTMLElement} panel @param {() => void} onClose @param {MediaQueryList} large
  */
-function attachPickerDrag(handle, panel, onClose, desktop) {
+function attachPickerDrag(handle, panel, onClose, large) {
   let startY = 0;
   let dy = 0;
   let dragging = false;
   handle.addEventListener("pointerdown", (e) => {
-    if (desktop.matches || (e.target instanceof Element && e.target.closest("button"))) return;
+    if (large.matches || (e.target instanceof Element && e.target.closest("button"))) return;
     dragging = true;
     startY = e.clientY;
     dy = 0;
@@ -914,8 +914,8 @@ function ensurePicker() {
   panel.append(top, head, body);
   document.body.append(scrim, panel);
 
-  // 마우스를 쓰는 넓은 화면이면 팝오버다. 다른 시트가 오른쪽 패널로 바뀌는 조건과 같다(helpers.js, DESIGN.md §6)
-  const desktop = window.matchMedia(DESKTOP_LAYOUT_QUERY);
+  // 큰 화면 레이아웃이면 팝오버다. 다른 시트가 오른쪽 패널로 바뀌는 조건과 같다(helpers.js, ADR-050 §2, DESIGN.md §6)
+  const large = window.matchMedia(LARGE_LAYOUT_QUERY);
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   let closeTimer;
@@ -927,7 +927,7 @@ function ensurePicker() {
     closeDone = null;
     panel.classList.remove("cal-picker-closing");
   };
-  // 휴대폰과 데스크톱의 경계를 넘어 닫는 중이다(아래 `desktop`의 change)
+  // 작은 화면과 큰 화면의 경계를 넘어 닫는 중이다(아래 `large`의 change)
   let switching = false;
   const overlay = window.appOverlay.createOverlay({
     panel,
@@ -950,10 +950,10 @@ function ensurePicker() {
       const trigger = pickerState?.trigger;
       if (trigger?.isConnected) focusInPicker(trigger);
     },
-    // 시트는 다른 시트처럼 아래로 미끄러져 닫힌다. 팝오버, 움직임을 줄인 설정, 끌어서 닫은 시트, 휴대폰과 데스크톱의 경계를 넘을 때는 바로 닫는다.
+    // 시트는 다른 시트처럼 아래로 미끄러져 닫힌다. 팝오버, 움직임을 줄인 설정, 끌어서 닫은 시트, 작은 화면과 큰 화면의 경계를 넘을 때는 바로 닫는다.
     // 경계를 넘을 때 미끄러지면, 보이지 않던 시트가 화면 아래에 나타났다 사라지거나 팝오버의 자리(top, left)에서 늘어난 채 움직인다
     closeTransition: (p, finalizeHide) => {
-      if (switching || desktop.matches || reduceMotion.matches || p.style.translate) {
+      if (switching || large.matches || reduceMotion.matches || p.style.translate) {
         finalizeHide();
         p.style.translate = "";
         clearPickerPlace(p);
@@ -1011,10 +1011,10 @@ function ensurePicker() {
     if (isModifiedClick(e)) return;
     if (e.target instanceof Element && e.target.closest("a[href]")) overlay.close();
   });
-  attachPickerDrag(top, panel, () => overlay.close(), desktop);
-  // 휴대폰과 데스크톱의 경계를 넘으면 시트와 팝오버가 바뀌므로 닫는다. 창 크기로 넘으면 resize 처리가 먼저 실행되어 팝오버의 자리를 이미 지웠을 수
-  // 있어, 자리가 아니라 이 표시를 보고 움직임 없이 닫는다. 데스크톱에서 창 크기가 바뀌면 자리를 다시 잡는다
-  desktop.addEventListener("change", () => {
+  attachPickerDrag(top, panel, () => overlay.close(), large);
+  // 작은 화면과 큰 화면의 경계를 넘으면 시트와 팝오버가 바뀌므로 닫는다. 창 크기로 넘으면 resize 처리가 먼저 실행되어 팝오버의 자리를 이미 지웠을 수
+  // 있어, 자리가 아니라 이 표시를 보고 움직임 없이 닫는다. 큰 화면에서 창 크기가 바뀌면 자리를 다시 잡는다
+  large.addEventListener("change", () => {
     switching = true;
     overlay.close();
     switching = false;

@@ -149,19 +149,10 @@ function makeEnv() {
     console, JSON, Object, Array, Set, Map, Error, String, Number, Boolean, Math,
     document,
     Node, Element, HTMLElement,
-    // Default mobile viewport (drag is mobile-only; resize is desktop-only).
+    // Default small-layout viewport (drag is small-layout only; resize is large-layout only).
     innerWidth: 400,
     innerHeight: 800,
-    // The sheet↔side-panel gate now reads matchMedia (ADR-029 개정 pointer-aware
-    // breakpoint) instead of innerWidth. Map the desktop/mobile-tier queries onto
-    // the stubbed innerWidth — these tests model a normal device where the pointer
-    // matches the width intent (wide ⇒ mouse). setViewport stays the control knob.
-    matchMedia: (q) => ({
-      media: q,
-      matches: q.includes("pointer: fine") ? ctx.innerWidth >= 769
-        : q.includes("pointer: coarse") ? ctx.innerWidth <= 768
-        : false,
-    }),
+    matchMedia: (q) => ({ media: q, matches: false }),
     requestAnimationFrame: (cb) => { rafCbs.push(cb); return rafCbs.length; },
     appHelpers: {
       setInert: (on, sel) => { inertCalls.push([on, sel]); },
@@ -169,6 +160,9 @@ function makeEnv() {
       // Real threshold logic (mirrors js/app/helpers.js) so the drag-release
       // decision is exercised end-to-end.
       dragReleaseAction: (h, vh) => (h < vh * 0.20 ? "close" : h < vh * 0.30 ? "snap-min" : "stay"),
+      // The sheet↔side-panel gate (ADR-050 §2), mirroring helpers.js LARGE_LAYOUT_QUERY on the stubbed viewport.
+      // setViewport stays the control knob.
+      isLargeLayout: () => ctx.innerWidth >= 700 && ctx.innerHeight >= 600,
     },
   };
   vm.createContext(ctx);
@@ -187,7 +181,7 @@ function makeEnv() {
     getActive: () => activeElement,
     /** Run + clear all queued requestAnimationFrame callbacks. */
     flushRaf: () => { rafCbs.splice(0).forEach((cb) => cb()); },
-    /** Override the stub viewport (drag is mobile-only, resize desktop-only). */
+    /** Override the stub viewport (drag is small-layout only, resize large-layout only). */
     setViewport: (w, h) => { ctx.innerWidth = w; ctx.innerHeight = h; },
     trapCalls,
     inertCalls,
@@ -574,9 +568,9 @@ test("attachSheetDrag: custom maxRatio caps the dragged height", () => {
   assert.equal(sheet.style.height, "400px");
 });
 
-test("attachSheetDrag: desktop (≥769px) pointerdown is a no-op", () => {
+test("attachSheetDrag: large layout (≥700×600) pointerdown is a no-op", () => {
   const env = makeEnv();
-  env.setViewport(1000, 800); // desktop
+  env.setViewport(1000, 800); // large layout
   let closed = 0;
   const handle = new env.StubEl();
   const sheet = new env.StubEl();
@@ -589,11 +583,11 @@ test("attachSheetDrag: desktop (≥769px) pointerdown is a no-op", () => {
   assert.equal(sheet.style.height, undefined); // never touched
 });
 
-// ── attachSheetResize (desktop side-panel width) ─────────────────────────────
+// ── attachSheetResize (large-layout side-panel width) ─────────────────────────────
 
-test("attachSheetResize: desktop drag-left widens within clamp", () => {
+test("attachSheetResize: large-layout drag-left widens within clamp", () => {
   const env = makeEnv();
-  env.setViewport(1200, 800); // desktop → cap 0.85·1200 = 1020
+  env.setViewport(1200, 800); // large layout → cap 0.85·1200 = 1020
   const handle = new env.StubEl();
   const sheet = new env.StubEl();
   sheet._baseW = 400;
@@ -615,9 +609,9 @@ test("attachSheetResize: width is clamped to the [minWidth, maxRatio·vw] band",
   assert.equal(sheet.style.width, "240px");
 });
 
-test("attachSheetResize: mobile (<769px) pointerdown is a no-op", () => {
+test("attachSheetResize: small layout (<700px wide) pointerdown is a no-op", () => {
   const env = makeEnv();
-  env.setViewport(400, 800); // mobile
+  env.setViewport(400, 800); // small layout
   const handle = new env.StubEl();
   const sheet = new env.StubEl();
   sheet._baseW = 400;

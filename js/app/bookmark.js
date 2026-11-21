@@ -52,7 +52,7 @@ import {
 // — see the call right after _bmSelectMode is declared below.
 import {
   initBookmarkGestures,
-  moveBookmarkItem, _setupDragHandle, _isMobileViewport,
+  moveBookmarkItem, _setupDragHandle,
   closeSwipedRow, resetSwipedRow, closeSwipedRowIfOutside,
 } from "./bookmark-gestures.js";
 
@@ -266,14 +266,14 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
   svg.setAttribute("aria-hidden", "true");
   _setBookmarkBtnIcon(svg, hasBookmark);
   btn.appendChild(svg);
-  // 모바일(탭 바 있음, ≤768px)에선 헤더 북마크가 '이 장 추가' 어포던스 전용 —
-  // 이미 북마크된 장(.has-bookmark)·장-목록(.is-list)에서는 CSS 가 숨기므로 보이는
-  // 건 미저장 장뿐이고, 탭하면 폴더 위치를 고르는 저장 모달(openSaveModal)을 연다.
-  // 그 외(데스크탑·가로 폰처럼 탭 바가 없는 >768px, 또는 장 맥락 없음)는 북마크 시트
-  // (드로어)를 연다 — 거기선 헤더가 유일한 북마크 진입점이라 상태 표시 겸 관리 창구다.
-  // 보임/숨김은 CSS 미디어 쿼리가 담당해 가로/세로 회전에도 자동으로 따라온다.
+  // 작은 화면(탭 바가 있다, ADR-050 §2)에서는 헤더 북마크가 '이 장 추가' 단추로만 쓰인다.
+  // 이미 북마크된 장(.has-bookmark)과 장 목록(.is-list)에서는 CSS가 숨기므로 보이는 것은
+  // 저장하지 않은 장뿐이고, 누르면 폴더 위치를 고르는 저장 모달(openSaveModal)을 연다.
+  // 큰 화면(탭 바가 없다)이나 장 맥락이 없을 때는 북마크 시트(드로어)를 연다. 거기서는 헤더가
+  // 유일한 북마크 진입점이라 상태를 보이고 북마크를 관리하는 창구다.
+  // 보임과 숨김은 CSS 미디어 쿼리가 맡아, 창 크기가 바뀌어도 함께 따라온다.
   btn.addEventListener("click", () => {
-    if (_isMobileViewport() && bookId && chapter != null) {
+    if (window.appHelpers.isSmallLayout() && bookId && chapter != null) {
       openSaveModal("chapter");
     } else {
       openBookmarkDrawer(bookId, chapter);
