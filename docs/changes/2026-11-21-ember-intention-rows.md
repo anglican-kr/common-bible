@@ -1,4 +1,5 @@
 ---
+pr: 632
 date: 2026-11-21
 branch: claude/lucid-hopper-7amh77
 title: "feat: 사계재는 전례일 검색에서 지향별 줄만 보이기"
