@@ -1047,31 +1047,38 @@ def test_christmas_weekday_is_found_by_its_name_on_screen(page):
     assert "다음 전례년 2026년 12월 31일 (목)" in page.inner_text(".lect-rows .cal-row-body")
 
 
-def test_ember_season_row_is_split_into_its_three_days(page):
-    """사계재의 계절 이름으로 찾으면 계절 줄이 수, 금, 토요일 세 줄이고, 줄마다 이번 전례년의 그날을 연다. 연도를 붙여도 해마다 세 날이고,
-    `사계재`로는 네 계절을 모두 찾는다(ADR-044 §3)."""
+def test_ember_days_are_found_only_as_their_intention_rows(page):
+    """사계재는 지향별 줄만 보인다. 계절 이름으로 찾으면 그 계절의 넷이고, 줄마다 이번 전례년에 그 지향을 지키는 하루를 연다. 연도를 붙여도
+    해마다 넷이고, `사계재`로는 네 계절의 열여섯이다. 절기 이름으로 찾아도 계절 이름의 줄은 없다(ADR-044 §3, 사용자 결정 2026-11-21)."""
+    intentions = ["성직자", "성직후보자", "수도자", "모든 신자"]
     _fix_today(page)
     _goto_search(page, "춘계재")
     _wait_days(page)
     titles = page.locator(".lect-rows .cal-row-title").all_inner_texts()
-    assert titles[:3] == ["춘계재 수요일", "춘계재 금요일", "춘계재 토요일"], titles
-    assert len(titles) == 7, "지향별 네 줄은 그대로다"
+    assert titles == [f"{who}의 성소를 위한 춘계재" for who in intentions], titles
+    # 2026 전례년의 춘계재는 2월 25, 27, 28일이다. 성직후보자의 날은 금요일이다
     row = page.locator(".lect-rows > li").nth(1)
     assert "2026년 2월 27일 (금)" in row.locator(".cal-row-meta").inner_text()
     assert "다음 전례년 2027년 2월 19일 (금)" in row.locator(".cal-row-body").inner_text()
     row.locator("a.cal-row").click()
     page.wait_for_function("() => location.pathname === '/lectionary/2026-02-27'", timeout=15_000)
-    page.wait_for_selector(".lect-day", timeout=15_000)
+    page.wait_for_selector(".lect-day:has-text('성직후보자의 성소를 위한 춘계재')", timeout=15_000)
 
     _goto_year_search(page, "2027 춘계재")
-    days = [label.split(", ")[0] for label in _row_labels(page) if label.startswith("춘계재")]
-    assert days == ["춘계재 수요일", "춘계재 금요일", "춘계재 토요일"], days
+    days = [label.split(", ")[0] for label in _row_labels(page)]
+    assert days == [f"{who}의 성소를 위한 춘계재" for who in intentions], days
 
-    # `사계재`는 네 계절을 함께 부르는 별칭이라 네 계절의 사흘, 열두 줄이다(ADR-037 §5)
+    # `사계재`는 네 계절을 함께 부르는 별칭이다(ADR-037 §5)
     _goto_search(page, "사계재", "&group=lectionary")
     _wait_days(page)
     titles = page.locator(".lect-rows .cal-row-title").all_inner_texts()
-    assert titles == [f"{season} {day}" for season in ["춘계재", "하계재", "추계재", "동계재"] for day in ["수요일", "금요일", "토요일"]], titles
+    assert titles == [f"{who}의 성소를 위한 {season}" for season in ["춘계재", "하계재", "추계재", "동계재"] for who in intentions], titles
+
+    # `대림`으로 찾으면 동계재의 사흘이 계절 이름의 줄 셋과 지향별 줄 넷으로 두 번 나왔다(사용자 보고 2026-11-21)
+    _goto_search(page, "대림", "&group=lectionary")
+    _wait_days(page)
+    titles = [t for t in page.locator(".lect-rows .cal-row-title").all_inner_texts() if t.endswith("동계재")]
+    assert titles == [f"{who}의 성소를 위한 동계재" for who in intentions], titles
 
 
 def test_row_shows_the_day_it_opens_and_a_link_to_the_next(page):

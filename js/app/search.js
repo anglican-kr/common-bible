@@ -448,19 +448,6 @@ const LECT_WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
 // 성탄 평일의 격자 전례일(엔진 `CHRISTMAS_WEEKDAY_PREFIX`). 독서는 날짜로 정해져 있고 이름은 주일을 기준으로 해마다 바뀌어, 줄 제목에는
 // 열리는 날의 이름(「성탄 1주 수요일」)을 적는다(ADR-044 §3).
 const LECT_CHRISTMAS_WEEKDAY = "grid:christmas-x-weekday-";
-// 사계재의 계절 줄을 나눈 날(워커의 `ember`, 검색 색인의 `days`, ADR-044 §3): 줄 제목에 붙이는 요일과 그 요일의 번호(0이 일요일).
-// 색인은 지금 수, 금, 토요일만 쓰지만 요일 일곱을 모두 둔다
-/** @type {Record<string, { name: string, weekday: number }>} */
-const LECT_EMBER_DAY = {
-  sun: { name: "일요일", weekday: 0 }, mon: { name: "월요일", weekday: 1 }, tue: { name: "화요일", weekday: 2 }, wed: { name: "수요일", weekday: 3 },
-  thu: { name: "목요일", weekday: 4 }, fri: { name: "금요일", weekday: 5 }, sat: { name: "토요일", weekday: 6 },
-};
-
-/** 사계재의 계절 줄을 나눈 날이면 그 요일(`LECT_EMBER_DAY`), 아니면 null. @param {any} item  LectItem */
-function lectEmberDayOf(item) {
-  return (item.ember && LECT_EMBER_DAY[item.ember]) || null;
-}
-
 /**
  * 줄이 여는 날(`open`, 이번 전례년의 날)과, 해에 따라 다른 독서를 읽는 줄이 그날이 지났을 때 다음에 읽는 날(`next`). `nextIds`는
  * 다음 링크의 슬러그다(엔진 `findReadingDay`). 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 `year`는 열리는 날의 해(`A`, `I` 등)이고,
@@ -846,8 +833,7 @@ function lectRowOf(item, labelOf, days = null, today = "") {
   const yearDay = item.yearDay || null;
   /** @type {KeptDay | null} */
   const open = yearDay || (days ? days.open : null);
-  const ember = lectEmberDayOf(item);
-  const title = open && open.obs.startsWith(LECT_CHRISTMAS_WEEKDAY) ? open.name : ember ? `${obs.name} ${ember.name}` : obs.name;
+  const title = open && open.obs.startsWith(LECT_CHRISTMAS_WEEKDAY) ? open.name : obs.name;
   /** @type {{ slot: string, text: string } | null} */
   let found = null;
   /** @type {string[]} */
@@ -932,10 +918,10 @@ function lectRowOf(item, labelOf, days = null, today = "") {
   const label = [title, found ? `${found.slot} ${found.text}` : null, ...colors.map((c) => c.name), ...said, ...saidLines]
     .filter(Boolean).join(", ");
   // 연도를 붙여 찾은 줄: 지키는 날은 그날부터 처음 지키는 날(곧 그날)을 고른 화면, 겹친 날은 그날의 기본 화면이다. 지역 축일은 날짜를
-  // 계산하기 전이면 다음 그날이다(엔진 없이 셀 수 있다). 사계재의 날은 보조 주소만으로는 요일을 모르므로 그날을 붙인다
+  // 계산하기 전이면 다음 그날이다(엔진 없이 셀 수 있다)
   const href = item.local ? localHref(item, open ? open.date : nextMonthDay(obs.date, today))
     : yearDay ? (yearDay.kind === "overlap" ? `/lectionary/${yearDay.date}` : lectHrefOf(lectSlugIds(item), yearDay.date))
-    : ember && open ? lectHrefOf(lectSlugIds(item), open.date) : lectSlugHref(item);
+    : lectSlugHref(item);
   return { title, href, bold, found, colors, meta, lines, label, nexts };
 }
 
@@ -1743,18 +1729,6 @@ async function lectDaysOf(mod, item, today, isStale = () => false) {
     return { open: localDayOf(mod, item, date), next: null, nextIds: [], year: null, cycles: [], nextYear };
   }
   const ids = lectSlugIds(item);
-  const ember = lectEmberDayOf(item);
-  if (ember) {
-    // 사계재의 날(ADR-044 §3): 이번 전례년과 다음 전례년에 그 계절을 지키는 날 가운데 그 요일이다. 이번 전례년에 그 요일이 없으면 다음
-    // 전례년의 그 요일을 연다
-    const days = await mod.findKeptDays(ids, today, ly.from, nextLy.to, isStale);
-    const onDay = (/** @type {KeptDay[]} */ list) => list.find((d) => lectWeekdayOf(d.date) === ember.weekday) || null;
-    const here = onDay(days.filter((d) => d.date <= ly.to));
-    const there = onDay(days.filter((d) => d.date >= nextLy.from));
-    const open = here || there;
-    if (!open) return null;
-    return { open, next: null, nextIds: ids, year: null, cycles: [], nextYear: here ? { date: there ? there.date : null } : null };
-  }
   const open = await mod.findReadingDay(ids, today, null, isStale);
   if (!open) return null;
   const year = item.hits ? "" : lectYearOf(item, open);
@@ -1891,10 +1865,7 @@ async function withYearRows(result, screen, isStale) {
   const found = lect.items;
   // 지역 축일은 해마다 같은 날짜라 엔진의 해마다의 표에 묻지 않는다(`localYearDayOf`)
   const engineItems = found.filter((/** @type {any} */ item) => !item.local);
-  // 사계재의 날은 그 요일의 날만 묻는다(ADR-044 §3)
-  const asks = engineItems.map((/** @type {any} */ item) => ({
-    ids: lectSlugIds(item), key: item.obs.key, weekday: lectEmberDayOf(item)?.weekday ?? null,
-  }));
+  const asks = engineItems.map((/** @type {any} */ item) => ({ ids: lectSlugIds(item), key: item.obs.key }));
   /** @type {Array<{ year: number, days: Array<any | null>, lunar: boolean }>} */
   const perYear = [];
   for (let y = lect.years.from; y <= lect.years.to; y++) {

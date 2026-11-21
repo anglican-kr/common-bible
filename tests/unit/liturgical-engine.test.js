@@ -2360,7 +2360,7 @@ test("지키는 날의 표: 전례년이 표의 끝을 넘어도 답을 낸다 �
   assert.ok((await e.findChristmasNames("9999-12-01")) instanceof Map);
 });
 
-test("findKeptDays: 구간 안에 지키는 날을 모두 날짜 차례로, 같은 날은 한 번(사계재의 날, ADR-044 §3)", async () => {
+test("findKeptDays: 구간 안에 지키는 날을 모두 날짜 차례로, 같은 날은 한 번(해마다 같은 독서 줄의 다음 전례년, ADR-044 §1)", async () => {
   const e = loadEngine(fakeFetch([]));
   await Promise.all([e.preloadCalendar(), e.preloadLectionary()]);
   const dates = async (ids, from, to, stale) => plain(await e.findKeptDays(ids, "2026-11-16", from, to, stale)).map((d) => d.date);
