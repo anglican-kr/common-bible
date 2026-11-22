@@ -1,10 +1,11 @@
 name: Sync data submodule
 
-# data 저장소의 build.yml 이 산출물을 main 에 푸시한 직후 호출하는
-# workflow_dispatch 를 받아, data 서브모듈 포인터를 최신 main 으로
-# 업데이트하고 sitemap 을 재생성한다.
+# data 저장소의 build.yml 이 산출물을 data 의 main 에 푸시한 직후 호출하는
+# workflow_dispatch 를 받아, data 서브모듈 포인터를 data 의 최신 main 으로
+# 업데이트하고 sitemap 을 재생성한다. 앱 쪽 대상은 dev 다(ADR-051) — 체크아웃도
+# PR 의 base 도 dev 로 고정해, 호출하는 쪽이 어느 ref 로 실행하든 dev 를 기준으로 본다.
 #
-# 브랜치 보호(2026-05-29 적용) 때문에 main 직접 push 가 거부된다.
+# 브랜치 보호(main 은 2026-05-29 적용, dev 는 ADR-051) 때문에 직접 push 가 거부된다.
 # 따라서 sync/data-<run_id> 토픽 브랜치로 push 한 뒤 PR 을 만들고,
 # Unit tests CI 통과 시 자동 squash 머지하도록 한다 (auto-merge).
 #
@@ -18,8 +19,8 @@ name: Sync data submodule
 #     pull_request 트리거를 발화하지 않아 Unit tests 가 실행되지 않으므로
 #     PAT 가 필수.
 #
-# main push 자체는 production 이 아님 (ADR-020: server 저장소의 deploy.sh
-# 가 별도 promote 단계). 따라서 자동 PR 머지도 안전.
+# dev 머지는 production 이 아님 (ADR-051: main 은 운영에 낼 때만 앞당기고,
+# server 저장소의 deploy.sh 가 별도 promote 단계). 따라서 자동 PR 머지도 안전.
 
 on:
   workflow_dispatch:
@@ -45,6 +46,7 @@ jobs:
           # PR 흐름용 PAT 로 체크아웃 — 이후 토픽 브랜치 push 가 pull_request
           # 트리거를 발화시켜 Unit tests CI 가 PR 에서 실행되도록 한다.
           token: ${{ secrets.SYNC_DATA_PR_PAT }}
+          ref: dev
           submodules: false
           fetch-depth: 0
 
@@ -137,7 +139,7 @@ jobs:
                       tests/unit/citations.data.test.js \
                       tests/unit/search-worker.data.test.js
 
-      # 앞 실행이 만든 자동 PR은 테스트를 기다리느라 아직 머지되지 않았을 수 있다. 그때 main은
+      # 앞 실행이 만든 자동 PR은 테스트를 기다리느라 아직 머지되지 않았을 수 있다. 그때 dev는
       # 옛 포인터라 바뀐 것이 있는 것처럼 보인다. 그래서 같은 포인터로 올리는 자동 PR이 이미
       # 열려 있으면 새로 만들지 않는다. 위의 동시 실행 제한과 함께 두어야, 두 실행이 동시에
       # 확인하다 둘 다 「없음」으로 보는 일이 없다. 포크에서 온 PR은 보지 않는다.
@@ -181,7 +183,7 @@ jobs:
           GH_TOKEN: ${{ secrets.SYNC_DATA_PR_PAT }}
         run: |
           gh pr create \
-            --base main \
+            --base dev \
             --head "$BRANCH" \
             --title 'data: 서브모듈 포인터 + sitemap 갱신' \
             --body 'data 저장소 build.yml 산출물 commit 직후 자동 생성된 PR. Unit tests 통과 시 자동 squash 머지.'

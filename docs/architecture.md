@@ -158,7 +158,7 @@ scripts/gen_manifests.py  ← 콘텐츠 해시 매니페스트 (ADR-021)
 - **운문 본문 형식**: 마크다운 블록 인용(`>`)으로 적는다. 절 안의 산문과 운문은 `segments` 배열(`type: "prose"|"poetry"`)로 나누고, 연(스탠자)은 절 사이의 `stanza_break: true`나 절 안 텍스트의 `\n\n`으로 나눈다. 단락은 `segments` 항목의 `paragraph_break: true`로 나눈다. 자세한 내용은 [ADR-006](decisions/006-poetry-source-format.md).
 - **교회력 데이터**: 교회력 정의 표가 「그날이 어떤 전례일인가」를 정하는 기준이며, 표에는 등급과 전례색이 있다. 전례독서와 본기도는 이름, 날짜, 절기 위치로 그 표에 조인되는 본문 표다. 독서와 본기도 파서는 전례일 키를 읽는 코드를 함께 쓴다([ADR-036](decisions/036-liturgical-calendar-data-model.md)과 [ADR-037](decisions/037-eucharist-lectionary-data-and-engine.md)). 이동 축일(temporal)의 규칙 문자열(`easter-46` 등)은 파서가 빌드할 때 구조화해 두므로 앱 엔진은 다시 파싱하지 않는다.
 
-**자동화**: 데이터 저장소 main에 파이프라인 입력이 push되면 `build.yml`이 파이프라인, 매니페스트, 전체 pytest를 실행해 산출물을 main에 커밋하고, 앱 저장소의 `sync-data.yml`을 실행하도록 요청한다. `sync-data.yml`은 서브모듈 포인터와 `sitemap.xml`을 올리고 실데이터 테스트를 실행한다. 통과하면 `sync/data-<run_id>` PR을 열고, Unit tests 검사가 끝난 뒤 자동으로 스쿼시 머지한다(버전은 올리지 않는다). 실데이터 테스트에는 교회력 설계서의 사실 블록과 대조하는 검사가 들어 있다. 데이터가 바뀌어 문서의 실측치와 달라지면 이 자동 PR은 만들어지지 않고, 문서를 함께 고친 앱 PR이 포인터를 올린다.
+**자동화**: 데이터 저장소 main에 파이프라인 입력이 push되면 `build.yml`이 파이프라인, 매니페스트, 전체 pytest를 실행해 산출물을 main에 커밋하고, 앱 저장소의 `sync-data.yml`을 실행하도록 요청한다. `sync-data.yml`은 서브모듈 포인터와 `sitemap.xml`을 올리고 실데이터 테스트를 실행한다. 통과하면 dev로 가는 `sync/data-<run_id>` PR을 열고, Unit tests 검사가 끝난 뒤 자동으로 스쿼시 머지한다(버전은 올리지 않는다). 그 포인터는 운영에 낼 때 main에 간다(ADR-051). 실데이터 테스트에는 교회력 설계서의 사실 블록과 대조하는 검사가 들어 있다. 데이터가 바뀌어 문서의 실측치와 달라지면 이 자동 PR은 만들어지지 않고, 문서를 함께 고친 앱 PR이 포인터를 올린다.
 
 자세한 실행 명령은 [README §데이터 파이프라인 실행](../README.md#데이터-파이프라인-실행).
 
@@ -454,7 +454,7 @@ npx tsc -p tsconfig.worker.json --noEmit
 | **전례 데이터 검증**                                                         | `data/tests/test_{psalter,canticles,lectionary,ordinal_weeks,calendar_tables,collects,commons}.py` 등 | 일부(원료 마크다운, 기사, 표를 읽는다) | ✅ (data 저장소) | 전례시편과 송가 DSL, 전례독서와 본기도 스키마, 교회력 정의 표의 조인과 사계재, 연중 주간 구간표 |
 | **E2E (Playwright)**                                                         | `tests/e2e/*.py`                             | ✅ (서버와 본문)                         | ❌ (로컬)        | 검색 UI, 라우팅, 클립보드, 설치 안내, 동기화 등의 회귀                                                                                         |
 
-유닛 테스트는 `node --test`만으로 돌고, `tests/unit/harness.js`가 자체 `vm` 모듈 컨텍스트를 만들어 전역 상태가 테스트 사이에 이어지는 일을 막는다. 의존성은 없다. 앱 저장소 CI(`.github/workflows/test.yml`의 「Unit tests」)는 Node 24로 유닛 테스트를 자동 실행하고, 같은 잡에서 타입 검사(`npm run typecheck`, §6)도 실행한다. 브랜치 보호의 필수 검사는 「Unit tests」와 「Change ledger」(`ledger.yml`. PR의 변경 원장)다. 실데이터가 있어야 실행되는 테스트(`*.data.test.js`, `sw.test.js`, `docs-data-consistency.test.js`)는 그 잡에서 건너뛰고, `engine-data.yml`(엔진이나 뷰 경로의 파일이 바뀐 main push, 또는 수동 실행)과 `sync-data.yml`(데이터 저장소가 실행을 요청한다)이 실행한다. 이 검사는 PR을 막지 않는다. 데이터 저장소에서는 `validate.yml`이 PR과 main push마다 `pytest tests/`(Level 1-3과 전례 데이터)를 실행하고, `build.yml`도 산출물을 만든 뒤 같은 테스트를 통과해야 커밋한다. 그 봇 커밋은 기본 `GITHUB_TOKEN`으로 push되어 다른 워크플로를 실행시키지 않으므로, 빌드된 산출물은 `build.yml`의 테스트 단계에서 확인한다(분할 후 ADR-020).
+유닛 테스트는 `node --test`만으로 돌고, `tests/unit/harness.js`가 자체 `vm` 모듈 컨텍스트를 만들어 전역 상태가 테스트 사이에 이어지는 일을 막는다. 의존성은 없다. 앱 저장소 CI(`.github/workflows/test.yml`의 「Unit tests」)는 Node 24로 유닛 테스트를 자동 실행하고, 같은 잡에서 타입 검사(`npm run typecheck`, §6)도 실행한다. 브랜치 보호의 필수 검사는 「Unit tests」와 「Change ledger」(`ledger.yml`. PR의 변경 원장)다. 실데이터가 있어야 실행되는 테스트(`*.data.test.js`, `sw.test.js`, `docs-data-consistency.test.js`)는 그 잡에서 건너뛰고, `engine-data.yml`(엔진이나 뷰 경로의 파일이 바뀐 dev push, 또는 수동 실행)과 `sync-data.yml`(데이터 저장소가 실행을 요청한다)이 실행한다. 이 검사는 PR을 막지 않는다. 데이터 저장소에서는 `validate.yml`이 PR과 main push마다 `pytest tests/`(Level 1-3과 전례 데이터)를 실행하고, `build.yml`도 산출물을 만든 뒤 같은 테스트를 통과해야 커밋한다. 그 봇 커밋은 기본 `GITHUB_TOKEN`으로 push되어 다른 워크플로를 실행시키지 않으므로, 빌드된 산출물은 `build.yml`의 테스트 단계에서 확인한다(분할 후 ADR-020).
 
 E2E는 의도적으로 CI에서 제외한다. 본문 텍스트가 있는 환경에서만 의미가 있고, 시각 회귀는 사람이 봐야 가장 정확하기 때문이다.
 
@@ -479,11 +479,11 @@ python scripts/release.py patch                       # 또는 minor / major / X
 
 `release.py`는 `version.json`과 `sw-version.js`의 `APP_VERSION`을 함께 갱신하고 자동으로 커밋한다. 한쪽만 바뀌어 서비스 워커가 새 셸을 가져오지 못하는 일을 막기 위해서다. `DATA_CACHE`와 `AUDIO_CACHE`는 ADR-021 이후 이름이 고정이다. 콘텐츠 무효화는 `common-bible-data` 저장소 CI가 `bible-manifest.json`과 `audio-manifest.json`을 자동으로 갱신하고, `js/manifest-sync.js`가 앱을 부팅할 때 항목 단위로 처리한다.
 
-`deploy.sh`는 `bible-{version}-{shortsha}` 형식으로 디렉터리 이름을 붙인다. 그래서 `dev`에서 같은 버전을 여러 번 배포해도 덮어쓰지 않고, `promote`할 때 `dev`에서 검증한 디렉터리를 운영 심볼릭 링크가 그대로 가리킨다. `git diff --quiet` 검사는 커밋하지 않은 변경이 있는 작업 트리에 `-dirty` 접미사를 붙여, 실수로 한 배포를 추적할 수 있게 한다.
+`deploy.sh`는 `bible-{version}-{shortsha}` 형식으로 디렉터리 이름을 붙인다. 그래서 `dev`에서 같은 버전을 여러 번 배포해도 덮어쓰지 않고, `promote`할 때 `dev`에서 검증한 디렉터리를 운영 심볼릭 링크가 그대로 가리킨다. 빌드하기 전에 origin을 새로 받아, `dev`는 `origin/dev`에 들어 있는 커밋만, `prod`는 `origin/main`과 같은 커밋만 받고, 커밋하지 않은 변경이나 배포 목록 경로 아래에 git이 추적하지 않는 파일이 있으면 멈춘다. `promote`는 dev가 가리키는 빌드의 커밋이 `origin/main`과 같을 때만 운영을 바꾼다(ADR-051 §4).
 
 링크를 교체하거나 `promote`, `rollback`을 실행한 직후마다 자동 검증 9종이 실행된다. 검증은 `/version.json`의 버전 일치, `/sw.js`의 200과 Content-Type, `/index.html`의 200과 ETag, `/data/books.json`, `/sw-version.js`, 매니페스트 2종, 교회력 묶음 하나와 전례독서 묶음 하나(`lectionary/sanctoral.json`, `lectionary/eucharist-readings.json`)의 200이다. 실패하면 수동 롤백 안내를 출력한다. zip 파일에 넣을 경로는 `scripts/deploy-manifest.txt`가 정하고, 목록의 항목이 없으면 `build-deploy.sh`가 멈춘다. 목록에 없는 새 경로는 검사되지 않으므로 데이터 디렉터리를 더하면 목록도 고친다. 보호 심볼릭 링크 4개(`dev`, `bible`, `dev-previous`, `bible-previous`)와 `BUILD_RETENTION`(기본 3)개를 넘는 옛 빌드 디렉터리는 자동으로, 또는 확인한 뒤 정리한다. 자세한 흐름은 `common-bible-server/scripts/deploy.sh`의 헤더 주석에 있다.
 
-릴리스 순서의 기준은 `CLAUDE.md` 「데이터 수정과 릴리스」 4번이다. `release.py patch`를 실행하면 push, 태그, GitHub Release까지 이어지고, 그다음 `deploy.sh dev`와 `deploy.sh promote`를 차례로 실행한다. main이 보호 브랜치라 버전 커밋은 `release/X.Y.Z` 브랜치에서 PR로 들어간다(예: #286. 원장이 릴리스 노트 초안이다). 변경 목록은 `scripts/changelog.py`가 만든다(`--generate-notes`를 대신한다).
+릴리스 순서의 기준은 `CLAUDE.md` 「데이터 수정과 릴리스」 4번이다. `release.py patch`는 버전 커밋까지만 만들고, 그 커밋은 릴리스 PR로 dev에 들어간다(원장이 릴리스 노트 초안이다). dev의 그 커밋을 `deploy.sh dev`로 확인한 뒤 main을 그 커밋으로 앞당기고, 태그와 GitHub Release를 만들고 `deploy.sh promote`를 실행한다(ADR-051 §3). 변경 목록은 `scripts/changelog.py`가 만든다(`--generate-notes`를 대신한다).
 
 업데이트 토스트 흐름:
 
@@ -589,6 +589,7 @@ Phase 1(성경 읽기 PWA)은 완성됐고, Phase 3(교회력)은 일부 구현�
 | [048](decisions/048-mobile-search-input-on-top.md) | 휴대폰의 검색 입력창은 검색 화면 위쪽에 둔다(ADR-030 §3의 하단 입력 모핑을 대체). 검색 원형은 검색 화면이 아닌 곳에서는 검색 화면으로 가기만 하고, 검색 화면에서는 입력창으로 포커스를 옮긴다. 키보드 내리기 단추는 없고, 검색어 지우기는 키보드를 내리고 깔때기로 포커스를 옮긴다. Esc는 키보드만 내린다 **(구현 완료 2026-11-20)** |
 | [049](decisions/049-search-book-pills.md) | 고른 책은 검색창 아래의 알약으로 보인다(ADR-033의 검색창 안 칩을 대체). 결과 화면에서는 책 알약이 결과 묶음의 알약을 대신하고, 알약마다 결과 수를 적으며 누르면 그 책의 결과만 보인다. 두 권 이상이면 「전체」를 둔다 |
 | [050](decisions/050-layout-tiers.md) | 화면 레이아웃은 「작은 화면」과 「큰 화면」 둘이고, 앱 화면의 폭이 700px 이상이고 높이가 600px 이상이면 큰 화면이다(ADR-029 §1을 대체). 기기 종류와 마우스는 보지 않으며, 화면 전체를 쓰는 iPad는 어느 방향이든 큰 화면이다. 각 레이아웃의 앞으로의 구성은 나중에 정하고, 화면 안의 구성 요소는 받은 칸의 크기로 정한다 |
+| [051](decisions/051-dev-and-main-branches.md) | 작업은 `dev` 브랜치에 모으고 `main`은 운영에 낸 코드만 담는다. 운영에 낼 때 dev에서 main으로 PR을 열어 검사를 통과시키고 main을 그 커밋으로 앞당긴다(머지 커밋과 squash를 쓰지 않는다). `deploy.sh`는 dev 배포에 dev의 커밋만, 운영 배포에 main과 같은 커밋만 받는다 |
 
 026은 main에 없다. 1.6.0 노트와 캘린더 설계는 개발을 멈춘 `release/1.6.0` 브랜치에만 있다. 데이터 저장소의 ADR(002, 003, 006, 039 전례시편 DSL)은 그 저장소의 `docs/decisions/`에 있다.
 
