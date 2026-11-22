@@ -9,11 +9,11 @@ C-/X-/I-/Q/R id · 픽스처 id · PR 번호를 뽑아 문서별·합집합으�
 구해(`git ls-tree`) 아직 없는 리비전에서는 비어 있는 것으로 본다 — 사실을 그리로 **옮기는** 변경이 사라짐으로
 잡히지 않게.
 
-    python3 scripts/docs_facts_snapshot.py --rev main            # 스냅샷 JSON 을 stdout 으로
-    python3 scripts/docs_facts_snapshot.py --rev main -o base.json
-    python3 scripts/docs_facts_snapshot.py --diff main HEAD      # 합집합 비교 — 사라진 토큰 0 이어야 통과
-    python3 scripts/docs_facts_snapshot.py --diff main WORKTREE  # 커밋 전 작업 트리와 비교
-    python3 scripts/docs_facts_snapshot.py --diff main HEAD --moved 04.28=2025-04-28 --allow-new '^§1\\.4$'
+    python3 scripts/docs_facts_snapshot.py --rev origin/dev            # 스냅샷 JSON 을 stdout 으로
+    python3 scripts/docs_facts_snapshot.py --rev origin/dev -o base.json
+    python3 scripts/docs_facts_snapshot.py --diff origin/dev HEAD      # 합집합 비교 — 사라진 토큰 0 이어야 통과
+    python3 scripts/docs_facts_snapshot.py --diff origin/dev WORKTREE  # 커밋 전 작업 트리와 비교
+    python3 scripts/docs_facts_snapshot.py --diff origin/dev HEAD --moved 04.28=2025-04-28 --allow-new '^§1\\.4$'
 
 `--diff A B` 의 판정(종료 코드 1 = 실패):
   - A 에 있고 B 에 없는 토큰(**사라짐**)은 0 이어야 한다. 예외는 `--ignore <token>` 로 열거하고
@@ -22,13 +22,13 @@ C-/X-/I-/Q/R id · 픽스처 id · PR 번호를 뽑아 문서별·합집합으�
     `--allow-new <regex>` 로 열거한다.
   - 카운트 감소는 정상이다(중복 제거가 목적) — 보고만 한다.
 
-리비전은 git rev(`main`, `HEAD`, 해시) 또는 `WORKTREE`(작업 트리 파일 그대로). stdlib 만 쓴다.
+리비전은 git rev(`origin/dev`, `HEAD`, 해시) 또는 `WORKTREE`(작업 트리 파일 그대로). stdlib 만 쓴다.
 
 교회력 밖의 문서(정리 층 · 주제 문서 · ADR · CLAUDE.md)를 옮기거나 고쳐 쓸 때는 옵션을 더한다
 (2026-10-22 docs 재구성). 옵션이 없으면 위의 동작 그대로다.
 
-    python3 scripts/docs_facts_snapshot.py --diff main WORKTREE --docs 'docs/*.md' --docs CLAUDE.md --kinds general
-    python3 scripts/docs_facts_snapshot.py --diff main WORKTREE --docs 'docs/*.md' --kinds general --strict-counts \\
+    python3 scripts/docs_facts_snapshot.py --diff origin/dev WORKTREE --docs 'docs/*.md' --docs CLAUDE.md --kinds general
+    python3 scripts/docs_facts_snapshot.py --diff origin/dev WORKTREE --docs 'docs/*.md' --kinds general --strict-counts \\
         --from docs/status.md --from docs/known-issues.md --into 'docs/*.md'
 
   - `--docs GLOB`(여러 번): 대상 문서를 리비전마다 glob 으로 펼친다(fnmatch — `*` 는 `/` 도 넘는다). 양쪽을

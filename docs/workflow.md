@@ -21,7 +21,7 @@
 - 원장 커밋의 제목에도 무엇의 원장인지 쓴다. 「docs: 저장 실패 안내 원장」은 제목만으로 내용을 알 수 없다. 해소한 이슈 번호를 넣어 「docs: known-issues §15.4 해소 기록과 원장」처럼 쓰고, 원장에 적은 것을 본문에 목록으로 붙인다(사용자 교정, 2026-10-26). 머지된 원장의 사실과 다른 문장을 바로잡는 원장이면 제목에 「바로잡음」을 붙인다(「docs: 주석 툴팁 상태 표시줄 높이 고침의 원장과 known-issues §50 바로잡음」, 사용자 교정 2026-11-07).
 - 진행 중인 작업이 GitHub 이슈와 이어져 있으면 커밋 제목 끝에 `(#NNN)`을 붙인다. 다른 저장소의 이슈는 `anglican-kr/common-bible#134`처럼 쓴다. 이슈를 닫는 `Closes #134`는 본문에 따로 적는다.
 - GitHub 작업은 REST(`gh api repos/...`)로 한다. GraphQL을 쓰는 `gh pr edit`가 projectCards 오류를 냈다(2026-07-06 PR #301, 사용자 지시). PR 생성 명령은 원장 훅이 검사하는 표준 절차라 그대로 쓰고, 오류가 나면 REST로 바꾼다.
-- 필수 검사가 「Expected」로 멈춰 머지가 막히면, CI를 다시 돌리기 전에 PR이 main과 충돌하는지 본다. 충돌이면 GitHub가 머지 ref(`refs/pull/<N>/merge`)를 만들지 못해 워크플로가 아예 돌지 않는다. `gh api repos/anglican-kr/common-bible/pulls/<N> --jq .mergeable_state`가 `dirty`이거나 head에 `github-actions` check-suite가 없으면 이 경우다. 해법은 충돌을 해결하는 것이다. 예전에는 `git rebase origin/main` 뒤 force push로 해결했는데, force push는 CLAUDE.md가 금지하므로 실행 전에 사용자에게 묻는다. squash 머지라면 `git merge origin/main`으로 해결해도 결과는 같다.
+- 필수 검사가 「Expected」로 멈춰 머지가 막히면, CI를 다시 돌리기 전에 PR이 기준 브랜치(dev)와 충돌하는지 본다. 충돌이면 GitHub가 머지 ref(`refs/pull/<N>/merge`)를 만들지 못해 워크플로가 아예 돌지 않는다. `gh api repos/anglican-kr/common-bible/pulls/<N> --jq .mergeable_state`가 `dirty`이거나 head에 `github-actions` check-suite가 없으면 이 경우다. 해법은 충돌을 해결하는 것이다. 예전에는 `git rebase origin/main` 뒤 force push로 해결했는데, force push는 CLAUDE.md가 금지하므로 실행 전에 사용자에게 묻는다. squash 머지라면 `git merge origin/dev`로 해결해도 결과는 같다.
 - **초안(draft) PR은 머지되지 않는다.** 머지 API가 「Pull Request is still a draft」(405)로 거절하면 그 PR은 초안이다. `gh pr ready <N>`으로 검토할 수 있는 상태로 바꾼 뒤 다시 머지한다. 문장 교정 PR이 초안으로 열린 적이 여러 번 있다(#448, #450, #453, #455). 그래서 스킬(`.claude/skills/prose-batch/SKILL.md`)에 초안이 아닌 PR로 열라고 적었다(사용자 결정 2026-10-31, #455).
 
 ## 리뷰
@@ -41,6 +41,7 @@
 - 태그는 annotated로 만들고(`git tag -a 1.0.x -m "..."`), 이름에 `v`를 붙이지 않는다(1.0.5부터). 메시지에 그 버전의 주요 변경을 적고 `git push origin <태그>`로 올린다. 태그 1.6.4와 1.5.12는 lightweight로 만들어져 이 규칙과 어긋난다.
 - 릴리스 PR(`chore: X.Y.Z 릴리스`)의 본문에는 둘을 함께 채운다. `python scripts/changelog.py <이전 태그> HEAD`의 출력을 그대로 옮긴 「변경 사항」(앱 PR과 본문 데이터 PR을 나눈 형식)과, 그것을 일상 언어로 다듬은 릴리스 노트 초안이다(`writing.md` 「릴리스 노트」). 초안은 머지 뒤 `gh release create <태그> --notes`에 그대로 쓸 수 있게 완성형으로 쓴다.
 - 배포 순서는 CLAUDE.md 「데이터 수정과 릴리스」에 있다. 배포 시점은 사용자가 정한다.
+- 운영에 낼 때는 dev에서 main으로 PR을 열어 검사만 통과시키고, main을 그 커밋으로 앞당긴다(ADR-051 §3). 이 PR은 머지 단추로 머지하지 않는다. squash 머지는 main에 새 커밋을 만들어 dev와 갈라지게 한다. 태그는 main을 앞당긴 뒤 그 커밋에 단다. 그래서 태그, main, dev.anglican.kr에서 확인한 빌드의 커밋이 모두 같다.
 
 ## 도구와 훅
 
@@ -51,15 +52,15 @@
   - `generate_splash.py`: iOS 스플래시 이미지를 만든다(ADR-007).
   - `lock_merged_ledgers.sh`: 머지된 원장을 로컬에서 읽기 전용으로 잠근다. `npm test` 앞과 PR 생성 뒤에 자동으로 돌고, 클론마다 다시 설정해야 한다.
   - `pr_body.sh`: 원장에서 frontmatter를 뺀 PR 본문을 만든다(pitfalls §30).
-  - `docs_facts_snapshot.py`: 문서의 사실 토큰을 리비전 사이에서 견준다. 기본은 교회력 설계 문서 다섯과 보관 문서, 픽스처이고(`--diff main HEAD`), 다른 문서는 `--docs`와 `--kinds general`, 글자 그대로 옮긴 줄은 `--from`과 `--into`로 검증한다. 문서를 옮기거나 고쳐 쓴 PR의 「사실 변경 0」 증명에 쓴다.
+  - `docs_facts_snapshot.py`: 문서의 사실 토큰을 리비전 사이에서 견준다. 기본은 교회력 설계 문서 다섯과 보관 문서, 픽스처이고(`--diff origin/dev HEAD`), 다른 문서는 `--docs`와 `--kinds general`, 글자 그대로 옮긴 줄은 `--from`과 `--into`로 검증한다. 문서를 옮기거나 고쳐 쓴 PR의 「사실 변경 0」 증명에 쓴다.
 - `tools/`: 개발자용 보조 도구다. 앱은 쓰지 않는다.
   - `booklet/`: 「전례독서」 책자 PDF와 엔진을 대조한다. pypdf로 본문을 추출하는 코드, 2027년 책자 형식의 파서, 엔진 결과를 파일로 내는 코드, 대조 보고서가 있다(README).
   - `csp/`: 릴리스 전에 주요 화면을 실제 브라우저로 돌며 콘솔의 CSP 위반을 모은다(README).
   - `prose/`: 문장 교정 도구다. `prose.py lint`는 문서와 코드 주석에서 기계로 찾을 수 있는 글쓰기 규칙 위반을 세고, `prose.py same-code`는 주석과 문서 말고 바뀐 코드가 없는지 본다(README). 교정할 파일의 순서와 상태는 `progress.md`에 있다.
 - CI(`.github/workflows/`)
-  - `test.yml`: 필수 검사 「Unit tests」. Node 24로 `node --test tests/unit/*.test.js`와 `npm run typecheck`를 돌린다(ADR-012, 013). `pull_request` 이벤트로 실행된다.
+  - `test.yml`: 필수 검사 「Unit tests」. Node 24로 `node --test tests/unit/*.test.js`와 `npm run typecheck`를 돌린다(ADR-012, 013). `pull_request` 이벤트로 실행되고, dev에 머지된 커밋에서 한 번 더 실행된다.
   - `prose.yml`: 문장 검사. PR이 고친 줄만 보고 경고만 낸다. 필수 검사가 아니다(`tools/prose/README.md`).
-  - `ledger.yml`: 필수 검사 「Change ledger」. PR에 새 원장이 있는지 보고, 머지된 원장의 변경을 막는다. `sync/` 자동 PR은 면제한다.
+  - `ledger.yml`: 필수 검사 「Change ledger」. dev나 main으로 가는 PR에 새 원장이 있는지 보고, 머지된 원장의 변경을 막는다. `sync/` 자동 PR은 면제한다. dev에서 main으로 가는 PR(운영 반영)은 새 원장을 요구하지 않고 머지된 원장을 고쳤는지만 본다. 원장은 작업 PR이 dev에 이미 넣었고, 데이터 자동 PR만 모아 운영에 낼 때는 새 원장이 없다.
 - Claude Code 훅(`.claude/hooks/`)
   - `typecheck-js.sh`: JS를 고친 뒤 tsc를 돌린다. 여러 파일을 고치는 도중의 오류 보고는 정상이니, 끝에서 `npm run typecheck`를 다시 본다.
   - `verify-on-stop.sh`: 턴을 끝낼 때 유닛 테스트를 돌린다. JS가 바뀌지 않았으면 돌지 않는다.
@@ -67,7 +68,8 @@
   - `pre-pr-ledger.sh`, `post-pr-ledger.sh`: PR 생성 전의 원장 게이트와, 생성 뒤 원장에 `pr: N`을 적는 일. 다른 저장소에 여는 PR(`--repo`, `-R`로 이 저장소가 아닌 곳을 가리키는 경우)은 검사하지 않는다(2026-10-24). data 저장소에는 원장이 없다.
     - 원장을 처음 쓸 때는 `pr:` 줄을 두지 않는다. 훅이 `^pr: `를 찾지 못하면 `date:` 앞에 넣는다. 값 없이 `pr:`만 두면 이 글자와 맞지 않아 줄이 둘이 된다(2026-10-31).
   - `pre-commit-ledger.sh`: 머지된 원장을 고치는 커밋을 막는다.
-  - 원장 훅 셋은 훅 입력의 `cwd`(세션의 셸 위치)로 저장소를 찾는다. 작업 폴더가 세션 폴더 밖(`~/projects/worktrees/`)에 있으면 셸 위치가 명령마다 원래 폴더로 돌아가므로, 훅은 작업 폴더가 아니라 원래 폴더를 검사한다. 그래서 작업 폴더에서 PR 생성 명령을 실행하면 훅이 「main 에서는 PR 을 만들 수 없습니다」로 막고, 커밋 검사는 원래 폴더의 스테이지를 본다. 머지된 원장을 고친 커밋은 CI `Change ledger`가 다시 잡는다(2026-11-02, PR #462). 작업 폴더를 세션 폴더 안(`.claude/worktrees/`)에 두던 2026-10-31 전에는 셸 위치가 작업 폴더에 남아 그 폴더를 검사했다. 훅 파일 자체는 세션을 시작한 폴더의 것이 실행되므로, 훅을 고치면 그 폴더가 새 main을 받은 뒤에 적용된다(2026-10-26).
+  - 원장 훅 셋은 훅 입력의 `cwd`(세션의 셸 위치)로 저장소를 찾는다. 작업 폴더가 세션 폴더 밖(`~/projects/worktrees/`)에 있으면 셸 위치가 명령마다 원래 폴더로 돌아가므로, 훅은 작업 폴더가 아니라 원래 폴더를 검사한다. 그래서 작업 폴더에서 PR 생성 명령을 실행하면 훅이 「main 이나 dev 에서는 PR 을 만들 수 없습니다」로 막고, 커밋 검사는 원래 폴더의 스테이지를 본다. 머지된 원장을 고친 커밋은 CI `Change ledger`가 다시 잡는다(2026-11-02, PR #462). 작업 폴더를 세션 폴더 안(`.claude/worktrees/`)에 두던 2026-10-31 전에는 셸 위치가 작업 폴더에 남아 그 폴더를 검사했다. 훅 파일 자체는 세션을 시작한 폴더의 것이 실행되므로, 훅을 고치면 그 폴더가 새 dev를 받은 뒤에 적용된다(2026-10-26. 2026-11-22까지는 main).
+  - 원장 훅과 `lock_merged_ledgers.sh`는 `origin/dev`를 기준 브랜치로 본다. `origin/dev`가 없는 클론에서는 `origin/main`, 그다음 로컬 `main`을 본다(ADR-051).
 - Claude Code 스킬(`.claude/skills/`)
   - `prose-batch/`: 문장 교정 반복 실행의 한 번. 열린 교정 PR의 검토 의견을 반영하거나, 진행 목록의 다음 묶음을 교정해 PR을 연다.
 
@@ -85,8 +87,8 @@
   - **`git submodule update data`**: `data/`를 앱 커밋에 기록된 데이터 커밋으로 맞추는 명령이다. 최신 데이터를 받는 명령이 아니다. 사용자는 원래 폴더에서 `git pull` 뒤 `git status`에 `data`가 변경으로 보일 때 실행한다(`git pull --recurse-submodules`면 따로 실행하지 않아도 된다). 작업 폴더에서는 실행하지 않는다. 새 데이터로 시험하려고 `data/`를 옮겨 둔 동안 실행하면 옛 커밋으로 되돌아가 실데이터 시험이 실패한다(2026-11-07).
   - **e2e 서버**: 8080에서는 원래 폴더의 서버가 실행 중일 수 있다(`readlink /proc/<pid>/cwd`로 어느 폴더의 서버인지 본다). 작업 폴더의 서버는 다른 포트에 pyenv의 Python 3.14로 띄운다(`~/.pyenv/versions/3.14.6/bin/python scripts/serve.py 8091`). 시스템 `python3`(3.13)은 255자가 넘는 경로에서 `Path.exists()`가 예외를 내서, 긴 주소를 여는 e2e가 실패한다.
   - **e2e 사본**: e2e 테스트는 파일마다 주소 `localhost:8080`을 적어 두었다. 그래서 `tests/e2e`를 임시 폴더에 복사하고 포트만 바꿔 돌린다(`sed -i 's/localhost:8080/localhost:8091/' <임시>/x/e2e/*.py`). 반절 표(`half-verses.json`)를 읽는 `test_lectionary_view.py`는 테스트 파일에서 두 단계 위 폴더의 `data/`를 읽는다. 그래서 그 자리에 작업 폴더의 `data`로 가는 링크를 둔다(`<임시>/x/e2e/`에 복사했으면 `<임시>/data`).
-  - **PR 열기**: 작업 폴더에서는 원장 훅이 PR 생성 명령을 막는다(위 「Claude Code 훅」). 훅이 보는 조건을 작업 폴더에서 직접 확인한다. 원장을 커밋했는지, main에 없는 새 파일인지, `title:`과 「요약」이 있는지, 코드가 바뀐 PR이면 「갱신한 문서」에 항목이 있는지다. 그다음 REST로 연다(`gh api -X POST repos/anglican-kr/common-bible/pulls -f title=… -f head=<브랜치> -f base=main -F body=@<본문 파일>`). 본문 파일은 `bash scripts/pr_body.sh <원장>`의 출력에 Claude Code 표시 줄을 붙여 만든다. 훅이 하던 대로 원장의 `date:` 줄 위에 `pr: N`을 직접 적고 커밋해 push한다(2026-11-02, PR #462).
-- **쌓은 브랜치의 squash 메시지**: 아직 머지하지 않은 PR의 브랜치 위에서 새 브랜치를 시작했는데 앞 PR이 squash로 머지되면, 앞 PR의 원래 커밋은 main의 조상이 아니다. 그래서 CLAUDE.md 「작업 표준 흐름」의 `git log --no-merges origin/main..<브랜치>`가 앞 PR의 커밋까지 모은다. 이때는 앞 PR 브랜치의 마지막 커밋부터 이 브랜치의 줄기만 모은다(`git log --reverse --first-parent --no-merges --format='* %s%n%n%b' <앞 PR의 마지막 커밋>..<브랜치> | cat -s`). `--first-parent`를 빼면 main을 합친 커밋을 거쳐 들어온 다른 PR의 커밋까지 모인다(2026-11-08, PR #524).
+  - **PR 열기**: 작업 폴더에서는 원장 훅이 PR 생성 명령을 막는다(위 「Claude Code 훅」). 훅이 보는 조건을 작업 폴더에서 직접 확인한다. 원장을 커밋했는지, dev에 없는 새 파일인지, `title:`과 「요약」이 있는지, 코드가 바뀐 PR이면 「갱신한 문서」에 항목이 있는지다. 그다음 REST로 연다(`gh api -X POST repos/anglican-kr/common-bible/pulls -f title=… -f head=<브랜치> -f base=dev -F body=@<본문 파일>`). 본문 파일은 `bash scripts/pr_body.sh <원장>`의 출력에 Claude Code 표시 줄을 붙여 만든다. 훅이 하던 대로 원장의 `date:` 줄 위에 `pr: N`을 직접 적고 커밋해 push한다(2026-11-02, PR #462).
+- **쌓은 브랜치의 squash 메시지**: 아직 머지하지 않은 PR의 브랜치 위에서 새 브랜치를 시작했는데 앞 PR이 squash로 머지되면, 앞 PR의 원래 커밋은 dev의 조상이 아니다. 그래서 CLAUDE.md 「작업 표준 흐름」의 `git log --no-merges origin/dev..<브랜치>`가 앞 PR의 커밋까지 모은다. 이때는 앞 PR 브랜치의 마지막 커밋부터 이 브랜치의 줄기만 모은다(`git log --reverse --first-parent --no-merges --format='* %s%n%n%b' <앞 PR의 마지막 커밋>..<브랜치> | cat -s`). `--first-parent`를 빼면 dev를 합친 커밋을 거쳐 들어온 다른 PR의 커밋까지 모인다(2026-11-08, PR #524. 그때는 main).
 - **data 저장소** 작업은 별도 클론(`~/projects/common-bible-data`)에서 한다. 앱의 `data/` 서브모듈 안에서 커밋하지 않는다. 그 저장소에는 원장이 없고 main이 보호되지 않는다. 서브모듈 운영은 README 「git 서브모듈 운영」.
 - **data 저장소의 파이프라인 코드(`src/**`)를 바꾼 PR은 다시 만든 산출물과 `bible-manifest.json`도 올린다**(2026-11-07, data#61). 그 저장소의 `pipeline.yml`이 PR에서 파이프라인을 돌려 커밋된 산출물(`bible/`, `search-*.json` 등)과 비교하고, 이어서 `gen_manifests.py --check`로 매니페스트의 해시를 비교한다. 산출물만 올리면 매니페스트가 이어서 걸린다. 바꾼 단계를 돌리고(`python src/search_indexer.py`) `python scripts/gen_manifests.py`를 돌려 둘 다 커밋한다. 입력(`source/*.md`)만 고친 PR은 머지 뒤 CI가 채우므로 drift가 빨개도 정상이다(data 저장소 README 「자동 빌드」).
 - **앱 `sync-data.yml`의 실패**는 대개 설계서의 사실 블록 대조 때문이다. 데이터가 문서의 실측치를 바꾸면 실패한다(2026-10-12, 10-13, 10-15).

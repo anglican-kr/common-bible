@@ -1,12 +1,14 @@
 name: Tests
 
 # Trigger philosophy: avoid running the same workflow twice when a feature
-# branch has an open PR. `push` is restricted to `main` (post-merge sanity),
+# branch has an open PR. `push` is restricted to `dev` (post-merge sanity on
+# the squash commit; `main` only fast-forwards to commits already tested on
+# dev, ADR-051),
 # while every PR run goes through `pull_request`. Branches without a PR
 # don't run CI here — open the PR to get coverage.
 on:
   push:
-    branches: [main]
+    branches: [dev]
   pull_request:
     branches: ["**"]
 
