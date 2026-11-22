@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PreToolUse(Bash) hook — 머지된 변경 원장(docs/changes/) 불변 게이트.
-# `git commit` 을 가로채, base(origin/main, 없으면 main)에 이미 있는 원장 파일(README.md 제외)에
+# `git commit` 을 가로채, base(origin/dev, 없으면 origin/main, 그다음 main — ADR-051)에 이미 있는 원장 파일(README.md 제외)에
 # 손댄 채 커밋되려 하면 permissionDecision=deny 로 막는다. 그 외 명령은 no-op.
 # 규약(docs/changes/README.md「규칙」): 머지 후에는 고치지 않는다 — 사실이 바뀌면 새 변경의 원장에 적는다.
 # 짝: .github/workflows/ledger.yml 의 같은 검사(PR diff 기준 — 터미널에서 만든 커밋·PR 까지 잡는다).
@@ -35,9 +35,10 @@ deny() {
   exit 0
 }
 
-# base: origin/main 이 있으면 그것, 없으면 main. 둘 다 없으면 판정할 기준이 없다 — 통과.
+# base: origin/dev(ADR-051), 없으면 origin/main, 그다음 main. 모두 없으면 판정할 기준이 없다 — 통과.
 base=
-if git rev-parse -q --verify origin/main >/dev/null 2>&1; then base=origin/main
+if git rev-parse -q --verify origin/dev >/dev/null 2>&1; then base=origin/dev
+elif git rev-parse -q --verify origin/main >/dev/null 2>&1; then base=origin/main
 elif git rev-parse -q --verify main >/dev/null 2>&1; then base=main
 else exit 0; fi
 

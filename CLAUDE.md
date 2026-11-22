@@ -84,21 +84,22 @@
 
 ## 브랜치 보호와 작업 흐름
 
-`main`은 보호 브랜치다(2026-05-29 적용). 모든 변경은 토픽 브랜치, PR, 머지 순서를 따른다.
+작업은 `dev`에 모으고, `main`은 운영(bible.anglican.kr)에 낸 코드만 담는다(ADR-051, 사용자 결정 2026-11-22). 토픽 브랜치는 `origin/dev`에서 따고 PR은 dev로 연다. GitHub 기본 브랜치도 dev다. main은 운영에 낼 때만 바뀐다(아래 「데이터 수정과 릴리스」 4). 두 브랜치 모두 보호 브랜치이고(main은 2026-05-29 적용), 모든 변경은 토픽 브랜치, PR, 머지 순서를 따른다.
 
-- **직접 push 금지.** 관리자(저장소 소유자)를 포함해 누구도 검사를 거치지 않은 커밋을 `main`에 push할 수 없다(`enforce_admins: true`). PR에서 필수 검사를 통과한 마지막 커밋을 그대로 FF push하는 것은 받아들여지지만(#354와 data#33에서 실제로 확인했다) 사용자가 따로 말할 때만 쓴다. `main`에 직접 커밋해 push하면 `protected branch hook declined`로 거부된다. 핫픽스도 짧은 브랜치와 PR로 한다.
+- **직접 push 금지.** 관리자(저장소 소유자)를 포함해 누구도 검사를 거치지 않은 커밋을 dev나 main에 push할 수 없다(`enforce_admins: true`). PR에서 필수 검사를 통과한 마지막 커밋을 그대로 FF push하는 것은 받아들여진다(#354와 data#33에서 실제로 확인했다). 운영에 낼 때 main을 dev의 커밋으로 앞당기는 데 이것을 쓰고, 그 밖에는 사용자가 따로 말할 때만 쓴다. 직접 커밋해 push하면 `protected branch hook declined`로 거부된다. 급한 수정도 짧은 브랜치와 dev로 가는 PR로 한다(ADR-051 §5).
 - **PR 필수.** 필수 검사 `Unit tests`(유닛 `node --test tests/unit/*.test.js`와 타입 검사 `npm run typecheck`)와 `Change ledger`(원장)를 통과해야 머지된다. 승인자 수는 0이라 본인 PR을 머지할 수 있다. **머지는 CI가 통과해도 사용자에게 묻고 한다.**
-- **머지 방법은 squash다**(사용자 결정 2026-10-17: 「이제부터는 브랜치를 따서 작업한 건 스쿼시 머지를 하기로 하자」). 저장소 설정이 squash 커밋의 제목을 PR 제목으로(커밋이 하나면 그 커밋 제목), 본문을 커밋 메시지 목록으로 만들고 머지된 브랜치를 지운다. 머지 커밋은 저장소 설정이 막는다. rebase 머지는 쓰지 않는다. GitHub가 SHA를 새로 만들고 서명을 없앤다.
+- **머지 방법은 squash다**(사용자 결정 2026-10-17: 「이제부터는 브랜치를 따서 작업한 건 스쿼시 머지를 하기로 하자」). dev에서 main으로 가는 PR만 squash로 머지하지 않고 앞당긴다(ADR-051 §3). 저장소 설정이 squash 커밋의 제목을 PR 제목으로(커밋이 하나면 그 커밋 제목), 본문을 커밋 메시지 목록으로 만들고 머지된 브랜치를 지운다. 머지 커밋은 저장소 설정이 막는다. rebase 머지는 쓰지 않는다. GitHub가 SHA를 새로 만들고 서명을 없앤다.
 - **force push와 브랜치 삭제는 금지다.** PR 리뷰 코멘트가 미해결이면 머지가 막힌다.
 - PR 제목은 짧은 문구로 쓰고, PR 본문에는 맨 위의 메타데이터(frontmatter)와 제목을 넣지 않는다(pitfalls §30).
 - **작업은 늘 작업 폴더(git worktree)에서 한다**(사용자 결정 2026-10-31). 작업 폴더는 저장소 안이 아니라 `~/projects/worktrees/<이름>`에 만든다. PR을 머지하면 바로 그 작업 폴더와 로컬 브랜치를 지운다. 지우기 전에 커밋하지 않은 변경과 git이 무시하는 파일 가운데 남길 것이 있는지 본다. 작업 폴더에서 e2e를 돌리는 요령은 `docs/workflow.md` 「작업 중 함정」에 있다.
+- **원래 폴더(`~/projects/common-bible`)는 dev를 체크아웃해 둔다**(ADR-051). 세션이 읽는 CLAUDE.md와 실행하는 훅이 그 폴더의 파일이라, 규칙과 훅을 고친 PR은 그 폴더가 새 dev를 받아야 적용된다.
 
 작업 표준 흐름:
 
 ```bash
-# 원래 폴더(~/projects/common-bible)에서 작업 폴더를 만든다. 원래 폴더의 main은 다른 세션이 쓸 수 있으므로 git pull로 받지 않는다
+# 원래 폴더(~/projects/common-bible)에서 작업 폴더를 만든다. 원래 폴더의 dev는 다른 세션이 쓸 수 있으므로 git pull로 받지 않는다
 git fetch origin
-git worktree add ~/projects/worktrees/<이름> -b <topic-branch> origin/main
+git worktree add ~/projects/worktrees/<이름> -b <topic-branch> origin/dev
 cd ~/projects/worktrees/<이름>
 git -c protocol.file.allow=always submodule update --init --reference ~/projects/common-bible/.git/modules/data data   # 데이터 서브모듈은 원래 폴더의 것을 참조해 받는다(실데이터 유닛과 e2e에 필요하다)
 # 작업하고 커밋한다
@@ -109,9 +110,9 @@ gh pr create --title "..." --body-file docs/changes/<YYYY-MM-DD>-<slug>.md   # �
 bash scripts/pr_body.sh docs/changes/<YYYY-MM-DD>-<slug>.md | gh api -X PATCH repos/anglican-kr/common-bible/pulls/<N> -F body=@-   # 본문에서 frontmatter를 뺀다
 # CI(Unit tests, Change ledger)가 통과하고 사용자가 확인하면 squash로 머지한다. 제목은 PR 제목에 번호를 붙인다(REST)
 gh api -X PUT repos/anglican-kr/common-bible/pulls/<N>/merge -f merge_method=squash -f commit_title="<PR 제목> (#<N>)" \
-  -f commit_message="$(git log --reverse --no-merges --format='* %s%n%n%b' origin/main..<topic-branch> | cat -s)"   # 커밋 목록만 넘긴다(main을 합친 커밋은 뺀다). GitHub 기본 메시지는 맨 끝에 Co-authored-by 줄을 한 번 더 붙인다
+  -f commit_message="$(git log --reverse --no-merges --format='* %s%n%n%b' origin/dev..<topic-branch> | cat -s)"   # 커밋 목록만 넘긴다(dev를 합친 커밋은 뺀다). GitHub 기본 메시지는 맨 끝에 Co-authored-by 줄을 한 번 더 붙인다
 git fetch origin
-git diff <topic-branch> origin/main --stat -- $(git diff --name-only origin/main...<topic-branch>)   # PR이 바꾼 파일만 본다. 비었으면 squash가 다 담았다(그사이 main에 들어온 데이터 자동 PR은 보지 않는다)
+git diff <topic-branch> origin/dev --stat -- $(git diff --name-only origin/dev...<topic-branch>)   # PR이 바꾼 파일만 본다. 비었으면 squash가 다 담았다(그사이 dev에 들어온 데이터 자동 PR은 보지 않는다)
 git status --short --ignored   # 커밋하지 않은 변경과 git이 무시하는 파일 가운데 남길 것이 있는지 본다
 cd ~/projects/common-bible
 git worktree remove ~/projects/worktrees/<이름>   # 데이터 서브모듈을 받은 폴더는 거절한다. 바로 위에서 남길 것이 없음을 확인했으면 --force를 붙인다
@@ -128,7 +129,14 @@ git branch -D <topic-branch>   # squash 커밋은 브랜치 커밋과 이어지�
 
 마크다운 원본, Python 파이프라인, 데이터 검증 테스트는 `common-bible-data` 저장소에 있고, 본 저장소는 서브모듈 포인터로 고정한 빌드 산출물을 그대로 쓴다. 배포와 nginx 설정은 `common-bible-server` 저장소에 있다.
 
-1. 데이터 저장소에서 `source/*.md`를 고치고 PR로 main에 머지한다.
-2. main의 `build.yml`이 파이프라인과 매니페스트를 다시 만들고, 같은 실행 안에서 산출물을 검증(ADR-004)한 뒤 자동으로 커밋한다.
-3. 앱 저장소의 `sync-data.yml`이 서브모듈 포인터와 `sitemap.xml`을 자동으로 올린다(버전은 올리지 않는다).
-4. 사용자가 정한 때 작업 폴더에서 `python scripts/release.py <patch|minor|major>`로 버전을 올린다. 스크립트는 `version.json`과 `sw-version.js`를 고쳐 커밋까지만 한다. 그 커밋을 릴리스 PR로 머지한 뒤 태그와 GitHub Release를 만들고, `deploy.sh dev`와 `deploy.sh promote`를 차례로 실행한다(태그와 릴리스 노트의 규칙은 `docs/workflow.md` 「릴리스」).
+1. 데이터 저장소에서 `source/*.md`를 고치고 PR로 데이터 저장소의 main에 머지한다(데이터 저장소에는 dev가 없다. ADR-051 「검토한 대안」 4).
+2. 데이터 저장소 main의 `build.yml`이 파이프라인과 매니페스트를 다시 만들고, 같은 실행 안에서 산출물을 검증(ADR-004)한 뒤 자동으로 커밋한다.
+3. 앱 저장소의 `sync-data.yml`이 서브모듈 포인터와 `sitemap.xml`을 올리는 자동 PR을 dev로 연다(버전은 올리지 않는다).
+4. 운영에는 사용자가 정한 때 낸다(ADR-051 §3). 버전을 올리지 않고 데이터만 낼 때는 아래 1의 버전 올리기와 5의 태그를 건너뛴다.
+   1. 작업 폴더에서 `python scripts/release.py <patch|minor|major>`로 버전을 올린다. 스크립트는 `version.json`과 `sw-version.js`를 고쳐 커밋까지만 한다. 그 커밋을 릴리스 PR로 dev에 머지한다.
+   2. dev의 그 커밋을 체크아웃한 폴더에서 `deploy.sh dev`를 실행하고, 사용자에게 dev.anglican.kr을 실제 기기에서 확인해 달라고 한다.
+   3. dev에서 main으로 PR을 REST로 연다(`gh api -X POST repos/anglican-kr/common-bible/pulls -f title="X.Y.Z 운영 반영" -f head=dev -f base=main -f body=…`). 원장은 쓰지 않는다. 그 커밋의 원장이 이미 dev에 있다.
+   4. 검사가 통과하고 사용자가 확인하면 `git push origin <그 커밋>:main`으로 main을 앞당긴다. GitHub가 그 PR을 머지된 것으로 닫는다.
+   5. 그 커밋에 태그와 GitHub Release를 만들고 `deploy.sh promote`를 실행한다(태그와 릴리스 노트의 규칙은 `docs/workflow.md` 「릴리스」).
+
+   `deploy.sh`는 dev 배포에 dev에 있는 커밋만, 운영 배포에 main과 같은 커밋만 받는다(ADR-051 §4).
