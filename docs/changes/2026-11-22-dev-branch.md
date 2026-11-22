@@ -1,4 +1,5 @@
 ---
+pr: 633
 date: 2026-11-22
 branch: chore/dev-branch
 title: "chore: dev 브랜치를 두고 main은 운영에만 쓰기"
