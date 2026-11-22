@@ -28,7 +28,7 @@
 | `dev` | 머지한 모든 작업과 데이터 자동 PR | PR을 머지할 때마다 |
 | `main` | 운영(bible.anglican.kr)에 낸 코드 | 운영에 낼 때만(§3) |
 
-- 두 브랜치 모두 보호한다. 필수 검사(`Unit tests`, `Change ledger`), 관리자를 포함한 직접 push 금지, force push와 브랜치 삭제 금지, 리뷰 코멘트 해결은 두 브랜치가 같다.
+- 두 브랜치 모두 보호한다. 필수 검사(`Unit tests`, `Change ledger`), 관리자를 포함한 직접 push 금지, force push와 브랜치 삭제 금지, 리뷰 코멘트 해결은 두 브랜치가 같다. 저장소는 머지된 PR의 브랜치를 자동으로 지우는데, 운영 반영 PR의 브랜치가 dev 자체다. 보호된 브랜치는 지우지 않으므로 dev의 보호를 풀지 않는다.
 - 까닭: main이 운영과 같으면, 운영에 무엇이 있는지를 브랜치 하나로 안다.
 
 ### 2. 작업 흐름
@@ -58,8 +58,8 @@
 
 | 명령 | 받는 경우 |
 | --- | --- |
-| `deploy.sh dev` | 앱 폴더의 커밋이 `origin/dev`에 들어 있고, 커밋하지 않은 변경이 없을 때 |
-| `deploy.sh prod` | 앱 폴더의 커밋이 `origin/main`과 같고, 커밋하지 않은 변경이 없을 때 |
+| `deploy.sh dev` | 앱 폴더의 커밋이 `origin/dev`에 들어 있고, 커밋하지 않은 변경과 배포 목록 경로 아래의 추적하지 않는 파일이 없을 때 |
+| `deploy.sh prod` | 앱 폴더의 커밋이 `origin/main`과 같고, 커밋하지 않은 변경과 배포 목록 경로 아래의 추적하지 않는 파일이 없을 때 |
 | `deploy.sh promote` | dev.anglican.kr이 가리키는 빌드의 커밋이 `origin/main`과 같을 때 |
 | `deploy.sh rollback` | 확인하지 않는다. 되돌리는 일은 막지 않는다 |
 

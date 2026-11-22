@@ -479,7 +479,7 @@ python scripts/release.py patch                       # 또는 minor / major / X
 
 `release.py`는 `version.json`과 `sw-version.js`의 `APP_VERSION`을 함께 갱신하고 자동으로 커밋한다. 한쪽만 바뀌어 서비스 워커가 새 셸을 가져오지 못하는 일을 막기 위해서다. `DATA_CACHE`와 `AUDIO_CACHE`는 ADR-021 이후 이름이 고정이다. 콘텐츠 무효화는 `common-bible-data` 저장소 CI가 `bible-manifest.json`과 `audio-manifest.json`을 자동으로 갱신하고, `js/manifest-sync.js`가 앱을 부팅할 때 항목 단위로 처리한다.
 
-`deploy.sh`는 `bible-{version}-{shortsha}` 형식으로 디렉터리 이름을 붙인다. 그래서 `dev`에서 같은 버전을 여러 번 배포해도 덮어쓰지 않고, `promote`할 때 `dev`에서 검증한 디렉터리를 운영 심볼릭 링크가 그대로 가리킨다. 빌드하기 전에 origin을 새로 받아, `dev`는 `origin/dev`에 들어 있는 커밋만, `prod`는 `origin/main`과 같은 커밋만 받고 커밋하지 않은 변경이 있으면 멈춘다. `promote`는 dev가 가리키는 빌드의 커밋이 `origin/main`과 같을 때만 운영을 바꾼다(ADR-051 §4).
+`deploy.sh`는 `bible-{version}-{shortsha}` 형식으로 디렉터리 이름을 붙인다. 그래서 `dev`에서 같은 버전을 여러 번 배포해도 덮어쓰지 않고, `promote`할 때 `dev`에서 검증한 디렉터리를 운영 심볼릭 링크가 그대로 가리킨다. 빌드하기 전에 origin을 새로 받아, `dev`는 `origin/dev`에 들어 있는 커밋만, `prod`는 `origin/main`과 같은 커밋만 받고, 커밋하지 않은 변경이나 배포 목록 경로 아래에 git이 추적하지 않는 파일이 있으면 멈춘다. `promote`는 dev가 가리키는 빌드의 커밋이 `origin/main`과 같을 때만 운영을 바꾼다(ADR-051 §4).
 
 링크를 교체하거나 `promote`, `rollback`을 실행한 직후마다 자동 검증 9종이 실행된다. 검증은 `/version.json`의 버전 일치, `/sw.js`의 200과 Content-Type, `/index.html`의 200과 ETag, `/data/books.json`, `/sw-version.js`, 매니페스트 2종, 교회력 묶음 하나와 전례독서 묶음 하나(`lectionary/sanctoral.json`, `lectionary/eucharist-readings.json`)의 200이다. 실패하면 수동 롤백 안내를 출력한다. zip 파일에 넣을 경로는 `scripts/deploy-manifest.txt`가 정하고, 목록의 항목이 없으면 `build-deploy.sh`가 멈춘다. 목록에 없는 새 경로는 검사되지 않으므로 데이터 디렉터리를 더하면 목록도 고친다. 보호 심볼릭 링크 4개(`dev`, `bible`, `dev-previous`, `bible-previous`)와 `BUILD_RETENTION`(기본 3)개를 넘는 옛 빌드 디렉터리는 자동으로, 또는 확인한 뒤 정리한다. 자세한 흐름은 `common-bible-server/scripts/deploy.sh`의 헤더 주석에 있다.
 
