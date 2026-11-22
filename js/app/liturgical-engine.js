@@ -2600,21 +2600,17 @@ function yearDaysIn(lix, cal, y) {
 
 /**
  * 독서 세트나 전례일(`ids`)을 그해에 처음 지키는 날. 없으면 전례일(`key`)이 다른 전례일과 겹쳐 기념만 하는 날, 그것도 없으면 null이다
- * (그해에 지키지 않는다, ADR-044 §4). `weekday`(0이 일요일)를 주면 그 요일의 날만 본다. 사계재의 줄은 날마다 한 줄이다(§3).
- * @param {YearDayTable} table @param {string[]} ids @param {string} key @param {number | null} [weekday]
- * @returns {YearDay | null}
+ * (그해에 지키지 않는다, ADR-044 §4).
+ * @param {YearDayTable} table @param {string[]} ids @param {string} key @returns {YearDay | null}
  */
-function yearDayIn(table, ids, key, weekday = null) {
-  /** @param {YearDay} d */
-  const onDay = (d) => weekday === null || dayOfWeek(d.date) === weekday;
+function yearDayIn(table, ids, key) {
   /** @type {YearDay | null} */
   let best = null;
   for (const id of ids) {
-    const day = (table.kept.get(id) || []).find(onDay);
+    const day = (table.kept.get(id) || [])[0];
     if (day && (!best || day.date < best.date)) best = day;
   }
-  const overlap = table.overlap.get(key);
-  return best || (overlap && onDay(overlap) ? overlap : null);
+  return best || table.overlap.get(key) || null;
 }
 
 /**
@@ -2926,8 +2922,8 @@ async function firstKeptDayByYear(ids, from, last, isStale) {
 }
 
 /**
- * 독서 세트나 전례일(`ids`)을 `from`부터 `to`까지(둘 다 포함) 지키는 날 모두(날짜 차례, 같은 날은 한 번). 사계재의 줄이 이번 전례년과
- * 다음 전례년에 그 요일을 찾는다(ADR-044 §3). 표는 이번 전례년의 첫날부터 30년 뒤까지라 `from`은 그 안이어야 하고, 표의 끝을 넘는
+ * 독서 세트나 전례일(`ids`)을 `from`부터 `to`까지(둘 다 포함) 지키는 날 모두(날짜 차례, 같은 날은 한 번). 해마다 같은 독서의 줄이
+ * 다음 전례년에 지키는 날을 찾는다(ADR-044 §1). 표는 이번 전례년의 첫날부터 30년 뒤까지라 `from`은 그 안이어야 하고, 표의 끝을 넘는
  * 구간은 끝에서 자른다. 해 사이마다 `isStale`이 참이면(화면을 떠났으면) 그치고 빈 배열이다.
  * @param {string[]} ids @param {string} today @param {string} from @param {string} to @param {() => boolean} [isStale]
  * @returns {Promise<KeptDay[]>}
@@ -2962,7 +2958,7 @@ const yearDayIndexes = { lix: null, cal: null };
 /**
  * 연도를 붙인 이름 검색(ADR-044 §4): 줄마다(`ids`는 독서 세트나 전례일, `key`는 전례일) 양력 `year`년의 날(`yearDayIn`). 그해를 처음
  * 찾으면 그해의 모든 날을 계산한다(`yearDaysIn`). 프리로드 규칙은 `findReadings`와 같다.
- * @param {Array<{ ids: string[], key: string, weekday?: number | null }>} rows @param {number} year
+ * @param {Array<{ ids: string[], key: string }>} rows @param {number} year
  * @returns {Array<YearDay | null>}
  */
 function findYearDays(rows, year) {
@@ -2984,7 +2980,7 @@ function findYearDays(rows, year) {
     }
   }
   const t = table;
-  return rows.map(({ ids, key, weekday }) => yearDayIn(t, ids, key, weekday ?? null));
+  return rows.map(({ ids, key }) => yearDayIn(t, ids, key));
 }
 
 /**

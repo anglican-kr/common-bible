@@ -478,23 +478,28 @@ test("yearDaysIn: 그해에 지키는 날, 옮겨 지키는 날, 겹쳐 기념�
   // 성탄 평일은 그날의 이름을 담는다(앱이 그해의 이름으로 거른다)
   assert.strictEqual(plain(e.yearDayIn(y27, ["d0102-성탄주간-t1-s1"], "d0102-성탄주간")).name, "성탄 1주 토요일");
   assert.strictEqual(e.yearDayIn(y27, ["d0103-성탄주간-t1-s1"], "d0103-성탄주간"), null, "1월 3일은 성탄 2주일");
-  // 사계재의 날은 그 요일의 날만 본다(ADR-044 §3). 2027년 춘계재는 2월 17, 19, 20일이다
-  assert.deepStrictEqual([3, 5, 6, 1].map((w) => e.yearDayIn(y27, ["t-춘계재"], "t-춘계재", w)?.date ?? null),
-    ["2027-02-17", "2027-02-19", "2027-02-20", null]);
+  // 사계재의 지향별 날은 그 독서를 읽는 하루다(ADR-044 §3). 2027년 춘계재는 2월 17, 19, 20일이다
+  const ember = (key) => e.yearDayIn(y27, [`${key}-t1-s1`], key)?.date ?? null;
+  assert.deepStrictEqual(["수요일-성직자", "금요일-성직후보자", "금요일-수도자", "토요일-모든-신자"]
+    .map((k) => ember(`lent-1-fast-사순1주-${k}의-성소를-위한-춘계재`)), ["2027-02-17", "2027-02-19", "2027-02-19", "2027-02-20"]);
 });
 
-test("사계재의 계절 이름으로 찾으면 계절 줄이 수, 금, 토요일 세 줄로 나뉘고, 지향별 줄 넷은 나누지 않는다. `사계재`로는 네 계절을 모두 찾는다(ADR-044 §3)", { skip: !haveData }, () => {
+test("사계재는 지향별 줄만 찾는다. 계절 이름으로 찾으면 그 계절의 넷, `사계재`로는 네 계절의 열여섯이다(ADR-044 §3)", { skip: !haveData }, () => {
   const { ctx, index } = loadLectionarySearch();
-  for (const season of ["춘계재", "하계재", "추계재", "동계재"]) {
+  const SEASONS = ["춘계재", "하계재", "추계재", "동계재"];
+  const INTENTIONS = ["성직자", "성직후보자", "수도자", "모든 신자"];
+  // 계절의 전례일은 색인에 없다. 같은 날이 계절 이름과 지향 이름으로 두 번 나오지 않는다(사용자 결정 2026-11-21)
+  assert.deepStrictEqual(index.obs.filter((o) => SEASONS.includes(o.name)), []);
+  for (const season of SEASONS) {
     const items = JSON.parse(JSON.stringify(ctx.searchLectionaryNames(index, season).items));
-    assert.deepStrictEqual(items.slice(0, 3).map((it) => [it.obs.key, it.ember, it.tier]),
-      [[`t-${season}`, "wed", 1], [`t-${season}`, "fri", 1], [`t-${season}`, "sat", 1]], season);
-    assert.deepStrictEqual(items.slice(3).map((it) => [it.obs.name.endsWith(season), it.ember ?? null]), Array(4).fill([true, null]), season);
+    assert.deepStrictEqual(items.map((it) => it.obs.name), INTENTIONS.map((who) => `${who}의 성소를 위한 ${season}`), season);
   }
-  // `사계재`는 네 계절을 함께 부르는 별칭이다. 계절마다 세 줄이라 열두 줄이다(ADR-037 §5)
+  // `사계재`는 네 계절을 함께 부르는 별칭이다(ADR-037 §5)
   const all = JSON.parse(JSON.stringify(ctx.searchLectionaryNames(index, "사계재").items));
-  assert.deepStrictEqual(all.map((it) => `${it.obs.key} ${it.ember}`),
-    ["춘계재", "하계재", "추계재", "동계재"].flatMap((season) => ["wed", "fri", "sat"].map((d) => `t-${season} ${d}`)));
+  assert.deepStrictEqual(all.map((it) => it.obs.name), SEASONS.flatMap((season) => INTENTIONS.map((who) => `${who}의 성소를 위한 ${season}`)));
+  // 절기 이름으로 찾아도 지향별 줄만이다. `대림`으로 찾으면 동계재의 사흘이 일곱 줄이었다(사용자 보고 2026-11-21)
+  const advent = JSON.parse(JSON.stringify(ctx.searchLectionaryNames(index, "대림").items)).map((it) => it.obs.name).filter((n) => n.endsWith("동계재"));
+  assert.deepStrictEqual(advent, INTENTIONS.map((who) => `${who}의 성소를 위한 동계재`));
 });
 
 test("yearDaysIn: 지키는 날은 지키는 날의 표와 같고, 전례일 자신의 날이다(색인의 모든 전례일, 2026-2028)", { skip: !haveData }, () => {
@@ -528,7 +533,7 @@ test("지키는 날의 표: 격자 전례일은 전례일로 넣지 않는다(�
   assert.ok(table.byId.get("ordinary-24-wed-II-t1-s1").some((d) => d.obs.startsWith("grid:")));
 });
 
-test("지키는 날의 표: 한 전례년에 여러 번 지키는 전례일은 사계재의 줄 넷과 몇 해의 성 안드레아 축일뿐이다(ADR-044 「한 전례년에 여러 번 오는 날」)", { skip: !haveData }, () => {
+test("지키는 날의 표: 검색 결과의 줄 가운데 한 전례년에 여러 번 지키는 것은 몇 해의 성 안드레아 축일뿐이다. 사계재 계절의 보조 주소도 이 규칙이다(ADR-044 「한 전례년에 여러 번 오는 날」)", { skip: !haveData }, () => {
   const { e, index } = realEngine();
   const table = keptTable();
   /** 전례일마다 그 세트(세트가 없으면 전례일 키)를 한 전례년 안의 다른 날 둘 이상에 지키는 전례년 */
@@ -540,16 +545,15 @@ test("지키는 날의 표: 한 전례년에 여러 번 지키는 전례일은 �
     for (const [key, sets] of byObs) {
       const ids = sets.length ? sets : [key];
       const dates = new Set(ids.flatMap((id) => (table.byId.get(id) || []).filter((d) => d.date >= ly.from && d.date <= ly.to).map((d) => d.date)));
-      if (dates.size > 1) many.add(key.startsWith("t-") && key.endsWith("계재") ? key : `${key} ${y}`);
+      if (dates.size > 1) many.add(`${key} ${y}`);
     }
   }
   assert.deepStrictEqual([...many].sort(), [
     "d1130-사도-성-안드레아 2028", "d1130-사도-성-안드레아 2034", "d1130-사도-성-안드레아 2040", "d1130-사도-성-안드레아 2045",
-    "t-동계재", "t-추계재", "t-춘계재", "t-하계재",
   ]);
   // 성 안드레아는 다가오는 11월 30일을 연다. 지난해의 11월 30일도 같은 전례년이다
   assert.strictEqual(e.openDayIn(table, ["d1130-사도-성-안드레아-t1-s1"], "2028-06-01").date, "2028-11-30");
-  // 사계재는 오늘이나 그 뒤의 첫날, 모두 지났으면 수요일이다
+  // 사계재 계절의 보조 주소(검색 결과에는 없다)는 오늘이나 그 뒤의 첫날, 모두 지났으면 수요일이다
   assert.strictEqual(e.openDayIn(table, ["t-춘계재"], "2026-02-26").date, "2026-02-27");
   assert.strictEqual(e.openDayIn(table, ["t-춘계재"], TODAY).date, "2026-02-25");
 });

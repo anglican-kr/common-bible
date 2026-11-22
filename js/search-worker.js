@@ -147,8 +147,6 @@
  * @property {string | null} rank
  * @property {number} order  전례년 순서
  * @property {string | null} common  고유 독서 없이 쓰는 공통 독서의 분류
- * @property {string[]} [days]  그 주의 여러 요일에 지키는 전례일만: 그 요일("wed" 등). 사계재 넷은 수, 금, 토요일이다. 결과를 날마다 한 줄로
- *   나눈다(ADR-037 §5, ADR-044 §3)
  *
  * @typedef {[number, string, string | null, number | null, number, string]} LectSetRaw
  *   [obs, set id, year, track, set no, label]
@@ -248,8 +246,6 @@
  *   a local day (ADR-044 §3): the user's parish dedication or a founding day. Its obs key is `local:<level>`
  * @property {string[]} [yearNames]  year search: a Christmas weekday found only by the names it may take (「성탄 1주 수요일」).
  *   The app keeps a year's row only when that year's name of the day is one of them (ADR-044 §4)
- * @property {string} [ember]  name search: one of the days of an observance kept on several weekdays of its week (the index's
- *   `days`, an Ember season: 「춘계재 수요일」). Its row is split into one row a day (ADR-044 §3)
  *
  * @typedef LectResult
  * @property {"name" | "passage"} kind
@@ -1086,14 +1082,11 @@ function searchLectionaryNames(index, query, extra = []) {
 
   result.items = [...best]
     .sort(([a, x], [b, y]) => x.tier - y.tier || index.obs[a].order - index.obs[b].order)
-    .flatMap(([i, { tier, matched }]) => {
+    .map(([i, { tier, matched }]) => {
       /** @type {LectItem} */
       const item = { obs: lectObsInfo(index, i), sets: index.setsOfObs[i].map((s) => lectSetInfo(index, s)), tier };
       if (matched) item.matched = matched;
-      // 그 주의 여러 요일에 지키는 전례일(색인의 `days`, 사계재의 계절 줄)은 날마다 한 줄로 나눈다(ADR-044 §3, 사용자 결정 2026-11-19).
-      // 지향별 줄(「성직자의 성소를 위한 춘계재」)은 하루씩이라 `days`가 없다
-      const { days } = index.obs[i];
-      return Array.isArray(days) && days.length ? days.map((ember) => ({ ...item, ember })) : [item];
+      return item;
     });
   return result;
 }

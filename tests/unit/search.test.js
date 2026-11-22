@@ -2375,39 +2375,6 @@ test("lectRowOf: 해마다 같은 독서는 이번 전례년의 날을 열고, �
   assert.deepStrictEqual(plain([later.meta, later.lines]), [["다음 2028년 1월 17일 (월)"], ["기념일"]]);
 });
 
-test("lectRowOf, lectDaysOf: 사계재의 날은 계절 이름 뒤에 요일을 붙이고, 이번 전례년의 그 요일을 열어 주소에 날짜를 붙인다(ADR-044 §3)", async () => {
-  const h = loadPureHelpers();
-  const ctx = loadLectDays();
-  const plain = (v) => JSON.parse(JSON.stringify(v));
-  const spring = (ember) => ({ obs: OBS({ key: "t-춘계재", name: "춘계재", rank: "feria" }), sets: [], tier: 1, ember });
-  const E = (date) => DAY(date, { obs: "t-춘계재", setId: null, name: "춘계재" });
-  // 2026 전례년의 춘계재는 2월 25, 27, 28일, 2027 전례년은 2월 17, 19, 20일이다
-  const kept = ["2026-02-25", "2026-02-27", "2026-02-28", "2027-02-17", "2027-02-19", "2027-02-20"].map(E);
-  const calls = [];
-  const mod = {
-    ...LY_ENGINE,
-    async findKeptDays(ids, today, from, to) {
-      calls.push([Array.from(ids), from, to]);
-      return kept.filter((d) => d.date >= from && d.date <= to);
-    },
-    async findReadingDay() { throw new Error("사계재의 날은 요일로 찾는다"); },
-  };
-  const fri = plain(await ctx.lectDaysOf(mod, spring("fri"), "2026-11-16"));
-  assert.deepStrictEqual([fri.open.date, fri.nextYear, fri.next, fri.cycles], ["2026-02-27", { date: "2027-02-19" }, null, []]);
-  assert.deepStrictEqual(plain(calls[0]), [["t-춘계재"], "2025-11-30", "2027-11-27"]);
-  const row = h.lectRowOf(spring("fri"), () => null, fri, "2026-11-16");
-  assert.deepStrictEqual(plain([row.title, row.href, row.meta, row.lines, row.nexts]),
-    ["춘계재 금요일", "/lectionary/d/t-%EC%B6%98%EA%B3%84%EC%9E%AC?from=2026-02-27", ["2026년 2월 27일 (금)"], ["다음 전례년 2027년 2월 19일 (금)"], []]);
-  // 날짜를 계산하기 전에도 제목에 요일이 있다
-  assert.strictEqual(h.lectRowOf(spring("sat"), () => null, null, "").title, "춘계재 토요일");
-  // 이번 전례년에 그 요일을 지키지 않으면 다음 전례년의 그 요일을 열고 다음 전례년의 날을 적지 않는다
-  const sparse = { ...mod, findKeptDays: async (ids, today, from, to) => kept.slice(3).filter((d) => d.date >= from && d.date <= to) };
-  const wed = plain(await ctx.lectDaysOf(sparse, spring("wed"), "2026-11-16"));
-  assert.deepStrictEqual([wed.open.date, wed.nextYear], ["2027-02-17", null]);
-  // 두 전례년 모두 없으면 날짜가 없다
-  assert.strictEqual(await ctx.lectDaysOf({ ...mod, findKeptDays: async () => [] }, spring("wed"), "2026-11-16"), null);
-});
-
 test("lectRowOf: 이름으로 찾은 줄이 해에 따라 다른 독서를 읽으면 열리는 날의 해를 적고, 다른 해의 날마다 링크를 둔다(ADR-044 §1)", () => {
   const h = loadPureHelpers();
   const sets = ["A", "B", "C"].map((y) => SET(`pentecost-${y}-t1-s1`, y));
