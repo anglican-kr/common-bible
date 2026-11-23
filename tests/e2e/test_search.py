@@ -1252,6 +1252,17 @@ def test_late_days_put_the_rows_in_date_order_before_the_screen_is_touched(brows
     page.wait_for_function("(note) => document.getElementById('a11y-announce').textContent === note", arg=RESORTED_NOTE, timeout=5_000)
     ctx.close()
 
+    # 창 밖에서 단추를 떼어 `pointerup`이 오지 않았어도, 단추 없이 움직인 마우스로 눌림이 풀려 다시 늘어놓는다(코드 리뷰 2026-11-23)
+    def released_outside(page, ctx):
+        page.evaluate("document.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'mouse', bubbles: true }))")
+        page.mouse.move(5, 5)
+
+    ctx, page, held, _ = _late_advent_rows(browser, before_rows=released_outside)
+    for route in held:
+        route.continue_()
+    page.wait_for_function("(note) => document.getElementById('a11y-announce').textContent === note", arg=RESORTED_NOTE, timeout=15_000)
+    ctx.close()
+
 
 def test_late_days_keep_the_drawn_order_once_the_screen_is_touched(browser):
     """그린 뒤 스크롤했거나, 포커스가 목록 안에 있거나, 마우스가 목록 위에서 움직였으면 날짜만 넣고 차례는 그대로 두며 알리지 않는다.
@@ -1274,6 +1285,12 @@ def test_late_days_keep_the_drawn_order_once_the_screen_is_touched(browser):
     # 마우스를 줄 위에 올렸을 때(누르지 않았다)
     ctx, page, held, drawn = _late_advent_rows(browser)
     page.locator(".lect-rows > li").nth(3).locator("a.cal-row").hover()
+    _assert_drawn_order_kept(page, held, drawn)
+    ctx.close()
+
+    # 그리기 전부터 줄이 그려질 자리에 마우스를 멈춰 두었을 때. 줄이 커서 아래에 생겨도 마우스가 움직이지 않았다(코드 리뷰 2026-11-23)
+    ctx, page, held, drawn = _late_advent_rows(browser, before_rows=lambda page, ctx: page.mouse.move(640, 450))
+    assert page.evaluate("document.querySelector('ul.lect-rows').matches(':hover')")
     _assert_drawn_order_kept(page, held, drawn)
     ctx.close()
 

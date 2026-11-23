@@ -1908,7 +1908,10 @@ function watchUserInput() {
   on("pointerdown", (/** @type {PointerEvent} */ e) => { if (e.pointerType !== "touch") _pressed = true; });
   for (const type of ["pointerup", "pointercancel"]) on(type, (/** @type {PointerEvent} */ e) => { if (e.pointerType !== "touch") _pressed = false; });
   on("pointermove", (/** @type {PointerEvent} */ e) => {
-    if (e.pointerType !== "touch" && e.target instanceof Element && e.target.closest("ul.lect-rows")) _lastListHover = performance.now();
+    if (e.pointerType === "touch") return;
+    // A button released outside the window sends no pointerup; the next move tells whether one is still down
+    _pressed = e.buttons !== 0;
+    if (e.target instanceof Element && e.target.closest("ul.lect-rows")) _lastListHover = performance.now();
   });
 }
 
@@ -1935,10 +1938,12 @@ function patchLectDays(target, lect, screen, labelOf) {
   });
   const sorted = lectItemsByDay(lect, screen.days);
   if (rows.length !== lect.items.length || sorted.every((item, i) => item === lect.items[i])) return;
-  // 누르기, 터치, 휠, 키 입력이 그린 뒤에 있었거나, 지금 손가락이 닿아 있거나 단추가 눌려 있거나, 그린 뒤 마우스가 목록 위에서 움직였거나,
-  // 포커스가 목록 안이면 건드린 것이다. 그린 때를 모르는 목록도 건드린 것으로 보고 그대로 둔다
+  // 누르기, 터치, 휠, 키 입력이 그린 뒤에 있었거나, 지금 손가락이 닿아 있거나 단추가 눌려 있거나, 그린 뒤 마우스가 목록 위에서 움직였거나
+  // 지금 목록 위에 있거나, 포커스가 목록 안이면 건드린 것이다. 그린 때를 모르는 목록도 건드린 것으로 보고 그대로 둔다
   const drawnAt = _lectDrawnAt.get(list) ?? -Infinity;
-  const touched = drawnAt <= _lastUserInput || drawnAt <= _lastListHover || _touching || _pressed || list.contains(document.activeElement);
+  // `:hover` also covers a mouse left resting where the rows were drawn: no pointermove fires until it moves
+  const touched = drawnAt <= _lastUserInput || drawnAt <= _lastListHover || _touching || _pressed || list.matches(":hover")
+    || list.contains(document.activeElement);
   if (touched) return;
   lect.items = sorted;
   for (const item of sorted) list.appendChild(/** @type {HTMLElement} */ (rowOf.get(item)));
