@@ -213,7 +213,7 @@ def test_calendar_module_failure_shows_reload_that_recovers(browser):
 
 def test_lectionary_module_failure_shows_its_own_title(browser):
     """엔진(liturgical-engine.js)을 받지 못하면 그것을 import하는 전례독서 모듈도 이어지지 못한다 — 전례독서의 제목 · 실패
-    화면이다(앞 화면을 남기는 공용 오류 .error가 아니다). 머리에는 컨트롤이 없고 캘린더로는 탭 바가 간다 — 전례독서의 다른
+    화면이다(앞 화면을 남기던 공용 오류 한 줄 .error가 아니다). 머리에는 컨트롤이 없고 캘린더로는 탭 바가 간다 — 전례독서의 다른
     실패 화면과 같다(사용자 결정 2026-11-03 — 그전엔 「캘린더로」 꺾쇠, ADR-038 §2 「구현」)."""
     ctx = _context(browser, mobile=True)
     page = ctx.new_page()

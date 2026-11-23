@@ -3111,7 +3111,8 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   await ensureBookMap();
   if (isStale()) return;
 
-  window.setTitle(`"${query}" 검색`);
+  const title = `"${query}" 검색`;
+  window.setTitle(title);
   const $title = _$("page-title");
   // Like every other main-header view, plant the mobile settings trigger so the
   // gear stays reachable if the window is resized down to the mobile breakpoint
@@ -3222,8 +3223,11 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   // resultsTarget is stale and #app belongs to a newer view now (ADR-033, Bugbot).
   if (isStale()) return;
 
+  // The worker could not search: its data did not load, or it threw (ADR-048 §6). The full-screen failure of the other
+  // views goes in the results' place only, so the mobile in-page bar (with the query) and the book pills stay, and a
+  // layout change keeps it (onLayoutTierChange moves the bar alone).
   if (!result) {
-    window.renderError("검색에 실패했습니다.");
+    window.renderSearchFailure(title, resultsTarget);
     return;
   }
 
