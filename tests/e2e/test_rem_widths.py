@@ -185,6 +185,8 @@ def test_bottom_sheet_stays_inside_the_side_safe_areas(browser):
         _safe_area(ctx, page, 62, 62)
         sel = _open_cite_sheet(page)
         page.wait_for_timeout(400)
+        # Without this, a font setting that silently failed to apply would leave an 18px (720px) sheet that passes.
+        assert page.evaluate("() => document.documentElement.style.fontSize") == "24px"
         box = _box(page, sel)
         assert box["left"] >= 61.5 and box["right"] <= LANDSCAPE_IPHONE["width"] - 61.5, box
     finally:

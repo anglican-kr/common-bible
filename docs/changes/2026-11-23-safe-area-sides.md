@@ -43,3 +43,10 @@ title: "fix: 본문 칸이 좌우 안전 영역을 넘지 않게 하기"
 - **원장의 측정 결과에 20px이 빠졌다.** 더했다.
 - 넘긴 것 1: `index.html`의 첫 화면용 CSS에 `--max-width: 720px`이 남아 있었다(#645가 놓쳤다). 시작 화면이 덮는 동안만 쓰여 보이는 해는 없지만, `css/style.css`와 같은 값으로 맞추고 두 값이 같은지 유닛 시험이 보게 했다. 인라인 `<style>`이 바뀌어 CSP(`index.html`의 meta) `style-src` 해시를 `scripts/csp_hashes.py --fix`로 갱신했다(`csp.test.js` 통과, Chromium에서 CSP 위반 없음). nginx는 CSP를 보내지 않는다.
 - 넘긴 것 2: 알림 묶음(`#notice-stack`)의 상한이 `calc(100vw - 2rem)`이라 긴 알림이 좌우 안전 영역에 들어갈 수 있다. 전부터 있던 것이라 탭 바와 함께 known-issues §60에 적었다.
+
+2회차(`/code-review medium --fix`, 전부터 있던 것 하나와 사소한 것 하나):
+
+- **휴대폰의 북마크 시트가 빠졌다.** 높이 600px보다 낮은 화면에서 북마크 시트(`#bookmark-drawer`)는 화면 전체 폭이고 `--max-width`를 쓰지 않아, 머리 줄의 제목(왼쪽 16px)이 좌우 안전 영역 안에 놓인다. 전부터 있던 것이라 고치지 않고 `topics/routing.md`의 known-issues §60과 `DESIGN.md`에 더했다. CSS에서 판단했고 실제로 재지는 않았다.
+- **인용 시트 e2e가 글자 크기를 확인하지 않았다.** 글자 크기 설정이 적용되지 않으면 720px 시트로 통과한다. 24px인지 확인하게 했다.
+
+2회차에 중요한 지적이 없어 리뷰를 멈췄다.
