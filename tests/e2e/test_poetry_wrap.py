@@ -1,4 +1,4 @@
-"""E2E: 운문의 행은 띄어쓰기 자리에서 줄을 바꾸고, 넘어간 줄은 한 글자 더 들여 쓴다(ADR-053).
+"""E2E: 운문의 행은 첫 줄을 한 글자 들여 쓰고 띄어쓰기 자리에서 줄을 바꾸며, 화면 끝에서 넘어간 줄은 들여 쓰지 않는다(ADR-053, ADR-054).
 
 줄마다 첫 글자의 자리를 글자 하나씩 재어(`Range.getClientRects`) 같은 높이의 글자를 한 줄로 묶는다.
 자리는 운문 행 상자의 왼쪽 끝에서 잰 값이다. 절 번호 자리는 2rem, 한 글자는 본문 글자 크기(1em)다.
@@ -76,19 +76,24 @@ def _assert_breaks_at_spaces(span, where):
         assert prev["text"].endswith(" ") or line["text"].startswith(" "), ("a line broke inside a word", where, span)
 
 
-def _assert_hangs(span, where):
-    """Every line after the first starts one letter inside the first line's start (2rem + 1em)."""
-    want = 2 * span["rem"] + span["em"]
+def _assert_first_line_indented(span, where):
+    """The line's first line starts one letter in from the text edge (2rem + 1em) — ADR-054."""
+    assert span["lines"][0]["x"] == pytest.approx(2 * span["rem"] + span["em"], abs=0.6), (where, span)
+
+
+def _assert_wrapped_lines_at_text_edge(span, where):
+    """Every line wrapped by the screen starts at the text edge, right after the verse-number gutter (2rem)."""
+    want = 2 * span["rem"]
     for line in span["lines"][1:]:
         assert line["x"] == pytest.approx(want, abs=0.6), (where, span)
     assert not span["overflow"], (where, span)
 
 
-def test_wrapped_psalm_line_keeps_the_word_and_indents(browser):
-    """시편 23:4의 첫 행은 휴대폰에서 "지날지라도"가 통째로 다음 줄로 가고, 그 줄은 한 글자 안쪽에서 시작한다.
+def test_wrapped_psalm_line_keeps_the_word(browser):
+    """시편 23:4의 첫 행은 휴대폰에서 "지날지라도"가 통째로 다음 줄로 간다. 행의 첫 줄은 한 글자 들여 쓰고, 넘어간 줄은
+    들여 쓰지 않아 새 행과 구별된다(ADR-054). 절 번호는 왼쪽 끝 그대로다.
 
-    글자 단위로 줄을 바꿀 때는 "도" 한 글자만 넘어가 첫 줄과 같은 자리에서 시작해 따로 된 행처럼 보였다.
-    절 번호와 첫 줄의 자리는 그대로다.
+    글자 단위로 줄을 바꿀 때는 "도" 한 글자만 넘어가 따로 된 행처럼 보였다.
     """
     ctx = _phone(browser)
     try:
@@ -100,8 +105,8 @@ def test_wrapped_psalm_line_keeps_the_word_and_indents(browser):
     assert texts == ["나 비록 음산한 죽음의 골짜기를", "지날지라도"], span
     assert span["numLeft"] == pytest.approx(0, abs=0.6), span
     assert span["numIndent"] == "0px", span
-    assert span["lines"][0]["x"] == pytest.approx(2 * span["rem"], abs=0.6), span
-    _assert_hangs(span, "ps 23:4a")
+    _assert_first_line_indented(span, "first line")
+    _assert_wrapped_lines_at_text_edge(span, "ps 23:4a")
 
 
 def test_long_liturgical_psalm_lines_wrap_at_spaces_without_overflow(browser):
@@ -117,7 +122,7 @@ def test_long_liturgical_psalm_lines_wrap_at_spaces_without_overflow(browser):
     wrapped = [s for s in spans if len(s["lines"]) > 1]
     assert len(wrapped) >= 5, len(wrapped)
     for span in spans:
-        _assert_hangs(span, "lps 20")
+        _assert_wrapped_lines_at_text_edge(span, "lps 20")
         _assert_breaks_at_spaces(span, "lps 20")
 
 
@@ -141,7 +146,7 @@ def test_quote_stays_with_its_particle(browser, path, vref, width, font, word):
     assert len(span["lines"]) >= 2, span   # the line still wraps here
     assert any(word in line["text"] for line in span["lines"]), (word, span)
     _assert_breaks_at_spaces(span, f"{path} {vref}")
-    _assert_hangs(span, f"{path} {vref}")
+    _assert_wrapped_lines_at_text_edge(span, f"{path} {vref}")
 
 
 # 선창 끝의 ◯ 가 마지막 낱말과 같은 줄에 있는가 — ◯ 마다 그 앞 마지막 글자와 세로 가운데를 견준다.
@@ -247,7 +252,7 @@ def test_half_verse_cut_inside_a_note_anchor_split_by_a_quote_run(browser):
 def test_versicle_mark_stays_in_the_gutter(browser):
     """전례시편의 ¶ 표시(무번호 후속 구절)는 상자와 글자 모두 절 번호 자리의 왼쪽 끝에 있다.
 
-    첫 줄 들여쓰기는 안쪽 상자에 물려지므로, 되돌리지 않으면 ¶가 한 글자 왼쪽으로 밀려 화면 밖으로 나간다.
+    운문 행에 첫 줄 들여쓰기(`text-indent`)를 주면 안쪽 상자가 물려받아 ¶ 글자가 상자 밖으로 밀린다(ADR-053을 구현하며 겪었다).
     """
     ctx = _phone(browser, width=320, font=24)
     try:
@@ -259,12 +264,12 @@ def test_versicle_mark_stays_in_the_gutter(browser):
     for span in spans:
         assert span["numLeft"] == pytest.approx(0, abs=0.6), span
         assert span["glyphLeft"] == pytest.approx(0, abs=0.6), span
-        assert span["lines"][0]["x"] == pytest.approx(2 * span["rem"], abs=0.6), span
-        _assert_hangs(span, "lps 10 ¶")
+        _assert_first_line_indented(span, "first line")
+        _assert_wrapped_lines_at_text_edge(span, "lps 10 ¶")
 
 
-def test_gloria_lines_hang_like_the_psalm(browser):
-    """전례독서의 영광송 두 줄도 시편의 행처럼 띄어쓰기 자리에서 줄을 바꾸고, 넘어간 줄은 한 글자 안쪽이다."""
+def test_gloria_lines_wrap_like_the_psalm(browser):
+    """전례독서의 영광송 두 줄도 시편의 행처럼 첫 줄을 한 글자 들여 쓰고 띄어쓰기 자리에서 줄을 바꾸며, 넘어간 줄은 들여 쓰지 않는다."""
     ctx = _phone(browser, width=320, font=24)
     try:
         page = _open(ctx, "/lectionary/2026-06-14", ".lect-gloria-line")
@@ -274,8 +279,8 @@ def test_gloria_lines_hang_like_the_psalm(browser):
     assert len(lines) == 2
     for span in lines:
         assert len(span["lines"]) >= 2, span
-        assert span["lines"][0]["x"] == pytest.approx(2 * span["rem"], abs=0.6), span
-        _assert_hangs(span, "gloria")
+        _assert_first_line_indented(span, "first line")
+        _assert_wrapped_lines_at_text_edge(span, "gloria")
         _assert_breaks_at_spaces(span, "gloria")
 
 
