@@ -37,7 +37,7 @@ title: "feat: 운문의 줄바꿈과 넘어간 줄의 들여쓰기"
 
 - 유닛: `node --test tests/unit/*.test.js` 1,988건 통과(`helpers.test.js`의 `quoteRuns` 4건을 더했다). 타입 검사(`tsc`, 두 설정) 통과.
 - e2e(새): `test_poetry_wrap.py` 13건 통과(리뷰 2회차에 1건, 따옴표에 4건을 더했다).
-- e2e(관련): `test_copy.py`, `test_liturgical_render.py`, `test_lectionary_view.py`, `test_lectionary_cites.py`, `test_search.py`, `test_bookmark.py`, `test_bookmark_read.py`, `test_cite_sheet.py`, `test_note_tooltip.py`와 새 파일을 함께 돌려 331건 가운데 330건이 통과했다. 실패한 1건(`test_lectionary_view.py`의 `test_copy_across_chapters_is_one_passage`)은 화면 글자의 끝 여섯 자를 복사한 글에서 찾는데, 화면에는 ◯ 앞에 줄바꿈 없는 공백과 낱말 잇기 문자가 있어 어긋났다. 복사한 글은 "… 주소서. ◯"로 맞다. 시험이 화면 글자를 복사와 같이 다듬은 뒤 견주게 고쳐 통과했다. 전체 e2e는 돌리지 않았다.
+- e2e(관련): `test_copy.py`, `test_liturgical_render.py`, `test_lectionary_view.py`, `test_lectionary_cites.py`, `test_search.py`, `test_bookmark.py`, `test_bookmark_read.py`, `test_cite_sheet.py`, `test_note_tooltip.py`와 새 파일을 함께 돌려 331건 가운데 330건이 통과했다. 실패한 1건(`test_lectionary_view.py`의 `test_copy_across_chapters_is_one_passage`)은 화면 글자의 끝 여섯 자를 복사한 글에서 찾는데, 화면에는 ◯ 앞에 줄바꿈 없는 공백과 낱말 잇기 문자가 있어 어긋났다. 복사한 글은 "… 주소서. ◯"로 맞다. 시험이 화면 글자를 복사와 같이 다듬은 뒤 견주게 고쳐 통과했다. 전체 e2e는 돌리지 않았다. 따옴표를 묶은 뒤 같은 파일들을 다시 돌려 336건 가운데 335건이 통과했다. 실패한 1건(`test_search.py`의 `test_unknown_book_leaves_no_recent_before_the_alias_map_loads`)은 검색 별칭 표를 받는 시점에 기대는 시험이고, 따로 세 번 돌려 모두 통과했다.
 - 변이 검사: 다섯 가지를 하나씩 되돌려 모두 실패를 확인했다. 줄 안 상자의 들여쓰기 되돌리기를 빼면 2건, ◯ 앞의 줄바꿈 없는 공백을 빼면 3건, 영광송 ◯의 낱말 잇기 문자를 빼면 1건, 복사의 공백 되돌리기를 빼면 기존 복사 시험 3건(`test_copy.py` 2, `test_lectionary_view.py` 1), 영광송 복사에서 낱말 잇기 문자를 지우지 않으면 기존 시험 1건이 실패한다. 따옴표 묶음 상자의 줄바꿈 막기를 빼면 따옴표 시험 4건이 모두 실패한다. 새 시험을 바꾸기 전의 코드에 돌리면 8건 가운데 6건이 실패한다(통과하는 둘은 산문 시험과, 옛 코드에서도 ◯가 붙어 있던 전례시편 20편).
 - 전수 비교(Chromium): 시편, 전례시편, 송가, 잠언, 욥기, 이사야, 아가, 애가, 전도서, 집회서, 지혜서의 운문 24,492행을 폭과 글자 크기 넷(폭 390px에 16px과 18px, 320px에 24px, 1280px에 24px)에서 바꾸기 전과 견주었다. 절 번호와 첫 줄의 자리는 모두 같고, 넘어간 줄은 모두 한 글자 안쪽이며, 화면을 넘는 행은 없다. 넘어가는 행의 수도 같다(16px 3,072행, 18px 6,661행, 320px의 24px 22,545행, 1280px의 24px 483행). 낱말 안의 줄바꿈은 따옴표를 묶기 전에 18px에서 3행, 320px의 24px에서 10행이었고 모두 문장 부호 옆이었다. 묶은 뒤에는 16px, 18px, 1280px의 24px에서 0행, 320px의 24px에서 따옴표와 상관없는 3행이다. 묶음 상자 바로 뒤의 공백은 다음 줄 첫머리에 놓이고 폭을 차지하지 않아, 그 줄의 첫 글자 자리로 띄어쓰기 자리의 줄바꿈인지 가렸다.
 - ◯ 2,673개(전례시편과 송가): 폭 390px의 16px과 18px에서 모두 마지막 낱말과 같은 줄이다. 폭 320px의 24px에서는 전례시편 99:8 한 곳만 "대답해주셨습니다. ◯"가 한 줄보다 길어 넘어간다. 영광송은 폭 260-699px, 글자 16-24px에서 모두 같은 줄이다.
@@ -77,4 +77,4 @@ title: "feat: 운문의 줄바꿈과 넘어간 줄의 들여쓰기"
 
 - ◯를 마지막 낱말과 같은 줄에 두는 규칙을 사용자가 확인했다.
 - 닫는 따옴표와 조사 사이의 줄바꿈(known-issues §58)을 이 PR에서 고치기로 했다. 따옴표와 양옆 글자를 묶어 고쳤다(위 「확정 · 근거」).
-- 디자인 시스템 아티팩트를 맞추기로 했다.
+- 디자인 시스템 아티팩트를 맞추기로 했다. 장 본문 설명, 브랜드 설명 「글꼴」, CSS 사본(`bundle.css`), 변경 기록의 수정본을 만들었지만, 링크 공유된 아티팩트에 올리는 일을 자동 모드의 권한 검사가 두 번 막아 아직 올리지 못했다.
