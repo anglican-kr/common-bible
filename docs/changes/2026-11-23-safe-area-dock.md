@@ -1,4 +1,5 @@
 ---
+pr: 647
 date: 2026-11-23
 branch: fix/safe-area-dock
 title: "fix: 하단 막대와 알림이 좌우 안전 영역을 피하게 하기"
