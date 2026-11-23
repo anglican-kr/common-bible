@@ -29,8 +29,9 @@
 
 ### 2. 앱 커밋의 기준
 
-- `app_commit`은 배포 목록(서버 저장소 `deploy-manifest.txt`)에서 `data/`와 `sitemap.xml`을 뺀 경로를 마지막으로 바꾼 커밋이다. `data_commit`은 데이터 서브모듈의 커밋이다.
-- 까닭: 데이터가 바뀌면 `sync-data.yml`이 서브모듈 포인터와 `sitemap.xml`을 올리는 커밋을 앱 저장소에 만든다. 앱 커밋으로 HEAD를 쓰면 앱이 그대로여도 값이 바뀌어, 앱과 데이터를 나눠 적는 뜻이 없다.
+- `app_commit`은 배포 목록(서버 저장소 `deploy-manifest.txt`)에서 `data/`를 뺀 경로를 마지막으로 바꾼 커밋이다. 다만 데이터 커밋은 건너뛴다. 데이터 커밋은 그 경로 가운데 `sitemap.xml`만 바꾸고, 데이터 서브모듈 포인터를 바꾸거나 제목이 `data:` 형식인 커밋이다. `data_commit`은 데이터 서브모듈의 커밋이다.
+- 까닭: 데이터가 바뀌면 `sync-data.yml`이 서브모듈 포인터를 올리고 `sitemap.xml`을 다시 만들어 "data: 서브모듈 포인터 + sitemap 갱신"으로 커밋한다. 앱 커밋으로 HEAD를 쓰면 앱이 그대로여도 값이 바뀌어, 앱과 데이터를 나눠 적는 뜻이 없다.
+- `sitemap.xml`은 앱 저장소의 파일이지만 데이터에서 만든다(`scripts/build_sitemap.py`). 그래서 데이터 커밋에서만 뺀다. 앱 PR이 포인터를 먼저 올렸으면 자동 PR은 포인터 없이 `sitemap.xml`만 바꾸므로(#635), 제목의 `data:` 형식으로도 가려낸다. `sitemap.xml`만 고친 앱 PR(`build_sitemap.py`를 고친 경우)은 앱 커밋을 바꾼다. 늘 빼면 내용이 다른 두 빌드가 같은 식별자를 가진다.
 - 문서만 바꾼 커밋도 배포 목록 밖이라 `app_commit`을 바꾸지 않는다.
 - 서버의 빌드 디렉터리 이름(`bible-{version}-{HEAD}`)과 promote의 확인은 HEAD를 그대로 쓴다. promote는 dev.anglican.kr에서 확인한 바로 그 커밋이 main인지 보아야 한다.
 
