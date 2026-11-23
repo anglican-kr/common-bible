@@ -322,16 +322,19 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
 
   /**
    * Desktop-only (wide + mouse): drag a left-edge handle to resize the side
-   * panel's width. Drag left widens; clamp to [minWidth, maxRatio·viewport-width].
+   * panel's width. Drag left widens; clamp to [minWidthRem, maxRatio·viewport-width].
    * The small layout is a no-op (the sheet is a bottom drawer there).
+   * The floor is in rem so it follows the font-size setting like the panel's own
+   * CSS width (ADR-055 §1); it is read at each pointerdown.
    *
    * @param {HTMLElement} handle
    * @param {HTMLElement} sheet
-   * @param {{ minWidth?: number, maxRatio?: number }} [opts]
+   * @param {{ minWidthRem?: number, maxRatio?: number }} [opts]
    */
-  function attachSheetResize(handle, sheet, { minWidth = 240, maxRatio = 0.85 } = {}) {
+  function attachSheetResize(handle, sheet, { minWidthRem = 13.3, maxRatio = 0.85 } = {}) {
     let startX = 0;
     let startW = 0;
+    let minWidth = 0;
     /** @param {PointerEvent} e */
     function onPointerMove(e) {
       const delta = startX - e.clientX; // drag left = wider
@@ -346,6 +349,7 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
       e.preventDefault();
       startX = e.clientX;
       startW = sheet.offsetWidth;
+      minWidth = minWidthRem * (parseFloat(getComputedStyle(document.documentElement).fontSize) || 18);
       handle.setPointerCapture(e.pointerId);
       handle.addEventListener("pointermove", onPointerMove);
       handle.addEventListener("pointerup", onPointerUp, { once: true });

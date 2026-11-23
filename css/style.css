@@ -207,7 +207,7 @@
   --tabbar-reserve: calc(4.5rem + env(safe-area-inset-bottom) * 0.75);
 
   /* ── Layout ── */
-  --max-width: 720px;
+  --max-width: 40rem;    /* 720px at the default 18px; follows the font-size setting (ADR-055 §2) */
 
   /* Toggle switch (settings panel). OFF-state colours only — the ON state
      always uses --accent so it tracks the chosen colour scheme. iOS uses the
@@ -1757,7 +1757,7 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 79;
-  width: min(92vw, 360px);
+  width: min(92vw, 20rem);
   background: var(--bg-card);
   color: var(--text);
   border-radius: var(--radius-modal);
@@ -3004,7 +3004,7 @@ a.scope-pill-main:active,
     bottom: auto;
     transform: none;
     margin-inline: 0;
-    width: min(420px, 90vw);
+    width: min(23.3rem, 90vw);
     max-width: none;
     height: 95vh;
     max-height: none;
@@ -3284,7 +3284,7 @@ a.scope-pill-main:active,
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 61;
-  width: min(92vw, 420px);
+  width: min(92vw, 23.3rem);
   max-height: 85vh;
   overflow-y: auto;
   background: var(--bg-card);
@@ -4759,7 +4759,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
     bottom: auto;
     left: auto;
     margin-inline: 0;
-    width: min(440px, 90vw);
+    width: min(24.4rem, 90vw);
     max-width: none;
     height: 95vh;
     max-height: none;
@@ -6941,7 +6941,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     right: 0;
     bottom: auto;
     left: auto;
-    width: min(360px, 90vw);
+    width: min(20rem, 90vw);
     height: 95vh;
     max-height: none;
     border-radius: var(--radius-xl) 0 0 var(--radius-xl);
@@ -7427,7 +7427,7 @@ body.bm-select-active .bm-folder-read-btn { display: none; }
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 73;
-  width: min(92vw, 420px);
+  width: min(92vw, 23.3rem);
   overflow: visible;
   background: var(--bg-card);
   color: var(--text);
@@ -7687,7 +7687,7 @@ body.bm-select-active .bm-folder-read-btn { display: none; }
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 77;
-  width: min(92vw, 360px);
+  width: min(92vw, 20rem);
   background: var(--bg-card);
   color: var(--text);
   border-radius: var(--radius-modal);
@@ -7748,7 +7748,7 @@ body.bm-select-active .bm-folder-read-btn { display: none; }
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 75;
-  width: min(92vw, 360px);
+  width: min(92vw, 20rem);
   background: var(--bg-card);
   color: var(--text);
   border-radius: var(--radius-modal);
@@ -7866,7 +7866,7 @@ body.bm-select-active .bm-folder-read-btn { display: none; }
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 77;
-  width: min(92vw, 360px);
+  width: min(92vw, 20rem);
   background: var(--bg-card);
   color: var(--text);
   border-radius: var(--radius-modal);
@@ -7946,7 +7946,7 @@ body.bm-select-active .bm-folder-read-btn { display: none; }
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 79;
-  width: min(92vw, 380px);
+  width: min(92vw, 21.1rem);
   max-height: 80vh;
   background: var(--bg-card);
   color: var(--text);
@@ -8076,7 +8076,7 @@ body.bm-select-active .bm-folder-read-btn { display: none; }
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 77;
-  width: min(92vw, 360px);
+  width: min(92vw, 20rem);
   background: var(--bg-card);
   color: var(--text);
   border-radius: var(--radius-modal);
