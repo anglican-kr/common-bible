@@ -1,7 +1,7 @@
 # ADR-051: 작업은 dev 브랜치에 모으고, main은 운영에 낸 코드만 담는다
 
 - 상태: 승인됨 — 구현 완료(2026-11-22). 앱 저장소의 규칙, CI, 훅을 dev 기준으로 바꿨고(#633), dev 브랜치와 저장소 설정(dev 보호, 기본 브랜치), 데이터 저장소의 동기화 요청(common-bible-data#92), 서버 저장소의 배포 확인(common-bible-server#5)을 적용했다. §3의 순서로 운영에 내는 것은 2.2.4가 처음이다
-- 관련: ADR-020(저장소 분할, 배포 스크립트의 위치), ADR-021(캐시 무효화와 릴리스 스크립트)
+- 관련: ADR-020(저장소 분할, 배포 스크립트의 위치), ADR-021(캐시 무효화와 릴리스 스크립트), ADR-052(빌드 식별자와 pre-release)
 
 ## 요약
 
@@ -43,10 +43,10 @@
 운영에 내는 일은 버전을 올릴 때든 데이터만 바뀌었을 때든 이 순서를 따른다.
 
 1. 버전을 올리면 릴리스 PR(`chore: X.Y.Z 릴리스`)을 dev에 머지한다.
-2. dev의 그 커밋을 `deploy.sh dev`로 dev.anglican.kr에 올리고 실제 기기에서 확인한다.
+2. dev의 그 커밋을 `deploy.sh dev`로 dev.anglican.kr에 올리고 실제 기기에서 확인한다. 버전을 올렸으면 그 빌드의 pre-release를 만든다(ADR-052 §4).
 3. dev에서 main으로 PR을 연다. 필수 검사가 그 커밋에서 실행된다.
 4. 검사가 통과하면 main을 그 커밋으로 앞당긴다(`git push origin <커밋>:main`). GitHub는 그 PR을 머지된 것으로 닫는다.
-5. 버전을 올렸으면 그 커밋에 태그와 GitHub Release를 만든다. 그다음 `deploy.sh promote`를 실행한다.
+5. 버전을 올렸으면 그 커밋에 정식 태그와 GitHub Release를 만든다. 그다음 `deploy.sh promote`를 실행한다.
 
 - main은 앞당기기만 한다. 머지 커밋도 squash도 쓰지 않는다. 까닭: main과 dev의 커밋이 같아야, dev에서 확인한 빌드 디렉터리(`bible-{version}-{shortsha}`)를 promote가 그대로 운영에 가리킬 수 있다.
 - 브랜치 보호는 PR에서 필수 검사를 통과한 커밋을 그대로 앞당기는 push를 받아들인다(#354와 data#33에서 확인했다).
