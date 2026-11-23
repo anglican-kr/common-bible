@@ -1403,9 +1403,12 @@ test("widths: boxes that hold text are sized in rem, so they follow the font-siz
   assert.match(css, /--max-width:\s*40rem;/, "the reading column is 40rem (ADR-055 §2)");
   // A width declaration (not a media or container query: those follow `(`) with a px length of 100 or more
   // is a box that holds text. What stays px is smaller: switches (51-52px), icons, handles, the 44px touch
-  // target. Gutters inside a viewport cap (`calc(100vw - 16px)`) are small too.
+  // target. Gutters inside a viewport cap (`calc(100vw - 16px)`) are small too. The `flex` and
+  // `grid-template-columns` shorthands and width tokens (`--*-w`, `--*-width`) carry widths as well;
+  // `--sidebar-w` is a reserved token no rule reads (ADR-028).
   const px = [];
-  for (const m of css.matchAll(/(?<=[;{}]\s*)((?:min-|max-)?(?:width|inline-size)|flex-basis)\s*:\s*([^;}]+)/g)) {
+  const decl = /(?<=[;{}]\s*)((?:min-|max-)?(?:width|inline-size)|flex-basis|flex|grid-template-columns|--(?!sidebar-w\b)[\w-]*-(?:w|width))\s*:\s*([^;}]+)/g;
+  for (const m of css.matchAll(decl)) {
     if ([...m[2].matchAll(/(\d+(?:\.\d+)?)px\b/g)].some((n) => Number(n[1]) >= 100)) px.push(`${m[1]}: ${m[2].trim()}`);
   }
   assert.deepEqual(px, [], "text boxes sized in px");

@@ -1102,7 +1102,7 @@ export interface AppOverlay {
   attachSheetResize: (
     handle: HTMLElement,
     sheet: HTMLElement,
-    opts?: { minWidth?: number; maxRatio?: number },
+    opts?: { minWidthRem?: number; maxRatio?: number },
   ) => void;
 }
 
