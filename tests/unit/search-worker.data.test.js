@@ -418,7 +418,7 @@ test("firstKeptDayIn: 독서 세트 여럿이면 가장 가까운 날이고, 지
   const plain = (v) => JSON.parse(JSON.stringify(v));
   // 사순2주일 가해의 복음(요한 3:1-17)은 2029년이 가해다
   assert.deepStrictEqual(plain(e.firstKeptDayIn(lec, cal, new Set(["lent-2-sun-A-t1-s1"]), "2026-11-16", "2050-12-31")),
-    { date: "2029-02-25", obs: "grid:lent-2-sunday", setId: "lent-2-sun-A-t1-s1", track: null });
+    { date: "2029-02-25", obs: "grid:lent-2-sunday", setId: "lent-2-sun-A-t1-s1", track: null, ember: false });
   // 세트 둘을 함께 주면 둘 가운데 먼저 오는 날이다
   const b = e.firstKeptDayIn(lec, cal, new Set(["advent-1-mon-B-t1-s1"]), "2026-11-16", "2050-12-31");
   const c = e.firstKeptDayIn(lec, cal, new Set(["advent-1-mon-C-t1-s1"]), "2026-11-16", "2050-12-31");
@@ -427,7 +427,10 @@ test("firstKeptDayIn: 독서 세트 여럿이면 가장 가까운 날이고, 지
   // 전례일 키(고유 독서가 없는 월별 축일)는 후보의 식별자로 찾는다. 세트와 트랙은 없다
   const school = e.firstKeptDayIn(lec, cal, new Set(["d0523-성-베드로-학교-개교"]), "2026-11-16", "2050-12-31");
   assert.ok(school, "성 베드로 학교 개교");
-  assert.deepStrictEqual(plain({ ...school, date: school.date.slice(5) }), { date: "05-23", obs: "d0523-성-베드로-학교-개교", setId: null, track: null });
+  assert.deepStrictEqual(plain({ ...school, date: school.date.slice(5) }), { date: "05-23", obs: "d0523-성-베드로-학교-개교", setId: null, track: null, ember: false });
+  // 사계재의 지향별 날은 `ember`다. 2026 전례년의 동계재 수요일은 2025-12-17이다
+  assert.deepStrictEqual(plain(e.firstKeptDayIn(lec, cal, new Set(["temporal-성직자의-성소를-위한-동계재-수요일-t1-s1"]), "2025-11-30", "2026-11-28")),
+    { date: "2025-12-17", obs: "t-동계재", setId: "temporal-성직자의-성소를-위한-동계재-수요일-t1-s1", track: null, ember: true });
   // 지키는 날만 센다: 사도 성 안드레아(11.30)는 2025년에 대림1주일과 겹쳐 12월 1일로 옮겨 간다
   for (const id of ["d1130-사도-성-안드레아", "d1130-사도-성-안드레아-t1-s1"]) {
     assert.strictEqual(e.firstKeptDayIn(lec, cal, new Set([id]), "2025-11-01", "2025-12-31").date, "2025-12-01", id);
@@ -448,6 +451,18 @@ function keptTable() {
   return (keptTableCache = table);
 }
 const TODAY = "2026-11-16";
+
+test("지키는 날의 표: 사계재의 날만 `ember`다(2025-2050년 전수, ADR-044 §1)", { skip: !haveData }, () => {
+  // 엔진은 규칙 종류로 판별한다(`isEmber`). 이 시험은 이름(「…계재」)으로 따로 세어 대조한다
+  let embers = 0;
+  for (const [id, days] of keptTable().byId) {
+    for (const day of days) {
+      assert.strictEqual(day.ember, day.obs.endsWith("계재"), `${id} ${day.date} ${day.obs}`);
+      if (day.ember) embers += 1;
+    }
+  }
+  assert.ok(embers > 0);
+});
 
 test("yearDaysIn: 그해에 지키는 날, 옮겨 지키는 날, 겹쳐 기념만 하는 날, 지키지 않는 해(ADR-044 §4)", { skip: !haveData }, () => {
   const { e, cal, lec } = realEngine();
@@ -482,6 +497,10 @@ test("yearDaysIn: 그해에 지키는 날, 옮겨 지키는 날, 겹쳐 기념�
   const ember = (key) => e.yearDayIn(y27, [`${key}-t1-s1`], key)?.date ?? null;
   assert.deepStrictEqual(["수요일-성직자", "금요일-성직후보자", "금요일-수도자", "토요일-모든-신자"]
     .map((k) => ember(`lent-1-fast-사순1주-${k}의-성소를-위한-춘계재`)), ["2027-02-17", "2027-02-19", "2027-02-19", "2027-02-20"]);
+  // 사계재의 날은 `ember`다. 검색 결과가 같은 날의 줄에서 사계재를 평일 아래에 둔다(ADR-044 §1). 겹친 날도 넘긴다
+  const flag = (key) => e.yearDayIn(y27, [`${key}-t1-s1`], key)?.ember;
+  assert.strictEqual(flag("lent-1-fast-사순1주-수요일-성직자의-성소를-위한-춘계재"), true);
+  assert.deepStrictEqual([nicola.ember, cranmer.ember], [false, false]);
 });
 
 test("사계재는 지향별 줄만 찾는다. 계절 이름으로 찾으면 그 계절의 넷, `사계재`로는 네 계절의 열여섯이다(ADR-044 §3)", { skip: !haveData }, () => {

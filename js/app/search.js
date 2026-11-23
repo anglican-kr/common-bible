@@ -671,7 +671,8 @@ const LECT_LUNAR_PREFIX = "lunar";
 /**
  * 연도를 붙인 이름 검색의 줄(ADR-044 §4). `found`는 워커가 찾은 전례일이고, `perYear`는 해마다 그 전례일들의 날(엔진 `findYearDays`,
  * `found`와 같은 차례)과 그해의 음력 날짜 자료가 있는지다. 줄은 전례일마다, 해마다 하나이고 날짜 차례다. 해가 날짜의 앞자리라 해의
- * 차례로 묶이고, 같은 날이면 이름 결과의 차례를 지킨다(`Array.prototype.sort`는 안정 정렬이다). 그해에 지키지 않는 전례일은 줄을
+ * 차례로 묶이고, 같은 날이면 사계재의 줄을 아래에 두고(`lectEmberLast`) 그 밖에는 이름 결과의 차례를 지킨다(`Array.prototype.sort`는
+ * 안정 정렬이다). 그해에 지키지 않는 전례일은 줄을
  * 두지 않는다. 성탄 평일을 그해의 이름으로만 찾았으면(`yearNames`) 그해의 이름이 맞는 날만 둔다. `notes`는 결과 위나 결과 없음 화면에
  * 적는 문장이다: 10년으로 자른 것, 음력 날짜 자료가 없는 해(「설날과 추석은 2025-2050년만 찾습니다.」, 사용자 결정 2026-11-18), 줄이 하나도
  * 없는 해(「2027, 2032년에는 검색하신 전례일을 지키지 않습니다.」).
@@ -696,7 +697,7 @@ function yearRowsOf(found, perYear, years, lunarSpan = null) {
     });
     if (items.length === before) empty.push(year);
   }
-  items.sort((a, b) => (a.yearDay.date < b.yearDay.date ? -1 : a.yearDay.date > b.yearDay.date ? 1 : 0));
+  items.sort((a, b) => (a.yearDay.date < b.yearDay.date ? -1 : a.yearDay.date > b.yearDay.date ? 1 : lectEmberLast(a.yearDay, b.yearDay)));
   /** @type {string[]} */
   const notes = [];
   /** 자른 것을 알리는 문장 @type {string[]} */
@@ -718,6 +719,49 @@ function yearRowsOf(found, perYear, years, lunarSpan = null) {
   const unkept = lunar.length === found.length ? empty.filter((y) => !noLunar.includes(y)) : empty;
   if (unkept.length) notes.push(`${yearsText(unkept)}에는 검색하신 전례일을 지키지 않습니다.`);
   return { items, notes };
+}
+
+/**
+ * 찾은 단계: 이름 결과는 이름이 검색어와 같은 것, 시작하는 것, 든 것(`tier`, 지역 축일도 있다)이고, 구절 결과는 검색어의 구절을 모두 담은
+ * 독서, 그다음 겹친 절이 많은 독서다. 워커가 이 차례로 보낸다(search-worker.js `searchLectionaryNames`, `searchLectionaryPassage`의 `better`).
+ * @param {any} a  LectItem @param {any} b  LectItem @returns {number}
+ */
+function lectStepOrder(a, b) {
+  if (a.hits && b.hits) {
+    const [x, y] = [a.hits[0], b.hits[0]];
+    return Number(y.full) - Number(x.full) || y.overlap - x.overlap;
+  }
+  return (a.tier ?? 3) - (b.tier ?? 3);
+}
+
+/**
+ * 전례일 줄의 차례(ADR-044 §1, 사용자 결정 2026-11-23): 찾은 단계 안에서 줄이 여는 날의 날짜 차례다. 그래야 같은 날 읽을 수 있는 줄이
+ * 이웃한다(`대림`의 동계재 지향별 줄이 목록 끝이 아니라 같은 날의 대림 평일 곁에 온다). 날이 같으면 사계재의 줄을 아래에 두고
+ * (`lectEmberLast`), 그 밖에는 워커가 보낸 전례년 순서다. 날짜를 계산하지 못한 줄(`days`에 없거나 null)은 그 단계의 끝에 그 순서로 둔다.
+ * 연도를 붙인 검색의 줄은 이미 그해의 날짜 차례라(`yearRowsOf`) 그대로 둔다.
+ * @param {any} lect  LectResult
+ * @param {Map<any, LectDays | null> | null | undefined} days  줄마다 여는 날(`withLectDays`)
+ * @returns {any[]}  LectItem[], 새 배열
+ */
+function lectItemsByDay(lect, days) {
+  if (lect.years || !days) return lect.items.slice();
+  return lect.items
+    .map((/** @type {any} */ item, /** @type {number} */ i) => ({ item, i, day: days.get(item)?.open ?? null }))
+    .sort((/** @type {any} */ a, /** @type {any} */ b) => lectStepOrder(a.item, b.item)
+      || (a.day === b.day ? 0 : a.day === null ? 1 : b.day === null ? -1 : a.day.date < b.day.date ? -1 : a.day.date > b.day.date ? 1
+        : lectEmberLast(a.day, b.day))
+      || a.i - b.i)
+    .map((/** @type {any} */ x) => x.item);
+}
+
+/**
+ * 같은 날의 두 줄: 사계재의 줄을 아래에 둔다(사용자 결정 2026-11-23, ADR-044 §1). 전례독서 화면이 그날의 평일을 제목으로 두고 사계재를 목록의
+ * 줄로 두는 것과 같다. 사계재인지는 엔진이 규칙 종류로 판별해 넘긴다(`KeptDay`, `YearDay`의 `ember`). 색인의 전례년 순서로는 춘계재와 하계재가
+ * 평일 위에, 동계재와 추계재가 평일 아래에 왔다.
+ * @param {{ ember?: boolean }} a @param {{ ember?: boolean }} b @returns {number}
+ */
+function lectEmberLast(a, b) {
+  return Number(!!a.ember) - Number(!!b.ember);
 }
 
 /**
@@ -1314,6 +1358,9 @@ function appendLectGroup(container, lect, screen) {
     container.appendChild(el("p", { className: "search-note" }, synonymNote(lect.synonyms)));
   }
   for (const note of lect.notes || []) container.appendChild(el("p", { className: "search-note" }, note));
+  // 날짜를 계산했으면 날짜 차례로 그린다. 아직이면 워커의 차례 그대로이고, 날짜가 오면 `patchLectDays`가 다시 늘어놓는다. 그린 줄과
+  // `lect.items`의 차례가 같아야 `patchLectDays`가 줄마다 제 날짜를 넣는다
+  lect.items = lectItemsByDay(lect, screen.days);
   const rows = el("ul", { className: "lect-rows", role: "list" });
   for (const item of lect.items) rows.appendChild(buildLectRow(lectRowOf(item, screen.readingLabel, screen.days?.get(item) ?? null, screen.today)));
   container.appendChild(rows);
@@ -1778,7 +1825,7 @@ function localDayOf(mod, item, date) {
     const resolved = mod.resolveDate(date);
     colors = resolved ? mod.headerColors(resolved, null).colors : [];
   }
-  return { date, obs: item.obs.key, setId: null, track: null, name: item.obs.name, colors };
+  return { date, obs: item.obs.key, setId: null, track: null, name: item.obs.name, colors, ember: false };
 }
 
 /**
@@ -1824,17 +1871,32 @@ async function withLectDays(result, screen, deadline, isStale) {
 }
 
 /**
- * 3초가 지나 계산이 끝난 날짜를 그린 줄에 넣는다(ADR-044 §1). 줄의 글만 바꾸므로 포커스와 읽던 자리가 남는다. 독서 표기는 처음 그린
- * 것(`labelOf`)을 그대로 쓴다. 나중에 받아도 다시 그리지 않기로 했다(ADR-044 §1).
+ * 3초가 지나 계산이 끝난 날짜를 그린 줄에 넣고, 줄을 날짜 차례로 다시 늘어놓는다(ADR-044 §1, `lectItemsByDay`). 줄의 글만 바꾸고 줄을
+ * 새로 만들지 않는다. 옮긴 줄에 포커스가 있었으면 그 링크에 다시 둔다(WCAG 2.4.3). 독서 표기는 처음 그린 것(`labelOf`)을 그대로 쓴다.
+ * 나중에 받아도 다시 그리지 않기로 했다(ADR-044 §1).
  * @param {HTMLElement} target @param {any} lect @param {SearchScreen} screen
  * @param {(setId: string, slot: string) => string | null} labelOf
  */
 function patchLectDays(target, lect, screen, labelOf) {
-  const rows = target.querySelectorAll("ul.lect-rows > li");
+  const list = target.querySelector("ul.lect-rows");
+  if (!list) return;
+  // `lect.items` is in the order the rows were drawn (`appendLectGroup`)
+  const rows = /** @type {HTMLElement[]} */ (Array.from(list.children));
+  /** @type {Map<any, HTMLElement>} */
+  const rowOf = new Map();
   lect.items.forEach((/** @type {any} */ item, /** @type {number} */ i) => {
-    const li = /** @type {HTMLElement | undefined} */ (rows[i]);
-    if (li) fillLectRow(li, lectRowOf(item, labelOf, screen.days?.get(item) ?? null, screen.today));
+    const li = rows[i];
+    if (!li) return;
+    fillLectRow(li, lectRowOf(item, labelOf, screen.days?.get(item) ?? null, screen.today));
+    rowOf.set(item, li);
   });
+  const sorted = lectItemsByDay(lect, screen.days);
+  if (rows.length !== lect.items.length || sorted.every((item, i) => item === lect.items[i])) return;
+  lect.items = sorted;
+  // Moving a node out of the document drops its focus, so put it back on the same link
+  const focused = document.activeElement instanceof HTMLElement && list.contains(document.activeElement) ? document.activeElement : null;
+  for (const item of sorted) list.appendChild(/** @type {HTMLElement} */ (rowOf.get(item)));
+  if (focused && document.activeElement !== focused) focused.focus({ preventScroll: true });
 }
 
 /**

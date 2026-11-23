@@ -278,6 +278,7 @@ function loadPureHelpers() {
     lectSlugHref: ctx.lectSlugHref,
     lectRowOf: ctx.lectRowOf,
     yearRowsOf: ctx.yearRowsOf,
+    lectItemsByDay: ctx.lectItemsByDay,
     nextMonthDay: ctx.nextMonthDay,
     monthDayIn: ctx.monthDayIn,
     monthDaysBetween: ctx.monthDaysBetween,
@@ -2141,7 +2142,7 @@ test("lectRowOf: 연도를 붙여 찾은 성탄 평일은 그해의 이름이 �
   assert.strictEqual(h.lectRowOf(item, () => null, null, "2026-11-17").title, "성탄 1주 토요일");
 });
 
-test("yearRowsOf: 줄은 날짜 차례라 해의 차례로 묶이고, 그해에 지키지 않는 전례일은 빼고, 같은 날은 이름 결과의 차례다(ADR-044 §4)", () => {
+test("yearRowsOf: 줄은 날짜 차례라 해의 차례로 묶이고, 그해에 지키지 않는 전례일은 빼고, 같은 날은 사계재가 아래이고 그 밖에는 이름 결과의 차례다(ADR-044 §4)", () => {
   const h = loadPureHelpers();
   const a = { obs: OBS({ key: "a", name: "가" }), sets: [] };
   const b = { obs: OBS({ key: "b", name: "나" }), sets: [] };
@@ -2154,6 +2155,79 @@ test("yearRowsOf: 줄은 날짜 차례라 해의 차례로 묶이고, 그해에 
   assert.deepStrictEqual(JSON.parse(JSON.stringify(items.map((it) => [it.obs.key, it.yearDay.date]))),
     [["b", "2026-01-05"], ["a", "2026-12-01"], ["c", "2027-02-01"], ["a", "2027-03-01"], ["b", "2027-03-01"]]);
   assert.deepStrictEqual(JSON.parse(JSON.stringify(notes)), []);
+  // 같은 날이면 사계재가 아래다(ADR-044 §1, 사용자 결정 2026-11-23). 이름 결과의 차례로는 춘계재가 먼저여도 그렇다
+  const ember = { obs: OBS({ key: "ember", name: "성직자의 성소를 위한 춘계재" }), sets: [] };
+  const wed = { obs: OBS({ key: "wed", name: "사순1주 수요일" }), sets: [] };
+  const lent = h.yearRowsOf([ember, wed], [{ year: 2027, days: [YDAY("2027-02-17", { ember: true }), YDAY("2027-02-17", { ember: false })], lunar: true }],
+    { from: 2027, to: 2027, capped: false });
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(lent.items.map((it) => it.obs.key))), ["wed", "ember"]);
+});
+
+/** 줄이 여는 날(`lectDaysOf`의 결과). @param {string} date @param {boolean} [ember] */
+const LDAYS = (date, ember = false) => ({ open: { date, obs: "x", setId: null, track: null, name: "", colors: [], ember }, next: null, nextIds: [],
+  year: null, cycles: [], nextYear: null });
+/** @param {any[]} items */
+const keysOf = (items) => JSON.parse(JSON.stringify(items.map((it) => it.obs.key)));
+
+test("lectItemsByDay: 찾은 단계 안에서 줄이 여는 날의 날짜 차례다. 날이 같으면 사계재가 아래이고 그 밖에는 워커의 차례, 날짜가 없는 줄은 그 단계의 끝이다(ADR-044 §1)", () => {
+  const h = loadPureHelpers();
+  // `대림`(2026 전례년): 워커는 전례년 순서로 보내 동계재가 맨 끝이고, 대림 3주 수요일은 성탄 8일 전에 밀려 다음 전례년에 읽는다
+  const item = (key, order, tier = 2) => ({ obs: OBS({ key, order }), sets: [], tier });
+  const tue = item("advent-3-tue", 16);
+  const wed = item("advent-3-wed", 17);
+  const sun4 = item("advent-4-sun", 20);
+  const d1217 = item("d1217", 21);
+  const ember = item("ember-wed", 400);
+  const unknown = item("no-day", 401);
+  const inside = item("inside", 500, 3);
+  const lect = { kind: "name", items: [tue, wed, sun4, d1217, ember, unknown, inside] };
+  const days = new Map([
+    [tue, LDAYS("2025-12-16")], [wed, LDAYS("2026-12-16")], [sun4, LDAYS("2025-12-21")], [d1217, LDAYS("2025-12-17")],
+    [ember, LDAYS("2025-12-17", true)], [unknown, null], [inside, LDAYS("2025-11-30")],
+  ]);
+  assert.deepStrictEqual(keysOf(h.lectItemsByDay(lect, days)),
+    ["advent-3-tue", "d1217", "ember-wed", "advent-4-sun", "advent-3-wed", "no-day", "inside"]);
+  // 새 배열을 돌려주고 결과는 바꾸지 않는다
+  assert.deepStrictEqual(keysOf(lect.items), ["advent-3-tue", "advent-3-wed", "advent-4-sun", "d1217", "ember-wed", "no-day", "inside"]);
+  // `사순`: 워커는 춘계재를 같은 날의 평일 위에 보내지만, 같은 날이면 사계재가 아래다(사용자 결정 2026-11-23). 금요일의 두 지향은 워커의 차례다
+  const lentEmberWed = item("ember-lent-wed", 52);
+  const lentWed = item("lent-1-wed", 53);
+  const lentEmberFri1 = item("ember-lent-fri-1", 55);
+  const lentEmberFri2 = item("ember-lent-fri-2", 56);
+  const lentFri = item("lent-1-fri", 57);
+  const lent = { kind: "name", items: [lentEmberWed, lentWed, lentEmberFri1, lentEmberFri2, lentFri] };
+  const lentDays = new Map([[lentEmberWed, LDAYS("2026-02-25", true)], [lentWed, LDAYS("2026-02-25")],
+    [lentEmberFri1, LDAYS("2026-02-27", true)], [lentEmberFri2, LDAYS("2026-02-27", true)], [lentFri, LDAYS("2026-02-27")]]);
+  assert.deepStrictEqual(keysOf(h.lectItemsByDay(lent, lentDays)),
+    ["lent-1-wed", "ember-lent-wed", "lent-1-fri", "ember-lent-fri-1", "ember-lent-fri-2"]);
+});
+
+test("lectItemsByDay: 구절 결과는 모두 담은 독서, 겹친 절이 많은 독서의 단계 안에서 날짜 차례다(ADR-044 §1)", () => {
+  const h = loadPureHelpers();
+  const item = (key, full, overlap) => ({ obs: OBS({ key }), sets: [], hits: [{ slot: 3, rows: [], sets: [], full, overlap }] });
+  const a = item("full-late", true, 3);
+  const b = item("full-early", true, 3);
+  const c = item("part-many-late", false, 2);
+  const d = item("part-many-early", false, 2);
+  const e = item("part-few-earliest", false, 1);
+  const days = new Map([[a, LDAYS("2026-08-01")], [b, LDAYS("2026-03-01")], [c, LDAYS("2026-09-01")], [d, LDAYS("2026-01-01")],
+    [e, LDAYS("2025-12-01")]]);
+  assert.deepStrictEqual(keysOf(h.lectItemsByDay({ kind: "passage", items: [a, b, c, d, e] }, days)),
+    ["full-early", "full-late", "part-many-early", "part-many-late", "part-few-earliest"]);
+});
+
+test("lectItemsByDay: 날짜를 계산하기 전과 연도를 붙인 검색의 줄은 차례를 바꾸지 않는다", () => {
+  const h = loadPureHelpers();
+  const a = { obs: OBS({ key: "a", order: 1 }), sets: [], tier: 1 };
+  const b = { obs: OBS({ key: "b", order: 2 }), sets: [], tier: 2 };
+  const c = { obs: OBS({ key: "c", order: 3 }), sets: [], tier: 2 };
+  const lect = { kind: "name", items: [a, b, c] };
+  assert.deepStrictEqual(keysOf(h.lectItemsByDay(lect, null)), ["a", "b", "c"]);
+  assert.deepStrictEqual(keysOf(h.lectItemsByDay(lect, new Map())), ["a", "b", "c"]);
+  // 연도를 붙인 검색은 단계와 상관없이 그해의 날짜 차례다(`yearRowsOf`). 단계로 다시 나누지 않는다
+  const year = { kind: "name", years: { from: 2027, to: 2027, capped: false }, yearRows: true,
+    items: [{ ...c, yearDay: YDAY("2027-01-01") }, { ...a, yearDay: YDAY("2027-05-01") }] };
+  assert.deepStrictEqual(keysOf(h.lectItemsByDay(year, new Map())), ["c", "a"]);
 });
 
 test("yearRowsOf: 2050년보다 늦은 해도 자르지 않고 그해의 날을 보인다(ADR-044 §4, 2026-11-18)", () => {
