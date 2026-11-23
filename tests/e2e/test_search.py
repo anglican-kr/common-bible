@@ -1206,8 +1206,8 @@ def test_name_rows_are_in_the_order_of_the_days_they_open(page):
 
 
 def test_late_days_put_the_rows_in_date_order_and_keep_focus(browser):
-    """3초가 지나 날짜를 넣으면 줄을 날짜 차례로 다시 늘어놓는다. 줄을 새로 만들지 않고 옮기며, 포커스가 있던 링크에 포커스가 남는다
-    (ADR-044 §1)."""
+    """3초가 지나 날짜를 넣으면 줄을 날짜 차례로 다시 늘어놓는다. 줄을 새로 만들지 않고 옮기며, 포커스가 있던 링크에 포커스가 남고 그 줄이
+    화면에 보인다(ADR-044 §1)."""
     ctx = browser.new_context(service_workers="block")
     held = []
     ctx.route("**/lectionary/eucharist-readings.json", lambda route: held.append(route))
@@ -1228,6 +1228,14 @@ def test_late_days_put_the_rows_in_date_order_and_keep_focus(browser):
     assert titles[at - 1] == "성탄 5일 전" and titles[at + 1] == "대림4주일", titles
     assert page.evaluate("document.activeElement?.dataset.mark") == "focused"
     assert page.evaluate("document.activeElement.querySelector('.cal-row-title').textContent") == "모든 신자의 성소를 위한 동계재"
+    # 목록 끝에서 가운데로 옮긴 줄이 상단 바와 탭 바 사이에 보인다(WCAG 2.4.7, 코드 리뷰 2026-11-23)
+    page.wait_for_function("""() => {
+        const box = document.activeElement.getBoundingClientRect();
+        const top = document.getElementById('sticky-group').getBoundingClientRect().bottom;
+        const dock = document.getElementById('tab-dock')?.getBoundingClientRect();
+        const bottom = dock && dock.height > 0 ? dock.top : innerHeight;
+        return box.top >= top && box.bottom <= bottom;
+    }""", timeout=5_000)
     ctx.close()
 
 

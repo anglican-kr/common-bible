@@ -1859,10 +1859,13 @@ async function withLectDays(result, screen, deadline, isStale) {
     const today = todayOf(mod);
     // 화면의 이름으로 찾을 수 있게, 교회력 자료를 처음 받은 뒤 이번 전례년의 성탄 평일의 이름을 보내 둔다
     sendChristmasNames(mod, today).catch(() => {});
-    const found = await Promise.all(lect.items.map((/** @type {any} */ item) => lectDaysOf(mod, item, today, isStale).catch(() => null)));
+    // `appendLectGroup` may replace `lect.items` with a reordered array while this awaits, so pair `found` with the
+    // array it was computed from, not whatever `lect.items` is afterwards
+    const items = lect.items;
+    const found = await Promise.all(items.map((/** @type {any} */ item) => lectDaysOf(mod, item, today, isStale).catch(() => null)));
     if (screen.days !== days) return;
     screen.today = today;
-    lect.items.forEach((/** @type {any} */ item, /** @type {number} */ i) => days.set(item, found[i]));
+    items.forEach((/** @type {any} */ item, /** @type {number} */ i) => days.set(item, found[i]));
   })();
   let done = false;
   const finished = work.then(() => { done = true; });
@@ -1872,7 +1875,8 @@ async function withLectDays(result, screen, deadline, isStale) {
 
 /**
  * 3초가 지나 계산이 끝난 날짜를 그린 줄에 넣고, 줄을 날짜 차례로 다시 늘어놓는다(ADR-044 §1, `lectItemsByDay`). 줄의 글만 바꾸고 줄을
- * 새로 만들지 않는다. 옮긴 줄에 포커스가 있었으면 그 링크에 다시 둔다(WCAG 2.4.3). 독서 표기는 처음 그린 것(`labelOf`)을 그대로 쓴다.
+ * 새로 만들지 않는다. 옮긴 줄에 포커스가 있었으면 그 링크에 다시 두고(WCAG 2.4.3), 그 줄이 화면 밖으로 갔으면 화면 가운데로 가져온다
+ * (WCAG 2.4.7, 코드 리뷰 2026-11-23). 독서 표기는 처음 그린 것(`labelOf`)을 그대로 쓴다.
  * 나중에 받아도 다시 그리지 않기로 했다(ADR-044 §1).
  * @param {HTMLElement} target @param {any} lect @param {SearchScreen} screen
  * @param {(setId: string, slot: string) => string | null} labelOf
@@ -1896,7 +1900,18 @@ function patchLectDays(target, lect, screen, labelOf) {
   // Moving a node out of the document drops its focus, so put it back on the same link
   const focused = document.activeElement instanceof HTMLElement && list.contains(document.activeElement) ? document.activeElement : null;
   for (const item of sorted) list.appendChild(/** @type {HTMLElement} */ (rowOf.get(item)));
-  if (focused && document.activeElement !== focused) focused.focus({ preventScroll: true });
+  if (!focused) return;
+  if (document.activeElement !== focused) focused.focus({ preventScroll: true });
+  // The focused row may have moved out of sight: bring it back between the sticky top bar and the tab dock
+  // (WCAG 2.4.7). Centred, so neither bar covers it. A row still in sight stays put
+  const edge = (/** @type {string} */ id, /** @type {"top" | "bottom"} */ side, /** @type {number} */ fallback) => {
+    const box = document.getElementById(id)?.getBoundingClientRect();
+    return box && box.height > 0 ? box[side] : fallback;
+  };
+  const box = focused.getBoundingClientRect();
+  if (box.top < edge("sticky-group", "bottom", 0) || box.bottom > edge("tab-dock", "top", window.innerHeight)) {
+    focused.scrollIntoView({ block: "center" });
+  }
 }
 
 /**
