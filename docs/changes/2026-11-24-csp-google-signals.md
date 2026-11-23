@@ -1,4 +1,5 @@
 ---
+pr: 653
 date: 2026-11-24
 branch: fix/csp-google-signals
 title: "fix: CSP가 구글 시그널의 수집 요청을 막는다"
