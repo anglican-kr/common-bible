@@ -42,7 +42,8 @@ ROOT = Path(__file__).parent.parent
 GITMODULES = ROOT / ".gitmodules"
 
 # Commit-subject patterns dropped as noise.
-RELEASE_COMMIT_RE = re.compile(r"^chore: \d+\.\d+\.\d+ 릴리스")
+# `release:` from 2.2.5 on (user decision 2026-11-24); earlier releases used `chore:`.
+RELEASE_COMMIT_RE = re.compile(r"^(?:release|chore): \d+\.\d+\.\d+ 릴리스")
 SYNC_COMMIT_RE = re.compile(r"^data: 서브모듈 포인터 \+ sitemap 갱신$")
 SKIP_CI_MARKER = "[skip ci]"
 # common-bible-data 의 build.yml 이 파이프라인 산출물을 자동 커밋백할 때 쓰는

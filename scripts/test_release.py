@@ -9,7 +9,21 @@ Run: python -m unittest scripts/test_release.py
 
 import unittest
 
+import changelog
 import release
+
+
+class ReleaseCommitMessageTest(unittest.TestCase):
+    def test_message_format(self):
+        self.assertEqual(
+            release.release_commit_message("2.2.5"), "release: 2.2.5 릴리스"
+        )
+
+    def test_changelog_drops_the_release_commit(self):
+        # The squash merge appends the PR number to the subject.
+        message = release.release_commit_message("2.2.5")
+        self.assertTrue(changelog.is_app_noise(message))
+        self.assertTrue(changelog.is_app_noise(f"{message} (#654)"))
 
 
 class BumpSemverTest(unittest.TestCase):

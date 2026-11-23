@@ -37,6 +37,7 @@
   - 남은 것은 PR5c 하나이고, 그것만 따로 진행하는 것은 보류한다. 자세한 것은 [ADR-034](../decisions/034-views-routing-second-split.md)의 개정에 있다.
 - **보안 헤더 6종 통합** (2026-05-08). nginx의 server 수준 설정 조각(snippet)으로, dev와 prod 두 vhost에 모두 적용했다. `common-bible-server/nginx/security-headers.example.conf`를 본다.
 - **구글 애널리틱스 측정 ID는 `G-2Q4SRGVNQN`이다** (2026-11-23). 애널리틱스 관리 화면의 웹 스트림 「공동번역성서」(`https://bible.anglican.kr`, 스트림 ID 14348950825)의 것이다. `index.html`의 태그 주소와 `js/gtag-init.js`의 `config` 두 곳에 같은 값을 적는다. 2026-05-05부터 이 값으로 되돌린 판을 운영에 낼 때까지는 두 곳이 `G-CWVVPW11TE`여서 이 스트림에 데이터가 오지 않았다(원장 `docs/changes/2026-11-23-analytics-measurement-id.md`).
+- **이 측정 ID의 속성은 구글 시그널이 켜져 있다** (사용자 결정 2026-11-24). 구글 태그가 연령대, 성별, 관심 분야 보고서를 위해 `analytics.google.com`, `stats.g.doubleclick.net`, `www.google.co.kr`로도 요청을 보내고, CSP가 이 주소들을 허용하며 `privacy.html`이 그 사실을 밝힌다. `js/gtag-init.js`에서 시그널을 끄거나 측정 ID를 바꾸면 CSP와 `privacy.html`을 함께 맞춘다(`architecture.md` 「보안 모델」의 CSP 줄, 원장 `docs/changes/2026-11-24-csp-google-signals.md`).
 - **방문 기록(구글 애널리틱스)**. 앱이 화면마다 방문을 1건 보낸다.
   - 화면을 다 그리고 문서 제목을 정한 뒤, 브라우저가 한가할 때 보낸다(`routing.js`의 `trackPageView`). 제목은 그 화면의 문서 제목이고 주소는 그때의 주소 전체다. `route()`의 모든 갈래와 실패 화면이 호출하므로 첫 화면, 링크로 옮긴 화면, 뒤로 가기와 앞으로 가기, 실패 화면이 모두 1건이다. 화면을 그리며 주소를 고치는 경우(절 범위를 장 끝으로 자르기, 트랙 적기, 검색의 구절 바로 열기)도 고친 주소로 1건이다.
   - 구글 태그는 첫 화면을 스스로 보내지 않는다(`gtag-init.js`의 `send_page_view: false`). 기본값대로 두면 화면을 그리기 전의 제목(「공동번역성서」)과 처음 연 주소로 1건을 더 보낸다.
