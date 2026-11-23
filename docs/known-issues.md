@@ -428,6 +428,6 @@ ADR-038 §3의 렌더 기반이 복원하는 전례 표기는 계응 ◯(`.respo
 
 ---
 
-## 58. 운문의 행이 닫는 따옴표와 조사 사이에서 줄을 바꾸는 곳이 있다 (2026-11-23)
+## 58. 운문의 행이 닫는 따옴표와 조사 사이에서 줄을 바꾸는 곳이 있다 (2026-11-23) — 해소 (2026-11-23)
 
-- §58 → [topics/design-system.md](topics/design-system.md)
+- §58 → [topics/design-system.md](topics/design-system.md). 해소 기록은 그 절에 있다.
