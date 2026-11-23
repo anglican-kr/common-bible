@@ -3,6 +3,9 @@
 줄마다 첫 글자의 자리를 글자 하나씩 재어(`Range.getClientRects`) 같은 높이의 글자를 한 줄로 묶는다.
 자리는 운문 행 상자의 왼쪽 끝에서 잰 값이다. 절 번호 자리는 2rem, 한 글자는 본문 글자 크기(1em)다.
 """
+import json
+from pathlib import Path
+
 import pytest
 
 from .conftest import BASE_URL, CLEAR_APP_STORAGE, IPHONE_UA
@@ -150,6 +153,38 @@ def test_gloria_mark_stays_with_the_last_word(browser):
     finally:
         ctx.close()
     assert len(marks) == 1 and marks[0]["same"], marks
+
+
+# 전례독서 시편 슬롯의 104:35 줄들 — [보이는 글자, ◯가 있는가].
+_PSALM_104_35 = """() => [...document.querySelectorAll(".lect-reading[data-slot='psalm'] .verse[data-vkey^='35/']")]
+  .map((s) => [s.textContent, !!s.querySelector('.responsory-mark')])"""
+
+
+def test_half_verse_cut_gives_back_the_space_before_a_dropped_mark(browser):
+    """반절의 뒷줄을 버려 선창 줄이 마지막 줄로 남으면 ◯는 지워지고(lectionary.js trimHalfVerses), ◯를 붙잡던 줄바꿈 없는 공백도
+    보통 공백으로 돌아간다. 줄 끝의 줄바꿈 없는 공백은 보통 공백과 달리 폭을 차지해 마지막 낱말을 다음 줄로 밀 수 있다.
+    실데이터의 전례시편 반절은 앞줄을 버리는 104:35하 하나뿐이라, 반절 표와 독서 표를 104:35상으로 바꿔 그린다(2025-06-08)."""
+    root = Path(__file__).resolve().parents[2] / "data" / "lectionary"
+    halves = json.loads((root / "half-verses.json").read_text(encoding="utf-8"))
+    [entry] = [e for e in halves["entries"] if (e["bookId"], e["chapter"], e["verse"]) == ("lps", 104, 35)]
+    entry.update(half="a", line=1, text=None)   # 상: 첫 줄(선창)까지
+    readings = (root / "eucharist-readings.json").read_text(encoding="utf-8")
+    assert '"verseSpec": "24-34,35b"' in readings
+    readings = readings.replace('"verseSpec": "24-34,35b"', '"verseSpec": "24-34,35a"').replace(
+        '"verseSpec": "1-9,24,35b"', '"verseSpec": "1-9,24,35a"')
+    ctx = browser.new_context(service_workers="block")
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    try:
+        ctx.route("**/data/lectionary/half-verses.json", lambda route: route.fulfill(json=halves))
+        ctx.route("**/data/lectionary/eucharist-readings.json",
+                  lambda route: route.fulfill(body=readings, content_type="application/json"))
+        page = _open(ctx, "/lectionary/2025-06-08", ".lect-reading[data-slot='psalm'] .chapter-text .verse")
+        lines = page.evaluate(_PSALM_104_35)
+    finally:
+        ctx.close()
+    assert [text.replace("\u2060", "").strip() for text, _ in lines] == ["악인들아, 이 세상에서 영원히 사라져 버려라."], lines
+    [(text, has_mark)] = lines
+    assert not has_mark and text.endswith(" ") and "\u00a0" not in text, lines
 
 
 def test_versicle_mark_stays_in_the_gutter(browser):
