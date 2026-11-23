@@ -414,7 +414,7 @@ CRUD 작업 후 의존하는 UI 컴포넌트의 갱신 함수를 호출하지 �
 구글 애널리틱스에는 주소가 바뀌면 방문을 저절로 기록하는 설정(Page changes based on browser history events)이 있다. 구글 문서에 따르면 이 설정은 `pushState`, `popState`, `replaceState`를 보고 기록한다. `gtag`는 `history` 객체의 `replaceState`를 덮어써 호출을 가로챈다(2026-11-07 dev에서 `history`가 이 메서드를 직접 가진 것을 확인). 이 앱은 화면마다 방문을 직접 보내므로(`routing.js`의 `trackPageView`), 사용자가 관리 화면에서 측정 ID `G-2Q4SRGVNQN` 스트림의 이 설정을 껐다(2026-11-23, known-issues §46). 켜져 있으면 앱이 싣는 태그(`index.html`의 `gtag/js?id=`)에 `__ccd_em_page_view`가 있고 `vtp_historyEvents`가 `true`다. 끈 스트림의 태그에는 그 항목이 없다(2026-11-23 확인).
 
 **사례:**
-- 2026-11-07(캘린더 목록): 설정이 켜진 채 스크롤이 멈출 때마다 `history.replaceState`로 주소를 바꾸면 그때마다 방문이 1건 기록됐다. 원본인 `History.prototype.replaceState`를 호출하면 0건이었다(dev에서 수집 요청을 세어 확인). 그래서 목록이 원본을 호출했고, 설정을 끈 뒤(2026-11-24) 평범한 `history.replaceState`로 되돌렸다(ADR-038 §2).
+- 2026-11-07(캘린더 목록): 설정이 켜진 채 스크롤이 멈출 때마다 `history.replaceState`로 주소를 바꾸면 그때마다 방문이 1건 기록됐다. 원본인 `History.prototype.replaceState`를 호출하면 0건이었다(dev에서 수집 요청을 세어 확인). 그래서 목록이 원본을 호출했고, 설정을 끈 뒤 2026-11-24에 평범한 `history.replaceState`로 되돌렸다(ADR-038 §2).
 - 2026-11-23(첫 화면, known-issues §46): 앱은 화면을 다 그린 뒤 방문을 보내는데, 태그의 `config`가 기본값대로 첫 화면을 한 번 더 보내 첫 화면이 2건이었다. 태그가 보낸 것은 화면을 그리기 전의 제목(「공동번역성서」)과 처음 연 주소를 싣기도 했다. 처음 열 때 주소를 고치는 화면(트랙 적기, 절 범위 자르기)은 주소 변경 기록까지 3건이었다. `send_page_view: false`로 고쳤다.
 
 **규칙:**
