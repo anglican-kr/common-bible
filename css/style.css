@@ -4494,13 +4494,14 @@ body.cites-shown .cite-chip--poetry:focus-visible {
 }
 
 /* Poetry-segment chip renders on its own line below the verse (ADR-022 §6 운문 예외).
-   Indent matches `.verse.verse-poetry` (2rem padding-left) so the chip aligns with
-   the poetry body text rather than the verse-number gutter. The gap above is padding,
-   not margin, so a selected verse's background reaches the chip. */
+   Indent matches the first line of `.verse.verse-poetry` (2rem: its 2rem + 1em padding-left
+   less the -1em text-indent, ADR-053) so the chip aligns with the poetry body text rather
+   than the verse-number gutter. The gap above is padding, not margin, so a selected
+   verse's background reaches the chip. */
 body.cites-shown .cite-chip--poetry {
   display: block;
   padding-top: 0.2em;
-  /* .verse.verse-poetry 와 동일하게 2rem (거터 결합값, 토큰 스냅 제외). */
+  /* .verse.verse-poetry 첫 줄의 자리와 같은 2rem (거터 결합값, 토큰 스냅 제외). */
   padding-left: 2rem;
   text-align: left;
 }
