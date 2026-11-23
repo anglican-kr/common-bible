@@ -37,7 +37,7 @@
 
 import { loadChapter, loadBooks, getBooksCache } from "./data-fetch.js";
 import {
-  appendVersesWithAids, bindCopyAttribution, absentVerseNumbers,
+  appendVersesWithAids, bindCopyAttribution, absentVerseNumbers, RESPONSORY_MARK,
   LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
   applyTitleCompactness,
 } from "./views.js";
@@ -1621,14 +1621,14 @@ function buildCollects(m) {
 /** 영광송 블록의 복사 글자 — 줄마다 한 줄, 선창 줄 끝에 「 ◯」(시편 본문 복사와 같은 방식). @param {Element} box @returns {string} */
 function gloriaCopyText(box) {
   return [...box.querySelectorAll(".lect-gloria-line")]
-    .map((line) => [...line.childNodes].map((c) => (c.textContent || "").trim()).filter(Boolean).join(" "))
+    .map((line) => [...line.childNodes].map((c) => (c.textContent || "").replace(/\u2060/g, "").trim()).filter(Boolean).join(" "))
     .join("\n");
 }
 
 function buildGloria() {
   const box = el("div", { className: "lect-gloria", lang: "ko", role: "group", "aria-label": "영광송" });
   const v = el("span", { className: "lect-gloria-line" }, GLORIA.versicle);
-  v.appendChild(el("span", { className: "responsory-mark", "aria-hidden": "true" }, "◯"));
+  v.appendChild(el("span", { className: "responsory-mark", "aria-hidden": "true" }, RESPONSORY_MARK));
   box.appendChild(v);
   box.appendChild(el("span", { className: "lect-gloria-line verse-response" }, GLORIA.response));
   return box;
