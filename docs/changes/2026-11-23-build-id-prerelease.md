@@ -1,4 +1,5 @@
 ---
+pr: 637
 date: 2026-11-23
 branch: feat/build-id-prerelease
 title: "feat: dev 설정에 빌드 식별자 보이기와 pre-release 절차"
