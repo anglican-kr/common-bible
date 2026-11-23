@@ -47,15 +47,32 @@ async function loadBooks() {
   return data;
 }
 
+/** @type {Promise<string> | null} */
+let versionPromise = null;
+
 /** @returns {Promise<string>} */
 async function loadVersion() {
   if (appVersion) return appVersion;
+  // The settings view (drawn before boot's idle call) and app.js can both ask while the first fetch is in flight:
+  // share it, so a late failure of a second fetch cannot overwrite the first one's result.
+  if (!versionPromise) versionPromise = fetchVersion().finally(() => { versionPromise = null; });
+  return versionPromise;
+}
+
+/** @returns {Promise<string>} */
+async function fetchVersion() {
   try {
     const res = await fetch("/version.json");
     const data = await res.json();
     appVersion = data.version;
+    // Build ids (ADR-052): only the copy zipped by the server repo's build-deploy.sh has them.
+    window.appBuild = {
+      app: typeof data.app_commit === "string" ? data.app_commit : "",
+      data: typeof data.data_commit === "string" ? data.data_commit : "",
+    };
   } catch {
     appVersion = "";
+    window.appBuild = null;
   }
   // Mirror to window so settings-ui.js can read it for the version footer.
   window.appVersion = appVersion;

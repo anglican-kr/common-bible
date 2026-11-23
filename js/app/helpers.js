@@ -596,12 +596,42 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
       }));
   }
 
+  // ── 설정 맨 아래의 버전 줄(ADR-052) ──
+  // 배포한 빌드의 version.json 사본에는 app_commit(배포하는 앱 파일을 마지막으로 바꾼 커밋)과 data_commit(데이터
+  // 서브모듈의 커밋)이 더 있다(서버 저장소 build-deploy.sh). 저장소의 version.json에는 없다. dev에서만 해시를 보이고
+  // 링크는 그 앱 커밋으로 간다. 운영은 버전과 릴리스 태그 그대로다. 운영은 셸을 캐시에서 먼저 꺼내므로, 데이터만 낸 배포
+  // 뒤에는 옛 해시가 남아 서버의 빌드와 어긋난다. 호스트 목록은 sw.js의 IS_DEV와 같다(helpers.test.js가 비교한다).
+  const DEV_HOSTS = ["dev.anglican.kr", "localhost", "127.0.0.1"];
+  const COMMIT_RE = /^[0-9a-f]{7,40}$/;
+  const REPO_URL = "https://github.com/anglican-kr/common-bible";
+
+  /**
+   * 버전 줄의 글과 링크. dev에서 앱 해시가 있으면 "공동번역성서 2.2.4-9985216 · 데이터 1de377e"와 그 앱 커밋, 아니면
+   * "공동번역성서 2.2.4"와 그 버전의 Release다. 짧은 해시의 형식(16진수 7-40자)이 아닌 값은 없는 것으로 본다.
+   * @param {string | null | undefined} version
+   * @param {{ app: string, data: string } | null | undefined} build
+   * @param {string} hostname
+   * @returns {{ label: string, href: string }}
+   */
+  function versionFooter(version, build, hostname) {
+    if (!version) return { label: "공동번역성서", href: `${REPO_URL}/releases` };
+    const app = build && COMMIT_RE.test(build.app) ? build.app : "";
+    if (app && DEV_HOSTS.includes(hostname)) {
+      const data = build && COMMIT_RE.test(build.data) ? build.data : "";
+      return {
+        label: `공동번역성서 ${version}-${app}` + (data ? ` · 데이터 ${data}` : ""),
+        href: `${REPO_URL}/commit/${app}`,
+      };
+    }
+    return { label: `공동번역성서 ${version}`, href: `${REPO_URL}/releases/tag/${encodeURIComponent(version)}` };
+  }
+
   return {
     _$, chUnit, chUnitNoun, chapterTitle, chapterLabel, verseRefLabel, missingChapterText, hasBatchim, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
     HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot, SCROLL_ANCHORING, barBottom, scrollUnderBar,
     publishBarHeight, isFormerNorthChurch, churchName, parishGroups, LARGE_LAYOUT_QUERY, isLargeLayout, isSmallLayout, TOUCH_INPUT_QUERY, isTouchInput,
     SHEET_INERT_SELECTORS,
-    DATE_PICKER_FOCUS_KEY, datePickerTrigger,
+    DATE_PICKER_FOCUS_KEY, datePickerTrigger, versionFooter,
   };
 })();
 

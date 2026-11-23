@@ -479,11 +479,11 @@ python scripts/release.py patch                       # 또는 minor / major / X
 
 `release.py`는 `version.json`과 `sw-version.js`의 `APP_VERSION`을 함께 갱신하고 자동으로 커밋한다. 한쪽만 바뀌어 서비스 워커가 새 셸을 가져오지 못하는 일을 막기 위해서다. `DATA_CACHE`와 `AUDIO_CACHE`는 ADR-021 이후 이름이 고정이다. 콘텐츠 무효화는 `common-bible-data` 저장소 CI가 `bible-manifest.json`과 `audio-manifest.json`을 자동으로 갱신하고, `js/manifest-sync.js`가 앱을 부팅할 때 항목 단위로 처리한다.
 
-`deploy.sh`는 `bible-{version}-{shortsha}` 형식으로 디렉터리 이름을 붙인다. 그래서 `dev`에서 같은 버전을 여러 번 배포해도 덮어쓰지 않고, `promote`할 때 `dev`에서 검증한 디렉터리를 운영 심볼릭 링크가 그대로 가리킨다. 빌드하기 전에 origin을 새로 받아, `dev`는 `origin/dev`에 들어 있는 커밋만, `prod`는 `origin/main`과 같은 커밋만 받고, 커밋하지 않은 변경이나 배포 목록 경로 아래에 git이 추적하지 않는 파일이 있으면 멈춘다. `promote`는 dev가 가리키는 빌드의 커밋이 `origin/main`과 같을 때만 운영을 바꾼다(ADR-051 §4).
+`deploy.sh`는 `bible-{version}-{shortsha}` 형식으로 디렉터리 이름을 붙인다. 그래서 `dev`에서 같은 버전을 여러 번 배포해도 덮어쓰지 않고, `promote`할 때 `dev`에서 검증한 디렉터리를 운영 심볼릭 링크가 그대로 가리킨다. 빌드하기 전에 origin을 새로 받아, `dev`는 `origin/dev`에 들어 있는 커밋만, `prod`는 `origin/main`과 같은 커밋만 받고, 커밋하지 않은 변경이나 배포 목록 경로 아래에 git이 추적하지 않는 파일이 있으면 멈춘다. `promote`는 dev가 가리키는 빌드의 커밋이 `origin/main`과 같을 때만 운영을 바꾼다(ADR-051 §4). `build-deploy.sh`는 zip에 넣는 `version.json` 사본에 앱 커밋(`app_commit`)과 데이터 커밋(`data_commit`)을 적고, dev 배포는 끝에 빌드 식별자 `X.Y.Z-<app_commit>`을 출력한다(ADR-052).
 
-링크를 교체하거나 `promote`, `rollback`을 실행한 직후마다 자동 검증 9종이 실행된다. 검증은 `/version.json`의 버전 일치, `/sw.js`의 200과 Content-Type, `/index.html`의 200과 ETag, `/data/books.json`, `/sw-version.js`, 매니페스트 2종, 교회력 묶음 하나와 전례독서 묶음 하나(`lectionary/sanctoral.json`, `lectionary/eucharist-readings.json`)의 200이다. 실패하면 수동 롤백 안내를 출력한다. zip 파일에 넣을 경로는 `scripts/deploy-manifest.txt`가 정하고, 목록의 항목이 없으면 `build-deploy.sh`가 멈춘다. 목록에 없는 새 경로는 검사되지 않으므로 데이터 디렉터리를 더하면 목록도 고친다. 보호 심볼릭 링크 4개(`dev`, `bible`, `dev-previous`, `bible-previous`)와 `BUILD_RETENTION`(기본 3)개를 넘는 옛 빌드 디렉터리는 자동으로, 또는 확인한 뒤 정리한다. 자세한 흐름은 `common-bible-server/scripts/deploy.sh`의 헤더 주석에 있다.
+링크를 교체하거나 `promote`, `rollback`을 실행한 직후마다 자동 검증 11종이 실행된다. 검증은 `/version.json`의 버전과 빌드 식별자 일치(식별자가 없는 옛 빌드는 버전만), `/sw.js`의 200과 Content-Type, `/index.html`의 200과 ETag, `/data/books.json`, `/sw-version.js`, 매니페스트 2종, 교회력 묶음 하나와 전례독서 묶음 하나(`lectionary/sanctoral.json`, `lectionary/eucharist-readings.json`), 크기 목록(`bible-sizes.json`), 성시 색인(`search-lit.json`)의 200이다. 실패하면 수동 롤백 안내를 출력한다. zip 파일에 넣을 경로는 `scripts/deploy-manifest.txt`가 정하고, 목록의 항목이 없으면 `build-deploy.sh`가 멈춘다. 목록에 없는 새 경로는 검사되지 않으므로 데이터 디렉터리를 더하면 목록도 고친다. 보호 심볼릭 링크 4개(`dev`, `bible`, `dev-previous`, `bible-previous`)와 `BUILD_RETENTION`(기본 3)개를 넘는 옛 빌드 디렉터리는 자동으로, 또는 확인한 뒤 정리한다. 자세한 흐름은 `common-bible-server/scripts/deploy.sh`의 헤더 주석에 있다.
 
-릴리스 순서의 기준은 `CLAUDE.md` 「데이터 수정과 릴리스」 4번이다. `release.py patch`는 버전 커밋까지만 만들고, 그 커밋은 릴리스 PR로 dev에 들어간다(원장이 릴리스 노트 초안이다). dev의 그 커밋을 `deploy.sh dev`로 확인한 뒤 main을 그 커밋으로 앞당기고, 태그와 GitHub Release를 만들고 `deploy.sh promote`를 실행한다(ADR-051 §3). 변경 목록은 `scripts/changelog.py`가 만든다(`--generate-notes`를 대신한다).
+릴리스 순서의 기준은 `CLAUDE.md` 「데이터 수정과 릴리스」 4번이다. `release.py patch`는 버전 커밋까지만 만들고, 그 커밋은 릴리스 PR로 dev에 들어간다(원장이 릴리스 노트 초안이다). dev의 그 커밋을 `deploy.sh dev`로 올려 pre-release를 만들고(ADR-052 §4) 확인한 뒤, main을 그 커밋으로 앞당기고 정식 태그와 GitHub Release를 만들고 `deploy.sh promote`를 실행한다(ADR-051 §3). 변경 목록은 `scripts/changelog.py`가 만든다(`--generate-notes`를 대신한다).
 
 업데이트 토스트 흐름:
 
@@ -590,6 +590,7 @@ Phase 1(성경 읽기 PWA)은 완성됐고, Phase 3(교회력)은 일부 구현�
 | [049](decisions/049-search-book-pills.md) | 고른 책은 검색창 아래의 알약으로 보인다(ADR-033의 검색창 안 칩을 대체). 결과 화면에서는 책 알약이 결과 묶음의 알약을 대신하고, 알약마다 결과 수를 적으며 누르면 그 책의 결과만 보인다. 두 권 이상이면 「전체」를 둔다 |
 | [050](decisions/050-layout-tiers.md) | 화면 레이아웃은 「작은 화면」과 「큰 화면」 둘이고, 앱 화면의 폭이 700px 이상이고 높이가 600px 이상이면 큰 화면이다(ADR-029 §1을 대체). 기기 종류와 마우스는 보지 않으며, 화면 전체를 쓰는 iPad는 어느 방향이든 큰 화면이다. 각 레이아웃의 앞으로의 구성은 나중에 정하고, 화면 안의 구성 요소는 받은 칸의 크기로 정한다 |
 | [051](decisions/051-dev-and-main-branches.md) | 작업은 `dev` 브랜치에 모으고 `main`은 운영에 낸 코드만 담는다. 운영에 낼 때 dev에서 main으로 PR을 열어 검사를 통과시키고 main을 그 커밋으로 앞당긴다(머지 커밋과 squash를 쓰지 않는다). `deploy.sh`는 dev 배포에 dev의 커밋만, 운영 배포에 main과 같은 커밋만 받는다 |
+| [052](decisions/052-build-ids-and-prereleases.md) | 배포한 빌드의 `version.json` 사본에 앱 커밋(배포하는 앱 파일을 마지막으로 바꾼 커밋)과 데이터 커밋을 적는다. dev.anglican.kr의 설정에만 "2.2.4-9985216 · 데이터 1de377e"로 보인다. 정식 태그가 아직 없는 버전을 dev에 올리면 앱 커밋이 바뀔 때마다 `X.Y.Z-<앱 커밋>` pre-release를 만들고, 정식 태그는 운영에 낼 때 만든다 |
 
 026은 main에 없다. 1.6.0 노트와 캘린더 설계는 개발을 멈춘 `release/1.6.0` 브랜치에만 있다. 데이터 저장소의 ADR(002, 003, 006, 039 전례시편 DSL)은 그 저장소의 `docs/decisions/`에 있다.
 

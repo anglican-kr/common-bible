@@ -23,6 +23,7 @@
 //   - barBottom · publishBarHeight (the top bar's measured bottom for JS, its height as `--top-bar-h` for CSS)
 //   - isFormerNorthChurch · parishGroups (the 소속교회 list from the parish table, ADR-041 §6)
 //   - LARGE_LAYOUT_QUERY (the layout condition is written once in JS and only as two queries in CSS, ADR-050 §2)
+//   - versionFooter (the settings version line: build ids on dev only, ADR-052 §3)
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -1353,5 +1354,55 @@ test("layout condition: one string in JS, and only that query and its exact comp
   for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".js") && n !== "helpers.js")) {
     const src = fs.readFileSync(path.join(dir, f), "utf8");
     assert.ok(!/matchMedia\(\s*["'`][^"'`]*\b(700|600|768|769)px/.test(src), `${f} writes its own layout query`);
+  }
+});
+
+// ── Version footer (ADR-052 §3) ─────────────────────────────────────────────
+
+const { versionFooter } = loadAppHelpers();
+const REPO = "https://github.com/anglican-kr/common-bible";
+const BUILD = { app: "9985216", data: "1de377e" };
+
+test("versionFooter: dev shows the build ids and links the app commit", () => {
+  assert.deepEqual(plainOf(versionFooter("2.2.4", BUILD, "dev.anglican.kr")), {
+    label: "공동번역성서 2.2.4-9985216 · 데이터 1de377e",
+    href: `${REPO}/commit/9985216`,
+  });
+  // No data id: the app part alone.
+  assert.equal(versionFooter("2.2.4", { app: "9985216", data: "" }, "dev.anglican.kr").label, "공동번역성서 2.2.4-9985216");
+});
+
+test("versionFooter: production shows the version and links its release, even with build ids", () => {
+  assert.deepEqual(plainOf(versionFooter("2.2.4", BUILD, "bible.anglican.kr")), {
+    label: "공동번역성서 2.2.4",
+    href: `${REPO}/releases/tag/2.2.4`,
+  });
+});
+
+test("versionFooter: no ids (the repo's version.json, an old build, a failed fetch) keeps the version line", () => {
+  for (const build of [null, undefined, { app: "", data: "" }]) {
+    assert.deepEqual(plainOf(versionFooter("2.2.4", build, "localhost")), {
+      label: "공동번역성서 2.2.4",
+      href: `${REPO}/releases/tag/2.2.4`,
+    }, JSON.stringify(build));
+  }
+  assert.deepEqual(plainOf(versionFooter("", BUILD, "dev.anglican.kr")), { label: "공동번역성서", href: `${REPO}/releases` });
+  assert.deepEqual(plainOf(versionFooter(null, null, "bible.anglican.kr")), { label: "공동번역성서", href: `${REPO}/releases` });
+});
+
+test("versionFooter: a value that is not a short hash counts as missing", () => {
+  for (const app of ["998521", "9985216/../x", "ABCDEF1", "<b>1234567</b>"]) {
+    assert.equal(versionFooter("2.2.4", { app, data: "1de377e" }, "dev.anglican.kr").label, "공동번역성서 2.2.4", app);
+  }
+  assert.equal(versionFooter("2.2.4", { app: "9985216", data: "x" }, "dev.anglican.kr").label, "공동번역성서 2.2.4-9985216");
+});
+
+test("versionFooter: the hosts that show build ids are sw.js's IS_DEV hosts", () => {
+  const sw = fs.readFileSync(path.resolve(__dirname, "../../sw.js"), "utf8");
+  const block = sw.match(/const IS_DEV =([\s\S]*?);/)?.[1] ?? "";
+  const hosts = [...block.matchAll(/hostname === "([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(hosts, ["dev.anglican.kr", "localhost", "127.0.0.1"]);
+  for (const host of hosts) {
+    assert.match(versionFooter("2.2.4", BUILD, host).label, /2\.2\.4-9985216/, host);
   }
 });

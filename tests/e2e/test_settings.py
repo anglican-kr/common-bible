@@ -1385,3 +1385,48 @@ def test_info_close_button_sits_beside_the_first_line(browser):
             view.get_by_role("button", name=f"{name} 닫기").click()
     finally:
         ctx.close()
+
+
+# ── 버전 줄 (ADR-052 §3) ─────────────────────────────────────────────────────
+
+def _version_link(page):
+    link = page.locator(".settings-view .settings-about a").last
+    link.wait_for(state="visible")
+    return link
+
+
+def test_version_line_shows_the_build_ids_on_a_dev_host_without_overflow_at_320px(browser):
+    """배포한 빌드의 version.json 사본에는 빌드 식별자가 있다. dev 호스트(로컬 포함)에서는 설정 맨 아래 버전 줄이 앱과 데이터의 커밋을
+    보이고 앱 커밋의 GitHub 페이지로 링크한다. 320px 화면에서도 가로로 넘치지 않는다."""
+    ctx = browser.new_context(viewport={"width": 320, "height": 640}, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.route("**/version.json", _fulfill_json('{"version": "2.2.4", "app_commit": "9985216", "data_commit": "1de377e"}'))
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/settings")
+        link = _version_link(page)
+        page.wait_for_function("() => /9985216/.test(document.querySelector('.settings-view .settings-about').textContent)")
+        assert link.inner_text().strip() == "공동번역성서 2.2.4-9985216 · 데이터 1de377e"
+        assert link.get_attribute("href") == "https://github.com/anglican-kr/common-bible/commit/9985216"
+        about = page.evaluate("""() => { const a = document.querySelector('.settings-view .settings-about');
+          return { scroll: a.scrollWidth, client: a.clientWidth, page: document.documentElement.scrollWidth }; }""")
+        assert about["scroll"] <= about["client"]
+        assert about["page"] <= 320
+    finally:
+        ctx.close()
+
+
+def test_version_line_without_build_ids_shows_the_version_and_its_release(browser):
+    """저장소의 version.json(로컬 서버가 내주는 파일)에는 빌드 식별자가 없다. 그러면 운영과 같이 버전과 그 Release 링크다."""
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/settings")
+        version = page.evaluate("() => fetch('/version.json').then((r) => r.json()).then((d) => d.version)")
+        link = _version_link(page)
+        page.wait_for_function(f"() => document.querySelector('.settings-view .settings-about').textContent.includes({version!r})")
+        assert link.inner_text().strip() == f"공동번역성서 {version}"
+        assert link.get_attribute("href") == f"https://github.com/anglican-kr/common-bible/releases/tag/{version}"
+    finally:
+        ctx.close()
