@@ -1,4 +1,5 @@
 ---
+pr: 652
 date: 2026-11-24
 branch: docs/known-issues-followups
 title: "docs: 방문 기록 작업에서 찾은 문제를 known-issues에 적기"
