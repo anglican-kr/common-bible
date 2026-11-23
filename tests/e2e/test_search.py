@@ -1068,11 +1068,11 @@ def test_ember_days_are_found_only_as_their_intention_rows(page):
     days = [label.split(", ")[0] for label in _row_labels(page)]
     assert days == [f"{who}의 성소를 위한 춘계재" for who in intentions], days
 
-    # `사계재`는 네 계절을 함께 부르는 별칭이다(ADR-037 §5)
+    # `사계재`는 네 계절을 함께 부르는 별칭이다(ADR-037 §5). 줄은 여는 날의 날짜 차례라 이번 전례년(2025년 대림부터)의 동계재가 먼저다
     _goto_search(page, "사계재", "&group=lectionary")
     _wait_days(page)
     titles = page.locator(".lect-rows .cal-row-title").all_inner_texts()
-    assert titles == [f"{who}의 성소를 위한 {season}" for season in ["춘계재", "하계재", "추계재", "동계재"] for who in intentions], titles
+    assert titles == [f"{who}의 성소를 위한 {season}" for season in ["동계재", "춘계재", "하계재", "추계재"] for who in intentions], titles
 
     # `대림`으로 찾으면 동계재의 사흘이 계절 이름의 줄 셋과 지향별 줄 넷으로 두 번 나왔다(사용자 보고 2026-11-21)
     _goto_search(page, "대림", "&group=lectionary")
@@ -1087,25 +1087,25 @@ def test_row_shows_the_day_it_opens_and_a_link_to_the_next(page):
     _goto_search(page, "요한 3:16")
     _wait_days(page)
     rows = page.locator(".lect-rows > li")
-    first, second = rows.nth(0), rows.nth(1)
+    # 줄은 여는 날의 날짜 차례다(ADR-044 §1, 2026-11-23): 이번 전례년의 사순2주일, 부활2주 수요일, 성 십자가의 날, 그 뒤에 다음 전례년의 두 줄
+    first, second, third, fourth = rows.nth(0), rows.nth(1), rows.nth(2), rows.nth(3)
     assert first.locator(".cal-row-color").inner_text() == "자색"
     assert "2026년 3월 1일 (일)" in first.locator(".cal-row-meta").inner_text()
     nxt = first.locator(".lect-row-next")
     assert nxt.get_attribute("href") == "/lectionary/d/lent-2-sun-A-t1-s1?from=2029-02-25"
     assert nxt.get_attribute("aria-label") == "사순2주일, 다음 2029년 2월 25일 일요일"
-    # 이번 전례년에 읽지 않는 나해의 독서는 다음 날을 열고, 따로 둘 링크가 없다
-    assert "다음 2027년 3월 7일 (일)" in second.locator(".cal-row-meta").inner_text()
-    assert second.locator(".lect-row-next").count() == 0
     # 해마다 같은 독서도 이번 전례년의 날을 열고, 링크 없이 다음 전례년의 날을 글로 적는다(ADR-044 §1)
-    third, fifth = rows.nth(2), rows.nth(4)
+    assert second.locator(".lect-row-next").count() == 0
+    assert "2026년 4월 15일 (수)" in second.locator(".cal-row-meta").inner_text()
+    assert "다음 전례년 2027년 4월 7일 (수)" in second.locator(".cal-row-body").inner_text()
     assert third.locator(".lect-row-next").count() == 0
-    assert "2026년 4월 15일 (수)" in third.locator(".cal-row-meta").inner_text()
-    assert "다음 전례년 2027년 4월 7일 (수)" in third.locator(".cal-row-body").inner_text()
-    assert fifth.locator(".lect-row-next").count() == 0
-    assert "2026년 9월 14일 (월)" in fifth.locator(".cal-row-meta").inner_text()
-    assert fifth.locator("a.cal-row").get_attribute("aria-label").endswith("2026년 9월 14일 월요일, 다음 전례년 2027년 9월 14일 화요일")
+    assert "2026년 9월 14일 (월)" in third.locator(".cal-row-meta").inner_text()
+    assert third.locator("a.cal-row").get_attribute("aria-label").endswith("2026년 9월 14일 월요일, 다음 전례년 2027년 9월 14일 화요일")
+    # 이번 전례년에 읽지 않는 나해의 독서는 다음 날을 열고, 따로 둘 링크가 없다
+    assert "다음 2027년 3월 7일 (일)" in fourth.locator(".cal-row-meta").inner_text()
+    assert fourth.locator(".lect-row-next").count() == 0
     # 해에 따라 다른 독서의 줄에는 다음 전례년의 글이 없다
-    assert "다음 전례년" not in first.inner_text() and "다음 전례년" not in second.inner_text()
+    assert "다음 전례년" not in first.inner_text() and "다음 전례년" not in fourth.inner_text()
 
     nxt.click()
     page.wait_for_function("() => location.pathname === '/lectionary/2029-02-25'", timeout=15_000)
@@ -1133,7 +1133,7 @@ def test_bible_results_do_not_wait_for_the_engine(browser):
 
 
 def test_late_engine_puts_the_days_in_place_and_keeps_focus(browser):
-    """교회력 엔진의 자료가 3초 안에 오지 않으면 날짜 없이 그리고, 나중에 줄의 글만 바꿔 넣는다. 포커스가 남는다(ADR-044 §1)."""
+    """교회력 엔진의 자료가 3초 안에 오지 않으면 날짜 없이 그리고, 나중에 줄의 글을 바꿔 넣는다. 포커스가 남는다(ADR-044 §1)."""
     ctx = browser.new_context(service_workers="block")
     held = []
     ctx.route("**/lectionary/eucharist-readings.json", lambda route: held.append(route))
@@ -1152,6 +1152,166 @@ def test_late_engine_puts_the_days_in_place_and_keeps_focus(browser):
     assert page.evaluate("document.activeElement?.dataset.mark") == "focused"
     links = page.locator(".lect-rows > li").first.locator(".lect-row-next")
     assert [links.nth(i).get_attribute("href").split("?")[1] for i in range(links.count())] == ["from=2027-05-16", "from=2028-06-04"]
+    ctx.close()
+
+
+def _open_dates(page):
+    """줄마다 여는 날(「2025년 12월 17일」, 「다음 2026년 12월 16일」)을 (해, 달, 날)로 읽는다."""
+    metas = page.locator(".lect-rows .cal-row-meta").all_inner_texts()
+    found = [re.search(r"(\d{4})년 (\d{1,2})월 (\d{1,2})일", m) for m in metas]
+    assert all(found), metas
+    return [tuple(int(x) for x in f.groups()) for f in found]
+
+
+def test_name_rows_are_in_the_order_of_the_days_they_open(page):
+    """전례일 줄은 찾은 단계 안에서 줄이 여는 날의 날짜 차례다. 같은 날 읽을 수 있는 줄이 이웃하고, 이번 전례년에 오지 않아 다음에 읽는
+    날을 여는 줄은 그 뒤에 온다(ADR-044 §1, 사용자 결정 2026-11-23)."""
+    _fix_today(page)
+    _goto_search(page, "대림", "&group=lectionary")
+    _wait_days(page)
+    rows = page.locator(".lect-rows > li")
+    titles = rows.locator(".cal-row-title").all_inner_texts()
+    # 2025년 12월 17, 19, 20일의 동계재는 같은 날의 대림 평일 곁이다. 전에는 전례년 순서라 목록 맨 끝이었다(사용자 보고 2026-11-23)
+    at = titles.index("성탄 8일 전")
+    assert titles[at:at + 9] == ["성탄 8일 전", "성직자의 성소를 위한 동계재", "성탄 7일 전", "성탄 6일 전",
+                                 "성직후보자의 성소를 위한 동계재", "수도자의 성소를 위한 동계재", "성탄 5일 전",
+                                 "모든 신자의 성소를 위한 동계재", "대림4주일"], titles
+    # 2025년 12월 17일이 성탄 8일 전이라 대림 3주 수요일은 다음 전례년에 읽는다. 이번 전례년의 줄 뒤에 온다
+    assert titles[-4:] == ["대림3주 수요일", "성탄 4일 전", "대림3주 목요일", "대림3주 금요일"], titles
+    metas = rows.locator(".cal-row-meta").all_inner_texts()
+    assert all("다음" in m for m in metas[-4:]) and not any("다음" in m for m in metas[:-4]), metas
+    assert _open_dates(page) == sorted(_open_dates(page))
+
+    # 성탄절기는 성탄 밤부터 주님의 세례까지 날짜대로다. 전에는 성탄일이 성탄 평일 뒤에 왔다
+    _goto_search(page, "성탄절기", "&group=lectionary")
+    _wait_days(page)
+    titles = page.locator(".lect-rows .cal-row-title").all_inner_texts()
+    assert titles[:4] == ["성탄 밤", "성탄 새벽", "성탄 낮", "성 스테파노(부제, 최초의 순교자)"], titles
+    assert _open_dates(page) == sorted(_open_dates(page))
+
+    # 같은 날이면 사계재가 평일 아래다. 전례독서 화면이 평일을 제목으로, 사계재를 목록의 줄로 두는 것과 같다(사용자 결정 2026-11-23).
+    # 색인의 차례로는 춘계재가 평일 위였다
+    lent_week = ["사순1주 수요일", "성직자의 성소를 위한 춘계재", "사순1주 목요일", "사순1주 금요일", "성직후보자의 성소를 위한 춘계재",
+                 "수도자의 성소를 위한 춘계재", "사순1주 토요일", "모든 신자의 성소를 위한 춘계재"]
+    _goto_search(page, "사순", "&group=lectionary")
+    _wait_days(page)
+    titles = page.locator(".lect-rows .cal-row-title").all_inner_texts()
+    at = titles.index("사순1주 수요일")
+    assert titles[at:at + 8] == lent_week, titles
+    # 연도를 붙인 검색도 같다(2027년 춘계재는 2월 17, 19, 20일)
+    _goto_year_search(page, "2027 사순")
+    names = [label.split(", ")[0] for label in _row_labels(page)]
+    at = names.index("사순1주 수요일")
+    assert names[at:at + 8] == lent_week, names
+
+
+RESORTED_NOTE = "전례일을 날짜순으로 다시 정렬했습니다."
+
+
+def _late_advent_rows(browser, before_rows=None, **ctx_opts):
+    """교회력 엔진의 자료를 붙잡아 `대림`의 줄을 날짜 없이 그린다. 줄은 워커가 보낸 전례년 순서라 동계재가 맨 끝이다.
+    `before_rows`는 검색 화면의 결과 상자가 생긴 뒤 줄을 그리기 전에 부른다(앱은 그때부터 입력을 지켜본다)."""
+    ctx = browser.new_context(service_workers="block", **ctx_opts)
+    held = []
+    ctx.route("**/lectionary/eucharist-readings.json", lambda route: held.append(route))
+    page = ctx.new_page()
+    _fix_today(page)
+    page.goto(f"{BASE_URL}/search?q={quote('대림')}&group=lectionary")
+    if before_rows:
+        page.wait_for_selector(".search-view-results", state="attached", timeout=10_000)
+        assert page.locator(".lect-rows").count() == 0
+        before_rows(page, ctx)
+    page.wait_for_selector(".lect-rows a.cal-row", timeout=20_000)
+    titles = page.locator(".lect-rows .cal-row-title").all_inner_texts()
+    assert titles[-1] == "모든 신자의 성소를 위한 동계재", titles
+    return ctx, page, held, titles
+
+
+def _assert_drawn_order_kept(page, held, drawn):
+    """붙잡은 자료를 보내 날짜를 넣은 뒤에도 줄이 그린 차례 그대로이고, 정렬을 알리지 않았다."""
+    for route in held:
+        route.continue_()
+    _wait_days(page)
+    assert page.locator(".lect-rows .cal-row-title").all_inner_texts() == drawn
+    assert "2025년 12월 20일 (토)" in page.locator(".lect-rows > li").last.locator(".cal-row-meta").inner_text()
+    page.wait_for_timeout(200)
+    assert page.locator("#a11y-announce").inner_text() != RESORTED_NOTE
+
+
+def test_late_days_put_the_rows_in_date_order_before_the_screen_is_touched(browser):
+    """3초가 지나 날짜를 넣을 때 그린 뒤 화면을 건드리지 않았으면 줄을 날짜 차례로 다시 늘어놓는다(ADR-044 §1)."""
+    ctx, page, held, _ = _late_advent_rows(browser)
+    for route in held:
+        route.continue_()
+    _wait_days(page)
+    titles = page.locator(".lect-rows .cal-row-title").all_inner_texts()
+    at = titles.index("모든 신자의 성소를 위한 동계재")
+    assert titles[at - 1] == "성탄 5일 전" and titles[at + 1] == "대림4주일", titles
+    assert _open_dates(page) == sorted(_open_dates(page))
+    # 화면 읽기 프로그램에 다시 정렬한 것을 알린다. VoiceOver로 쓸어 넘기는 동작은 앱이 알 수 없다(사용자 결정 2026-11-23)
+    page.wait_for_function("(note) => document.getElementById('a11y-announce').textContent === note", arg=RESORTED_NOTE, timeout=5_000)
+    ctx.close()
+
+    # 창 밖에서 단추를 떼어 `pointerup`이 오지 않았어도, 단추 없이 움직인 마우스로 눌림이 풀려 다시 늘어놓는다(코드 리뷰 2026-11-23)
+    def released_outside(page, ctx):
+        page.evaluate("document.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'mouse', bubbles: true }))")
+        page.mouse.move(5, 5)
+
+    ctx, page, held, _ = _late_advent_rows(browser, before_rows=released_outside)
+    for route in held:
+        route.continue_()
+    page.wait_for_function("(note) => document.getElementById('a11y-announce').textContent === note", arg=RESORTED_NOTE, timeout=15_000)
+    ctx.close()
+
+
+def test_late_days_keep_the_drawn_order_once_the_screen_is_touched(browser):
+    """그린 뒤 스크롤했거나, 포커스가 목록 안에 있거나, 마우스가 목록 위에서 움직였으면 날짜만 넣고 차례는 그대로 두며 알리지 않는다.
+    누르려던 줄이 손가락이나 마우스 아래에서 다른 날로 바뀌거나 화면 읽기 프로그램으로 듣던 차례가 바뀌지 않게 한다(사용자 결정 2026-11-23,
+    코드 리뷰)."""
+    # 휠을 굴린 뒤(마우스는 목록 위로 옮기지 않는다)
+    ctx, page, held, drawn = _late_advent_rows(browser)
+    page.mouse.wheel(0, 300)
+    _assert_drawn_order_kept(page, held, drawn)
+    ctx.close()
+
+    # 포커스가 목록 안에 있을 때(키 입력 없이 옮긴 포커스도). 줄의 글만 바꾸므로 같은 링크에 포커스가 남는다
+    ctx, page, held, drawn = _late_advent_rows(browser)
+    page.locator(".lect-rows > li").last.locator("a.cal-row").focus()
+    page.evaluate("document.activeElement.dataset.mark = 'focused'")
+    _assert_drawn_order_kept(page, held, drawn)
+    assert page.evaluate("document.activeElement?.dataset.mark") == "focused"
+    ctx.close()
+
+    # 마우스를 줄 위에 올렸을 때(누르지 않았다)
+    ctx, page, held, drawn = _late_advent_rows(browser)
+    page.locator(".lect-rows > li").nth(3).locator("a.cal-row").hover()
+    _assert_drawn_order_kept(page, held, drawn)
+    ctx.close()
+
+    # 그리기 전부터 줄이 그려질 자리에 마우스를 멈춰 두었을 때. 줄이 커서 아래에 생겨도 마우스가 움직이지 않았다(코드 리뷰 2026-11-23)
+    ctx, page, held, drawn = _late_advent_rows(browser, before_rows=lambda page, ctx: page.mouse.move(640, 450))
+    assert page.evaluate("document.querySelector('ul.lect-rows').matches(':hover')")
+    _assert_drawn_order_kept(page, held, drawn)
+    ctx.close()
+
+
+def test_late_days_keep_the_drawn_order_while_held_from_before(browser):
+    """줄을 그리기 전부터 누르고 있던 마우스 단추나 화면에 대고 있던 손가락이 날짜가 올 때도 그대로면, 차례를 그대로 둔다(사용자 결정
+    2026-11-23, 코드 리뷰)."""
+    ctx, page, held, drawn = _late_advent_rows(browser, before_rows=lambda page, ctx: page.mouse.down())
+    _assert_drawn_order_kept(page, held, drawn)
+    page.mouse.up()
+    ctx.close()
+
+    cdp = {}
+
+    def finger_down(page, ctx):
+        cdp["session"] = ctx.new_cdp_session(page)
+        cdp["session"].send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": 200, "y": 600}]})
+
+    ctx, page, held, drawn = _late_advent_rows(browser, before_rows=finger_down, has_touch=True)
+    _assert_drawn_order_kept(page, held, drawn)
+    cdp["session"].send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
     ctx.close()
 
 
@@ -1634,7 +1794,7 @@ def test_enter_opens_the_chapter_when_the_index_is_too_slow(browser):
 
 
 def test_late_lectionary_days_are_added_and_told(browser):
-    """3초가 지나 온 전례일은 결과에 더하고 「더 찾았습니다」를 알린다(ADR-044 §1)."""
+    """3초가 지나 온 전례일은 결과에 더하고 「더 찾았습니다」를 알린다. 줄은 날짜를 기다려 날짜 차례로 그린다(ADR-044 §1)."""
     ctx, held = _held_lectionary_index(browser)
     page = ctx.new_page()
     page.goto(f"{BASE_URL}/search?q={quote('요한 3:16')}")
@@ -1646,6 +1806,10 @@ def test_late_lectionary_days_are_added_and_told(browser):
         "() => document.getElementById('a11y-announce').textContent === '\"요한 3:16\" 이 구절을 읽는 날 5건을 더 찾았습니다'",
         timeout=5_000,
     )
+    # 줄을 그릴 때 날짜를 기다려 처음부터 날짜 차례로 그린다. 그린 뒤 다시 늘어놓아 정렬 알림이 이 알림을 덮지 않는다(ADR-044 §1)
+    assert _open_dates(page) == sorted(_open_dates(page))
+    page.wait_for_timeout(500)
+    assert page.inner_text("#a11y-announce") == '"요한 3:16" 이 구절을 읽는 날 5건을 더 찾았습니다'
     ctx.close()
 
 

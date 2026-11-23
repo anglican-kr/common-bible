@@ -671,7 +671,8 @@ const LECT_LUNAR_PREFIX = "lunar";
 /**
  * 연도를 붙인 이름 검색의 줄(ADR-044 §4). `found`는 워커가 찾은 전례일이고, `perYear`는 해마다 그 전례일들의 날(엔진 `findYearDays`,
  * `found`와 같은 차례)과 그해의 음력 날짜 자료가 있는지다. 줄은 전례일마다, 해마다 하나이고 날짜 차례다. 해가 날짜의 앞자리라 해의
- * 차례로 묶이고, 같은 날이면 이름 결과의 차례를 지킨다(`Array.prototype.sort`는 안정 정렬이다). 그해에 지키지 않는 전례일은 줄을
+ * 차례로 묶이고, 같은 날이면 사계재의 줄을 아래에 두고(`lectEmberLast`) 그 밖에는 이름 결과의 차례를 지킨다(`Array.prototype.sort`는
+ * 안정 정렬이다). 그해에 지키지 않는 전례일은 줄을
  * 두지 않는다. 성탄 평일을 그해의 이름으로만 찾았으면(`yearNames`) 그해의 이름이 맞는 날만 둔다. `notes`는 결과 위나 결과 없음 화면에
  * 적는 문장이다: 10년으로 자른 것, 음력 날짜 자료가 없는 해(「설날과 추석은 2025-2050년만 찾습니다.」, 사용자 결정 2026-11-18), 줄이 하나도
  * 없는 해(「2027, 2032년에는 검색하신 전례일을 지키지 않습니다.」).
@@ -696,7 +697,7 @@ function yearRowsOf(found, perYear, years, lunarSpan = null) {
     });
     if (items.length === before) empty.push(year);
   }
-  items.sort((a, b) => (a.yearDay.date < b.yearDay.date ? -1 : a.yearDay.date > b.yearDay.date ? 1 : 0));
+  items.sort((a, b) => (a.yearDay.date < b.yearDay.date ? -1 : a.yearDay.date > b.yearDay.date ? 1 : lectEmberLast(a.yearDay, b.yearDay)));
   /** @type {string[]} */
   const notes = [];
   /** 자른 것을 알리는 문장 @type {string[]} */
@@ -718,6 +719,50 @@ function yearRowsOf(found, perYear, years, lunarSpan = null) {
   const unkept = lunar.length === found.length ? empty.filter((y) => !noLunar.includes(y)) : empty;
   if (unkept.length) notes.push(`${yearsText(unkept)}에는 검색하신 전례일을 지키지 않습니다.`);
   return { items, notes };
+}
+
+/**
+ * 찾은 단계: 이름 결과는 이름이 검색어와 같은 것, 시작하는 것, 든 것(`tier`, 지역 축일도 있다)이고, 구절 결과는 검색어의 구절을 모두 담은
+ * 독서, 그다음 겹친 절이 많은 독서다. 워커가 이 차례로 보낸다(search-worker.js `searchLectionaryNames`, `searchLectionaryPassage`의 `better`).
+ * @param {any} a  LectItem @param {any} b  LectItem @returns {number}
+ */
+function lectStepOrder(a, b) {
+  // A passage row with no hits ranks below every row that has one, so the comparison stays consistent (transitive)
+  if (a.hits || b.hits) {
+    const [x, y] = [a.hits?.[0], b.hits?.[0]];
+    return Number(!!y?.full) - Number(!!x?.full) || (y?.overlap ?? 0) - (x?.overlap ?? 0);
+  }
+  return (a.tier ?? 3) - (b.tier ?? 3);
+}
+
+/**
+ * 전례일 줄의 차례(ADR-044 §1, 사용자 결정 2026-11-23): 찾은 단계 안에서 줄이 여는 날의 날짜 차례다. 그래야 같은 날 읽을 수 있는 줄이
+ * 이웃한다(`대림`의 동계재 지향별 줄이 목록 끝이 아니라 같은 날의 대림 평일 곁에 온다). 날이 같으면 사계재의 줄을 아래에 두고
+ * (`lectEmberLast`), 그 밖에는 워커가 보낸 전례년 순서다. 날짜를 계산하지 못한 줄(`days`에 없거나 null)은 그 단계의 끝에 그 순서로 둔다.
+ * 연도를 붙인 검색의 줄은 이미 그해의 날짜 차례라(`yearRowsOf`) 그대로 둔다.
+ * @param {any} lect  LectResult
+ * @param {Map<any, LectDays | null> | null | undefined} days  줄마다 여는 날(`withLectDays`)
+ * @returns {any[]}  LectItem[], 새 배열
+ */
+function lectItemsByDay(lect, days) {
+  if (lect.years || !days) return lect.items.slice();
+  return lect.items
+    .map((/** @type {any} */ item, /** @type {number} */ i) => ({ item, i, day: days.get(item)?.open ?? null }))
+    .sort((/** @type {any} */ a, /** @type {any} */ b) => lectStepOrder(a.item, b.item)
+      || (a.day === b.day ? 0 : a.day === null ? 1 : b.day === null ? -1 : a.day.date < b.day.date ? -1 : a.day.date > b.day.date ? 1
+        : lectEmberLast(a.day, b.day))
+      || a.i - b.i)
+    .map((/** @type {any} */ x) => x.item);
+}
+
+/**
+ * 같은 날의 두 줄: 사계재의 줄을 아래에 둔다(사용자 결정 2026-11-23, ADR-044 §1). 전례독서 화면이 그날의 평일을 제목으로 두고 사계재를 목록의
+ * 줄로 두는 것과 같다. 사계재인지는 엔진이 규칙 종류로 판별해 넘긴다(`KeptDay`, `YearDay`의 `ember`). 색인의 전례년 순서로는 춘계재와 하계재가
+ * 평일 위에, 동계재와 추계재가 평일 아래에 왔다.
+ * @param {{ ember?: boolean }} a @param {{ ember?: boolean }} b @returns {number}
+ */
+function lectEmberLast(a, b) {
+  return Number(!!a.ember) - Number(!!b.ember);
 }
 
 /**
@@ -1314,7 +1359,13 @@ function appendLectGroup(container, lect, screen) {
     container.appendChild(el("p", { className: "search-note" }, synonymNote(lect.synonyms)));
   }
   for (const note of lect.notes || []) container.appendChild(el("p", { className: "search-note" }, note));
+  // 날짜를 계산했으면 날짜 차례로 그린다. 아직이면 워커의 차례 그대로이고, 날짜가 오면 `patchLectDays`가 다시 늘어놓는다. 그린 줄과
+  // `lect.items`의 차례가 같아야 `patchLectDays`가 줄마다 제 날짜를 넣는다
+  lect.items = lectItemsByDay(lect, screen.days);
   const rows = el("ul", { className: "lect-rows", role: "list" });
+  // 3초가 지나 날짜가 오면 그린 뒤 사용자가 화면을 건드렸는지 본다(`patchLectDays`)
+  watchUserInput();
+  _lectDrawnAt.set(rows, performance.now());
   for (const item of lect.items) rows.appendChild(buildLectRow(lectRowOf(item, screen.readingLabel, screen.days?.get(item) ?? null, screen.today)));
   container.appendChild(rows);
 }
@@ -1778,7 +1829,7 @@ function localDayOf(mod, item, date) {
     const resolved = mod.resolveDate(date);
     colors = resolved ? mod.headerColors(resolved, null).colors : [];
   }
-  return { date, obs: item.obs.key, setId: null, track: null, name: item.obs.name, colors };
+  return { date, obs: item.obs.key, setId: null, track: null, name: item.obs.name, colors, ember: false };
 }
 
 /**
@@ -1812,10 +1863,13 @@ async function withLectDays(result, screen, deadline, isStale) {
     const today = todayOf(mod);
     // 화면의 이름으로 찾을 수 있게, 교회력 자료를 처음 받은 뒤 이번 전례년의 성탄 평일의 이름을 보내 둔다
     sendChristmasNames(mod, today).catch(() => {});
-    const found = await Promise.all(lect.items.map((/** @type {any} */ item) => lectDaysOf(mod, item, today, isStale).catch(() => null)));
+    // `appendLectGroup` may replace `lect.items` with a reordered array while this awaits, so pair `found` with the
+    // array it was computed from, not whatever `lect.items` is afterwards
+    const items = lect.items;
+    const found = await Promise.all(items.map((/** @type {any} */ item) => lectDaysOf(mod, item, today, isStale).catch(() => null)));
     if (screen.days !== days) return;
     screen.today = today;
-    lect.items.forEach((/** @type {any} */ item, /** @type {number} */ i) => days.set(item, found[i]));
+    items.forEach((/** @type {any} */ item, /** @type {number} */ i) => days.set(item, found[i]));
   })();
   let done = false;
   const finished = work.then(() => { done = true; });
@@ -1824,17 +1878,76 @@ async function withLectDays(result, screen, deadline, isStale) {
 }
 
 /**
- * 3초가 지나 계산이 끝난 날짜를 그린 줄에 넣는다(ADR-044 §1). 줄의 글만 바꾸므로 포커스와 읽던 자리가 남는다. 독서 표기는 처음 그린
- * 것(`labelOf`)을 그대로 쓴다. 나중에 받아도 다시 그리지 않기로 했다(ADR-044 §1).
+ * 사용자가 화면을 건드렸는가. 3초가 지나 온 날짜로 전례일 줄을 다시 늘어놓을지 정한다(`patchLectDays`, 사용자 결정 2026-11-23).
+ * `_lastUserInput`은 마지막 누르기, 터치, 휠, 키 입력의 때(`performance.now()`), `_lastListHover`는 마우스나 펜이 줄 목록 위에서 마지막으로
+ * 움직인 때다. `_touching`은 지금 화면에 손가락이 닿아 있는가, `_pressed`는 지금 마우스 단추나 펜이 눌려 있는가다. 그리기 전부터 대고 있던
+ * 손가락도 보도록 검색을 시작할 때부터 지켜본다(`renderSearchResults`). `scroll` 이벤트는 보지 않는다. 화면 전환과 스크롤 기억도 그 이벤트를 낸다.
+ */
+let _lastUserInput = 0;
+let _lastListHover = 0;
+let _touching = false;
+let _pressed = false;
+let _userInputWatched = false;
+/** @type {WeakMap<Element, number>} */
+const _lectDrawnAt = new WeakMap();
+// 늦게 온 날짜로 줄을 다시 늘어놓았을 때 화면 읽기 프로그램에 한 번 읽어 주는 글(사용자 결정 2026-11-23). VoiceOver로 쓸어 넘기는 동작은
+// 앱이 알 수 없어(`watchUserInput`이 보는 이벤트가 나지 않는다), 듣던 차례가 바뀐 것을 이 글로 알린다
+const LECT_RESORTED_NOTE = "전례일을 날짜순으로 다시 정렬했습니다.";
+
+/** Note the user's own input from now on, once: pointer, touch, wheel and key events. */
+function watchUserInput() {
+  if (_userInputWatched) return;
+  _userInputWatched = true;
+  const opts = { capture: true, passive: true };
+  const on = (/** @type {string} */ type, /** @type {(e: any) => void} */ fn) => document.addEventListener(type, fn, opts);
+  const note = () => { _lastUserInput = performance.now(); };
+  for (const type of ["pointerdown", "touchstart", "wheel", "keydown"]) on(type, note);
+  // Touch events, not pointer events, for a finger on the screen: a touch pointer is cancelled once the page pans,
+  // while the finger stays down
+  for (const type of ["touchstart", "touchend", "touchcancel"]) on(type, (/** @type {TouchEvent} */ e) => { _touching = e.touches.length > 0; });
+  on("pointerdown", (/** @type {PointerEvent} */ e) => { if (e.pointerType !== "touch") _pressed = true; });
+  for (const type of ["pointerup", "pointercancel"]) on(type, (/** @type {PointerEvent} */ e) => { if (e.pointerType !== "touch") _pressed = false; });
+  on("pointermove", (/** @type {PointerEvent} */ e) => {
+    if (e.pointerType === "touch") return;
+    // A button released outside the window sends no pointerup; the next move tells whether one is still down
+    _pressed = e.buttons !== 0;
+    if (e.target instanceof Element && e.target.closest("ul.lect-rows")) _lastListHover = performance.now();
+  });
+}
+
+/**
+ * 3초가 지나 계산이 끝난 날짜를 그린 줄에 넣는다(ADR-044 §1). 줄의 글만 바꾸고 줄을 새로 만들지 않아 포커스가 남는다. 그린 뒤 사용자가
+ * 화면을 건드리지 않았고(`watchUserInput`) 포커스가 목록 밖이면 줄을 날짜 차례로 다시 늘어놓고(`lectItemsByDay`), 건드렸으면 차례를 그대로 둔다. 누르려던
+ * 줄이 손가락 아래에서 다른 날로 바뀌거나 화면 읽기 프로그램으로 듣던 차례가 바뀌지 않게 하려는 것이다(사용자 결정 2026-11-23, 코드 리뷰).
+ * 다시 늘어놓으면 화면 읽기 프로그램에 알린다(`LECT_RESORTED_NOTE`). 독서 표기는 처음 그린 것(`labelOf`)을 그대로 쓴다. 나중에 받아도 다시 그리지 않기로 했다(ADR-044 §1).
  * @param {HTMLElement} target @param {any} lect @param {SearchScreen} screen
  * @param {(setId: string, slot: string) => string | null} labelOf
  */
 function patchLectDays(target, lect, screen, labelOf) {
-  const rows = target.querySelectorAll("ul.lect-rows > li");
+  const list = target.querySelector("ul.lect-rows");
+  if (!list) return;
+  // `lect.items` is in the order the rows were drawn (`appendLectGroup`)
+  const rows = /** @type {HTMLElement[]} */ (Array.from(list.children));
+  /** @type {Map<any, HTMLElement>} */
+  const rowOf = new Map();
   lect.items.forEach((/** @type {any} */ item, /** @type {number} */ i) => {
-    const li = /** @type {HTMLElement | undefined} */ (rows[i]);
-    if (li) fillLectRow(li, lectRowOf(item, labelOf, screen.days?.get(item) ?? null, screen.today));
+    const li = rows[i];
+    if (!li) return;
+    fillLectRow(li, lectRowOf(item, labelOf, screen.days?.get(item) ?? null, screen.today));
+    rowOf.set(item, li);
   });
+  const sorted = lectItemsByDay(lect, screen.days);
+  if (rows.length !== lect.items.length || sorted.every((item, i) => item === lect.items[i])) return;
+  // 누르기, 터치, 휠, 키 입력이 그린 뒤에 있었거나, 지금 손가락이 닿아 있거나 단추가 눌려 있거나, 그린 뒤 마우스가 목록 위에서 움직였거나
+  // 지금 목록 위에 있거나, 포커스가 목록 안이면 건드린 것이다. 그린 때를 모르는 목록도 건드린 것으로 보고 그대로 둔다
+  const drawnAt = _lectDrawnAt.get(list) ?? -Infinity;
+  // `:hover` also covers a mouse left resting where the rows were drawn: no pointermove fires until it moves
+  const touched = drawnAt <= _lastUserInput || drawnAt <= _lastListHover || _touching || _pressed || list.matches(":hover")
+    || list.contains(document.activeElement);
+  if (touched) return;
+  lect.items = sorted;
+  for (const item of sorted) list.appendChild(/** @type {HTMLElement} */ (rowOf.get(item)));
+  window.announce(LECT_RESORTED_NOTE);
 }
 
 /**
@@ -3028,6 +3141,8 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   focusRebuiltScopeRow(view, seq);
 
   resultsTarget.appendChild(el("div", { className: "loading", "aria-live": "polite" }, "검색 중…"));
+  // 전례일 줄을 그리기 전부터 화면에 대고 있던 손가락도 보도록 지금부터 입력을 지켜본다(`patchLectDays`)
+  watchUserInput();
 
   const pageSize = searchPageSize(query, filterBooks);
 
@@ -3212,8 +3327,12 @@ async function addLateLectionary(result, query, screen, target, isStale, draw) {
   }
   await withReadingLabels(result, screen, 0);
   if (isStale() || !target.isConnected) return;
-  // 날짜는 이미 계산한 표가 있으면 곧 나온다. 기다리지 않고 그린 뒤 넣는다
-  const lateDays = await withLectDays(result, screen, Date.now(), () => isStale() || !target.isConnected);
+  // 전례일 줄을 그릴 때(성서 본문이나 성시의 목록이 없을 때)는 날짜를 3초까지 기다려 날짜 차례로 그린다(ADR-044 §1). 그린 뒤 날짜가 와서
+  // 다시 늘어놓으면 정렬 알림(`LECT_RESORTED_NOTE`)이 바로 앞의 「더 찾았습니다」 알림을 덮는다. 알약만 더할 때는 기다리지 않는다
+  const drawsRows = !target.querySelector("h2.search-count");
+  const lateDays = await withLectDays(result, screen, Date.now() + (drawsRows ? LECTIONARY_WAIT_MS : 0),
+    () => isStale() || !target.isConnected);
+  if (isStale() || !target.isConnected) return;
   const labelOf = screen.readingLabel;
   lateDays?.later.then(() => {
     if (!isStale() && target.isConnected) patchLectDays(target, lect, screen, labelOf);

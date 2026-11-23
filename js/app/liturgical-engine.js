@@ -2323,11 +2323,11 @@ function slugTargetsIn(lix, cal) {
  * 독서 세트나 전례일(`ids`)을 `from`부터 `to`까지(둘 다 포함) 처음 지키는 날(설계서 §7). 지키는 날은 후보의 상태가 `proper`나
  * `transferred_in`인 날이다. 다른 날로 옮겨 간 날과 선택 봉헌으로만 오는 날은 그날 읽는 독서가 아니다. 독서 세트는 그 후보가 내는
  * 독서 그룹의 `id`로, 전례일은 후보의 `observance.id`로 견준다. 공통 독서는 견주지 않는다(지키는 날의 표와 같다). 찾은 세트의 `setId`와
- * 트랙을 함께 돌려준다. 세트의 차례(`?set=`)는
+ * 트랙, 사계재의 날인가(`ember`, `KeptDay`와 같다)를 함께 돌려준다. 세트의 차례(`?set=`)는
  * 전례독서 화면이 선택지를 합치고 늘어놓은 차례라 화면이 정한다. 없으면 null.
  * @param {LectionaryIndex} lix @param {CalendarIndex} cal
  * @param {Set<string>} ids  @param {string} from  @param {string} to  "YYYY-MM-DD"
- * @returns {{ date: string, obs: string, setId: string | null, track: 1 | 2 | null } | null}
+ * @returns {{ date: string, obs: string, setId: string | null, track: 1 | 2 | null, ember: boolean } | null}
  */
 function firstKeptDayIn(lix, cal, ids, from, to) {
   let year = 0;
@@ -2343,9 +2343,10 @@ function firstKeptDayIn(lix, cal, ids, from, to) {
     if (!resolved) continue;
     for (const c of resolved.candidates) {
       if (c.status !== "proper" && c.status !== "transferred_in") continue;
-      if (ids.has(c.observance.id)) return { date: d, obs: c.observance.id, setId: null, track: null };
+      const ember = isEmber(c.observance);
+      if (ids.has(c.observance.id)) return { date: d, obs: c.observance.id, setId: null, track: null, ember };
       for (const g of findReadingsIn(lix, cal, resolved, c)) {
-        if (!g.common && ids.has(g.id)) return { date: d, obs: c.observance.id, setId: g.id, track: g.reading_track };
+        if (!g.common && ids.has(g.id)) return { date: d, obs: c.observance.id, setId: g.id, track: g.reading_track, ember };
       }
     }
   }
@@ -2383,8 +2384,9 @@ function headerColors(resolved, selected) {
 
 /**
  * 지키는 날 하나(`extendKeptDaysIn`). `setId`가 null이면 전례일로 찾은 날이다. `colors`는 그 전례일을 고른 전례독서 화면 머리의 색이다
- * (`headerColors`, 대체색은 빼고). 검색 결과의 색 점이 이 색이다(ADR-044 §1).
- * @typedef {{ date: string, obs: string, setId: string | null, track: 1 | 2 | null, name: string, colors: string[] }} KeptDay
+ * (`headerColors`, 대체색은 빼고). 검색 결과의 색 점이 이 색이다(ADR-044 §1). `ember`는 사계재의 날인가다(규칙 종류로 판별, `isEmber`).
+ * 검색 결과가 같은 날의 줄에서 사계재를 평일 아래에 둔다(ADR-044 §1, 사용자 결정 2026-11-23).
+ * @typedef {{ date: string, obs: string, setId: string | null, track: 1 | 2 | null, name: string, colors: string[], ember: boolean }} KeptDay
  */
 /**
  * 지키는 날의 표. `from`부터 `to`까지(둘 다 포함, `to`가 빈 문자열이면 아직 하루도 세지 않았다) 독서 세트의 `id`와 전례일의 `id`마다
@@ -2446,12 +2448,13 @@ function extendKeptDaysIn(lix, cal, table, to) {
         if (c.status !== "proper" && c.status !== "transferred_in") continue;
         const o = c.observance;
         const colors = headerColors(resolved, c).colors;
+        const ember = isEmber(o);
         // 격자 전례일(날마다 있는 평일)은 보조 주소와 검색이 전례일로 묻지 않으므로(`slugTargetsIn`) 전례일로는 넣지 않는다. 넣으면 표의
         // 3분의 1을 차지한다(코드 리뷰 2026-11-17). 그날의 독서 세트로는 넣는다
-        if (!o.id.startsWith(GRID_PREFIX)) push(table.byId, o.id, { date: d, obs: o.id, setId: null, track: null, name: o.name, colors });
+        if (!o.id.startsWith(GRID_PREFIX)) push(table.byId, o.id, { date: d, obs: o.id, setId: null, track: null, name: o.name, colors, ember });
         for (const g of findReadingsIn(lix, cal, resolved, c)) {
           if (g.common) continue;
-          const day = { date: d, obs: o.id, setId: g.id, track: g.reading_track ?? null, name: o.name, colors };
+          const day = { date: d, obs: o.id, setId: g.id, track: g.reading_track ?? null, name: o.name, colors, ember };
           push(table.byId, g.id, day);
           if (o.id.startsWith(CHRISTMAS_WEEKDAY_PREFIX)) push(table.byName, o.name, day);
         }
@@ -2543,9 +2546,9 @@ function christmasNamesIn(table, today) {
  * 연도를 붙인 이름 검색(ADR-044 §4)이 찾는 그해의 날 하나. `kind`는 그날 지키면 `kept`, 다른 날에서 옮겨 와 지키면 `moved`(`from`은
  * 원래 날), 다른 전례일과 겹쳐 기념만 하면 `overlap`(`by`는 그날 지키는 전례일의 이름, `bySaint`는 그 전례일이 성인 축일인가)이다.
  * 성인 축일은 월별 축일 가운데 국가 명절(설날, 추석)이 아닌 것이다. 검색 결과가 이름 뒤에 「축일」을 붙인다. `colors`는 줄을 누르면 열리는 화면 머리의
- * 색이다. 지키는 날은 그 전례일을 고른 화면, 겹친 날은 그날의 기본 화면이다(`headerColors`).
+ * 색이다. 지키는 날은 그 전례일을 고른 화면, 겹친 날은 그날의 기본 화면이다(`headerColors`). `ember`는 `KeptDay`와 같다.
  * @typedef {{ kind: "kept" | "moved" | "overlap", date: string, obs: string, setId: string | null, track: 1 | 2 | null,
- *   name: string, colors: string[], from: string | null, by: string | null, bySaint: boolean }} YearDay
+ *   name: string, colors: string[], from: string | null, by: string | null, bySaint: boolean, ember: boolean }} YearDay
  */
 /**
  * 양력 한 해의 표(`yearDaysIn`). `kept`는 독서 세트의 `id`와 전례일의 `id`마다 지키는 날(날짜 차례), `overlap`은 전례일의 `id`마다
@@ -2580,7 +2583,7 @@ function yearDaysIn(lix, cal, y) {
         const moved = c.status === "transferred_in";
         /** @type {YearDay} */
         const day = { kind: moved ? "moved" : "kept", date: d, obs: o.id, setId: null, track: null, name: o.name,
-          colors: headerColors(resolved, c).colors, from: moved && c.from ? c.from : null, by: null, bySaint: false };
+          colors: headerColors(resolved, c).colors, from: moved && c.from ? c.from : null, by: null, bySaint: false, ember: isEmber(o) };
         // 격자 전례일(날마다 있는 평일)은 검색이 전례일로 묻지 않는다(`extendKeptDaysIn`과 같다). 그날의 독서 세트로는 넣는다
         if (!grid) keep(o.id, day);
         for (const g of findReadingsIn(lix, cal, resolved, c)) {
@@ -2591,7 +2594,7 @@ function yearDaysIn(lix, cal, y) {
         const byObs = by ? by.observance : null;
         table.overlap.set(o.id, { kind: "overlap", date: d, obs: o.id, setId: null, track: null, name: o.name,
           colors: headerColors(resolved, null).colors, from: null, by: byObs ? byObs.name : null,
-          bySaint: !!byObs && byObs.kind === "sanctoral" && byObs.sanctoral_class !== "national" });
+          bySaint: !!byObs && byObs.kind === "sanctoral" && byObs.sanctoral_class !== "national", ember: isEmber(o) });
       }
     }
   }
