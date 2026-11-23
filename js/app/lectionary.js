@@ -1764,7 +1764,16 @@ function trimHalfVerses(article, verseSpec, bookId, chapter) {
       dropSiblings(spans[0], /** @type {Element} */ (first.previousElementSibling));
     }
     if (last !== spans[spans.length - 1]) {
-      last.querySelectorAll(".responsory-mark").forEach((n) => n.remove());
+      last.querySelectorAll(".responsory-mark").forEach((n) => {
+        // The no-break space that held ◯ to the last word (views.js appendVerses) goes back to a space: a line-end
+        // no-break space does not hang past the edge like a space does, so it could push that word to a line of its own.
+        const before = n.previousSibling;
+        if (before?.nodeType === Node.TEXT_NODE) {
+          const text = /** @type {Text} */ (before);
+          if (text.data.endsWith("\u00a0")) text.data = `${text.data.slice(0, -1)} `;
+        }
+        n.remove();
+      });
       dropSiblings(/** @type {Element} */ (last.nextElementSibling), spans[spans.length - 1]);
     }
     const num = first.querySelector(".verse-num");
