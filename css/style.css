@@ -982,9 +982,10 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   margin: 0 0.1em;
   user-select: none;
 }
-/* 〔 opening a poetry verse hangs right after the number, in the first line's indent (ADR-054), so the first letter
-   stays where the other lines' first letters start (사용자 결정 2026-11-14). The box is one glyph wide and pulled back by its own width; the glyph's
-   ink is its right half, so it stays clear of a three-digit number. A leading quote is not pulled back over it. */
+/* 〔 opening a poetry verse hangs right after the number, just before the first letter (ADR-054), so the first letter
+   stays where the other lines' first letters start (사용자 결정 2026-11-14). The box is one glyph wide and pulled back by its own width, so with the
+   half-letter indent its left half reaches into the number's gutter; the glyph's ink is its right half, so it stays clear of a three-digit number.
+   A leading quote is not pulled back over it. */
 .lect-bracket--hang {
   display: inline-block;
   width: 1em;
