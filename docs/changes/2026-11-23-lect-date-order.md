@@ -1,4 +1,5 @@
 ---
+pr: 638
 date: 2026-11-23
 branch: feat/lect-date-order
 title: "feat: 전례일 검색 결과를 날짜 차례로"
