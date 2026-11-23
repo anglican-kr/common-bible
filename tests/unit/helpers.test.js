@@ -1402,6 +1402,10 @@ test("widths: boxes that hold text are sized in rem, so they follow the font-siz
   const css = fs.readFileSync(path.join(root, "css/style.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   assert.match(css, /--max-width:\s*min\(40rem, 100vw - 2 \* max\(env\(safe-area-inset-left, 0px\), env\(safe-area-inset-right, 0px\)\)\);/,
     "the reading column is 40rem, inside the side safe areas (ADR-055 §2, §4)");
+  // index.html's critical pre-paint styles carry their own copy of the token; keep it the same.
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const token = (src) => src.match(/--max-width:\s*([^;]+);/)?.[1];
+  assert.equal(token(html), token(css), "index.html critical --max-width matches css/style.css");
   // A width declaration (not a media or container query: those follow `(`) with a px length of 100 or more
   // is a box that holds text. What stays px is smaller: switches (51-52px), icons, handles, the 44px touch
   // target. Gutters inside a viewport cap (`calc(100vw - 16px)`) are small too. The `flex` and

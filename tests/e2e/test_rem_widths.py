@@ -155,17 +155,18 @@ def _safe_area(ctx, page, left: int, right: int) -> None:
                                    {"insets": {"left": left, "right": right, "top": 0, "bottom": 21}})
 
 
-@pytest.mark.parametrize("font, left, right", [(18, 62, 62), (22, 62, 62), (24, 62, 62), (24, 62, 0)],
-                         ids=["18px", "22px", "24px", "24px-one-side"])
+@pytest.mark.parametrize("font, left, right", [(18, 62, 62), (20, 62, 62), (22, 62, 62), (24, 62, 62), (24, 62, 0)],
+                         ids=["18px", "20px", "22px", "24px", "24px-one-side"])
 def test_reading_column_stays_inside_the_side_safe_areas(browser, font, left, right):
     """가로로 든 iPhone에서 본문 칸과 헤더는 좌우 안전 영역에 들어가지 않는다. 18px에서는 전처럼 720px 칸이 가운데에 있고,
-    22px과 24px에서는 화면에서 넓은 쪽 안전 영역의 두 배를 뺀 폭(750px)이다. 안전 영역이 한쪽뿐이어도 그쪽을 피한다."""
+    20px부터는 화면에서 넓은 쪽 안전 영역의 두 배를 뺀 폭(750px)이다. 안전 영역이 한쪽뿐이어도 그쪽을 피한다."""
     ctx = _ctx(browser, LANDSCAPE_IPHONE, font, phone=True)
     try:
         page = ctx.new_page()
         _safe_area(ctx, page, left, right)
         page.goto(f"{BASE_URL}/ps/23")
         page.wait_for_selector("article.chapter-text .verse", timeout=20_000)
+        assert page.evaluate("() => document.documentElement.style.fontSize") == f"{font}px"
         inset = max(left, right)
         app = _box(page, "#app")
         assert abs(app["width"] - min(40 * font, LANDSCAPE_IPHONE["width"] - 2 * inset)) < 1, (font, app)
