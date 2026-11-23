@@ -485,6 +485,12 @@ async function route() {
   // settings / chapter popovers). Closing the chapter picker / settings popover
   // on nav also makes the /settings desktop fallback's gear.click() always OPEN.
   window.appOverlay.closeAllOverlays();
+  // The note tooltip is not an overlay (no scrim, focus trap or focus restore), so it closes here on its own. Without
+  // this a route its outside-click close did not see — back · forward, a redraw of the same address, a tab bar icon
+  // (an SVG target, which that close skips) — left it open over the new screen, its anchor gone, under the header, and
+  // its scroll/resize followers and size observer running (known-issues §50). It leaves focus where it is: the anchor
+  // closeNoteTooltip would focus is on the screen being left.
+  window.appCitations?.hideNoteTooltip();
   const parsed = parsePath();
   // Narrowing on the destructured `view` narrows `parsed` too — each branch reads its own fields off it.
   const { view } = parsed;
@@ -786,6 +792,10 @@ async function route() {
     // 내부 navigate()(리다이렉트)가 _routeSeq 를 올렸으면 낡은 바깥 호출이라 건너뛴다.
     if (routeSeq === _routeSeq) {
       window.tabHistory?.onRouteEnd();
+      // The close at the start came too early for a tooltip opened on the old screen while this route still waited to
+      // replace it (books.json not yet in when leaving the lectionary for a chapter): its anchor left with the old screen,
+      // and it stayed over the new one (known-issues §50). Only such a tooltip closes; one opened on the new screen stays.
+      window.appCitations?.hideNoteTooltip({ ifAnchorGone: true });
       // 누른 링크가 옛 화면과 함께 사라져 body 로 빠진 포커스를 새 화면의 같은 컨트롤로(ADR-031 §5). 오류 화면 ·
       // 다른 뷰에는 같은 키가 없어 아무것도 하지 않는다.
       restoreFocusSpot(focusSpot, $app);
