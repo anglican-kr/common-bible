@@ -18,6 +18,8 @@ Covers:
   - full-screen failure of the Bible screens (ADR-024 §6, known-issues §13.1) — missing chapter (/john/99, /ps/151),
       unknown path (/xyz), no such page in a book (/john/abc · /john/ · /john/0 · /john/prologue), data not received
       (chapter · books.json): the head of the screen, no audio bar, not saved as the reading position
+  - page views (known-issues §46), counted by a stand-in for Google's tag: one per screen with the drawn screen's
+      title and address — first screen, link, back, forward; a failure screen and the calendar list opened first
 """
 
 import re
@@ -482,5 +484,83 @@ def test_chapter_picker_opens_and_navigates(browser):
 
         current = page.evaluate("() => location.pathname")
         assert current == "/gen/5", f"Expected /gen/5, got {current!r}"
+    finally:
+        ctx.close()
+
+
+# ── 방문 기록(known-issues §46) ─────────────────────────────────────────────
+
+# 구글 태그(gtag.js) 대신 싣는 흉내. 진짜 태그처럼 앱이 쌓은 명령(`dataLayer`)을 읽어, 방문 기록(page_view)으로 보낼 것을 `window.__pageViews`에
+# 모은다. `config`는 `send_page_view: false`가 없으면 첫 화면의 방문을 스스로 보내고(그때의 제목과 주소), `page_view` 이벤트는 받은 값으로
+# 보낸다. 주소가 바뀔 때 저절로 보내는 설정(pitfalls §43)은 애널리틱스 관리 화면에서 꺼 두었으므로 흉내 내지 않는다. 진짜 태그를 받지 않으므로
+# 수집 요청도 나가지 않는다.
+FAKE_GTAG = """(() => {
+  window.__pageViews = [];
+  const send = (args) => {
+    const [command, name, params] = args;
+    if (command === 'config' && params?.send_page_view !== false) window.__pageViews.push({ title: document.title, location: location.href });
+    if (command === 'event' && name === 'page_view') window.__pageViews.push({ title: params?.page_title, location: params?.page_location });
+  };
+  const queue = window.dataLayer = window.dataLayer || [];
+  for (const args of queue) send(args);
+  const push = queue.push.bind(queue);
+  queue.push = (...items) => { items.forEach(send); return push(...items); };
+})();"""
+
+
+def _page_view_context(browser):
+    ctx = _failure_context(browser)
+    ctx.route(re.compile(r"^https://www\.googletagmanager\.com/gtag/js"),
+              lambda route: route.fulfill(status=200, content_type="text/javascript", body=FAKE_GTAG))
+    return ctx
+
+
+def _sent(page, n):
+    """보낸 방문 기록이 n건이 되면 조금 더 기다렸다가 모두 돌려준다. 앱은 화면을 다 그린 뒤 한가할 때 보낸다(`trackPageView`)."""
+    page.wait_for_function("(n) => (window.__pageViews || []).length >= n", arg=n, timeout=8_000)
+    page.wait_for_timeout(500)
+    return page.evaluate("() => window.__pageViews")
+
+
+def test_each_screen_sends_one_page_view_with_its_title_and_address(browser):
+    """첫 화면, 링크로 옮긴 화면, 뒤로 가기와 앞으로 가기는 방문을 1건씩 보낸다. 제목과 주소는 다 그린 화면의 것이다. 태그가 첫 화면을
+    스스로 보내면 첫 화면이 2건이 된다(known-issues §46)."""
+    ctx = _page_view_context(browser)
+    page = ctx.new_page()
+    try:
+        page.goto(BASE)
+        page.wait_for_selector(".book-list")
+        books = {"title": "공동번역성서", "location": f"{BASE}/"}
+        gen = {"title": "창세기 — 공동번역성서", "location": f"{BASE}/gen"}
+        gen1 = {"title": "창세기 1장 — 공동번역성서", "location": f"{BASE}/gen/1"}
+        assert _sent(page, 1) == [books]
+        page.locator(".book-list a[href='/gen']").first.click()
+        page.wait_for_selector(".chapter-grid")
+        assert _sent(page, 2) == [books, gen]
+        page.locator("a[href='/gen/1']").first.click()
+        page.wait_for_selector("article.chapter-text .verse")
+        assert _sent(page, 3) == [books, gen, gen1]
+        page.go_back()
+        page.wait_for_selector(".chapter-grid")
+        assert _sent(page, 4) == [books, gen, gen1, gen]
+        page.go_forward()
+        page.wait_for_selector("article.chapter-text .verse")
+        assert _sent(page, 5) == [books, gen, gen1, gen, gen1]
+    finally:
+        ctx.close()
+
+
+@pytest.mark.parametrize(("path", "title"), [
+    ("john/99", "요한의 복음서 — 공동번역성서"),
+    ("xyz", "공동번역성서"),
+    ("calendar/list/2026-12-15", "2026년 12월 캘린더 목록 — 공동번역성서"),
+])
+def test_first_screen_sends_one_page_view(browser, path, title):
+    """실패 화면과 처음 갈 때 모듈을 받는 화면(캘린더)도 처음 열면 방문이 1건이고, 다 그린 화면의 제목이다."""
+    ctx = _page_view_context(browser)
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/{path}")
+        assert _sent(page, 1) == [{"title": title, "location": f"{BASE}/{path}"}]
     finally:
         ctx.close()

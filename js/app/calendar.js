@@ -1325,13 +1325,13 @@ function followTopMonth(list) {
 }
 
 /**
- * 방문 기록 항목을 늘리지 않고 목록의 주소를 바꾼다. 탭과 앱 다시 열기도 이 주소로 돌아오게 함께 기억한다(ADR-038 §1). `gtag`가 `history`의
- * `replaceState`를 덮어써 주소가 바뀔 때마다 방문 통계를 보내므로 원본을 호출한다. 그대로 호출하면 스크롤이 멈출 때마다 방문이 1건씩
- * 기록된다(사용자 결정 2026-11-07, ADR-038 §2).
+ * 방문 기록 항목을 늘리지 않고 목록의 주소를 바꾼다. 탭과 앱 다시 열기도 이 주소로 돌아오게 함께 기억한다(ADR-038 §1). 주소를 바꿔도
+ * 방문 통계는 늘지 않는다. 앱은 화면을 그릴 때만 방문을 보내고(`routing.js`의 `trackPageView`), 주소가 바뀌면 저절로 보내는 애널리틱스
+ * 설정은 꺼 두었다(사용자 결정 2026-11-23, ADR-038 §2, pitfalls §43).
  * @param {string} path
  */
 function replaceListAddress(path) {
-  History.prototype.replaceState.call(history, history.state, "", path);
+  history.replaceState(history.state, "", path);
   window.tabHistory?.recordPath(path);
   window.tabHistory?.rememberCalendarView();
 }

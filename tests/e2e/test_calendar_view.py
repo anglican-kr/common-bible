@@ -1103,17 +1103,21 @@ def test_list_address_follows_the_top_row_when_scrolling_stops(mobile_context, a
     assert page.title() == "2027년 1월 캘린더 목록 — 공동번역성서"
 
 
-def test_list_saves_the_address_after_stopping_without_reporting_a_page_view(mobile_context):
-    """`gtag`는 `history`의 `replaceState`를 덮어써 방문 통계를 보낸다. 목록은 원본을 호출해 통계를 늘리지 않고, 스크롤 중에는 적지 않는다(ADR-038 §2)."""
+# 앱이 방문 기록으로 보낸 것(`trackPageView` — gtag-init.js가 dataLayer에 쌓는다)
+APP_PAGE_VIEWS = "() => (window.dataLayer || []).filter((a) => a[0] === 'event' && a[1] === 'page_view').map((a) => a[2].page_location)"
+
+
+def test_list_saves_the_address_after_stopping_without_sending_a_page_view(mobile_context):
+    """스크롤이 멈추면 주소를 바꾸되 방문은 보내지 않는다. 앱은 화면을 그릴 때만 방문을 보내고, 주소가 바뀌면 저절로 보내는 애널리틱스
+    설정은 꺼 두었다. 그래서 목록은 평범한 `history.replaceState`를 쓴다. 스크롤 중에는 주소를 적지 않는다(ADR-038 §2, pitfalls §43)."""
     mobile_context.add_init_script("""
-        window.__reported = 0;
         window.__saved = 0;
         const original = History.prototype.replaceState;
         History.prototype.replaceState = function (...args) { window.__saved++; return original.apply(this, args); };
-        history.replaceState = function (...args) { window.__reported++; return original.apply(this, args); };
     """)
     page = mobile_context.new_page()
     _open_list(page, "calendar/list/2026-12-15")
+    page.wait_for_function(f"() => ({APP_PAGE_VIEWS})().length === 1")   # 목록을 연 방문 1건
     page.evaluate("""async () => {
         for (let i = 0; i < 60; i++) {
             window.scrollBy({ top: 40, behavior: 'instant' });
@@ -1121,7 +1125,8 @@ def test_list_saves_the_address_after_stopping_without_reporting_a_page_view(mob
         }
     }""")
     page.wait_for_function("() => location.pathname !== '/calendar/list/2026-12-15'")
-    assert page.evaluate("() => window.__reported") == 0
+    page.wait_for_timeout(500)   # 앱은 방문을 브라우저가 한가할 때 보낸다
+    assert page.evaluate(APP_PAGE_VIEWS) == [f"{BASE}/calendar/list/2026-12-15"]
     assert page.evaluate("() => window.__saved") < 5   # 프레임마다 적지 않는다. 느린 컴퓨터에서 프레임이 끊기면 두어 번은 적을 수 있다
 
 
