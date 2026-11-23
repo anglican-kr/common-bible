@@ -36,13 +36,14 @@
   - **2라운드(2026-06-11)에서 마저 나눴다.** 제스처, 선택 삭제, 절 선택, ⋯ 메뉴, 트리 그리기를 `bookmark-{gestures,select,verse-select,menu,tree}.js`로 떼어 냈다. 그래서 `bookmark.js`가 **589줄**(처음 3,578줄보다 −84%)이 되고, 드로어와 헤더를 조율하는 일만 남았다. 이 과정에서 `views-routing.js`는 없어지고 `routing.js`, `views.js` 등으로 나뉘었다.
   - 남은 것은 PR5c 하나이고, 그것만 따로 진행하는 것은 보류한다. 자세한 것은 [ADR-034](../decisions/034-views-routing-second-split.md)의 개정에 있다.
 - **보안 헤더 6종 통합** (2026-05-08). nginx의 server 수준 설정 조각(snippet)으로, dev와 prod 두 vhost에 모두 적용했다. `common-bible-server/nginx/security-headers.example.conf`를 본다.
-- **모노레포 4분할** (2026-05-11, ADR-020). 앱, 데이터, 오디오, 서버의 네 저장소로 나눴다. data는 본 저장소의 `data/`에 서브모듈로 붙고, audio는 data 안에 다시 서브모듈로 붙는다(nested). server는 따로 clone한다.
+- **구글 애널리틱스 측정 ID는 `G-2Q4SRGVNQN`이다** (2026-11-23). 애널리틱스 관리 화면의 웹 스트림 「공동번역성서」(`https://bible.anglican.kr`, 스트림 ID 14348950825)의 것이다. `index.html`의 태그 주소와 `js/gtag-init.js`의 `config` 두 곳에 같은 값을 적는다. 2026-05-05부터 이 값으로 되돌린 판을 운영에 낼 때까지는 두 곳이 `G-CWVVPW11TE`여서 이 스트림에 데이터가 오지 않았다(원장 `docs/changes/2026-11-23-analytics-measurement-id.md`).
 - **방문 기록(구글 애널리틱스)**. 앱이 화면마다 방문을 1건 보낸다.
   - 화면을 다 그리고 문서 제목을 정한 뒤, 브라우저가 한가할 때 보낸다(`routing.js`의 `trackPageView`). 제목은 그 화면의 문서 제목이고 주소는 그때의 주소 전체다. `route()`의 모든 갈래와 실패 화면이 호출하므로 첫 화면, 링크로 옮긴 화면, 뒤로 가기와 앞으로 가기, 실패 화면이 모두 1건이다. 화면을 그리며 주소를 고치는 경우(절 범위를 장 끝으로 자르기, 트랙 적기, 검색의 구절 바로 열기)도 고친 주소로 1건이다.
   - 구글 태그는 첫 화면을 스스로 보내지 않는다(`gtag-init.js`의 `send_page_view: false`). 기본값대로 두면 화면을 그리기 전의 제목(「공동번역성서」)과 처음 연 주소로 1건을 더 보낸다.
-  - 주소가 바뀔 때 태그가 저절로 보내는 기록(애널리틱스 관리 화면의 Page changes based on browser history events)은 앱이 보내는 측정 ID의 스트림에서 꺼 두었다(pitfalls §43). 그래서 화면을 옮기지 않고 주소만 바꾸는 일(캘린더 목록이 스크롤이 멈출 때 적는 위치)은 방문을 보내지 않고, 캘린더 목록도 평범한 `history.replaceState`를 쓴다. 이 설정을 다시 켜거나 설정이 켜진 스트림으로 측정 ID를 바꾸면 화면을 옮길 때마다 1건, 목록의 스크롤이 멈출 때마다 1건이 더 기록된다.
+  - 주소가 바뀔 때 태그가 저절로 보내는 기록(애널리틱스 관리 화면의 Page changes based on browser history events)은 위 측정 ID의 스트림에서 꺼 두었다(pitfalls §43). 그래서 화면을 옮기지 않고 주소만 바꾸는 일(캘린더 목록이 스크롤이 멈출 때 적는 위치)은 방문을 보내지 않고, 캘린더 목록도 평범한 `history.replaceState`를 쓴다. 이 설정을 다시 켜거나 설정이 켜진 스트림으로 측정 ID를 바꾸면 화면을 옮길 때마다 1건, 목록의 스크롤이 멈출 때마다 1건이 더 기록된다.
   - 세례명 줄과 축성일 화면의 주소와 제목은 ADR-041 §8을 따른다.
-  - 테스트: 유닛(`gtag-init.test.js`), e2e(`test_navigation.py`의 방문 기록. 구글 태그 대신 흉내를 실어 앱이 보내는 것을 센다).
+  - 테스트: 유닛(`gtag-init.test.js`. 첫 화면 설정과 두 곳의 측정 ID가 같은지), e2e(`test_navigation.py`의 방문 기록. 구글 태그 대신 흉내를 실어 앱이 보내는 것을 센다).
+- **모노레포 4분할** (2026-05-11, ADR-020). 앱, 데이터, 오디오, 서버의 네 저장소로 나눴다. data는 본 저장소의 `data/`에 서브모듈로 붙고, audio는 data 안에 다시 서브모듈로 붙는다(nested). server는 따로 clone한다.
 
 ## 결정
 
