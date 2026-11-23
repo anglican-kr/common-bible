@@ -1,4 +1,5 @@
 ---
+pr: 642
 date: 2026-11-23
 branch: fix/poetry-first-line-indent
 title: "fix: 운문의 행은 첫 줄을 한 글자 들여 쓰기"
