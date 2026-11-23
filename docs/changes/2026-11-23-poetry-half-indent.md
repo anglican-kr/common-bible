@@ -1,4 +1,5 @@
 ---
+pr: 644
 date: 2026-11-23
 branch: fix/poetry-half-indent
 title: "fix: 운문의 첫 줄 들여쓰기를 반 글자로 줄이기"
