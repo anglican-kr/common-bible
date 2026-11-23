@@ -1,4 +1,5 @@
 ---
+pr: 651
 date: 2026-11-24
 branch: fix/search-failure-screen
 title: "fix: 검색이 결과를 받지 못할 때의 실패 화면"
