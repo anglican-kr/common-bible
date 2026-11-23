@@ -1,4 +1,5 @@
 ---
+pr: 640
 date: 2026-11-23
 branch: feat/poetry-wrap
 title: "feat: 운문의 줄바꿈과 넘어간 줄의 들여쓰기"
