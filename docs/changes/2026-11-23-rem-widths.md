@@ -1,4 +1,5 @@
 ---
+pr: 645
 date: 2026-11-23
 branch: style/rem-widths
 title: "style: 글자를 담는 칸의 폭을 rem으로 맞추기"
@@ -22,6 +23,7 @@ title: "style: 글자를 담는 칸의 폭을 rem으로 맞추기"
 - 유닛: `node --test tests/unit/*.test.js` 1,991건 통과. 타입 검사(`npm run typecheck`) 통과.
   - 새 유닛 2건. `helpers.test.js`는 `css/style.css`에서 100px 이상의 px 폭과 40rem이 아닌 `--max-width`를 찾는다. 옮기기 대화상자를 380px로 되돌리면 실패한다. `overlay.test.js`는 옆 패널 폭 조절의 하한이 글자 크기(24px, 16px)를 따르는지 본다. 하한을 18px 기준의 고정값으로 바꾸면 실패한다. 하한 시험에는 상한(창 폭의 85%)도 더했다.
 - e2e: 새 `test_rem_widths.py` 22건 통과. 바꾸기 전의 `css/style.css`로 돌리면 12건이 실패한다(데스크톱과 가로로 든 휴대폰의 본문 칸 4건, 옆 패널 6건, 데스크톱의 대화상자 2건). 휴대폰의 대화상자 2건은 전에도 화면 폭의 92%가 정해 통과한다. 이 시험은 화면을 넘지 않는지 본다.
+- 관련 e2e: `test_rem_widths.py`, `test_layout_tiers.py`, `test_top_bar.py`, `test_cite_sheet.py`, `test_bookmark.py`, `test_search.py`, `test_calendar_view.py`, `test_audio_controls.py`, `test_bookmark_select_delete.py`, `test_bookmark_folders.py`, `test_bookmark_export_import.py`, `test_install_guide.py`, `test_settings.py`의 484건 가운데 483건 통과. 실패한 `test_calendar_view.py`의 `test_tab_in_scrolled_list_goes_back_to_today`는 dev(`192930f`)의 코드에서도 실패하는 날짜 탓의 시험 문제라 이 PR에서 고치지 않고 known-issues §59로 남겼다. 오늘부터 70일 뒤(2027-02-01)가 달의 첫날이라 앱이 달 이름부터 상단 바 아래에 둔다(`calendar.js`의 `scrollToRow`).
 - 실측(2026-11-23, Chromium, 폭 1,280px 창의 요한 1장): 본문 칸 안의 한 줄은 글자 크기 16, 18, 20, 22, 24px에서 모두 한글 40자다. 전의 720px 칸에서는 46, 40, 36, 33, 30자였다(설계 문서 §2.1).
 
 ## 갱신한 문서
@@ -34,3 +36,14 @@ title: "style: 글자를 담는 칸의 폭을 rem으로 맞추기"
 - `docs/topics/design-system.md`: 「지금 동작」에 "칸의 폭", 「결정」에 ADR-055, 「남은 일」에 본문 칸 40rem의 확정, known-issues §22에 이 PR이 디자인 시스템 아티팩트를 맞추지 않은 것.
 - `docs/architecture.md` 부록 A: ADR-055 줄.
 - `tests/README.md`: `helpers.test.js`(98건), `overlay.test.js`(30건. 전의 27건은 이미 맞지 않았다), `test_rem_widths.py`(22건) 줄.
+- `docs/known-issues.md` §59와 `docs/topics/liturgical.md` 「남은 일」: 캘린더 목록의 뒤로 가기 e2e가 70일 뒤가 달의 첫날인 날 실패하는 것.
+
+## 리뷰 반영
+
+1회차(`/code-review medium --fix`, 사소한 것 세 건):
+
+- **ADR-055 §4가 폭 390px 휴대폰의 20rem 대화상자를 "20px부터" 화면 폭의 92%라고 적었다.** 18px에서 20rem은 360px이라 이미 92%(359px)보다 넓다. "18px부터"로 고쳤다.
+- **px 폭을 막는 유닛 시험이 `;`와 `{` 바로 뒤의 선언만 보았다.** 중첩 규칙을 닫는 `}` 바로 뒤의 선언도 보게 넓혔다. 넓혀서 새로 걸리는 선언은 없다.
+- **옆 패널 끌기 하한이 글자 크기를 읽지 못할 때의 대체값이 16px였다.** 앱의 기본 글자 크기와 같은 18px로 고쳤다.
+
+중요한 지적이 없어 리뷰를 멈췄다.

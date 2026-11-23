@@ -349,7 +349,7 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
       e.preventDefault();
       startX = e.clientX;
       startW = sheet.offsetWidth;
-      minWidth = minWidthRem * (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16);
+      minWidth = minWidthRem * (parseFloat(getComputedStyle(document.documentElement).fontSize) || 18);
       handle.setPointerCapture(e.pointerId);
       handle.addEventListener("pointermove", onPointerMove);
       handle.addEventListener("pointerup", onPointerUp, { once: true });

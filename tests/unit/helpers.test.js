@@ -1405,7 +1405,7 @@ test("widths: boxes that hold text are sized in rem, so they follow the font-siz
   // is a box that holds text. What stays px is smaller: switches (51-52px), icons, handles, the 44px touch
   // target. Gutters inside a viewport cap (`calc(100vw - 16px)`) are small too.
   const px = [];
-  for (const m of css.matchAll(/(?<=[;{]\s*)((?:min-|max-)?(?:width|inline-size)|flex-basis)\s*:\s*([^;}]+)/g)) {
+  for (const m of css.matchAll(/(?<=[;{}]\s*)((?:min-|max-)?(?:width|inline-size)|flex-basis)\s*:\s*([^;}]+)/g)) {
     if ([...m[2].matchAll(/(\d+(?:\.\d+)?)px\b/g)].some((n) => Number(n[1]) >= 100)) px.push(`${m[1]}: ${m[2].trim()}`);
   }
   assert.deepEqual(px, [], "text boxes sized in px");
