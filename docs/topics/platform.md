@@ -193,4 +193,3 @@ e2e가 여는 화면은 `index.html`이 싣는 구글 태그(`gtag.js`)를 그�
 | `test_a11y_axe.py` | 13 | 15 |
 
 - **고치는 법**: 열려 있는 PR #649, #650, #651이 건수를 더 바꾸므로, 그 PR들이 머지된 뒤 한꺼번에 다시 센다. 세는 방법은 `tests/README.md` 머리에 있다(파일마다 `node --test <파일>`과 `pytest <파일> --collect-only -q`).
-
