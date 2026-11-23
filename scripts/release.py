@@ -57,19 +57,26 @@ def write_sw_version(text: str, new_version: str) -> str:
     return SW_VERSION_RE.sub(rf'\g<1>{new_version}\g<2>', text)
 
 
-def stage_and_commit(new_version: str) -> None:
+def release_commit_message(new_version: str) -> str:
+    """Subject of the release commit. `changelog.py` drops it by this format
+    (RELEASE_COMMIT_RE), so the two must change together."""
+    return f"release: {new_version} 릴리스"
+
+
+def stage_and_commit(new_version: str) -> str:
     paths = ["version.json", "sw-version.js"]
     subprocess.run(["git", "add", *paths], cwd=ROOT, check=True)
-    # Only the actually-modified files end up in the commit; `git add data`
-    # is harmless when the submodule pointer is unchanged.
+    # Only these two files are staged; the submodule pointer is not part of
+    # a release commit (ADR-021).
     has_changes = subprocess.run(
         ["git", "diff", "--cached", "--quiet"], cwd=ROOT
     ).returncode != 0
     if not has_changes:
         print("no staged changes after add — aborting commit", file=sys.stderr)
         sys.exit(1)
-    message = f"chore: {new_version} 릴리스"
+    message = release_commit_message(new_version)
     subprocess.run(["git", "commit", "-m", message], cwd=ROOT, check=True)
+    return message
 
 
 def main() -> int:
@@ -100,8 +107,8 @@ def main() -> int:
     print(f"version.json   : {current} -> {new_version}")
     print(f"sw-version.js  : APP_VERSION -> {new_version}")
 
-    stage_and_commit(new_version)
-    print(f"committed: chore: {new_version} 릴리스")
+    message = stage_and_commit(new_version)
+    print(f"committed: {message}")
     return 0
 
 

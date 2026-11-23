@@ -47,6 +47,10 @@ class NoiseFilterTest(unittest.TestCase):
     def test_release_commit_is_app_noise(self):
         self.assertTrue(changelog.is_app_noise("chore: 1.4.17 릴리스"))
 
+    def test_release_type_commit_is_app_noise(self):
+        self.assertTrue(changelog.is_app_noise("release: 2.2.5 릴리스"))
+        self.assertTrue(changelog.is_app_noise("release: 2.2.5 릴리스 (#654)"))
+
     def test_release_commit_with_suffix_is_app_noise(self):
         self.assertTrue(
             changelog.is_app_noise("chore: 1.4.12 릴리스 — version.json bump")

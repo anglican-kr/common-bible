@@ -42,7 +42,7 @@
 
 운영에 내는 일은 버전을 올릴 때든 데이터만 바뀌었을 때든 이 순서를 따른다.
 
-1. 버전을 올리면 릴리스 PR(`chore: X.Y.Z 릴리스`)을 dev에 머지한다.
+1. 버전을 올리면 릴리스 PR(`release: X.Y.Z 릴리스`)을 dev에 머지한다.
 2. dev의 그 커밋을 `deploy.sh dev`로 dev.anglican.kr에 올리고 실제 기기에서 확인한다. 그 버전에 정식 태그가 아직 없으면 그 빌드의 pre-release를 만든다(ADR-052 §4).
 3. dev에서 main으로 PR을 연다. 필수 검사가 그 커밋에서 실행된다.
 4. 검사가 통과하면 main을 그 커밋으로 앞당긴다(`git push origin <커밋>:main`). GitHub는 그 PR을 머지된 것으로 닫는다.
