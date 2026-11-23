@@ -457,6 +457,35 @@ test("loadVersion: mirrors the build ids of a deployed version.json onto window.
   assert.deepEqual({ ...h.windowStub.appBuild }, { app: "9985216", data: "1de377e" });
 });
 
+test("loadVersion: calls made while the first fetch is in flight share it (one request, one result)", async () => {
+  // The settings view drawn before boot's loadVersion() finished asks again (ADR-052 §3). A second request whose
+  // failure lands last would overwrite the first one's version and build ids.
+  const h = loadDataFetching();
+  let calls = 0;
+  /** @type {(v: any) => void} */
+  let release = () => {};
+  h.setFetch(() => {
+    calls++;
+    if (calls > 1) return Promise.reject(new Error("second request"));
+    return new Promise((resolve) => { release = resolve; });
+  });
+  const first = h.loadVersion();
+  const second = h.loadVersion();
+  release({ ok: true, json: async () => ({ version: "2.2.4", app_commit: "9985216", data_commit: "1de377e" }) });
+  assert.deepEqual(await Promise.all([first, second]), ["2.2.4", "2.2.4"]);
+  assert.equal(calls, 1);
+  assert.equal(h.windowStub.appVersion, "2.2.4");
+  assert.deepEqual({ ...h.windowStub.appBuild }, { app: "9985216", data: "1de377e" });
+});
+
+test("loadVersion: after a failed fetch the next call fetches again", async () => {
+  const h = loadDataFetching();
+  h.setFetch(async () => { throw new Error("network down"); });
+  assert.equal(await h.loadVersion(), "");
+  h.setFetch(async () => ({ ok: true, json: async () => ({ version: "2.2.4" }) }));
+  assert.equal(await h.loadVersion(), "2.2.4");
+});
+
 test("loadVersion: the repo's version.json (no ids) gives empty ids, a failed fetch gives null", async () => {
   const h = loadDataFetching();
   h.setFetch(async () => ({ ok: true, json: async () => ({ version: "2.2.4", app_commit: 9985216 }) }));

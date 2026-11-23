@@ -600,7 +600,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   // 배포한 빌드의 version.json 사본에는 app_commit(배포하는 앱 파일을 마지막으로 바꾼 커밋)과 data_commit(데이터
   // 서브모듈의 커밋)이 더 있다(서버 저장소 build-deploy.sh). 저장소의 version.json에는 없다. dev에서만 해시를 보이고
   // 링크는 그 앱 커밋으로 간다. 운영은 버전과 릴리스 태그 그대로다. 운영은 셸을 캐시에서 먼저 꺼내므로, 데이터만 낸 배포
-  // 뒤에는 옛 해시가 남아 서버의 빌드와 어긋난다. 호스트 목록은 sw.js의 IS_DEV와 같다(helpers.test.js가 견준다).
+  // 뒤에는 옛 해시가 남아 서버의 빌드와 어긋난다. 호스트 목록은 sw.js의 IS_DEV와 같다(helpers.test.js가 비교한다).
   const DEV_HOSTS = ["dev.anglican.kr", "localhost", "127.0.0.1"];
   const COMMIT_RE = /^[0-9a-f]{7,40}$/;
   const REPO_URL = "https://github.com/anglican-kr/common-bible";

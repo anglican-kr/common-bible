@@ -47,9 +47,20 @@ async function loadBooks() {
   return data;
 }
 
+/** @type {Promise<string> | null} */
+let versionPromise = null;
+
 /** @returns {Promise<string>} */
 async function loadVersion() {
   if (appVersion) return appVersion;
+  // The settings view (drawn before boot's idle call) and app.js can both ask while the first fetch is in flight:
+  // share it, so a late failure of a second fetch cannot overwrite the first one's result.
+  if (!versionPromise) versionPromise = fetchVersion().finally(() => { versionPromise = null; });
+  return versionPromise;
+}
+
+/** @returns {Promise<string>} */
+async function fetchVersion() {
   try {
     const res = await fetch("/version.json");
     const data = await res.json();
