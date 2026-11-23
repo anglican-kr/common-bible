@@ -153,6 +153,9 @@ function makeEnv() {
     innerWidth: 400,
     innerHeight: 800,
     matchMedia: (q) => ({ media: q, matches: false }),
+    // Root font size = the app's font-size setting (html font-size); the side-panel resize floor is in rem.
+    rootFontSize: "18px",
+    getComputedStyle: (el) => ({ fontSize: el === document.documentElement ? ctx.rootFontSize : "16px" }),
     requestAnimationFrame: (cb) => { rafCbs.push(cb); return rafCbs.length; },
     appHelpers: {
       setInert: (on, sel) => { inertCalls.push([on, sel]); },
@@ -183,6 +186,7 @@ function makeEnv() {
     flushRaf: () => { rafCbs.splice(0).forEach((cb) => cb()); },
     /** Override the stub viewport (drag is small-layout only, resize large-layout only). */
     setViewport: (w, h) => { ctx.innerWidth = w; ctx.innerHeight = h; },
+    setRootFontSize: (px) => { ctx.rootFontSize = `${px}px`; },
     trapCalls,
     inertCalls,
     getTrapCleanupCount: () => trapCleanupCount,
@@ -599,14 +603,32 @@ test("attachSheetResize: large-layout drag-left widens within clamp", () => {
 
 test("attachSheetResize: width is clamped to the [minWidth, maxRatio·vw] band", () => {
   const env = makeEnv();
-  env.setViewport(1000, 800); // cap 850, floor 240
+  env.setViewport(1000, 800); // cap 850, floor 13.3rem = 239.4px at the default 18px
   const handle = new env.StubEl();
   const sheet = new env.StubEl();
   sheet._baseW = 300;
   env.attachSheetResize(handle, sheet);
   handle._dispatch("pointerdown", { clientX: 500, pointerId: 1, preventDefault() {} });
-  handle._dispatch("pointermove", { clientX: 1200 }); // drag right far → below floor → 240
-  assert.equal(sheet.style.width, "240px");
+  handle._dispatch("pointermove", { clientX: 1200 }); // drag right far → below floor → 239.4
+  assert.equal(sheet.style.width, "239.4px");
+  handle._dispatch("pointermove", { clientX: -1000 }); // drag left far → above cap → 850
+  assert.equal(sheet.style.width, "850px");
+});
+
+test("attachSheetResize: the floor follows the font-size setting, read at each drag (ADR-055 §1)", () => {
+  const env = makeEnv();
+  env.setViewport(1000, 800);
+  const handle = new env.StubEl();
+  const sheet = new env.StubEl();
+  sheet._baseW = 400;
+  env.attachSheetResize(handle, sheet);
+  for (const [font, floor] of [[24, 13.3 * 24], [16, 13.3 * 16]]) {
+    env.setRootFontSize(font); // changed between two drags, as the settings popover does
+    handle._dispatch("pointerdown", { clientX: 500, pointerId: 1, preventDefault() {} });
+    handle._dispatch("pointermove", { clientX: 1200 });
+    assert.ok(Math.abs(parseFloat(sheet.style.width) - floor) < 1e-6, `${font}px: ${sheet.style.width}`);
+    handle._dispatch("pointerup", {});
+  }
 });
 
 test("attachSheetResize: small layout (<700px wide) pointerdown is a no-op", () => {
