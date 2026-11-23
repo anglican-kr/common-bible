@@ -982,9 +982,10 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   margin: 0 0.1em;
   user-select: none;
 }
-/* 〔 opening a poetry verse hangs right after the number, in the first line's indent (ADR-054), so the first letter
-   stays where the other lines' first letters start (사용자 결정 2026-11-14). The box is one glyph wide and pulled back by its own width; the glyph's
-   ink is its right half, so it stays clear of a three-digit number. A leading quote is not pulled back over it. */
+/* 〔 opening a poetry verse hangs right after the number, just before the first letter (ADR-054), so the first letter
+   stays where the other lines' first letters start (사용자 결정 2026-11-14). The box is one glyph wide and pulled back by its own width, so with the
+   half-letter indent its left half reaches into the number's gutter; the glyph's ink is its right half, so it stays clear of a three-digit number.
+   A leading quote is not pulled back over it. */
 .lect-bracket--hang {
   display: inline-block;
   width: 1em;
@@ -1027,11 +1028,11 @@ body.cites-shown .lect-bracket--chips-off { display: none; }
   font-size: var(--font-md);
   line-height: var(--leading-loose);
 }
-/* The psalm's poetry lines: the line's start one letter in, breaks at spaces (ADR-053, ADR-054, .verse.verse-poetry). */
+/* The psalm's poetry lines: the line's start half a letter in, breaks at spaces (ADR-053, ADR-054, .verse.verse-poetry). */
 .lect-gloria-line {
   display: block;
   padding-left: 2rem;
-  text-indent: 1em;
+  text-indent: 0.5em;
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
@@ -4297,7 +4298,7 @@ mark.search-highlight {
   }
 }
 
-/* ADR-054: 운문의 행은 첫 줄을 한 글자 들여 쓴다. One body letter, worked out on the poetry line (a registered
+/* ADR-054: 운문의 행은 첫 줄을 반 글자 들여 쓴다. Half a body letter, worked out on the poetry line (a registered
    length is computed where it is set and inherited as that length), so the smaller verse number can pull its box
    back by the same amount. */
 @property --poetry-indent {
@@ -4312,7 +4313,7 @@ mark.search-highlight {
      결합된 값 — 절 번호와 본문이 같은 거터를 공유하고 큰 폰트에서 rem 으로 함께 스케일하도록
      의도적으로 2rem 유지(토큰 스냅 제외). 화면 끝에서 넘어간 줄은 이 자리에서 시작한다(ADR-054). */
   padding-left: 2rem;
-  --poetry-indent: 1em;
+  --poetry-indent: 0.5em;
   text-indent: var(--poetry-indent);
   /* ADR-053: 운문의 행만 띄어쓰기 자리에서 줄을 바꾼다. A word longer than the line still breaks. */
   word-break: keep-all;

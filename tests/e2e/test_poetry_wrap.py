@@ -1,7 +1,7 @@
-"""E2E: 운문의 행은 첫 줄을 한 글자 들여 쓰고 띄어쓰기 자리에서 줄을 바꾸며, 화면 끝에서 넘어간 줄은 들여 쓰지 않는다(ADR-053, ADR-054).
+"""E2E: 운문의 행은 첫 줄을 반 글자 들여 쓰고 띄어쓰기 자리에서 줄을 바꾸며, 화면 끝에서 넘어간 줄은 들여 쓰지 않는다(ADR-053, ADR-054).
 
 줄마다 첫 글자의 자리를 글자 하나씩 재어(`Range.getClientRects`) 같은 높이의 글자를 한 줄로 묶는다.
-자리는 운문 행 상자의 왼쪽 끝에서 잰 값이다. 절 번호 자리는 2rem, 한 글자는 본문 글자 크기(1em)다.
+자리는 운문 행 상자의 왼쪽 끝에서 잰 값이다. 절 번호 자리는 2rem, 반 글자는 본문 글자 크기의 절반(0.5em)이다.
 """
 import json
 from pathlib import Path
@@ -77,8 +77,8 @@ def _assert_breaks_at_spaces(span, where):
 
 
 def _assert_first_line_indented(span, where):
-    """The line's first line starts one letter in from the text edge (2rem + 1em) — ADR-054."""
-    assert span["lines"][0]["x"] == pytest.approx(2 * span["rem"] + span["em"], abs=0.6), (where, span)
+    """The line's first line starts half a letter in from the text edge (2rem + 0.5em) — ADR-054."""
+    assert span["lines"][0]["x"] == pytest.approx(2 * span["rem"] + 0.5 * span["em"], abs=0.6), (where, span)
 
 
 def _assert_wrapped_lines_at_text_edge(span, where):
@@ -90,7 +90,7 @@ def _assert_wrapped_lines_at_text_edge(span, where):
 
 
 def test_wrapped_psalm_line_keeps_the_word(browser):
-    """시편 23:4의 첫 행은 휴대폰에서 "지날지라도"가 통째로 다음 줄로 간다. 행의 첫 줄은 한 글자 들여 쓰고, 넘어간 줄은
+    """시편 23:4의 첫 행은 휴대폰에서 "지날지라도"가 통째로 다음 줄로 간다. 행의 첫 줄은 반 글자 들여 쓰고, 넘어간 줄은
     들여 쓰지 않아 새 행과 구별된다(ADR-054). 절 번호는 왼쪽 끝 그대로다.
 
     글자 단위로 줄을 바꿀 때는 "도" 한 글자만 넘어가 따로 된 행처럼 보였다.
@@ -249,6 +249,33 @@ def test_half_verse_cut_inside_a_note_anchor_split_by_a_quote_run(browser):
     assert notes == 0, lines   # 반쪽 어절에 온전한 어절의 주석 단추가 남지 않는다
 
 
+# 전례독서 운문의 〔(`.lect-bracket--hang`)마다 [절 번호 글자의 오른쪽 끝, 〔 글자 칸의 왼쪽 끝]. 절 번호는 가장 긴 「150」으로
+# 바꿔 잰다(시편의 가장 큰 절 번호). 절 번호는 생성 글자(::before)라 같은 글꼴로 캔버스에서 폭을 잰다.
+_BRACKET_CLEARS_NUMBER = r"""() => [...document.querySelectorAll('.verse-poetry .lect-bracket--hang')].map(b => {
+  const num = b.closest('.verse-poetry').querySelector('.verse-num');
+  num.setAttribute('data-v', '150');
+  const cs = getComputedStyle(num);
+  const ctx = document.createElement('canvas').getContext('2d');
+  ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  const r = document.createRange(); r.selectNodeContents(b);
+  return { numRight: num.getBoundingClientRect().left + ctx.measureText('150').width, bracketLeft: r.getClientRects()[0].left };
+})"""
+
+
+@pytest.mark.parametrize("width, font", [(390, 18), (320, 24)])
+def test_optional_bracket_clears_the_verse_number(browser, width, font):
+    """전례독서의 〔는 첫 글자 바로 앞에 내어 쓰고(ADR-054), 반 글자 들여쓰기에서는 그 칸이 절 번호 자리에 걸친다. 세 자리 절
+    번호와도 겹치지 않는다(2026-05-06의 운문 〔 두 곳)."""
+    ctx = _phone(browser, width=width, font=font)
+    try:
+        page = _open(ctx, "/lectionary/2026-05-06", ".verse-poetry .lect-bracket--hang")
+        spots = page.evaluate(_BRACKET_CLEARS_NUMBER)
+    finally:
+        ctx.close()
+    assert len(spots) == 2, spots   # 2026-05-06의 운문 〔 두 곳
+    assert all(s["bracketLeft"] >= s["numRight"] for s in spots), spots
+
+
 def test_versicle_mark_stays_in_the_gutter(browser):
     """전례시편의 ¶ 표시(무번호 후속 구절)는 상자와 글자 모두 절 번호 자리의 왼쪽 끝에 있다.
 
@@ -269,7 +296,7 @@ def test_versicle_mark_stays_in_the_gutter(browser):
 
 
 def test_gloria_lines_wrap_like_the_psalm(browser):
-    """전례독서의 영광송 두 줄도 시편의 행처럼 첫 줄을 한 글자 들여 쓰고 띄어쓰기 자리에서 줄을 바꾸며, 넘어간 줄은 들여 쓰지 않는다."""
+    """전례독서의 영광송 두 줄도 시편의 행처럼 첫 줄을 반 글자 들여 쓰고 띄어쓰기 자리에서 줄을 바꾸며, 넘어간 줄은 들여 쓰지 않는다."""
     ctx = _phone(browser, width=320, font=24)
     try:
         page = _open(ctx, "/lectionary/2026-06-14", ".lect-gloria-line")
