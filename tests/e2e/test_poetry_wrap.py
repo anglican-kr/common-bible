@@ -252,7 +252,7 @@ def test_half_verse_cut_inside_a_note_anchor_split_by_a_quote_run(browser):
 def test_versicle_mark_stays_in_the_gutter(browser):
     """전례시편의 ¶ 표시(무번호 후속 구절)는 상자와 글자 모두 절 번호 자리의 왼쪽 끝에 있다.
 
-    운문 행에 첫 줄 들여쓰기(`text-indent`)를 주면 안쪽 상자가 물려받아 ¶ 글자가 상자 밖으로 밀린다(ADR-053을 구현하며 겪었다).
+    운문 행에 첫 줄 들여쓰기(`text-indent`)를 주면 안쪽 상자가 물려받아 ¶ 글자가 절 번호 자리의 왼쪽 끝에서 밀린다(ADR-053을 구현하며 겪었다).
     """
     ctx = _phone(browser, width=320, font=24)
     try:

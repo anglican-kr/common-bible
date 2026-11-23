@@ -982,8 +982,8 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   margin: 0 0.1em;
   user-select: none;
 }
-/* 〔 opening a poetry verse hangs in the verse-number gutter, right after the number, so the first letter stays on
-   the poetry margin (사용자 결정 2026-11-14). The box is one glyph wide and pulled back by its own width; the glyph's
+/* 〔 opening a poetry verse hangs right after the number, in the first line's indent (ADR-054), so the first letter
+   stays where the other lines' first letters start (사용자 결정 2026-11-14). The box is one glyph wide and pulled back by its own width; the glyph's
    ink is its right half, so it stays clear of a three-digit number. A leading quote is not pulled back over it. */
 .lect-bracket--hang {
   display: inline-block;
@@ -4308,7 +4308,7 @@ mark.search-highlight {
 
 .verse.verse-poetry {
   display: block;
-  /* 8pt 그리드가 아니라 .verse-num 의 hanging gutter(width:2rem · margin-left:-2rem)에
+  /* 8pt 그리드가 아니라 .verse-num 의 hanging gutter(2rem, 첫 줄 들여쓰기만큼 더 당기고 넓힌다)에
      결합된 값 — 절 번호와 본문이 같은 거터를 공유하고 큰 폰트에서 rem 으로 함께 스케일하도록
      의도적으로 2rem 유지(토큰 스냅 제외). 화면 끝에서 넘어간 줄은 이 자리에서 시작한다(ADR-054). */
   padding-left: 2rem;
