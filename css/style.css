@@ -205,12 +205,18 @@
   /* 모바일 탭 바가 하단에서 차지하는 공간(콘텐츠 패딩·오디오 스택 기준, ADR-029 P4).
      바 높이(~3.5rem) + 하단 오프셋 + 여유. safe-area 는 바와 동일 비율(0.75). */
   --tabbar-reserve: calc(4.5rem + env(safe-area-inset-bottom) * 0.75);
+  /* How far the bottom dock row (tab dock, audio bar, landscape resume pill) keeps from the screen's left and
+     right edges: --space-4 inside that side's safe area. Each side on its own, since the row is not centered.
+     A landscape iPhone put the first tab and the search circle in the ~62pt side safe areas (ADR-030 §1,
+     known-issues §60). Without side safe areas (portrait) this is plain --space-4. */
+  --dock-left: calc(var(--space-4) + env(safe-area-inset-left, 0px));
+  --dock-right: calc(var(--space-4) + env(safe-area-inset-right, 0px));
 
   /* ── Layout ── */
   /* 40rem = 720px at the default 18px; follows the font-size setting (ADR-055 §2). Never wider than the
      screen minus the side safe areas (twice the larger one, so the centered users stay clear on both
-     sides): a landscape iPhone's Dynamic Island covered text at 22-24px (ADR-055 §4). All nine users
-     are centered with `margin: auto`. */
+     sides): a landscape iPhone's Dynamic Island covered text at 22-24px (ADR-055 §4). Every user is
+     centered with `margin: auto`. */
   --max-width: min(40rem, 100vw - 2 * max(env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)));
 
   /* Toggle switch (settings panel). OFF-state colours only — the ON state
@@ -4024,8 +4030,8 @@ mark.search-highlight {
     .resume-banner {
       position: fixed;
       bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
-      left: calc(var(--space-4) + var(--tab-bar-w, calc(var(--dock-control) * 4)) + var(--space-2));
-      right: calc(var(--space-4) + var(--dock-control) + var(--space-2));
+      left: calc(var(--dock-left) + var(--tab-bar-w, calc(var(--dock-control) * 4)) + var(--space-2));
+      right: calc(var(--dock-right) + var(--dock-control) + var(--space-2));
       height: var(--dock-control);
       margin: 0;
       /* dock 캡슐(탭바·검색·미니 오디오)과 동일 — 둥근 사각 --radius 대신 반원 캡 pill. */
@@ -5198,10 +5204,10 @@ html.cite-sheet-open {
   display: flex;
   align-items: center;
   /* ADR-030: 탭바=왼쪽 끝, 검색 그룹=오른쪽 끝. 검색 그룹(#tab-search-dock)의
-     margin-left:auto 가 우측으로 밀어붙인다. padding 0 space-4 + left/right 0
-     으로 오디오 바(margin:0 space-4)와 좌우 가장자리 정렬. 탭 바↔검색 간격은 dock gap
-     이 아니라 #tab-bar margin-right 가 준다. */
-  padding: 0 var(--space-4);
+     margin-left:auto 가 우측으로 밀어붙인다. 좌우 padding(--dock-left/right, 안전 영역 안쪽의
+     --space-4) + left/right 0 으로 오디오 바(같은 토큰의 left/right)와 좌우 가장자리 정렬. 탭 바↔검색
+     간격은 dock gap 이 아니라 #tab-bar margin-right 가 준다. */
+  padding: 0 var(--dock-right) 0 var(--dock-left);
   /* 순수 레이아웃 레이어 — 어떤 표면도 없음(완전 투명). */
   background: none;
   border: none;
@@ -5483,8 +5489,8 @@ html.cite-sheet-open {
        position:fixed 라, floating 도 fixed 로 통일하면 left/right/bottom/padding 이
        보간돼 dock 행으로 슬라이드·축소된다(sticky 였으면 타입 전환이라 스냅). */
     position: fixed;
-    left: var(--space-4);
-    right: var(--space-4);
+    left: var(--dock-left);
+    right: var(--dock-right);
     /* 탭 바 footprint(--tabbar-reserve) 위에 안착 — 같은 토큰을 써 탭 바와
        겹치지 않게(매직넘버 불일치 방지). */
     bottom: var(--tabbar-reserve);
@@ -5517,12 +5523,12 @@ html.cite-sheet-open {
 
   /* ── ADR-030 P3b: 스크롤 축소 + 오디오 표시 중 → 오디오 바를 홈·검색 원형 사이
      dock 행으로 축소·이동(재생 버튼 + 진행바만, 시간·속도 숨김). position:fixed 로
-     dock 행에 정확히 배치 — 좌우 = space-4 + 홈/검색 원형 60px + space-2 간격. */
+     dock 행에 정확히 배치 — 좌우 = --dock-left/right + 홈/검색 원형 60px + space-2 간격. */
   body.tabbar-collapsed #audio-bar:not([hidden]) {
     position: fixed;
     bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
-    left: calc(var(--space-4) + var(--touch-target) + var(--space-2) * 3);
-    right: calc(var(--space-4) + var(--touch-target) + var(--space-2) * 3);
+    left: calc(var(--dock-left) + var(--touch-target) + var(--space-2) * 3);
+    right: calc(var(--dock-right) + var(--touch-target) + var(--space-2) * 3);
     margin: 0;
     height: var(--dock-control); /* 60px — 원형들과 동일 */
     /* 좌단 space-2 로 재생 버튼 중심을 좌측 캡 중심에 맞춤(플로팅 바와 동일 규칙). */
@@ -5566,12 +5572,15 @@ html.cite-sheet-open {
     #tab-dock.collapsed .tab-indicator.is-shown { opacity: 1; }
 
     /* (2) 축소 시 미니 오디오는 '전체 탭바' 우측~검색 사이에. 우측(검색)은 base 축소
-       규칙(space-4 + 60 + space-2)과 동일하므로 left 만 탭바 실폭(--tab-bar-w) 기준으로 옮긴다. */
+       규칙(--dock-right + 60 + space-2)과 동일하므로 left 만 탭바 실폭(--tab-bar-w) 기준으로 옮긴다. */
     body.tabbar-collapsed #audio-bar:not([hidden]) {
-      left: calc(var(--space-4) + var(--tab-bar-w, calc(var(--dock-control) * 4)) + var(--space-2));
+      left: calc(var(--dock-left) + var(--tab-bar-w, calc(var(--dock-control) * 4)) + var(--space-2));
     }
     /* 진행바 최소 길이 — 컨트롤이 늘어도 드래그 가능한 길이를 보장(차등 숨김의 바닥). */
-    #audio-bar:not([hidden]) .audio-progress { min-width: 6rem; }
+    /* width: a range input's default width (129px in Chromium) is otherwise its min-content size, which keeps
+       the progress wrap from shrinking below it and raised the floor above 6rem at 16-20px text. Flex
+       (basis 0%) still sets the actual width. */
+    #audio-bar:not([hidden]) .audio-progress { min-width: 6rem; width: 6rem; }
   }
 
   /* (3) 가로 + 전체 컨트롤이 들어가는 넓은 폭(≥641px): 오디오를 항상 dock 행에 둔다 —
@@ -5580,8 +5589,8 @@ html.cite-sheet-open {
     body #audio-bar:not([hidden]) {
       position: fixed;
       bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
-      left: calc(var(--space-4) + var(--tab-bar-w, calc(var(--dock-control) * 4)) + var(--space-2));
-      right: calc(var(--space-4) + var(--dock-control) + var(--space-2));
+      left: calc(var(--dock-left) + var(--tab-bar-w, calc(var(--dock-control) * 4)) + var(--space-2));
+      right: calc(var(--dock-right) + var(--dock-control) + var(--space-2));
       margin: 0;
       height: var(--dock-control);
       padding: 0 var(--space-3) 0 var(--space-2);
@@ -5596,6 +5605,16 @@ html.cite-sheet-open {
     /* 항상 dock 행이라 #app 하단 여유는 탭 바 footprint 만(floating 풀바 자리 불필요). */
     body:not(.verse-select-active) #app:has(~ #audio-bar:not([hidden])) {
       padding-bottom: var(--tabbar-reserve);
+    }
+    /* The bar gets what the tab bar, the search circle and the side safe areas leave, which is not always
+       room for every control: 72px (play 44 + gaps 8, 12, 8) + 13.5rem (progress 6, speed 3, and the time
+       4.5: "23:45 / 25:10" in --font-2xs, wider than its 5.5em minimum). It fell short with 22-24px text on a 812px phone with 50pt side safe
+       areas (the speed button ran into the search circle) and with four tabs on a 667px phone. There is no
+       floating full bar to scroll back to here, so drop the time readout and keep every control
+       (ADR-030 §5 「가로 모드」). rem in a container query is the root's font size (the font setting). */
+    body #audio-bar:not([hidden]) { container: audio-dock / inline-size; }
+    @container audio-dock (max-width: calc(72px + 13.5rem)) {
+      #audio-bar .audio-time { display: none; }
     }
   }
 
@@ -6081,7 +6100,9 @@ html.cite-sheet-open {
   align-items: center;
   gap: var(--space-2);
   width: max-content;
-  max-width: calc(100vw - 2rem);
+  /* Centered, so it leaves twice the larger side safe area out, like --max-width: a long notice on a landscape
+     iPhone reached 18px from the screen's edges, inside the ~62pt side safe areas (known-issues §60). */
+  max-width: calc(100vw - 2rem - 2 * max(env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)));
   /* The stack box itself must not swallow taps on the content behind its gaps. */
   pointer-events: none;
   transition: bottom var(--duration-base) var(--ease-standard);
@@ -6900,6 +6921,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 /* ── Bookmark drawer (mobile: bottom sheet) ── */
+/* As wide as the reading column and centered, like the cite and book-filter sheets: full width on a portrait
+   phone, clear of the side safe areas on a landscape one (known-issues §60). */
 #bookmark-drawer {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   display: none;
@@ -6907,6 +6930,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   bottom: 0;
   left: 0;
   right: 0;
+  margin-inline: auto;
+  max-width: var(--max-width);
   height: 70vh;
   max-height: 85vh;
   z-index: 71;
@@ -6945,7 +6970,9 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     right: 0;
     bottom: auto;
     left: auto;
+    margin-inline: 0;
     width: min(20rem, 90vw);
+    max-width: none;
     height: 95vh;
     max-height: none;
     border-radius: var(--radius-xl) 0 0 var(--radius-xl);

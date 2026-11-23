@@ -216,3 +216,12 @@ def emulate_status_bar(page, inset) -> None:
     Chrome 개발자 도구 프로토콜(CDP)의 기능이라 Chromium에서만 된다. 쓰는 시험에 `@pytest.mark.only_browser("chromium")`을 붙인다."""
     cdp = page.context.new_cdp_session(page)
     cdp.send("Emulation.setSafeAreaInsetsOverride", {"insets": {"top": inset, "topMax": inset}})
+
+
+def emulate_side_safe_areas(page, left, right, bottom=21) -> None:
+    """가로로 든 iPhone의 좌우 안전 영역을 흉내 낸다. `env(safe-area-inset-left)`과 `env(safe-area-inset-right)`이 `left`px과
+    `right`px이 되고, 아래는 홈 표시줄의 `bottom`px이다(가로로 든 iPhone 17은 좌우 62pt쯤, 아래 21pt). 실제 iPhone이 아니다.
+    `emulate_status_bar`처럼 Chromium에서만 된다. 쓰는 시험에 `@pytest.mark.only_browser("chromium")`을 붙인다."""
+    cdp = page.context.new_cdp_session(page)
+    cdp.send("Emulation.setSafeAreaInsetsOverride",
+             {"insets": {"left": left, "right": right, "top": 0, "bottom": bottom}})
