@@ -1400,7 +1400,8 @@ test("layout condition: one string in JS, and only that query and its exact comp
 test("widths: boxes that hold text are sized in rem, so they follow the font-size setting (ADR-055 §1, §3)", () => {
   const root = path.resolve(__dirname, "../..");
   const css = fs.readFileSync(path.join(root, "css/style.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-  assert.match(css, /--max-width:\s*40rem;/, "the reading column is 40rem (ADR-055 §2)");
+  assert.match(css, /--max-width:\s*min\(40rem, 100vw - 2 \* max\(env\(safe-area-inset-left, 0px\), env\(safe-area-inset-right, 0px\)\)\);/,
+    "the reading column is 40rem, inside the side safe areas (ADR-055 §2, §4)");
   // A width declaration (not a media or container query: those follow `(`) with a px length of 100 or more
   // is a box that holds text. What stays px is smaller: switches (51-52px), icons, handles, the 44px touch
   // target. Gutters inside a viewport cap (`calc(100vw - 16px)`) are small too. The `flex` and

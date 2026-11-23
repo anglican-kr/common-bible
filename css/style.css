@@ -207,7 +207,11 @@
   --tabbar-reserve: calc(4.5rem + env(safe-area-inset-bottom) * 0.75);
 
   /* ── Layout ── */
-  --max-width: 40rem;    /* 720px at the default 18px; follows the font-size setting (ADR-055 §2) */
+  /* 40rem = 720px at the default 18px; follows the font-size setting (ADR-055 §2). Never wider than the
+     screen minus the side safe areas (twice the larger one, so the centered users stay clear on both
+     sides): a landscape iPhone's Dynamic Island covered text at 22-24px (ADR-055 §4). All nine users
+     are centered with `margin: auto`. */
+  --max-width: min(40rem, 100vw - 2 * max(env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)));
 
   /* Toggle switch (settings panel). OFF-state colours only — the ON state
      always uses --accent so it tracks the chosen colour scheme. iOS uses the
