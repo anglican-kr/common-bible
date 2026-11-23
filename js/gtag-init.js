@@ -7,7 +7,7 @@ window.dataLayer = window.dataLayer || [];
 /** @param {...unknown} _args */
 function gtag(..._args) { (window.dataLayer ??= []).push(arguments); }
 gtag("js", new Date());
-gtag("config", "G-CWVVPW11TE");
+gtag("config", "G-2Q4SRGVNQN");
 
 // Expose on window so other ESM modules (views.js's trackPageView
 // in particular) can call it as a bare global. After ADR-019's ESM
