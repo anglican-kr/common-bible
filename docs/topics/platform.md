@@ -38,6 +38,12 @@
 - **보안 헤더 6종 통합** (2026-05-08). nginx의 server 수준 설정 조각(snippet)으로, dev와 prod 두 vhost에 모두 적용했다. `common-bible-server/nginx/security-headers.example.conf`를 본다.
 - **구글 애널리틱스 측정 ID는 `G-2Q4SRGVNQN`이다** (2026-11-23). 애널리틱스 관리 화면의 웹 스트림 「공동번역성서」(`https://bible.anglican.kr`, 스트림 ID 14348950825)의 것이다. `index.html`의 태그 주소와 `js/gtag-init.js`의 `config` 두 곳에 같은 값을 적는다. 2026-05-05부터 이 값으로 되돌린 판을 운영에 낼 때까지는 두 곳이 `G-CWVVPW11TE`여서 이 스트림에 데이터가 오지 않았다(원장 `docs/changes/2026-11-23-analytics-measurement-id.md`).
 - **이 측정 ID의 속성은 구글 시그널이 켜져 있다** (사용자 결정 2026-11-24). 구글 태그가 연령대, 성별, 관심 분야 보고서를 위해 `analytics.google.com`, `stats.g.doubleclick.net`, `www.google.co.kr`로도 요청을 보내고, CSP가 이 주소들을 허용하며 `privacy.html`이 그 사실을 밝힌다. `js/gtag-init.js`에서 시그널을 끄거나 측정 ID를 바꾸면 CSP와 `privacy.html`을 함께 맞춘다(`architecture.md` 「보안 모델」의 CSP 줄, 원장 `docs/changes/2026-11-24-csp-google-signals.md`).
+- **방문 기록(구글 애널리틱스)**. 앱이 화면마다 방문을 1건 보낸다.
+  - 화면을 다 그리고 문서 제목을 정한 뒤, 브라우저가 한가할 때 보낸다(`routing.js`의 `trackPageView`). 제목은 그 화면의 문서 제목이고 주소는 그때의 주소 전체다. `route()`의 모든 갈래와 실패 화면이 호출하므로 첫 화면, 링크로 옮긴 화면, 뒤로 가기와 앞으로 가기, 실패 화면이 모두 1건이다. 화면을 그리며 주소를 고치는 경우(절 범위를 장 끝으로 자르기, 트랙 적기, 검색의 구절 바로 열기)도 고친 주소로 1건이다.
+  - 구글 태그는 첫 화면을 스스로 보내지 않는다(`gtag-init.js`의 `send_page_view: false`). 기본값대로 두면 화면을 그리기 전의 제목(「공동번역성서」)과 처음 연 주소로 1건을 더 보낸다.
+  - 주소가 바뀔 때 태그가 저절로 보내는 기록(애널리틱스 관리 화면의 Page changes based on browser history events)은 위 측정 ID의 스트림에서 꺼 두었다(pitfalls §43). 그래서 화면을 옮기지 않고 주소만 바꾸는 일(캘린더 목록이 스크롤이 멈출 때 적는 위치)은 방문을 보내지 않고, 캘린더 목록도 평범한 `history.replaceState`를 쓴다. 이 설정을 다시 켜거나 설정이 켜진 스트림으로 측정 ID를 바꾸면 화면을 옮길 때마다 1건, 목록의 스크롤이 멈출 때마다 1건이 더 기록된다.
+  - 세례명 줄과 축성일 화면의 주소와 제목은 ADR-041 §8을 따른다.
+  - 테스트: 유닛(`gtag-init.test.js`. 첫 화면 설정과 두 곳의 측정 ID가 같은지), e2e(`test_navigation.py`의 방문 기록. 구글 태그 대신 흉내를 실어, 링크와 뒤로 가기와 `route()`의 갈래마다 처음 연 화면에서 앱이 보내는 것을 센다).
 - **모노레포 4분할** (2026-05-11, ADR-020). 앱, 데이터, 오디오, 서버의 네 저장소로 나눴다. data는 본 저장소의 `data/`에 서브모듈로 붙고, audio는 data 안에 다시 서브모듈로 붙는다(nested). server는 따로 clone한다.
 
 ## 결정
@@ -143,7 +149,6 @@ index.html은 모듈(`<script type="module">`)을 적힌 순서대로 실행한�
 - **known-issues §12.4** **pitfalls §31(영어 뒤 조사 붙여 쓰기) 전에 쓴 문서에 띄어 쓴 곳이 많다**(문서). #354는 그 PR에서 쓰거나 고친 줄만 고쳤다. 머지된 원장은 고칠 수 없으므로, 나머지(정리 층 문서와 코드 주석)를 따로 한꺼번에 정리할지 정한다.
 - **known-issues §12.5** **`architecture.md` §4.3 아래쪽 그림**(상태 머신, 전송, 저장 상자)의 테두리가 한글 폭 때문에 어긋나 있다. 내용은 맞다. 오래된 일이다.
 - **known-issues §13.5** **WebKit이 `books.json`을 두 번 받는다**(main부터). `index.html`의 `<link rel="preload" … as="fetch" crossorigin>`으로 미리 받은 것을 `pre-fetch.js`의 `fetch()`가 쓰지 못해, 「preloaded but not used」 경고가 난다. **고치는 법**: preload 링크의 요청 방식(credentials 등)을 `fetch()`와 맞추거나, 둘 중 하나만 둔다. WebKit과 Chromium 둘 다에서 요청 수로 확인한다.
-- **known-issues §46** **앱 안에서 화면을 옮길 때마다 구글 애널리틱스에 방문이 2건 기록된다**(2026-11-07 dev에서 수집 요청을 세어 확인, 보고서의 숫자는 보지 못했다). 라우터가 화면마다 직접 보내는 기록(`routing.js trackPageView`)과, 주소가 바뀌면 저절로 나가는 기록(Page changes based on browser history events, pitfalls §43)이 겹친다. **고치는 길은 둘이다**: 애널리틱스 관리 화면의 향상된 측정에서 그 설정을 끄거나(`route()`의 모든 갈래가 `trackPageView`를 호출해 빠지는 화면이 없다), `trackPageView`를 지운다. 설정을 끄면 그날부터 보고서의 숫자가 줄어들므로 사용자가 정한다. 설정을 끄면 캘린더 목록의 원본 메서드 호출(ADR-038 「검토한 대안 — 목록 위치와 방문 통계」)도 평범한 `replaceState`로 되돌린다.
 - **known-issues §57** **저장소의 `.python-version`이 이 기기에 없는 pyenv 가상 환경(`common-bible-env`)을 가리킨다**(2026-11-23, PR #638 코드 리뷰에서 찾음). 그래서 `pyenv exec python -m pytest`가 실행되지 않고, 리뷰 도구도 e2e를 돌리지 못했다. 작업 폴더의 e2e는 `docs/workflow.md` 「작업 중 함정」대로 `~/.pyenv/versions/3.14.6/bin/python`으로 돌린다(이 Python에 pytest와 Playwright가 있다). **고치는 길은 둘이다**: 기기에 `common-bible-env`를 만들거나(`pyenv virtualenv 3.14.6 common-bible-env`와 `requirements.txt` 설치), `.python-version`을 설치된 버전(`3.14.6`)으로 바꾼다. 다른 기기와 CI가 이 파일을 쓰는지 먼저 본다.
 
 ### known-issues §30 — `coding-pitfalls.md`와 주제 문서의 긴 사례 고쳐 쓰기 (2026-10-24)
