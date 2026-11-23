@@ -1,4 +1,5 @@
 ---
+pr: 648
 date: 2026-11-23
 branch: fix/analytics-measurement-id
 title: "fix: 구글 애널리틱스 측정 ID를 관리 화면의 스트림에 맞추기"
