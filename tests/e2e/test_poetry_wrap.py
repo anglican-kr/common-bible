@@ -216,6 +216,34 @@ def test_half_verse_cut_gives_back_the_space_before_a_dropped_mark(browser):
     assert not has_mark and text.endswith(" ") and "\u00a0" not in text, lines
 
 
+def test_half_verse_cut_inside_a_note_anchor_split_by_a_quote_run(browser):
+    """따옴표 묶음 상자(`.quote-run`)가 어절 주석의 글자를 여러 조각으로 나눠도, 반절 경계가 주석 안의 조각 첫머리에 떨어지면
+    주석을 풀고 경계에서 자른다(lectionary.js cutLineText). 조각 첫머리를 주석의 시작으로 보면 버릴 쪽 글자가 주석째 남았다.
+    실데이터에는 없는 경우라 104:35의 첫 줄에 따옴표와 주석을 넣고, 경계 문구를 그 묶음 첫 글자부터로 바꿔 그린다(2025-06-08)."""
+    root = Path(__file__).resolve().parents[2] / "data"
+    halves = json.loads((root / "lectionary" / "half-verses.json").read_text(encoding="utf-8"))
+    [entry] = [e for e in halves["entries"] if (e["bookId"], e["chapter"], e["verse"]) == ("lps", 104, 35)]
+    entry.update(half="b", line=1, text="원’히 사라져 버려라.")   # 하: 첫 줄의 이 문구부터
+    chapter = json.loads((root / "bible" / "lps-104.json").read_text(encoding="utf-8"))
+    [v35] = [v for v in chapter["verses"] if v["number"] == 35]
+    v35["segments"][0]["text"] = "악인들아, 이 세상에서 ‘영원’히 사라져 버려라."
+    v35["notes"] = [{"anchor": "‘영원’히 사라져", "body": "꾸민 주석"}]
+    ctx = browser.new_context(service_workers="block")
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    try:
+        ctx.route("**/data/lectionary/half-verses.json", lambda route: route.fulfill(json=halves))
+        ctx.route("**/data/bible/lps-104.json", lambda route: route.fulfill(json=chapter))
+        page = _open(ctx, "/lectionary/2025-06-08", ".lect-reading[data-slot='psalm'] .chapter-text .verse")
+        lines = page.evaluate(_PSALM_104_35)
+        notes = page.evaluate("""() => [...document.querySelectorAll(
+          ".lect-reading[data-slot='psalm'] .verse[data-vkey^='35/'] .note-anchor")].length""")
+    finally:
+        ctx.close()
+    assert [text.replace("⁠", "").replace(" ", " ").strip() for text, _ in lines] == [
+        "원’히 사라져 버려라. ◯", "내 영혼아, 주님을 찬미하여라. 알렐루야!"], lines
+    assert notes == 0, lines   # 반쪽 어절에 온전한 어절의 주석 단추가 남지 않는다
+
+
 def test_versicle_mark_stays_in_the_gutter(browser):
     """전례시편의 ¶ 표시(무번호 후속 구절)는 상자와 글자 모두 절 번호 자리의 왼쪽 끝에 있다.
 

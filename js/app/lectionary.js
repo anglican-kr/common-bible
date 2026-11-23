@@ -1882,7 +1882,13 @@ function cutLineText(span, text, keepTail) {
   const [node, offset] = hit;
   const cut = pos - offset;
   const anchor = node.parentElement?.closest(".note-anchor");
-  if (anchor && cut > 0 && cut < node.length) anchor.replaceWith(...anchor.childNodes);
+  if (anchor) {
+    // The anchor's text can be several nodes (helpers.js wrapQuoteRuns splits it), so a boundary at the start of one of
+    // them is still inside the anchor: compare with where the anchor's whole text starts and ends.
+    const inside = nodes.filter(([n]) => anchor.contains(n));
+    const [lastNode, lastStart] = inside[inside.length - 1];
+    if (pos > inside[0][1] && pos < lastStart + lastNode.length) anchor.replaceWith(...anchor.childNodes);
+  }
   // At offset 0 the range stops before the line's child that holds the node, so a note anchor that begins right at the
   // boundary goes whole to its side instead of leaving an empty button behind.
   /** @type {Node} */
