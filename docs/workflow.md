@@ -39,8 +39,8 @@
 ## 릴리스
 
 - 태그는 annotated로 만들고(`git tag -a 1.0.x -m "..."`), 이름에 `v`를 붙이지 않는다(1.0.5부터). 메시지에 그 버전의 주요 변경을 적고 `git push origin <태그>`로 올린다. 태그 1.6.4와 1.5.12는 lightweight로 만들어져 이 규칙과 어긋난다.
-- **pre-release**(ADR-052 §4): 버전을 올린 커밋을 dev.anglican.kr에 올리면, `deploy.sh dev`가 끝에 출력하는 빌드 식별자(`Build id: X.Y.Z-<app_commit>`)를 이름으로 배포한 커밋에 annotated 태그를 단다. 태그 메시지에 데이터 커밋을 함께 적는다. 그다음 `gh release create <태그> --prerelease --verify-tag --title <태그> --notes-file <초안>`으로 pre-release를 만든다. 노트는 릴리스 PR의 릴리스 노트 초안이다.
-  - 같은 버전에 앱 수정을 더해 다시 올려 빌드 식별자가 바뀌면 새로 만든다. 데이터만 바뀌어 식별자가 같으면 만들지 않는다. 버전을 올리지 않은 시험 배포에는 만들지 않는다.
+- **pre-release**(ADR-052 §4): 정식 태그가 아직 없는 버전을 dev.anglican.kr에 올리면(`git ls-remote --tags origin refs/tags/X.Y.Z`가 비어 있으면), `deploy.sh dev`가 끝에 출력하는 빌드 식별자(`Build id: X.Y.Z-<app_commit>`)를 이름으로 배포한 커밋에 annotated 태그를 단다. 태그 메시지에 데이터 커밋을 함께 적는다. 그다음 `gh release create <태그> --prerelease --verify-tag --title <태그> --notes-file <초안>`으로 pre-release를 만든다. 노트는 릴리스 PR의 릴리스 노트 초안이다.
+  - 같은 버전에 앱 수정을 더해 다시 올려 빌드 식별자가 바뀌면 새로 만든다. 그 수정 PR이 버전을 올리지 않았어도 만든다. 데이터만 바뀌어 식별자가 같으면 만들지 않는다. 정식 태그가 이미 있는 버전을 올리는 시험 배포에는 만들지 않는다.
   - 정식 태그와 Release는 운영에 낼 때 main을 앞당긴 커밋에 새로 만든다. pre-release 태그는 옮기거나 고치지 않는다.
   - `changelog.py`의 이전 태그와 노트 끝의 비교 링크는 직전 정식 태그다. pre-release 태그가 아니다.
 - 릴리스 PR(`chore: X.Y.Z 릴리스`)의 본문에는 둘을 함께 채운다. `python scripts/changelog.py <이전 태그> HEAD`의 출력을 그대로 옮긴 「변경 사항」(앱 PR과 본문 데이터 PR을 나눈 형식)과, 그것을 일상 언어로 다듬은 릴리스 노트 초안이다(`writing.md` 「릴리스 노트」). 초안은 머지 뒤 `gh release create <태그> --notes`에 그대로 쓸 수 있게 완성형으로 쓴다.
