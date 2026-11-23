@@ -1,4 +1,5 @@
 ---
+pr: 649
 date: 2026-11-23
 branch: fix/note-tooltip-route-close
 title: "fix: 화면을 옮길 때 주석 툴팁 닫기"
