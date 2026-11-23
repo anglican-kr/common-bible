@@ -62,11 +62,11 @@
   - 자세한 내용과 개정 이력은 ADR-028 §7과 §9에 있다.
 - **칸의 폭** (2026-11-23, ADR-055).
   - 글자를 담는 칸의 폭은 rem이라, 글자 크기 설정(`html`의 `font-size`)을 바꾸면 함께 커지고 작아진다. 기본 글자 크기 18px에서는 전의 px 폭과 1px 안에서 같다.
-  - 본문 칸(`--max-width`)은 40rem이다. `#app`, `#app-header`, `.cal-picker`, `.book-filter-sheet`, `#resume-banner-slot`, `#division-tabs-slot`, `#cite-sheet`, `#audio-bar`, `#verse-select-bar`와 `#bm-select-bar`가 함께 쓴다. 큰 화면에서 헤더는 화면 전체 폭이고, 시트는 옆 패널이나 팝오버라 이 값을 쓰지 않는다.
+  - 본문 칸(`--max-width`)은 40rem이고, 화면 폭에서 좌우 안전 영역(`env(safe-area-inset-left)`, `env(safe-area-inset-right)`) 가운데 넓은 쪽의 두 배를 뺀 폭보다 넓지 않다(ADR-055 §4). 가로로 든 iPhone 17(874pt, 안전 영역 62pt쯤)에서 20px, 22px, 24px의 칸은 750px이고, 18px은 그대로 720px이다. `#app`, `#app-header`, `.cal-picker`, `.book-filter-sheet`, `#resume-banner-slot`, `#division-tabs-slot`, `#cite-sheet`, `#audio-bar`, `#verse-select-bar`와 `#bm-select-bar`가 함께 쓴다. 큰 화면에서 헤더는 화면 전체 폭이고, 시트는 옆 패널이나 팝오버라 이 값을 쓰지 않는다.
   - 큰 화면의 옆 패널은 책 선택 `min(23.3rem, 90vw)`, 인용 `min(24.4rem, 90vw)`, 북마크 `min(20rem, 90vw)`이다. 왼쪽 가장자리를 끌어 줄일 수 있는 가장 좁은 폭은 13.3rem이고, 끌 때마다 그때의 글자 크기로 계산한다(`overlay.js`의 `attachSheetResize`). 끌어 바꾼 폭은 px로 남고, 패널을 닫으면 지운다.
   - 대화상자는 `min(92vw, 20rem)`(드라이브 연결 끊기, 새 폴더, 이미 저장된 북마크, 확인, 가져오기), `min(92vw, 21.1rem)`(옮기기), `min(92vw, 23.3rem)`(북마크 저장, 설치 안내)이다. 휴대폰에서는 화면 폭의 92%가 정하는 경우가 많다.
   - px로 남긴 것: 레이아웃 결정 조건의 미디어 쿼리, 테두리, 안전 영역, 누르는 자리 44px, 아이콘, 스위치(51-52px), 시트의 손잡이, 색 견본, 여백(`--space-*`). 쓰이지 않는 예약 토큰 `--sidebar-w`(260px)도 그대로다.
-  - 유닛 시험(`helpers.test.js`)이 `css/style.css`에서 100px 이상의 px 폭을 찾아 막는다. e2e `test_rem_widths.py`가 글자 크기 16, 18, 24px에서 본문 칸, 옆 패널 셋, 북마크 저장 대화상자의 폭을 잰다.
+  - 유닛 시험(`helpers.test.js`)이 `css/style.css`에서 100px 이상의 px 폭을 찾아 막는다. e2e `test_rem_widths.py`가 글자 크기 16, 18, 24px에서 본문 칸, 옆 패널 셋, 북마크 저장 대화상자의 폭을 잰다. 가로로 든 iPhone에서는 Chromium의 개발자 프로토콜(`Emulation.setSafeAreaInsetsOverride`)로 좌우 안전 영역을 흉내 내, 본문 칸, 헤더, 절 번호, 인용 시트가 그 밖에 있는지 본다.
 - **읽기 화면 헤더의 스크롤 그림자** (2026-05-30, ADR-025).
   - 본문을 스크롤해 맨 위를 벗어나면 헤더 아래에 그림자가 서서히 나타난다. 헤더 아래의 1px 가는 선은 그대로 둔다.
   - 맨 위를 벗어났는지는 IntersectionObserver(요소가 화면에 보이는지 알려 주는 브라우저 기능)가 `#scroll-sentinel`을 지켜보아 알아낸다. 그림자는 `#sticky-group`에 그린다.

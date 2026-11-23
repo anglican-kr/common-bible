@@ -142,3 +142,52 @@ def test_dialog_width_follows_the_font_size_inside_the_screen(browser, viewport,
         assert box["left"] >= 0 and box["right"] <= viewport["width"], box
     finally:
         ctx.close()
+
+
+# ── 좌우 안전 영역(ADR-055 §4) ───────────────────────────────────────────────────
+# 가로로 든 iPhone 17(앱 화면 874×402)은 좌우에 안전 영역 62px쯤을 둔다(다이내믹 아일랜드 쪽). Chromium의 개발자 프로토콜로
+# 안전 영역을 흉내 낸다(`Emulation.setSafeAreaInsetsOverride`). 실제 iPhone이 아니다.
+LANDSCAPE_IPHONE = {"width": 874, "height": 402}
+
+
+def _safe_area(ctx, page, left: int, right: int) -> None:
+    ctx.new_cdp_session(page).send("Emulation.setSafeAreaInsetsOverride",
+                                   {"insets": {"left": left, "right": right, "top": 0, "bottom": 21}})
+
+
+@pytest.mark.parametrize("font, left, right", [(18, 62, 62), (20, 62, 62), (22, 62, 62), (24, 62, 62), (24, 62, 0)],
+                         ids=["18px", "20px", "22px", "24px", "24px-one-side"])
+def test_reading_column_stays_inside_the_side_safe_areas(browser, font, left, right):
+    """가로로 든 iPhone에서 본문 칸과 헤더는 좌우 안전 영역에 들어가지 않는다. 18px에서는 전처럼 720px 칸이 가운데에 있고,
+    20px부터는 화면에서 넓은 쪽 안전 영역의 두 배를 뺀 폭(750px)이다. 안전 영역이 한쪽뿐이어도 그쪽을 피한다."""
+    ctx = _ctx(browser, LANDSCAPE_IPHONE, font, phone=True)
+    try:
+        page = ctx.new_page()
+        _safe_area(ctx, page, left, right)
+        page.goto(f"{BASE_URL}/ps/23")
+        page.wait_for_selector("article.chapter-text .verse", timeout=20_000)
+        assert page.evaluate("() => document.documentElement.style.fontSize") == f"{font}px"
+        inset = max(left, right)
+        app = _box(page, "#app")
+        assert abs(app["width"] - min(40 * font, LANDSCAPE_IPHONE["width"] - 2 * inset)) < 1, (font, app)
+        for sel in ("#app", "#app-header", "article.chapter-text .verse-num"):
+            box = _box(page, sel)
+            assert box["left"] >= left - 0.5 and box["right"] <= LANDSCAPE_IPHONE["width"] - right + 0.5, (sel, box)
+    finally:
+        ctx.close()
+
+
+def test_bottom_sheet_stays_inside_the_side_safe_areas(browser):
+    """가로로 든 iPhone의 큰 글자(24px)에서 바텀 시트(인용)도 본문 칸과 같은 폭이라 좌우 안전 영역에 들어가지 않는다."""
+    ctx = _ctx(browser, LANDSCAPE_IPHONE, 24, phone=True)
+    try:
+        page = ctx.new_page()
+        _safe_area(ctx, page, 62, 62)
+        sel = _open_cite_sheet(page)
+        page.wait_for_timeout(400)
+        # Without this, a font setting that silently failed to apply would leave an 18px (720px) sheet that passes.
+        assert page.evaluate("() => document.documentElement.style.fontSize") == "24px"
+        box = _box(page, sel)
+        assert box["left"] >= 61.5 and box["right"] <= LANDSCAPE_IPHONE["width"] - 61.5, box
+    finally:
+        ctx.close()
