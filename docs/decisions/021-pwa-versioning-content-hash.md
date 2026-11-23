@@ -72,7 +72,7 @@ DATA_CACHE와 AUDIO_CACHE는 이제 번호 없는 고정 이름(`"data"`, `"audi
 `scripts/release.py`를 다시 쓴다.
 - 인자는 `patch | minor | major | X.Y.Z` 하나뿐이다.
 - `version.json`과 `sw-version.js`를 함께 고친다.
-- 마지막에 두 파일을 커밋한다(`chore: X.Y.Z 릴리스`). 확인을 묻지 않는다. 처음에는 `git add version.json sw-version.js data`로 서브모듈 포인터와 sitemap.xml도 함께 담았지만, 2026-05-23부터 두 파일만 담는다(아래 4).
+- 마지막에 두 파일을 커밋한다(`release: X.Y.Z 릴리스`, 2.2.4까지는 `chore`). 확인을 묻지 않는다. 처음에는 `git add version.json sw-version.js data`로 서브모듈 포인터와 sitemap.xml도 함께 담았지만, 2026-05-23부터 두 파일만 담는다(아래 4).
 - `--bump-data`, `--bump-audio` 플래그는 없앤다(버전 번호라는 개념 자체가 없어졌다).
 - push는 사람이 직접 한다(실수를 막기 위해서다).
 

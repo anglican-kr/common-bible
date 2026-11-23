@@ -68,7 +68,7 @@ def stage_and_commit(new_version: str) -> None:
     if not has_changes:
         print("no staged changes after add — aborting commit", file=sys.stderr)
         sys.exit(1)
-    message = f"chore: {new_version} 릴리스"
+    message = f"release: {new_version} 릴리스"
     subprocess.run(["git", "commit", "-m", message], cwd=ROOT, check=True)
 
 
@@ -101,7 +101,7 @@ def main() -> int:
     print(f"sw-version.js  : APP_VERSION -> {new_version}")
 
     stage_and_commit(new_version)
-    print(f"committed: chore: {new_version} 릴리스")
+    print(f"committed: release: {new_version} 릴리스")
     return 0
 
 
