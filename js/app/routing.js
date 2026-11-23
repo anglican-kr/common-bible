@@ -485,6 +485,12 @@ async function route() {
   // settings / chapter popovers). Closing the chapter picker / settings popover
   // on nav also makes the /settings desktop fallback's gear.click() always OPEN.
   window.appOverlay.closeAllOverlays();
+  // The note tooltip is not an overlay (no scrim, focus trap or focus restore), so it closes here on its own. Without
+  // this a route its outside-click close did not see — back · forward, a redraw of the same address, a tab bar icon
+  // (an SVG target, which that close skips) — left it open over the new screen, its anchor gone, under the header, and
+  // its scroll/resize followers and size observer running (known-issues §50). It leaves focus where it is: the anchor
+  // closeNoteTooltip would focus is on the screen being left.
+  window.appCitations?.hideNoteTooltip();
   const parsed = parsePath();
   // Narrowing on the destructured `view` narrows `parsed` too — each branch reads its own fields off it.
   const { view } = parsed;

@@ -1244,6 +1244,8 @@ export interface AppCitations {
     body: string | ReadonlyArray<string | HTMLElement>,
   ) => void;
   closeNoteTooltip: () => void;
+  // 포커스를 옮기지 않고 주석 툴팁을 닫는다. 화면이 바뀔 때 routing.js route()가 부른다.
+  hideNoteTooltip: () => void;
   openCiteSheet: (
     src: string,
     parallels: ReadonlyArray<CiteParallelRef> | null,

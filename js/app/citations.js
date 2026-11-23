@@ -274,7 +274,7 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
   function setNoteAnchorsActive(on, root = document) {
     const lost = on ? null : _focusedAid();
     for (const a of root.querySelectorAll(WORD_ANCHOR_SELECTOR)) _setWordAnchorActive(a, on);
-    if (!on) _hideNoteTooltip();
+    if (!on) hideNoteTooltip();
     const verse = lost && _verseOfAid(lost);
     if (verse) {
       // Focusable from script only, and only until focus leaves it.
@@ -482,7 +482,8 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
   /**
    * Open the note tooltip anchored to `anchorEl`. Renders the note body and
    * positions itself. Followers the anchor on scroll/resize until closed by
-   * ESC or outside-click (wired by initCiteSheet).
+   * ESC or outside-click (wired by initCiteSheet) or a route change
+   * (routing.js route() → hideNoteTooltip).
    *
    * Long anchor labels are truncated with an ellipsis so the tooltip header
    * stays readable.
@@ -557,8 +558,10 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
     }
   }
 
-  // Hide the tooltip and stop following its anchor, leaving focus where it is.
-  function _hideNoteTooltip() {
+  // Hide the tooltip and stop following its anchor, leaving focus where it is. Also the route change's close
+  // (routing.js route()): the anchor closeNoteTooltip would focus belongs to the screen being left, and the new
+  // screen places focus itself (ADR-031 §5).
+  function hideNoteTooltip() {
     const tt = /** @type {HTMLElement | null} */ (document.getElementById("note-tooltip"));
     if (tt) tt.hidden = true;
     _stopFollowingNoteAnchor();
@@ -568,7 +571,7 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
   // Close and return focus to the anchor that opened the tooltip (Escape, a click outside it).
   function closeNoteTooltip() {
     const anchor = _currentNoteAnchor;
-    _hideNoteTooltip();
+    hideNoteTooltip();
     if (anchor && typeof anchor.focus === "function") anchor.focus();
   }
 
@@ -1269,6 +1272,7 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
     closeCiteSheet,
     openNoteTooltip,
     closeNoteTooltip,
+    hideNoteTooltip,
     initCiteSheet,
     maybeShowCoachmark,
   };
