@@ -948,12 +948,20 @@ export interface ParishGroup {
   churches: { id: string; name: string }[];
 }
 
+/** 배포한 빌드의 식별자(ADR-052) — version.json 사본의 `app_commit`, `data_commit`. 저장소의 version.json에는 없어 빈 문자열이다. */
+export interface AppBuild {
+  app: string;
+  data: string;
+}
+
 export interface AppHelpers {
   /** 「북.」으로 시작하는 성당(북한에 있던 성당)인가 — 축성일 줄과 소속교회 목록에서 뺀다(ADR-038 §3, ADR-041 §6). */
   isFormerNorthChurch: (name: string) => boolean;
   churchName: (name: string) => string;
   /** 본당 표(`local-observances.json`)로 소속교회 목록을 만든다. 북한에 있던 성당, 교구나 식별자가 없는 줄은 뺀다(ADR-041 §6). */
   parishGroups: (table: any) => ParishGroup[];
+  /** 설정 맨 아래 버전 줄의 글과 링크 — dev에서만 빌드 해시를 보인다(ADR-052). */
+  versionFooter: (version: string | null | undefined, build: AppBuild | null | undefined, hostname: string) => { label: string; href: string };
   _$: (id: string) => HTMLElement;
   chUnit: (bookId: string) => string;
   /** 단위를 이름으로 쓰는 자리의 낱말 — 「장」, 「편」, 송가는 「송가」(ADR-047 §3). */
@@ -1446,6 +1454,8 @@ declare global {
     // App version mirror — set by views.js's loadVersion() (Phase 7a
     // owner). Read by settings-ui.js's version footer.
     appVersion?: string | null;
+    // Build ids of the deployed build (ADR-052), set by loadVersion() next to appVersion; null when version.json failed.
+    appBuild?: AppBuild | null;
 
     // Install carousel object (Phase 4 owner: js/app/install.js). The module
     // assigns `window.install = install` at load time so settings-ui can read

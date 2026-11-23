@@ -94,7 +94,7 @@ function loadDataFetching() {
     ok: true,
     json: async () => ({}),
   });
-  const windowStub = { booksPromise: undefined, appVersion: null };
+  const windowStub = { booksPromise: undefined, appVersion: null, appBuild: undefined };
 
   const ctx = {
     Promise, Object, Array, Set, Map, JSON, console, Error,
@@ -448,6 +448,24 @@ test("loadVersion: returns empty string on fetch failure", async () => {
   h.setFetch(async () => { throw new Error("network down"); });
   const v = await h.loadVersion();
   assert.equal(v, "");
+});
+
+test("loadVersion: mirrors the build ids of a deployed version.json onto window.appBuild (ADR-052)", async () => {
+  const h = loadDataFetching();
+  h.setFetch(async () => ({ ok: true, json: async () => ({ version: "2.2.4", app_commit: "9985216", data_commit: "1de377e" }) }));
+  assert.equal(await h.loadVersion(), "2.2.4");
+  assert.deepEqual({ ...h.windowStub.appBuild }, { app: "9985216", data: "1de377e" });
+});
+
+test("loadVersion: the repo's version.json (no ids) gives empty ids, a failed fetch gives null", async () => {
+  const h = loadDataFetching();
+  h.setFetch(async () => ({ ok: true, json: async () => ({ version: "2.2.4", app_commit: 9985216 }) }));
+  await h.loadVersion();
+  assert.deepEqual({ ...h.windowStub.appBuild }, { app: "", data: "" });
+  const h2 = loadDataFetching();
+  h2.setFetch(async () => { throw new Error("network down"); });
+  await h2.loadVersion();
+  assert.equal(h2.windowStub.appBuild, null);
 });
 
 test("loadChapter: hits /data/bible/{bookId}-{chapter}.json", async () => {
