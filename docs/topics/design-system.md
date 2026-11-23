@@ -18,6 +18,7 @@
 - **하단 알림은 한 열에 쌓여 탭 바 위에 뜬다** (2026-11-21, `DESIGN.md` §6 「하단 알림 열」, 사용자 요청).
   - 업데이트 토스트(`app.js`)와 스낵바(`drive-sync.js`의 `_showSyncSnackbar`)는 `#notice-stack` 한 열에 들어가 서로 겹치지 않는다. 새 알림이 아래에 붙고 앞의 알림은 위로 밀린다. 같은 글의 스낵바를 또 띄우면 앞의 것을 지우고 하나만 남는다.
   - 그 열은 화면 아래의 막대(탭 독, 오디오 바, 절 선택과 북마크 선택 바와 그 카운트 칩, 가로의 이어 읽기 알약) 가운데 가장 위의 것보다 8px 위에 있다. 막대의 자리는 화면 방향, 스크롤 축소, 오디오 재생, 선택 모드에 따라 달라서, 알림이 떠 있는 동안 막대를 재어 넣는다(`tabbar.js`의 `noticeBottom`, `placeNotices`). 막대가 바뀌는 때(몸통의 모드 클래스, 막대의 `hidden`, 전환이 끝날 때, 창 크기)마다 다시 잰다. 화면 아래에 막대가 없으면(데스크톱) 화면 아래에서 1rem 위다.
+  - 열은 가운데에 있고, 폭은 화면 폭에서 2rem과 좌우 안전 영역 가운데 넓은 쪽의 두 배를 뺀 폭까지다. 가로로 든 iPhone 17에서 긴 알림도 안전 영역 안쪽에서 끝난다(ADR-055 §4).
   - 그전에는 토스트가 화면 아래 1rem에 떠 휴대폰의 탭 바를 가렸고, 스낵바는 따로 80px 위에 떠 토스트나 다른 스낵바와 겹쳤다. 스낵바의 모양도 인라인 스타일에서 `.snackbar`의 토큰으로 옮겼다(known-issues §23의 첫 항목).
   - 테스트: 유닛 +4(`tabbar.test.js`의 `noticeBottom`), e2e +2(`test_update_toast.py`), 스낵바를 찾는 e2e 셋의 선택자를 `#notice-stack > .snackbar`로 고쳤다.
 - **상단 바 높이는 숫자로 적지 않고 잰다** (2026-11-07, `DESIGN.md` §4 「레이아웃」).
@@ -62,11 +63,11 @@
   - 자세한 내용과 개정 이력은 ADR-028 §7과 §9에 있다.
 - **칸의 폭** (2026-11-23, ADR-055).
   - 글자를 담는 칸의 폭은 rem이라, 글자 크기 설정(`html`의 `font-size`)을 바꾸면 함께 커지고 작아진다. 기본 글자 크기 18px에서는 전의 px 폭과 1px 안에서 같다.
-  - 본문 칸(`--max-width`)은 40rem이고, 화면 폭에서 좌우 안전 영역(`env(safe-area-inset-left)`, `env(safe-area-inset-right)`) 가운데 넓은 쪽의 두 배를 뺀 폭보다 넓지 않다(ADR-055 §4). 가로로 든 iPhone 17(874pt, 안전 영역 62pt쯤)에서 20px, 22px, 24px의 칸은 750px이고, 18px은 그대로 720px이다. `#app`, `#app-header`, `.cal-picker`, `.book-filter-sheet`, `#resume-banner-slot`, `#division-tabs-slot`, `#cite-sheet`, `#audio-bar`, `#verse-select-bar`와 `#bm-select-bar`가 함께 쓴다. 큰 화면에서 헤더는 화면 전체 폭이고, 시트는 옆 패널이나 팝오버라 이 값을 쓰지 않는다.
+  - 본문 칸(`--max-width`)은 40rem이고, 화면 폭에서 좌우 안전 영역(`env(safe-area-inset-left)`, `env(safe-area-inset-right)`) 가운데 넓은 쪽의 두 배를 뺀 폭보다 넓지 않다(ADR-055 §4). 가로로 든 iPhone 17(874pt, 안전 영역 62pt쯤)에서 20px, 22px, 24px의 칸은 750px이고, 18px은 그대로 720px이다. `#app`, `#app-header`, `.cal-picker`, `.book-filter-sheet`, `#resume-banner-slot`, `#division-tabs-slot`, `#cite-sheet`, 작은 화면의 `#bookmark-drawer`, `#audio-bar`, `#verse-select-bar`와 `#bm-select-bar`가 함께 쓴다. 큰 화면에서 헤더는 화면 전체 폭이고, 시트는 옆 패널이나 팝오버라 이 값을 쓰지 않는다.
   - 큰 화면의 옆 패널은 책 선택 `min(23.3rem, 90vw)`, 인용 `min(24.4rem, 90vw)`, 북마크 `min(20rem, 90vw)`이다. 왼쪽 가장자리를 끌어 줄일 수 있는 가장 좁은 폭은 13.3rem이고, 끌 때마다 그때의 글자 크기로 계산한다(`overlay.js`의 `attachSheetResize`). 끌어 바꾼 폭은 px로 남고, 패널을 닫으면 지운다.
   - 대화상자는 `min(92vw, 20rem)`(드라이브 연결 끊기, 새 폴더, 이미 저장된 북마크, 확인, 가져오기), `min(92vw, 21.1rem)`(옮기기), `min(92vw, 23.3rem)`(북마크 저장, 설치 안내)이다. 휴대폰에서는 화면 폭의 92%가 정하는 경우가 많다.
   - px로 남긴 것: 레이아웃 결정 조건의 미디어 쿼리, 테두리, 안전 영역, 누르는 자리 44px, 아이콘, 스위치(51-52px), 시트의 손잡이, 색 견본, 여백(`--space-*`). 쓰이지 않는 예약 토큰 `--sidebar-w`(260px)도 그대로다.
-  - 유닛 시험(`helpers.test.js`)이 `css/style.css`에서 100px 이상의 px 폭을 찾아 막는다. e2e `test_rem_widths.py`가 글자 크기 16, 18, 24px에서 본문 칸, 옆 패널 셋, 북마크 저장 대화상자의 폭을 잰다. 가로로 든 iPhone에서는 Chromium의 개발자 프로토콜(`Emulation.setSafeAreaInsetsOverride`)로 좌우 안전 영역을 흉내 내, 본문 칸, 헤더, 절 번호, 인용 시트가 그 밖에 있는지 본다.
+  - 유닛 시험(`helpers.test.js`)이 `css/style.css`에서 100px 이상의 px 폭을 찾아 막는다. e2e `test_rem_widths.py`가 글자 크기 16, 18, 24px에서 본문 칸, 옆 패널 셋, 북마크 저장 대화상자의 폭을 잰다. 가로로 든 iPhone에서는 Chromium의 개발자 프로토콜(`Emulation.setSafeAreaInsetsOverride`)로 좌우 안전 영역을 흉내 내(`conftest.py`의 `emulate_side_safe_areas`), 본문 칸, 헤더, 절 번호, 인용 시트가 그 밖에 있는지 본다. 하단 막대, 알림, 북마크 시트는 `test_safe_area_sides.py`가 본다.
 - **읽기 화면 헤더의 스크롤 그림자** (2026-05-30, ADR-025).
   - 본문을 스크롤해 맨 위를 벗어나면 헤더 아래에 그림자가 서서히 나타난다. 헤더 아래의 1px 가는 선은 그대로 둔다.
   - 맨 위를 벗어났는지는 IntersectionObserver(요소가 화면에 보이는지 알려 주는 브라우저 기능)가 `#scroll-sentinel`을 지켜보아 알아낸다. 그림자는 `#sticky-group`에 그린다.

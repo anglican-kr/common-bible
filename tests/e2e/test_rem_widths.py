@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 import pytest
 
-from .conftest import BASE_URL, CLEAR_APP_STORAGE, IPHONE_UA
+from .conftest import BASE_URL, CLEAR_APP_STORAGE, IPHONE_UA, emulate_side_safe_areas
 
 COACHMARK_SEEN = "try { localStorage.setItem('bible-cite-coachmark-seen','1'); } catch(_) {}"
 
@@ -150,11 +150,7 @@ def test_dialog_width_follows_the_font_size_inside_the_screen(browser, viewport,
 LANDSCAPE_IPHONE = {"width": 874, "height": 402}
 
 
-def _safe_area(ctx, page, left: int, right: int) -> None:
-    ctx.new_cdp_session(page).send("Emulation.setSafeAreaInsetsOverride",
-                                   {"insets": {"left": left, "right": right, "top": 0, "bottom": 21}})
-
-
+@pytest.mark.only_browser("chromium")
 @pytest.mark.parametrize("font, left, right", [(18, 62, 62), (20, 62, 62), (22, 62, 62), (24, 62, 62), (24, 62, 0)],
                          ids=["18px", "20px", "22px", "24px", "24px-one-side"])
 def test_reading_column_stays_inside_the_side_safe_areas(browser, font, left, right):
@@ -163,7 +159,7 @@ def test_reading_column_stays_inside_the_side_safe_areas(browser, font, left, ri
     ctx = _ctx(browser, LANDSCAPE_IPHONE, font, phone=True)
     try:
         page = ctx.new_page()
-        _safe_area(ctx, page, left, right)
+        emulate_side_safe_areas(page, left, right)
         page.goto(f"{BASE_URL}/ps/23")
         page.wait_for_selector("article.chapter-text .verse", timeout=20_000)
         assert page.evaluate("() => document.documentElement.style.fontSize") == f"{font}px"
@@ -177,12 +173,13 @@ def test_reading_column_stays_inside_the_side_safe_areas(browser, font, left, ri
         ctx.close()
 
 
+@pytest.mark.only_browser("chromium")
 def test_bottom_sheet_stays_inside_the_side_safe_areas(browser):
     """가로로 든 iPhone의 큰 글자(24px)에서 바텀 시트(인용)도 본문 칸과 같은 폭이라 좌우 안전 영역에 들어가지 않는다."""
     ctx = _ctx(browser, LANDSCAPE_IPHONE, 24, phone=True)
     try:
         page = ctx.new_page()
-        _safe_area(ctx, page, 62, 62)
+        emulate_side_safe_areas(page, 62, 62)
         sel = _open_cite_sheet(page)
         page.wait_for_timeout(400)
         # Without this, a font setting that silently failed to apply would leave an 18px (720px) sheet that passes.
