@@ -32,7 +32,7 @@ title: "feat: dev 설정에 빌드 식별자 보이기와 pre-release 절차"
 
 ## 검증
 
-- 유닛: `node --test tests/unit/*.test.js` 1,978건 모두 통과(건너뜀 0, 데이터 서브모듈을 받은 작업 폴더). 타입 검사(`tsc`, 설정 2종) 통과.
+- 유닛: `node --test tests/unit/*.test.js` 1,980건 모두 통과(1회차 반영 뒤, 건너뜀 0, 데이터 서브모듈을 받은 작업 폴더). 타입 검사(`tsc`, 설정 2종) 통과.
 - 변이 검사 2건:
   - `versionFooter`의 호스트 확인을 빼면 "운영은 버전만" 시험이 실패한다.
   - `loadVersion()`이 `app_commit`을 옮기지 않으면 `window.appBuild` 시험이 실패한다.
@@ -53,3 +53,14 @@ title: "feat: dev 설정에 빌드 식별자 보이기와 pre-release 절차"
 - `docs/architecture.md`: §8 배포의 식별자, 검증 11종, 릴리스 순서, 부록 A의 ADR 인덱스
 - `CLAUDE.md`: "데이터 수정과 릴리스" 4의 2와 5
 - `tests/README.md`: 총계와 `helpers.test.js`, `views.test.js`, `test_settings.py` 행
+
+## 리뷰 반영 (2026-11-23, 1회차)
+
+`/code-review medium --fix`의 지적 4건(모두 가벼운 지적)을 반영했다.
+
+- **버전 파일을 두 번 받던 것**(`6535b99`). 설정 화면을 버전보다 먼저 그리면 `loadVersion()`이 부팅 때의 호출과 겹쳐 `version.json`을 두 번 받고, 늦게 실패한 쪽이 먼저 받은 버전과 빌드 식별자를 지울 수 있었다. 진행 중인 요청을 함께 쓰게 했다. 겹친 두 호출이 요청 하나로 끝나는지와, 실패한 뒤 다시 부르면 새로 받는지를 유닛 2건으로 더했다. 앞의 시험은 고치기 전 코드에서 실패한다.
+- **"견준다" 두 곳**(`6535b99`, `b85d440`). 이 PR에서 새로 쓴 `helpers.js` 주석과 ADR-052 배경 1을 "비교한다"로 고쳤다.
+- **ADR-052 §3 표의 "로컬"**(`b85d440`). 로컬 서버의 `version.json`에는 해시가 없어 버전만 보이므로, 표의 행을 dev.anglican.kr로 줄였다.
+- **pre-release 규칙이 겹치던 것**(`b85d440`). 릴리스 PR 뒤에 버전을 올리지 않은 앱 수정 PR이 더해진 dev를 올리면, "앱 커밋이 바뀌면 새로 만든다"와 "버전을 올리지 않은 시험 배포에는 만들지 않는다"가 함께 해당했다. 사용자가 앞의 규칙을 기준으로 정했다(2026-11-23). 정식 태그가 아직 없는 버전이면 앱 커밋이 바뀔 때마다 만들고, 정식 태그가 이미 있는 버전의 시험 배포에만 만들지 않는다. ADR-052 §4에 경우별 표와 버린 대안 7을 더하고, ADR-051 §3의 2, `docs/workflow.md` "릴리스", `docs/architecture.md` 인덱스를 같은 말로 고쳤다.
+- 서버 저장소의 같은 리뷰는 common-bible-server#6에서 반영했다(`c45fcf3`: 해시 길이를 7자리 이상으로 고정, zip을 `zipfile`로 읽기, Build id 줄은 dev 배포에서만). 그 리뷰의 `sitemap.xml` 지적은 결정을 기다린다.
+- 검증: 유닛 1,980건과 타입 검사가 통과했다. e2e `test_settings.py`와 `test_update_toast.py` 61건이 통과했다.
