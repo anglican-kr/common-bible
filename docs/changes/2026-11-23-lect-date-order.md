@@ -37,6 +37,7 @@ title: "feat: 전례일 검색 결과를 날짜 차례로"
 - `docs/topics/liturgical.md`: 지키는 날의 표가 담는 `ember`
 - `docs/design/lectionary-search.md`: §4.3, §5의 순서, 미결 2
 - `docs/architecture.md`: 부록 A의 ADR-044 줄
+- `docs/writing.md`: 개발 문서의 낫표와 「Enter」(리뷰 반영 1회차)
 - `tests/README.md`: 총계와 `search.test.js`, `search-worker.data.test.js`, `test_search.py` 행(세 행의 건수는 전부터 실제와 달라 지금 수로 다시 셌다)
 
 ## 리뷰 반영 (2026-11-23, 1회차)
@@ -45,4 +46,4 @@ title: "feat: 전례일 검색 결과를 날짜 차례로"
 
 - 날짜를 계산한 결과를 줄과 짝지을 때, 계산하는 동안 줄 배열이 바뀌어도 어긋나지 않게 했다(`withLectDays`). 이번 PR에서 그릴 때 줄 배열을 정렬한 새 배열로 바꾸게 되어 생긴 틈이다. 지금은 날짜가 오기 전의 차례가 워커의 차례와 같아 드러나지 않으므로 시험은 두지 않았다.
 - 3초가 지나 줄을 다시 늘어놓을 때, 포커스가 있던 줄이 상단 바와 탭 바 사이에서 벗어나면 화면 가운데로 가져온다(WCAG 2.4.7). 처음에는 포커스만 되돌리고 스크롤하지 않아, `대림`의 마지막 줄에 있던 포커스가 목록 가운데로 옮겨 가면 보이지 않았다. e2e(`test_late_days_put_the_rows_in_date_order_and_keep_focus`)에 그 줄이 보이는지 더했고, 스크롤을 빼는 변이를 잡았다.
-- `docs/architecture.md`의 ADR-044 줄에 남은 「Enter를 쳐도」(전역 규칙의 키보드 표현): 고치지 않았다. ADR-044와 검색 주제 문서가 이 키의 동작을 같은 말로 여러 번 적고, 저장소의 `docs/writing.md`는 이 표현을 릴리스 노트에서만 막는다. 사용자에게 묻는다.
+- `docs/architecture.md`의 ADR-044 줄에 남은 「Enter를 쳐도」(키보드 표현): 고치지 않았다. ADR-044와 검색 주제 문서가 이 키의 동작을 같은 말로 19번 적고, `docs/writing.md`는 이 표현을 릴리스 노트에서만 막는다. 리뷰가 함께 물은 개발 문서의 낫표(「」)도 같다. 사용자가 개발 문서에서는 둘 다 그대로 쓰기로 했다(2026-11-23). 이 규칙을 `docs/writing.md` 머리에 적었다.
