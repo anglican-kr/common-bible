@@ -8,7 +8,8 @@
 않는다(`citations.js`의 `setNoteAnchorsActive`, 구현하며 정함 2026-11-08). 창세 28:19의 주석 「베델」을 쓴다.
 
 화면이 바뀌면 툴팁이 닫히고, 표지를 따라가던 스크롤과 창 크기 감시, 크기 감시도 함께 풀린다(`routing.js`의 `route()`가
-`citations.js`의 `hideNoteTooltip`을 부른다, known-issues §50).
+`citations.js`의 `hideNoteTooltip`을 부른다, known-issues §50). 새 화면을 받는 동안 옛 화면에서 연 툴팁도 새 화면이 그려지면
+닫힌다(`route()`가 끝날 때 표지가 사라진 툴팁만 닫는다).
 """
 import pytest
 
@@ -331,13 +332,24 @@ def _wait_route_end(page, title_before):
 
 def test_note_tooltip_closes_on_back(browser):
     """휴대폰 폭에서 열왕기상 4장에서 5장으로 간 뒤 「사천」의 툴팁을 연 채 뒤로 가면, 툴팁이 닫히고 표지를 따라가던 감시가
-    모두 풀린다. 그전에는 4장 화면에 툴팁이 열린 채 상단 바 밑에 숨고, 감시는 다음 누름이나 Esc까지 남았다."""
+    모두 풀린다. 그전에는 4장 화면에 툴팁이 열린 채 상단 바 밑에 숨고, 감시는 다음 누름이나 Esc까지 남았다. 4장의 자료를
+    붙잡아 두어, 장이 오기 전(불러오는 중 화면)에 이미 닫혔는지도 본다(`route()`가 시작할 때 닫는다)."""
+    held = []
     ctx, page = _open_recording(browser, MOBILE_VIEWPORT, "/1kgs/4", ".verse")
     try:
         _navigate(page, "/1kgs/5", ANCHOR)
         _open_recorded_tooltip(page)
         title = page.title()
+        page.route("**/data/bible/1kgs-4.json", lambda route: held.append(route))
         page.go_back()
+        page.wait_for_selector("#app > .loading")
+        for _ in range(500):   # 불러오는 중 화면을 그린 바로 뒤에 보내는 요청이 붙잡힐 때까지
+            if held:
+                break
+            page.wait_for_timeout(20)
+        assert held
+        assert page.evaluate(_FOLLOWERS) == {"open": False, "listeners": 0, "observers": 0}
+        held.pop().continue_()
         _wait_route_end(page, title)
         assert page.evaluate("() => location.pathname") == "/1kgs/4"
         assert page.evaluate(_FOLLOWERS) == {"open": False, "listeners": 0, "observers": 0}
@@ -396,5 +408,38 @@ def test_note_tooltip_closes_on_tab_bar_icon_and_tab_keeps_focus(browser):
         assert page.evaluate("() => location.pathname") == "/calendar"
         assert page.evaluate(_FOLLOWERS) == {"open": False, "listeners": 0, "observers": 0}
         assert page.evaluate("() => document.activeElement === document.querySelector('#tab-bar [data-tab=\"calendar\"]')")
+    finally:
+        ctx.close()
+
+
+@pytest.mark.parametrize("viewport", [MOBILE_VIEWPORT, {"width": 1280, "height": 800}], ids=["mobile", "desktop"])
+def test_note_tooltip_opened_while_the_next_screen_loads_closes(browser, viewport):
+    """성서 목록(`books.json`)을 아직 받지 못한 전례독서(2027-01-10)에서 장으로 옮기면, 라우터가 목록을 기다리는 동안 옛 화면이
+    남는다. 그 틈에 옛 화면의 「기운」을 눌러 연 툴팁은 장이 그려지면 닫히고 감시가 풀린다. 그전에는 시작할 때의 닫기가 이미 지나가
+    장 화면에 남았다. 목록의 응답은 붙잡아 두었다가 툴팁을 연 뒤 풀어 주므로 시간에 기대지 않는다. 끝날 때의 닫기는 표지가 사라진
+    툴팁만 닫으므로, 새 화면에서 연 툴팁은 그대로다."""
+    held = []
+    ctx = browser.new_context(viewport=viewport, service_workers="block")
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_COACHMARK_SEEN)
+    ctx.add_init_script(_RECORD_FOLLOWERS)
+    ctx.route("**/data/books.json", lambda route: held.append(route))   # 이 날의 전례독서는 성서 목록 없이 그린다(송가 독서가 없다)
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}{LECTIONARY}")
+        page.wait_for_selector(LECTIONARY_WORD, timeout=20_000)
+        assert len(held) == 1   # 머리에서 미리 받는 목록(`js/pre-fetch.js`)이 붙잡혀 있다
+        title = page.title()
+        page.evaluate("() => window.navigate('/1kgs/5')")
+        page.wait_for_function("() => location.pathname === '/1kgs/5'")
+        _open_recorded_tooltip(page, LECTIONARY_WORD)   # 옛 화면 그대로다. 라우터가 목록을 기다린다
+        held.pop().continue_()
+        _wait_route_end(page, title)
+        page.wait_for_selector(ANCHOR)
+        assert page.evaluate(_FOLLOWERS) == {"open": False, "listeners": 0, "observers": 0}
+        page.locator(ANCHOR).first.click()
+        page.wait_for_function(NOTE_TOOLTIP_OPEN)
+        page.evaluate("() => window.appCitations.hideNoteTooltip({ ifAnchorGone: true })")
+        assert page.evaluate(NOTE_TOOLTIP_OPEN)
     finally:
         ctx.close()

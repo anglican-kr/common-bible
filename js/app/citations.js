@@ -561,7 +561,11 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
   // Hide the tooltip and stop following its anchor, leaving focus where it is. Also the route change's close
   // (routing.js route()): the anchor closeNoteTooltip would focus belongs to the screen being left, so focus goes
   // wherever any route sends it — the clicked control for a same-screen redraw link (ADR-031 §5), else the page start.
-  function hideNoteTooltip() {
+  // `ifAnchorGone`: only once the anchor has left the document — the close at the end of a route, for a tooltip opened
+  // on the old screen while the route still waited to replace it. One opened on the new screen keeps its anchor.
+  /** @param {{ ifAnchorGone?: boolean }} [opts] */
+  function hideNoteTooltip({ ifAnchorGone = false } = {}) {
+    if (ifAnchorGone && (!_currentNoteAnchor || _currentNoteAnchor.isConnected)) return;
     const tt = /** @type {HTMLElement | null} */ (document.getElementById("note-tooltip"));
     if (tt) tt.hidden = true;
     _stopFollowingNoteAnchor();

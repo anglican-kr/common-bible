@@ -792,6 +792,10 @@ async function route() {
     // 내부 navigate()(리다이렉트)가 _routeSeq 를 올렸으면 낡은 바깥 호출이라 건너뛴다.
     if (routeSeq === _routeSeq) {
       window.tabHistory?.onRouteEnd();
+      // The close at the start came too early for a tooltip opened on the old screen while this route still waited to
+      // replace it (books.json not yet in when leaving the lectionary for a chapter): its anchor left with the old screen,
+      // and it stayed over the new one (known-issues §50). Only such a tooltip closes; one opened on the new screen stays.
+      window.appCitations?.hideNoteTooltip({ ifAnchorGone: true });
       // 누른 링크가 옛 화면과 함께 사라져 body 로 빠진 포커스를 새 화면의 같은 컨트롤로(ADR-031 §5). 오류 화면 ·
       // 다른 뷰에는 같은 키가 없어 아무것도 하지 않는다.
       restoreFocusSpot(focusSpot, $app);
