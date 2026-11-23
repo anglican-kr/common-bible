@@ -4,7 +4,8 @@ Covers:
   - keyword search shows results
   - verse reference auto-navigates to chapter when no lectionary day reads it
   - lectionary results (ADR-044): pills, rows, Enter rules, missing chapter, book name alone, slug landing
-  - worker init failure surfaces an error message
+  - a search that gets no results (data not received, worker error) shows the full-screen failure in the results'
+    place, keeping the mobile in-page bar and the book pills (ADR-048 §6)
   - verse search URL on refresh auto-navigates (regression)
   - in: operator restricts to a book / supports OR / tolerates whitespace
 """
@@ -17,8 +18,8 @@ from urllib.parse import quote
 import pytest
 
 from .conftest import (
-    ADD_STYLE_RULE, CLEAR_APP_STORAGE, IPHONE_UA, MOBILE_VIEWPORT, assert_sheet_close_button, emulate_status_bar, pseudo_session,
-    style_in_state, wait_app_ready,
+    ADD_STYLE_RULE, CLEAR_APP_STORAGE, IPHONE_UA, MOBILE_VIEWPORT, RECORD_ANNOUNCEMENTS, assert_sheet_close_button, emulate_status_bar,
+    pseudo_session, style_in_state, wait_app_ready,
 )
 
 BASE_URL = "http://localhost:8080"
@@ -626,22 +627,317 @@ def test_keyword_with_comma_still_searches_text(page, base_url):
     assert page.locator(".ref-match-item").count() == 0
 
 
-def test_worker_error_surfaces_to_ui(browser):
-    """Worker meta-load failure must show an error in the UI, not hang."""
-    ctx = browser.new_context(service_workers="block")
+# ── 결과를 받지 못한 검색(ADR-048 §6, known-issues §48) ─────────────────────────
+# 캘린더, 전례독서, 성서 화면과 같은 전체 화면 실패를 결과 자리에 그린다. 머리는 검색 화면의 것이고, 휴대폰의 위쪽 입력창과 책 알약은
+# 남는다(사용자 결정 2026-11-23). 그전에는 본문 자리(#app)를 「검색에 실패했습니다.」 한 줄로 바꿔 휴대폰의 위쪽 입력창까지 지웠다.
+
+SEARCH_FAILURE = {
+    "title": "검색 자료를 불러오지 못했습니다",
+    "subtitle": "네트워크 연결을 확인한 뒤 「다시 불러오기」를 눌러 주세요.",
+    "action": "다시 불러오기",
+    "tag": "BUTTON",
+}
+
+# 검색 워커가 PAGE쪽을 찾다가 오류를 낸다. 찾는 중에 던진 오류는 워커가 받아 `error` 메시지로 보낸다(search-worker.js의 onmessage).
+# 다른 메시지는 지나가게 하려고 검색 메시지만 보고 정한다.
+WORKER_THROWS_ON_PAGE = """
+;(() => {
+  const handle = onmessage;
+  const readRef = tryVerseRef;
+  let failing = false;
+  tryVerseRef = (q) => { if (failing) throw new Error("e2e: 검색 워커의 오류"); return readRef(q); };
+  onmessage = (ev) => {
+    if (ev.data && ev.data.type === "search") failing = ev.data.page === PAGE;
+    return handle(ev);
+  };
+})();
+"""
+
+
+def _search_failure_context(browser, mobile=False, viewport=None):
+    """서비스 워커를 막는다. `route`는 서비스 워커가 처리한 요청을 가로채지 못한다."""
+    options = {"service_workers": "block"}
+    if mobile:
+        options.update(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA, is_mobile=True, has_touch=True)
+    elif viewport:
+        options.update(viewport=viewport)
+    ctx = browser.new_context(**options)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    return ctx
+
+
+def _fail_meta(ctx):
+    ctx.route("**/data/search-meta.json", lambda route: route.fulfill(status=500, body="boom"))
+
+
+def _worker_throws_on_page(ctx, n):
+    def patch(route):
+        resp = route.fetch()
+        route.fulfill(response=resp, body=resp.text() + WORKER_THROWS_ON_PAGE.replace("PAGE", str(n)))
+    ctx.route("**/js/search-worker.js", patch)
+
+
+def _search_failure(page):
+    """결과 자리에 그린 실패 화면의 제목, 부제, 다음 행동. 실패 화면은 하나다."""
+    page.wait_for_selector("#app .search-view-results .empty-state-title", timeout=20_000)
+    return page.evaluate("""() => {
+      const action = document.querySelector('#app .state-action > *');
+      return {
+        title: document.querySelector('#app .empty-state-title').textContent,
+        subtitle: document.querySelector('#app .empty-state-subtitle').textContent,
+        action: action?.textContent ?? null,
+        tag: action?.tagName ?? null,
+        count: document.querySelectorAll('#app .empty-state').length,
+      };
+    }""")
+
+
+def _assert_search_failure(page):
+    state = _search_failure(page)
+    assert state.pop("count") == 1, state
+    assert state == SEARCH_FAILURE
+
+
+@pytest.mark.parametrize("mobile", [False, True], ids=["desktop", "mobile"])
+def test_search_failure_is_the_full_screen_failure(browser, mobile):
+    """장을 읽다(오디오 바가 보인다) 검색했는데 검색 자료(`search-meta.json`)를 받지 못하면, 머리는 「"사랑" 검색」이고 결과 자리에
+    캘린더, 전례독서, 성서 화면과 같은 실패 화면이 나온다. 앞 장의 오디오 바는 내려간다. 라이브 영역은 머리의 제목과 안 된 것을 함께
+    읽고, 포커스는 옮기지 않는다. 데스크톱은 상단 바의 검색창에, 휴대폰은 검색 화면 맨 위의 입력창에 검색어가 남는다. 실패한 검색어는
+    지금처럼 최근 검색에 남는다(ADR-014 D1이 빼는 것은 모르는 책 이름과 다섯 권을 넘긴 검색뿐이다)."""
+    ctx = _search_failure_context(browser, mobile=mobile, viewport={"width": 1280, "height": 720})
+    _fail_meta(ctx)
     page = ctx.new_page()
-    page.route("**/data/search-meta.json", lambda route: route.fulfill(status=500, body="boom"))
+    try:
+        page.goto(f"{BASE_URL}/john/3")
+        page.wait_for_selector("article.chapter-text .verse", timeout=8_000)
+        page.wait_for_function("() => document.getElementById('audio-bar').hidden === false")
+        if mobile:
+            page.locator("#tab-search").click()
+            page.wait_for_selector("#search-inpage-input")
+            page.locator("#search-inpage-input").click()
+            field = "#search-inpage-input"
+        else:
+            field = "#search-input"
+        page.fill(field, "사랑")
+        page.evaluate(RECORD_ANNOUNCEMENTS)
+        page.press(field, "Enter")
 
-    page.goto(BASE_URL)
-    wait_app_ready(page)
+        _assert_search_failure(page)
+        page.wait_for_function(
+            "() => window.__said.includes('\"사랑\" 검색 — 검색 자료를 불러오지 못했습니다')", timeout=5_000)
+        state = page.evaluate("""() => ({
+            title: document.getElementById('page-title').textContent,
+            doc: document.title,
+            audioHidden: document.getElementById('audio-bar').hidden,
+            chapter: document.querySelectorAll('article.chapter-text').length,
+            results: document.querySelectorAll('.search-result-item').length,
+            bar: document.querySelector('#app > .search-view > #search-inpage-bar:first-child') !== null,
+            barValue: document.getElementById('search-inpage-input')?.value ?? null,
+            clearShown: !!document.getElementById('search-inpage-clear') && !document.getElementById('search-inpage-clear').hidden,
+            header: document.getElementById('search-input').value,
+            active: document.activeElement.id || document.activeElement.tagName,
+            history: JSON.parse(localStorage.getItem('bible-search-history') || '[]').map((e) => e.q),
+        })""")
+        assert state["title"] == '"사랑" 검색', state
+        assert state["doc"] == '"사랑" 검색 — 공동번역성서', state
+        assert state["audioHidden"] is True and state["chapter"] == 0 and state["results"] == 0, state
+        assert state["active"] != "BUTTON", "포커스를 실패 화면의 단추로 옮기지 않는다"
+        assert state["history"] == ["사랑"], state
+        if mobile:
+            assert state["bar"] and state["barValue"] == "사랑" and state["clearShown"], state
+            assert state["active"] == "BODY", "Enter로 찾은 뒤 내려간 키보드를 다시 띄우지 않는다(ADR-048 §3)"
+        else:
+            assert not state["bar"] and state["header"] == "사랑", state
+            assert state["active"] == "search-input", state
+    finally:
+        ctx.close()
 
-    page.fill("#search-input", "사랑")
-    page.press("#search-input", "Enter")
 
-    page.wait_for_selector(".error", timeout=8000)
-    assert page.inner_text(".error").strip()
+@pytest.mark.parametrize("cause", ["meta-offline", "bible-index", "later-index", "worker-error"])
+def test_search_failure_causes(browser, cause):
+    """검색이 결과를 받지 못하는 길마다 같은 실패 화면이다. 검색 자료의 메타 파일을 오프라인이라 받지 못할 때, 첫 성서 색인
+    (`search-nt.json`)을 받지 못할 때, 나중에 오는 성서 색인(`search-ot.json`)을 받지 못할 때(받는 동안 보이던 결과를 지운다), 검색
+    워커가 찾다가 오류를 낼 때다."""
+    ctx = _search_failure_context(browser)
+    held = []
+    if cause == "meta-offline":
+        ctx.route("**/data/search-meta.json", lambda route: route.abort("internetdisconnected"))
+    elif cause == "bible-index":
+        ctx.route("**/data/search-nt.json", lambda route: route.fulfill(status=500, body="boom"))
+    elif cause == "later-index":
+        ctx.route("**/data/search-ot.json", lambda route: held.append(route))
+    else:
+        _worker_throws_on_page(ctx, 1)
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE_URL}/search?q={quote('사랑')}")
+        if cause == "later-index":
+            page.wait_for_function(
+                "() => document.querySelector('h2.search-count')?.textContent.includes('검색 중')", timeout=20_000)
+            assert page.locator(".search-result-item").count() > 0, "받는 동안의 결과가 보인다"
+            for _ in range(100):
+                if held:
+                    break
+                page.wait_for_timeout(100)
+            held[0].fulfill(status=500, body="boom")
+        _assert_search_failure(page)
+        assert page.locator(".search-result-item").count() == 0
+        assert page.locator("h2.search-count").count() == 0
+    finally:
+        ctx.close()
 
-    ctx.close()
+
+def test_search_failure_keeps_the_in_page_bar_to_search_again(browser):
+    """휴대폰의 실패 화면에서 위쪽 입력창의 검색어를 고쳐 다시 찾을 수 있다. 자료를 여전히 받지 못하면 새 검색어의 실패 화면이다.
+    자료를 받을 수 있게 된 뒤 「다시 불러오기」를 누르면 페이지를 새로 고쳐 같은 주소의 검색을 다시 하고 결과가 나온다."""
+    ctx = _search_failure_context(browser, mobile=True)
+    _fail_meta(ctx)
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE_URL}/search?q={quote('사랑')}")
+        _assert_search_failure(page)
+
+        page.locator("#search-inpage-input").click()
+        page.fill("#search-inpage-input", "믿음")
+        page.press("#search-inpage-input", "Enter")
+        page.wait_for_function("() => new URLSearchParams(location.search).get('q') === '믿음'", timeout=5_000)
+        page.wait_for_function("() => document.getElementById('page-title').textContent === '\"믿음\" 검색'", timeout=5_000)
+        _assert_search_failure(page)
+        assert page.input_value("#search-inpage-input") == "믿음"
+
+        ctx.unroute("**/data/search-meta.json")
+        with page.expect_navigation():
+            page.locator("#app .state-action button").click()
+        page.wait_for_selector(".search-result-item", timeout=20_000)
+        assert page.evaluate("() => new URLSearchParams(location.search).get('q')") == "믿음"
+        assert page.locator("#app .empty-state").count() == 0
+    finally:
+        ctx.close()
+
+
+def test_search_failure_keeps_focus_in_the_in_page_bar(browser):
+    """찾는 동안 휴대폰의 위쪽 입력창을 눌러 두었으면, 실패 화면이 나와도 포커스(와 키보드)가 그 입력창에 남는다. 실패 화면은 결과
+    자리에만 그리기 때문이다. 오류 한 줄을 그릴 때는 입력창이 지워져 포커스가 페이지 맨 앞으로 떨어졌다."""
+    ctx = _search_failure_context(browser, mobile=True)
+    held = []
+    ctx.route("**/data/search-meta.json", lambda route: held.append(route))
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE_URL}/search?q={quote('사랑')}")
+        page.wait_for_selector("#search-inpage-input", timeout=20_000)
+        page.locator("#search-inpage-input").click()
+        assert page.evaluate("() => document.activeElement.id") == "search-inpage-input"
+        for _ in range(100):
+            if held:
+                break
+            page.wait_for_timeout(100)
+        while held:
+            held.pop().fulfill(status=500, body="boom")
+        _assert_search_failure(page)
+        assert page.evaluate("() => document.activeElement.id") == "search-inpage-input"
+    finally:
+        ctx.close()
+
+
+def test_search_failure_survives_a_layout_change(browser):
+    """실패 화면에서 창이 작은 화면과 큰 화면의 경계를 넘나들면 위쪽 입력창만 빼고 넣는다(`onLayoutTierChange`). 실패 화면은 다시
+    그리지 않고 하나로 남으며, 찾지 않은 채 친 글자는 새 배치의 검색창으로 옮긴다."""
+    ctx = _search_failure_context(browser, viewport={"width": 390, "height": 844})
+    _fail_meta(ctx)
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE_URL}/search?q={quote('사랑')}")
+        _assert_search_failure(page)
+        assert page.locator("#search-inpage-bar").count() == 1
+        page.evaluate("() => { document.querySelector('#app .search-view-results .empty-state').dataset.mark = 'kept'; }")
+        kept = "#app .search-view-results .empty-state[data-mark='kept']"
+        url = page.url
+
+        page.set_viewport_size({"width": 1280, "height": 800})
+        page.wait_for_function("() => !document.getElementById('search-inpage-bar')", timeout=5_000)
+        assert page.locator(kept).count() == 1, "실패 화면을 다시 그리지 않는다"
+        _assert_search_failure(page)
+        assert page.input_value("#search-input") == "사랑"
+
+        page.fill("#search-input", "믿음")
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.wait_for_selector("#app > .search-view > #search-inpage-bar:first-child", timeout=5_000)
+        assert page.locator(kept).count() == 1, "실패 화면을 다시 그리지 않는다"
+        _assert_search_failure(page)
+        assert page.input_value("#search-inpage-input") == "믿음"
+        assert page.url == url
+    finally:
+        ctx.close()
+
+
+def test_search_failure_on_a_later_page_and_back_and_forward(browser):
+    """결과를 보다가 다음 쪽에서 검색 워커가 오류를 내면 그 쪽은 실패 화면이다. 뒤로 가기는 1쪽의 결과를, 앞으로 가기는 다시 실패
+    화면을 보인다. 실패한 쪽에서 알약 줄(`.search-pills`)과 쪽 넘기기도 남지 않는다."""
+    ctx = _search_failure_context(browser, viewport={"width": 1280, "height": 800})
+    _worker_throws_on_page(ctx, 2)
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE_URL}/search?q={quote('사랑')}")
+        page.wait_for_selector(".search-pagination", timeout=20_000)
+        page.locator(".search-pagination a", has_text="다음").click()
+        page.wait_for_function("() => new URLSearchParams(location.search).get('page') === '2'", timeout=5_000)
+        _assert_search_failure(page)
+        assert page.locator(".search-pagination, .search-pills, .search-result-item").count() == 0
+
+        page.go_back()
+        page.wait_for_function(
+            "() => document.querySelector('h2.search-count')?.textContent.includes('(1/')", timeout=20_000)
+        assert page.locator("#app .empty-state").count() == 0
+
+        page.go_forward()
+        page.wait_for_function("() => new URLSearchParams(location.search).get('page') === '2'", timeout=5_000)
+        _assert_search_failure(page)
+    finally:
+        ctx.close()
+
+
+def test_search_failure_keeps_the_chosen_books(browser):
+    """책을 고른 검색(주소의 `in=`)이 실패해도 위쪽 입력창 아래의 책 알약은 이름과 ×로 남는다(ADR-049 §5). 결과를 받지 못해 수는
+    없다. ×를 누르면 그 책을 빼고 다시 찾는다."""
+    ctx = _search_failure_context(browser, mobile=True)
+    _fail_meta(ctx)
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE_URL}/search?q={quote('사랑')}&in=john&in=mark")
+        _assert_search_failure(page)
+        state = page.evaluate("""() => ({
+            pills: [...document.querySelectorAll('#app .scope-row .scope-pill')].map((n) => n.textContent),
+            counts: document.querySelectorAll('#app .scope-row .search-pill-count').length,
+            removes: document.querySelectorAll('#app .scope-row [data-remove-book]').length,
+            rowAboveFailure: !!document.querySelector('#app .search-view > .scope-row + .search-view-results .empty-state'),
+        })""")
+        assert state["counts"] == 0 and state["removes"] == 2 and state["rowAboveFailure"], state
+        assert [p.replace("×", "").strip() for p in state["pills"]] == ["마르", "요한"], state
+
+        page.locator("#app .scope-row [data-remove-book='mark']").click()
+        page.wait_for_function("() => new URLSearchParams(location.search).getAll('in').join() === 'john'", timeout=5_000)
+        _assert_search_failure(page)
+    finally:
+        ctx.close()
+
+
+def test_search_failure_comes_back_with_the_search_tab(browser):
+    """탭 바로 다른 탭에 갔다가 검색 원형을 누르면 마지막 검색(실패한 검색)으로 돌아와 다시 찾고, 같은 실패 화면과 검색어가 담긴 위쪽
+    입력창이 보인다(ADR-031, ADR-048 §2)."""
+    ctx = _search_failure_context(browser, mobile=True)
+    _fail_meta(ctx)
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE_URL}/search?q={quote('사랑')}")
+        _assert_search_failure(page)
+        page.locator('#tab-bar [data-tab="home"]').click()
+        page.wait_for_selector(".book-list", timeout=8_000)
+        page.locator("#tab-search").click()
+        page.wait_for_function("() => new URLSearchParams(location.search).get('q') === '사랑'", timeout=5_000)
+        _assert_search_failure(page)
+        assert page.input_value("#search-inpage-input") == "사랑"
+    finally:
+        ctx.close()
 
 
 def test_search_url_refresh_navigates_and_dismisses_launch_screen(page):

@@ -1532,7 +1532,6 @@ declare global {
   //   parsePath, route, navigate → views.js (Phase 7)
   //   setTitle                   → views.js (Phase 7)
   //   hideAudioBar               → audio player section (Phase 7)
-  //   renderError                → views.js (Phase 7)
   function announce(msg: string): void;
   function openInstallModal(): void;
   function maybeShowInstallNudge(): void;
@@ -1610,5 +1609,6 @@ declare global {
   function navigate(path: string): void;
   function setTitle(text: string): void;
   function hideAudioBar(): void;
-  function renderError(msg: string): void;
+  // views.js — the search view's full-screen failure, drawn in the results' place (ADR-048 §6).
+  function renderSearchFailure(title: string, target: HTMLElement): void;
 }

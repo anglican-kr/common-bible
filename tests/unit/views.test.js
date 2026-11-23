@@ -32,6 +32,7 @@
 //     citePieceSpace — where the space after a prose cite piece goes (glue / after the chip / normal).
 //   - FAILURE_TEXT block — bibleFailureText. The copy of the Bible screens' full-screen failure
 //     (missing chapter, no such page, data not received; psalms count 편) + the shared reload subtitle.
+//     SEARCH_FAILURE_TEXT — the search view's failure when the worker could not search (ADR-048 §6).
 
 import test from "node:test";
 import assert from "node:assert";
@@ -367,6 +368,7 @@ function loadFailureText() {
     /** @param {...any} args */
     bibleFailureText: (...args) => JSON.parse(JSON.stringify(ctx.bibleFailureText(...args))),
     RELOAD_SUBTITLE: vm.runInContext("RELOAD_SUBTITLE", ctx),
+    SEARCH_FAILURE_TEXT: JSON.parse(JSON.stringify(vm.runInContext("SEARCH_FAILURE_TEXT", ctx))),
   };
 }
 
@@ -1457,4 +1459,13 @@ test("bibleFailureText: 자료를 받지 못하면 링크 없이 「다시 불�
       link: null,
     });
   }
+});
+
+test("SEARCH_FAILURE_TEXT: 검색이 결과를 받지 못하면 「검색 자료를 불러오지 못했습니다」 — 부제는 다른 실패 화면과 같은 글이다(ADR-048 §6)", () => {
+  const { SEARCH_FAILURE_TEXT, RELOAD_SUBTITLE } = loadFailureText();
+  assert.deepEqual(SEARCH_FAILURE_TEXT, {
+    message: "검색 자료를 불러오지 못했습니다",
+    subtitle: "네트워크 연결을 확인한 뒤 「다시 불러오기」를 눌러 주세요.",
+  });
+  assert.equal(SEARCH_FAILURE_TEXT.subtitle, RELOAD_SUBTITLE);
 });

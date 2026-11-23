@@ -1916,20 +1916,11 @@ function renderLoading() {
   $app.appendChild(el("div", { className: "loading", "aria-live": "polite" }, "불러오는 중…"));
 }
 
-/**
- * 본문 자리만 오류 한 줄로 바꾸고 머리는 그대로 둔다. 지금은 검색이 결과를 받지 못했을 때만 쓴다(`search.js`. 검색 화면이 머리를
- * 그린 뒤다). 주소의 화면을 통째로 그리지 못한 실패는 아래의 전체 화면 실패다.
- * @param {string} msg
- */
-function renderError(msg) {
-  clearNode($app);
-  $app.appendChild(el("div", { className: "error", role: "alert" }, msg));
-}
-
 // ── Full-screen failure (DESIGN.md §6 「전체 화면 실패」) ──
-// 캘린더, 전례독서, 성서 화면이 주소의 화면을 통째로 그리지 못했을 때 쓴다. 머리는 그 화면의 머리를 그리는 함수가 그리고
-// (`commitLiturgicalTitle`, `commitBookTitle`, `commitBookListTitle`), 본문은 `commitFailure` 하나가 그린다. 화면마다 따로 그리면
-// 서로 달라지기 때문이다(PR #355 리뷰 2026-10-18, 성서 화면은 ADR-024 §6, 2026-11-07).
+// 캘린더, 전례독서, 성서 화면이 주소의 화면을 통째로 그리지 못했을 때와, 검색이 결과를 받지 못했을 때 쓴다. 머리는 그 화면의 머리를
+// 그리는 함수가 그리고(`commitLiturgicalTitle`, `commitBookTitle`, `commitBookListTitle`, 검색은 `search.js`의 `renderSearchResults`),
+// 본문은 `commitFailure` 하나가 그린다. 화면마다 따로 그리면 서로 달라지기 때문이다(PR #355 리뷰 2026-10-18, 성서 화면은 ADR-024 §6,
+// 2026-11-07, 검색 화면은 ADR-048 §6, 2026-11-23).
 
 // ── BEGIN FAILURE_TEXT ──
 // Exercised by tests/unit/views.test.js with helpers.js's naming rules (chUnitNoun, missingChapterText, hasBatchim). Pure: the
@@ -1981,6 +1972,10 @@ function bibleFailureText(kind, book, chapter) {
   }
   return { message: "없는 주소입니다", subtitle: `「${link.label}」을 눌러 ${unitObject} 골라 주세요.`, link };
 }
+
+// 검색이 결과를 받지 못했을 때의 글(ADR-048 §6). 제목은 「성서 자료」, 「교회력 자료」와 같은 틀이고, 부제와 다음 행동 「다시 불러오기」는
+// 캘린더, 전례독서, 성서 화면과 같다(사용자 결정 2026-11-23).
+const SEARCH_FAILURE_TEXT = Object.freeze({ message: "검색 자료를 불러오지 못했습니다", subtitle: RELOAD_SUBTITLE });
 // ── END FAILURE_TEXT ──
 
 /**
@@ -1998,19 +1993,21 @@ function buildReloadButton() {
 
 /**
  * 전체 화면 실패의 본문을 그린다. 머리는 호출하는 쪽이 그 화면의 것으로 먼저 그린다. 앞 화면의 헤더, 제목, 오디오 바를 남기지
- * 않으므로 본문만 바꾸는 `.error` 한 줄과 다르다(ADR-038 §3 「실패 · 범위」, ADR-024 §6). 본문은 아이콘 없는 빈 상태(제목은 안 된
- * 것, 부제는 다음 할 일을 단추 이름으로)와 다음 행동 하나다. 라이브 영역에는 머리의 제목과 안 된 것을 함께 읽힌다. `setTitle`만으로는
- * 제목만 들려 성공한 화면과 귀로 구별되지 않았다(리뷰 2026-10-18).
+ * 않는다(ADR-038 §3 「실패 · 범위」, ADR-024 §6). 본문은 아이콘 없는 빈 상태(제목은 안 된 것, 부제는 다음 할 일을 단추 이름으로)와
+ * 다음 행동 하나다. 라이브 영역에는 머리의 제목과 안 된 것을 함께 읽힌다. `setTitle`만으로는 제목만 들려 성공한 화면과 귀로 구별되지
+ * 않았다(리뷰 2026-10-18). 포커스는 옮기지 않는다.
  * @param {string} title  머리의 제목
- * @param {{ message: string, subtitle: string, action: HTMLElement, panel?: string }} failure  `action`은 다음 행동이다(다른
- *   화면으로 가면 링크, 그 자리에서 다시 하면 단추). `panel`은 바깥 상자의 클래스다(그 화면의 글꼴과 여백).
+ * @param {{ message: string, subtitle: string, action: HTMLElement, panel?: string, target?: HTMLElement }} failure  `action`은
+ *   다음 행동이다(다른 화면으로 가면 링크, 그 자리에서 다시 하면 단추). `panel`은 바깥 상자의 클래스다(그 화면의 글꼴과 여백).
+ *   `target`은 본문을 그릴 자리이고, 없으면 본문 자리(`#app`) 전체다. 검색 화면은 결과 자리만 넘겨, 휴대폰의 위쪽 입력창과 책 알약을
+ *   남긴다(ADR-048 §6).
  */
-function commitFailure(title, { message, subtitle, action, panel }) {
-  clearNode($app);
+function commitFailure(title, { message, subtitle, action, panel, target = $app }) {
+  clearNode(target);
   const box = el("div", panel ? { className: panel } : null);
   box.appendChild(emptyState({ icon: null, title: message, subtitle }));
   box.appendChild(el("p", { className: "state-action" }, action));
-  $app.appendChild(box);
+  target.appendChild(box);
   announce(`${title} — ${message}`);
 }
 
@@ -2031,6 +2028,18 @@ function renderBibleFailure(kind, book, chapter) {
     action: link ? el("a", { href: link.href }, link.label) : buildReloadButton(),
   });
   return book?.name_ko;
+}
+
+/**
+ * 검색이 결과를 받지 못했을 때의 전체 화면 실패를 그린다(ADR-048 §6, 사용자 결정 2026-11-23). 검색 화면이 머리(제목 「"사랑" 검색」,
+ * 휴대폰의 위쪽 입력창, 책 알약)를 그린 뒤 결과 자리를 넘긴다. 본문만 그 자리에 그리므로, 레이아웃이 작은 화면과 큰 화면을 넘나들 때
+ * 위쪽 입력창만 넣고 빼는 처리(`search.js`의 `onLayoutTierChange`)도 실패 화면을 그대로 둔다. 다음 행동은 페이지를 새로 고치는
+ * 「다시 불러오기」라 같은 주소의 검색을 다시 한다.
+ * @param {string} title  머리의 제목
+ * @param {HTMLElement} target  결과를 그릴 자리
+ */
+function renderSearchFailure(title, target) {
+  commitFailure(title, { ...SEARCH_FAILURE_TEXT, action: buildReloadButton(), target });
 }
 
 // ── Liturgical view shell (ADR-038) ──
@@ -2100,7 +2109,7 @@ function renderLiturgicalLoadFailure(view) {
 // ── Window facade ──
 // `appViewsRouting` aggregate + per-name globals so other modules (app.js
 // bootstrap, settings-ui / search / bookmark) call setTitle / divisionLabels /
-// renderError etc. as bare globals. The view renderers route() needs are ESM-
+// renderSearchFailure etc. as bare globals. The view renderers route() needs are ESM-
 // exported below for routing.js to import (one-directional). Routing's facade
 // (parsePath / route / navigate / routeSeq) moved to routing.js (ADR-034 PR5a);
 // data fetching's to data-fetch.js (PR2); audio's to audio-player.js (PR1).
@@ -2109,7 +2118,7 @@ const appViewsRouting = {
   setTitle, setTitleWithChapterPicker,
   buildDivisionTabs, divisionLabels, divisionOrder, effectiveDivision,
   initScrollElevation,
-  renderError,
+  renderSearchFailure,
   _verseSelectionUnit,
   _verseRangeKeys,
 };
@@ -2124,8 +2133,8 @@ window.effectiveDivision = effectiveDivision;
 window.bookListPath = bookListPath;   // tabbar.js — the home tab and the desktop 성서 tab land on the book's division
 window.initScrollElevation = initScrollElevation;
 window.setPendingBookFocus = setPendingBookFocus;
-// renderError stays here (view renderer); search.js calls it as a bare global.
-window.renderError = renderError;
+// The search view's failure screen (ADR-048 §6) draws with commitFailure here; search.js calls it as a bare global.
+window.renderSearchFailure = renderSearchFailure;
 
 // ESM exports. The first group is the long-standing public surface; the second
 // is the view-renderer entry points routing.js imports (route() dispatch); the

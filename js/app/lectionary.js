@@ -2162,7 +2162,8 @@ async function renderLectionaryView(parsed) {
     await Promise.all([preloadCalendar(), preloadLectionary()]);
   } catch (err) {
     // 교회력 자료를 받지 못했다(오프라인 · 캐시 없음) — 이 뷰의 헤더 · 제목으로 실패 화면을 낸다. 낡은 요청이면 조용히
-    // 끝낸다(route() 가 새 화면을 그리고 있다). 공용 renderError 로 넘기면 앞 화면의 헤더 · 제목이 남았다(자체 리뷰 2026-10-13).
+    // 끝낸다(route() 가 새 화면을 그리고 있다). 본문만 바꾸던 공용 오류 한 줄(renderError, 2026-11-24에 지웠다)로 넘기면 앞 화면의
+    // 헤더 · 제목이 남았다(자체 리뷰 2026-10-13).
     // 화면 모듈을 받지 못했을 때와 같은 실패 화면이다 — 「다시 불러오기」가 그날을 다시 연다.
     if (isStale()) return PAGE_TITLE;
     console.error(err);

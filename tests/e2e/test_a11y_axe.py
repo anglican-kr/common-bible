@@ -163,6 +163,22 @@ def test_a11y_search_results(browser):
         ctx.close()
 
 
+@pytest.mark.parametrize("viewport", [{"width": 1280, "height": 800}, {"width": 390, "height": 844}], ids=["desktop", "mobile"])
+def test_a11y_search_failure(browser, viewport):
+    """검색이 결과를 받지 못한 화면(ADR-048 §6) — 결과 자리의 실패 화면과, 휴대폰이면 위쪽 입력창과 책 알약. critical/serious 위반 0건."""
+    ctx = browser.new_context(service_workers="block", viewport=viewport)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.route("**/data/search-meta.json", lambda route: route.fulfill(status=500, body="boom"))
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/search?q=%EC%82%AC%EB%9E%91&in=john")  # 사랑, 요한
+        page.wait_for_selector("#app .empty-state-title", timeout=20_000)
+        v = _violations(page)
+        assert not v, f"Search failure: {len(v)} violation(s):\n{_fmt(v)}"
+    finally:
+        ctx.close()
+
+
 def test_a11y_search_local_days(browser):
     """지역 축일 안내 카드(고르는 단추, 교회 목록)와 지역 축일 줄(ADR-044 §3) — critical/serious 위반 0건. 관구설립일 줄은 소속교회 없이도 나온다."""
     ctx, page = _open(browser, "search?q=%EC%9A%A9%EC%9D%B8%EC%84%B1%EB%8B%B9")  # 용인성당, 소속교회 없음
