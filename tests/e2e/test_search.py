@@ -1205,6 +1205,9 @@ def test_name_rows_are_in_the_order_of_the_days_they_open(page):
     assert names[at:at + 8] == lent_week, names
 
 
+RESORTED_NOTE = "전례일을 날짜순으로 다시 정렬했습니다."
+
+
 def _late_advent_rows(browser):
     """교회력 엔진의 자료를 붙잡아 `대림`의 줄을 날짜 없이 그린다. 줄은 워커가 보낸 전례년 순서라 동계재가 맨 끝이다."""
     ctx = browser.new_context(service_workers="block")
@@ -1229,6 +1232,8 @@ def test_late_days_put_the_rows_in_date_order_before_the_screen_is_touched(brows
     at = titles.index("모든 신자의 성소를 위한 동계재")
     assert titles[at - 1] == "성탄 5일 전" and titles[at + 1] == "대림4주일", titles
     assert _open_dates(page) == sorted(_open_dates(page))
+    # 화면 읽기 프로그램에 다시 정렬한 것을 알린다. VoiceOver로 쓸어 넘기는 동작은 앱이 알 수 없다(사용자 결정 2026-11-23)
+    page.wait_for_function("(note) => document.getElementById('a11y-announce').textContent === note", arg=RESORTED_NOTE, timeout=5_000)
     ctx.close()
 
 
@@ -1244,6 +1249,9 @@ def test_late_days_keep_the_drawn_order_once_the_screen_is_touched(browser):
     _wait_days(page)
     assert page.locator(".lect-rows .cal-row-title").all_inner_texts() == drawn
     assert "2025년 12월 20일 (토)" in page.locator(".lect-rows > li").last.locator(".cal-row-meta").inner_text()
+    # 늘어놓지 않았으니 알리지 않는다
+    page.wait_for_timeout(200)
+    assert page.locator("#a11y-announce").inner_text() != RESORTED_NOTE
     ctx.close()
 
     # 포커스가 목록 안에 있을 때(키 입력 없이 옮긴 포커스도). 줄의 글만 바꾸므로 같은 링크에 포커스가 남는다
@@ -1737,7 +1745,7 @@ def test_enter_opens_the_chapter_when_the_index_is_too_slow(browser):
 
 
 def test_late_lectionary_days_are_added_and_told(browser):
-    """3초가 지나 온 전례일은 결과에 더하고 「더 찾았습니다」를 알린다(ADR-044 §1)."""
+    """3초가 지나 온 전례일은 결과에 더하고 「더 찾았습니다」를 알린다. 줄은 날짜를 기다려 날짜 차례로 그린다(ADR-044 §1)."""
     ctx, held = _held_lectionary_index(browser)
     page = ctx.new_page()
     page.goto(f"{BASE_URL}/search?q={quote('요한 3:16')}")
@@ -1749,6 +1757,10 @@ def test_late_lectionary_days_are_added_and_told(browser):
         "() => document.getElementById('a11y-announce').textContent === '\"요한 3:16\" 이 구절을 읽는 날 5건을 더 찾았습니다'",
         timeout=5_000,
     )
+    # 줄을 그릴 때 날짜를 기다려 처음부터 날짜 차례로 그린다. 그린 뒤 다시 늘어놓아 정렬 알림이 이 알림을 덮지 않는다(ADR-044 §1)
+    assert _open_dates(page) == sorted(_open_dates(page))
+    page.wait_for_timeout(500)
+    assert page.inner_text("#a11y-announce") == '"요한 3:16" 이 구절을 읽는 날 5건을 더 찾았습니다'
     ctx.close()
 
 

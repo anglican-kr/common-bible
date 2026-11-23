@@ -1884,6 +1884,9 @@ let _lastUserInput = 0;
 let _userInputWatched = false;
 /** @type {WeakMap<Element, number>} */
 const _lectDrawnAt = new WeakMap();
+// 늦게 온 날짜로 줄을 다시 늘어놓았을 때 화면 읽기 프로그램에 한 번 읽어 주는 글(사용자 결정 2026-11-23). VoiceOver로 쓸어 넘기는 동작은
+// 앱이 알 수 없어(`watchUserInput`이 보는 이벤트가 나지 않는다), 듣던 차례가 바뀐 것을 이 글로 알린다
+const LECT_RESORTED_NOTE = "전례일을 날짜순으로 다시 정렬했습니다.";
 
 /** Note the user's own input from now on, once: pointer, touch, wheel and key events. */
 function watchUserInput() {
@@ -1899,7 +1902,7 @@ function watchUserInput() {
  * 3초가 지나 계산이 끝난 날짜를 그린 줄에 넣는다(ADR-044 §1). 줄의 글만 바꾸고 줄을 새로 만들지 않아 포커스가 남는다. 그린 뒤 사용자가
  * 화면을 건드리지 않았고 포커스가 목록 밖이면 줄을 날짜 차례로 다시 늘어놓고(`lectItemsByDay`), 건드렸으면 차례를 그대로 둔다. 누르려던
  * 줄이 손가락 아래에서 다른 날로 바뀌거나 화면 읽기 프로그램으로 듣던 차례가 바뀌지 않게 하려는 것이다(사용자 결정 2026-11-23, 코드 리뷰).
- * 독서 표기는 처음 그린 것(`labelOf`)을 그대로 쓴다. 나중에 받아도 다시 그리지 않기로 했다(ADR-044 §1).
+ * 다시 늘어놓으면 화면 읽기 프로그램에 알린다(`LECT_RESORTED_NOTE`). 독서 표기는 처음 그린 것(`labelOf`)을 그대로 쓴다. 나중에 받아도 다시 그리지 않기로 했다(ADR-044 §1).
  * @param {HTMLElement} target @param {any} lect @param {SearchScreen} screen
  * @param {(setId: string, slot: string) => string | null} labelOf
  */
@@ -1923,6 +1926,7 @@ function patchLectDays(target, lect, screen, labelOf) {
   if (touched) return;
   lect.items = sorted;
   for (const item of sorted) list.appendChild(/** @type {HTMLElement} */ (rowOf.get(item)));
+  window.announce(LECT_RESORTED_NOTE);
 }
 
 /**
@@ -3300,8 +3304,12 @@ async function addLateLectionary(result, query, screen, target, isStale, draw) {
   }
   await withReadingLabels(result, screen, 0);
   if (isStale() || !target.isConnected) return;
-  // 날짜는 이미 계산한 표가 있으면 곧 나온다. 기다리지 않고 그린 뒤 넣는다
-  const lateDays = await withLectDays(result, screen, Date.now(), () => isStale() || !target.isConnected);
+  // 전례일 줄을 그릴 때(성서 본문이나 성시의 목록이 없을 때)는 날짜를 3초까지 기다려 날짜 차례로 그린다(ADR-044 §1). 그린 뒤 날짜가 와서
+  // 다시 늘어놓으면 정렬 알림(`LECT_RESORTED_NOTE`)이 바로 앞의 「더 찾았습니다」 알림을 덮는다. 알약만 더할 때는 기다리지 않는다
+  const drawsRows = !target.querySelector("h2.search-count");
+  const lateDays = await withLectDays(result, screen, Date.now() + (drawsRows ? LECTIONARY_WAIT_MS : 0),
+    () => isStale() || !target.isConnected);
+  if (isStale() || !target.isConnected) return;
   const labelOf = screen.readingLabel;
   lateDays?.later.then(() => {
     if (!isStale() && target.isConnected) patchLectDays(target, lect, screen, labelOf);
