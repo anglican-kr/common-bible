@@ -42,3 +42,5 @@ title: "fix: CSP가 구글 시그널의 수집 요청을 막는다"
 ## 갱신한 문서
 
 - `docs/architecture.md` 「보안 모델」의 CSP 줄: 구글 시그널을 위한 세 주소와 그 까닭, 나라별 주소의 한계.
+- `docs/topics/platform.md` 「지금 동작」: 속성에 구글 시그널이 켜져 있다는 것과, 끄거나 측정 ID를 바꿀 때 CSP와 `privacy.html`을 함께 맞춘다는 것.
+- `tools/csp/README.md`: 한국 밖에서 점검하면 `ga-audiences`의 `img-src` 위반이 하나 나온다는 것.

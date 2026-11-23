@@ -13,3 +13,5 @@ python3 -I tools/csp/csp_sweep.py --sw             # 서비스 워커를 켜고(
 WebKit으로도 실행할 수 있다(`--browser webkit`). 이 클론의 호스트에는 Playwright WebKit이 쓰는 라이브러리가 없어 그대로는 실행되지 않는다. 실행하는 법은 `docs/coding-pitfalls.md` §34에 있다.
 
 **위반이 나오면** 먼저 그것이 앱이 하는 일인지(같은 출처의 스크립트, 스타일, 요청), 외부 서비스가 바꾼 것인지 판단한다. 외부 서비스라면 그 서비스의 공식 CSP 안내(구글 태그는 [Google 태그 CSP 안내](https://developers.google.com/tag-platform/security/guides/csp))를 확인하되, 와일드카드를 그대로 받지 말고 실제로 나가는 주소만 적는다. 예를 들어 2026-10-18에는 애널리틱스가 페이지를 떠날 때 `https://www.google.com/g/collect`로 보내는 요청이 막혀 있었다. 안내는 `https://*.google.com`을 권했지만 나가는 곳은 `www.google.com` 하나였다(원장 `docs/changes/2026-10-18-csp-google-collect.md`). 인라인 `<style>`을 고쳤으면 해시는 `scripts/csp_hashes.py --fix`가 맞추고 `tests/unit/csp.test.js`가 확인한다.
+
+한국 밖의 네트워크에서 실행하면 `img-src` 위반이 하나 나온다. 구글 시그널의 `ga-audiences` 요청은 주소가 방문자의 나라에 따라 `www.google.<나라>`로 바뀌는데, CSP는 한국(`www.google.co.kr`)과 `*.google.com`만 허용한다(2026-11-24, `docs/architecture.md` 「보안 모델」). 이 위반은 정책을 넓히지 않고 넘긴다.
