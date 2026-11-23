@@ -1,4 +1,5 @@
 ---
+pr: 646
 date: 2026-11-23
 branch: fix/safe-area-sides
 title: "fix: 본문 칸이 좌우 안전 영역을 넘지 않게 하기"
