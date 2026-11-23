@@ -2214,9 +2214,13 @@ test("lectItemsByDay: 구절 결과는 모두 담은 독서, 겹친 절이 많�
     [e, LDAYS("2025-12-01")]]);
   assert.deepStrictEqual(keysOf(h.lectItemsByDay({ kind: "passage", items: [a, b, c, d, e] }, days)),
     ["full-early", "full-late", "part-many-early", "part-many-late", "part-few-earliest"]);
-  // 찾은 독서가 없는 줄이 와도 정렬하다 멈추지 않는다(코드 리뷰 2026-11-23. 줄을 그리는 `lectRowOf`도 빈 목록을 견딘다)
+  // 찾은 독서가 없는 줄(`hits: []`)은 가장 낮은 단계다. 날짜가 일러도 앞으로 오지 않고, 들어온 차례와 상관없이 같은 차례다
+  // (코드 리뷰 2026-11-23. 줄을 그리는 `lectRowOf`도 빈 목록을 견딘다)
   const none = { obs: OBS({ key: "no-hits" }), sets: [], hits: [] };
-  assert.doesNotThrow(() => h.lectItemsByDay({ kind: "passage", items: [a, none] }, new Map([[a, LDAYS("2026-08-01")], [none, LDAYS("2026-01-01")]])));
+  const mixed = new Map([[a, LDAYS("2026-08-01")], [c, LDAYS("2026-01-01")], [none, LDAYS("2026-02-01")]]);
+  for (const items of [[a, c, none], [none, c, a], [c, none, a]]) {
+    assert.deepStrictEqual(keysOf(h.lectItemsByDay({ kind: "passage", items }, mixed)), ["full-late", "part-many-late", "no-hits"]);
+  }
 });
 
 test("lectItemsByDay: 날짜를 계산하기 전과 연도를 붙인 검색의 줄은 차례를 바꾸지 않는다", () => {

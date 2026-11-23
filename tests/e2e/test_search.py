@@ -1208,18 +1208,34 @@ def test_name_rows_are_in_the_order_of_the_days_they_open(page):
 RESORTED_NOTE = "전례일을 날짜순으로 다시 정렬했습니다."
 
 
-def _late_advent_rows(browser):
-    """교회력 엔진의 자료를 붙잡아 `대림`의 줄을 날짜 없이 그린다. 줄은 워커가 보낸 전례년 순서라 동계재가 맨 끝이다."""
-    ctx = browser.new_context(service_workers="block")
+def _late_advent_rows(browser, before_rows=None, **ctx_opts):
+    """교회력 엔진의 자료를 붙잡아 `대림`의 줄을 날짜 없이 그린다. 줄은 워커가 보낸 전례년 순서라 동계재가 맨 끝이다.
+    `before_rows`는 검색 화면의 결과 상자가 생긴 뒤 줄을 그리기 전에 부른다(앱은 그때부터 입력을 지켜본다)."""
+    ctx = browser.new_context(service_workers="block", **ctx_opts)
     held = []
     ctx.route("**/lectionary/eucharist-readings.json", lambda route: held.append(route))
     page = ctx.new_page()
     _fix_today(page)
     page.goto(f"{BASE_URL}/search?q={quote('대림')}&group=lectionary")
+    if before_rows:
+        page.wait_for_selector(".search-view-results", state="attached", timeout=10_000)
+        assert page.locator(".lect-rows").count() == 0
+        before_rows(page, ctx)
     page.wait_for_selector(".lect-rows a.cal-row", timeout=20_000)
     titles = page.locator(".lect-rows .cal-row-title").all_inner_texts()
     assert titles[-1] == "모든 신자의 성소를 위한 동계재", titles
     return ctx, page, held, titles
+
+
+def _assert_drawn_order_kept(page, held, drawn):
+    """붙잡은 자료를 보내 날짜를 넣은 뒤에도 줄이 그린 차례 그대로이고, 정렬을 알리지 않았다."""
+    for route in held:
+        route.continue_()
+    _wait_days(page)
+    assert page.locator(".lect-rows .cal-row-title").all_inner_texts() == drawn
+    assert "2025년 12월 20일 (토)" in page.locator(".lect-rows > li").last.locator(".cal-row-meta").inner_text()
+    page.wait_for_timeout(200)
+    assert page.locator("#a11y-announce").inner_text() != RESORTED_NOTE
 
 
 def test_late_days_put_the_rows_in_date_order_before_the_screen_is_touched(browser):
@@ -1238,31 +1254,47 @@ def test_late_days_put_the_rows_in_date_order_before_the_screen_is_touched(brows
 
 
 def test_late_days_keep_the_drawn_order_once_the_screen_is_touched(browser):
-    """그린 뒤 스크롤했거나 포커스가 목록 안에 있으면 날짜만 넣고 차례는 그대로 둔다. 누르려던 줄이 손가락 아래에서 다른 날로 바뀌거나
-    화면 읽기 프로그램으로 듣던 차례가 바뀌지 않게 한다(사용자 결정 2026-11-23, 코드 리뷰)."""
-    # 스크롤한 뒤
+    """그린 뒤 스크롤했거나, 포커스가 목록 안에 있거나, 마우스가 목록 위에서 움직였으면 날짜만 넣고 차례는 그대로 두며 알리지 않는다.
+    누르려던 줄이 손가락이나 마우스 아래에서 다른 날로 바뀌거나 화면 읽기 프로그램으로 듣던 차례가 바뀌지 않게 한다(사용자 결정 2026-11-23,
+    코드 리뷰)."""
+    # 휠을 굴린 뒤(마우스는 목록 위로 옮기지 않는다)
     ctx, page, held, drawn = _late_advent_rows(browser)
-    page.mouse.move(100, 400)
     page.mouse.wheel(0, 300)
-    for route in held:
-        route.continue_()
-    _wait_days(page)
-    assert page.locator(".lect-rows .cal-row-title").all_inner_texts() == drawn
-    assert "2025년 12월 20일 (토)" in page.locator(".lect-rows > li").last.locator(".cal-row-meta").inner_text()
-    # 늘어놓지 않았으니 알리지 않는다
-    page.wait_for_timeout(200)
-    assert page.locator("#a11y-announce").inner_text() != RESORTED_NOTE
+    _assert_drawn_order_kept(page, held, drawn)
     ctx.close()
 
     # 포커스가 목록 안에 있을 때(키 입력 없이 옮긴 포커스도). 줄의 글만 바꾸므로 같은 링크에 포커스가 남는다
     ctx, page, held, drawn = _late_advent_rows(browser)
     page.locator(".lect-rows > li").last.locator("a.cal-row").focus()
     page.evaluate("document.activeElement.dataset.mark = 'focused'")
-    for route in held:
-        route.continue_()
-    _wait_days(page)
-    assert page.locator(".lect-rows .cal-row-title").all_inner_texts() == drawn
+    _assert_drawn_order_kept(page, held, drawn)
     assert page.evaluate("document.activeElement?.dataset.mark") == "focused"
+    ctx.close()
+
+    # 마우스를 줄 위에 올렸을 때(누르지 않았다)
+    ctx, page, held, drawn = _late_advent_rows(browser)
+    page.locator(".lect-rows > li").nth(3).locator("a.cal-row").hover()
+    _assert_drawn_order_kept(page, held, drawn)
+    ctx.close()
+
+
+def test_late_days_keep_the_drawn_order_while_held_from_before(browser):
+    """줄을 그리기 전부터 누르고 있던 마우스 단추나 화면에 대고 있던 손가락이 날짜가 올 때도 그대로면, 차례를 그대로 둔다(사용자 결정
+    2026-11-23, 코드 리뷰)."""
+    ctx, page, held, drawn = _late_advent_rows(browser, before_rows=lambda page, ctx: page.mouse.down())
+    _assert_drawn_order_kept(page, held, drawn)
+    page.mouse.up()
+    ctx.close()
+
+    cdp = {}
+
+    def finger_down(page, ctx):
+        cdp["session"] = ctx.new_cdp_session(page)
+        cdp["session"].send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": 200, "y": 600}]})
+
+    ctx, page, held, drawn = _late_advent_rows(browser, before_rows=finger_down, has_touch=True)
+    _assert_drawn_order_kept(page, held, drawn)
+    cdp["session"].send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
     ctx.close()
 
 

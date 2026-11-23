@@ -727,9 +727,10 @@ function yearRowsOf(found, perYear, years, lunarSpan = null) {
  * @param {any} a  LectItem @param {any} b  LectItem @returns {number}
  */
 function lectStepOrder(a, b) {
-  if (a.hits?.length && b.hits?.length) {
-    const [x, y] = [a.hits[0], b.hits[0]];
-    return Number(y.full) - Number(x.full) || y.overlap - x.overlap;
+  // A passage row with no hits ranks below every row that has one, so the comparison stays consistent (transitive)
+  if (a.hits || b.hits) {
+    const [x, y] = [a.hits?.[0], b.hits?.[0]];
+    return Number(!!y?.full) - Number(!!x?.full) || (y?.overlap ?? 0) - (x?.overlap ?? 0);
   }
   return (a.tier ?? 3) - (b.tier ?? 3);
 }
@@ -1877,10 +1878,15 @@ async function withLectDays(result, screen, deadline, isStale) {
 }
 
 /**
- * 사용자가 마지막으로 화면을 건드린 때(누르기, 스크롤, 키 입력, `performance.now()`)와 전례일 줄 목록을 그린 때. 3초가 지나 온 날짜로 줄을
- * 다시 늘어놓을지 정한다(`patchLectDays`). `scroll` 이벤트는 보지 않는다. 화면 전환과 스크롤 기억도 그 이벤트를 낸다.
+ * 사용자가 화면을 건드렸는가. 3초가 지나 온 날짜로 전례일 줄을 다시 늘어놓을지 정한다(`patchLectDays`, 사용자 결정 2026-11-23).
+ * `_lastUserInput`은 마지막 누르기, 터치, 휠, 키 입력의 때(`performance.now()`), `_lastListHover`는 마우스나 펜이 줄 목록 위에서 마지막으로
+ * 움직인 때다. `_touching`은 지금 화면에 손가락이 닿아 있는가, `_pressed`는 지금 마우스 단추나 펜이 눌려 있는가다. 그리기 전부터 대고 있던
+ * 손가락도 보도록 검색을 시작할 때부터 지켜본다(`renderSearchResults`). `scroll` 이벤트는 보지 않는다. 화면 전환과 스크롤 기억도 그 이벤트를 낸다.
  */
 let _lastUserInput = 0;
+let _lastListHover = 0;
+let _touching = false;
+let _pressed = false;
 let _userInputWatched = false;
 /** @type {WeakMap<Element, number>} */
 const _lectDrawnAt = new WeakMap();
@@ -1892,15 +1898,23 @@ const LECT_RESORTED_NOTE = "전례일을 날짜순으로 다시 정렬했습니�
 function watchUserInput() {
   if (_userInputWatched) return;
   _userInputWatched = true;
+  const opts = { capture: true, passive: true };
+  const on = (/** @type {string} */ type, /** @type {(e: any) => void} */ fn) => document.addEventListener(type, fn, opts);
   const note = () => { _lastUserInput = performance.now(); };
-  for (const type of ["pointerdown", "touchstart", "wheel", "keydown"]) {
-    document.addEventListener(type, note, { capture: true, passive: true });
-  }
+  for (const type of ["pointerdown", "touchstart", "wheel", "keydown"]) on(type, note);
+  // Touch events, not pointer events, for a finger on the screen: a touch pointer is cancelled once the page pans,
+  // while the finger stays down
+  for (const type of ["touchstart", "touchend", "touchcancel"]) on(type, (/** @type {TouchEvent} */ e) => { _touching = e.touches.length > 0; });
+  on("pointerdown", (/** @type {PointerEvent} */ e) => { if (e.pointerType !== "touch") _pressed = true; });
+  for (const type of ["pointerup", "pointercancel"]) on(type, (/** @type {PointerEvent} */ e) => { if (e.pointerType !== "touch") _pressed = false; });
+  on("pointermove", (/** @type {PointerEvent} */ e) => {
+    if (e.pointerType !== "touch" && e.target instanceof Element && e.target.closest("ul.lect-rows")) _lastListHover = performance.now();
+  });
 }
 
 /**
  * 3초가 지나 계산이 끝난 날짜를 그린 줄에 넣는다(ADR-044 §1). 줄의 글만 바꾸고 줄을 새로 만들지 않아 포커스가 남는다. 그린 뒤 사용자가
- * 화면을 건드리지 않았고 포커스가 목록 밖이면 줄을 날짜 차례로 다시 늘어놓고(`lectItemsByDay`), 건드렸으면 차례를 그대로 둔다. 누르려던
+ * 화면을 건드리지 않았고(`watchUserInput`) 포커스가 목록 밖이면 줄을 날짜 차례로 다시 늘어놓고(`lectItemsByDay`), 건드렸으면 차례를 그대로 둔다. 누르려던
  * 줄이 손가락 아래에서 다른 날로 바뀌거나 화면 읽기 프로그램으로 듣던 차례가 바뀌지 않게 하려는 것이다(사용자 결정 2026-11-23, 코드 리뷰).
  * 다시 늘어놓으면 화면 읽기 프로그램에 알린다(`LECT_RESORTED_NOTE`). 독서 표기는 처음 그린 것(`labelOf`)을 그대로 쓴다. 나중에 받아도 다시 그리지 않기로 했다(ADR-044 §1).
  * @param {HTMLElement} target @param {any} lect @param {SearchScreen} screen
@@ -1921,8 +1935,10 @@ function patchLectDays(target, lect, screen, labelOf) {
   });
   const sorted = lectItemsByDay(lect, screen.days);
   if (rows.length !== lect.items.length || sorted.every((item, i) => item === lect.items[i])) return;
-  // A list with no drawing time counts as touched: it stays as drawn
-  const touched = (_lectDrawnAt.get(list) ?? -Infinity) <= _lastUserInput || list.contains(document.activeElement);
+  // 누르기, 터치, 휠, 키 입력이 그린 뒤에 있었거나, 지금 손가락이 닿아 있거나 단추가 눌려 있거나, 그린 뒤 마우스가 목록 위에서 움직였거나,
+  // 포커스가 목록 안이면 건드린 것이다. 그린 때를 모르는 목록도 건드린 것으로 보고 그대로 둔다
+  const drawnAt = _lectDrawnAt.get(list) ?? -Infinity;
+  const touched = drawnAt <= _lastUserInput || drawnAt <= _lastListHover || _touching || _pressed || list.contains(document.activeElement);
   if (touched) return;
   lect.items = sorted;
   for (const item of sorted) list.appendChild(/** @type {HTMLElement} */ (rowOf.get(item)));
@@ -3120,6 +3136,8 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   focusRebuiltScopeRow(view, seq);
 
   resultsTarget.appendChild(el("div", { className: "loading", "aria-live": "polite" }, "검색 중…"));
+  // 전례일 줄을 그리기 전부터 화면에 대고 있던 손가락도 보도록 지금부터 입력을 지켜본다(`patchLectDays`)
+  watchUserInput();
 
   const pageSize = searchPageSize(query, filterBooks);
 
