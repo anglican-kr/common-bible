@@ -1,4 +1,5 @@
 ---
+pr: 650
 date: 2026-11-24
 branch: fix/analytics-double-pageview
 title: "fix: 구글 애널리틱스 방문 중복 기록 수정"
