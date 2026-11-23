@@ -19,7 +19,7 @@ title: "fix: 운문의 첫 줄 들여쓰기를 반 글자로 줄이기"
 ## 검증
 
 - 유닛: `node --test tests/unit/*.test.js` 1,989건 통과. 타입 검사(`tsc`) 통과.
-- e2e: `test_poetry_wrap.py`, `test_liturgical_render.py`, `test_copy.py` 63건 통과. 들여쓰기를 한 글자로 되돌리면 첫 줄 시험 3건(시편 23:4, 전례시편 10편의 ¶ 행, 영광송)이 실패한다.
+- e2e: `test_poetry_wrap.py`, `test_liturgical_render.py`, `test_copy.py` 63건 통과. 리뷰 1회차에 더한 〔 시험 2건도 통과한다. 들여쓰기를 한 글자로 되돌리면 첫 줄 시험 3건(시편 23:4, 전례시편 10편의 ¶ 행, 영광송)이 실패한다.
 - 전수 비교(Chromium): 운문 24,492행을 폭 390px에 18px, 320px에 24px, 1280px에 24px에서 #640 전의 모양과 견주었다. 모든 행의 첫 줄은 정확히 반 글자 안쪽이고, 넘어간 줄은 모두 글자 자리이며, 화면을 넘는 행은 없다. 낱말 안의 줄바꿈은 320px의 24px에서 아가 5:9 "하느냐?(신부)" 한 곳뿐이다.
 
 ## 갱신한 문서
@@ -27,4 +27,12 @@ title: "fix: 운문의 첫 줄 들여쓰기를 반 글자로 줄이기"
 - `docs/decisions/054-poetry-first-line-indent.md`: 반 글자로 고치고, 넘어가는 행의 수를 다시 쟀다. 〔의 자리를 "첫 글자 바로 앞"으로만 적었다(반 글자에서는 절 번호 자리에 걸친다).
 - `docs/decisions/053-poetry-line-wrap.md` §1의 대체 표시, `docs/architecture.md` 부록 A의 ADR-054 줄, `DESIGN.md` §3 「규약」, `docs/design/responsive-composition.md` §5의 1: 반 글자.
 - `docs/topics/design-system.md`: 「지금 동작」의 들여쓰기 양, 넘어가는 행의 수, 등록 변수를 모르는 브라우저의 절 번호 자리. 「결정」의 ADR-054 이름.
-- `tests/README.md`: `test_poetry_wrap.py` 줄.
+- `tests/README.md`: `test_poetry_wrap.py` 줄(건수 16).
+
+## 리뷰 반영
+
+1회차(`/code-review medium --fix`, 사소한 것 세 건):
+
+- **〔 상자의 CSS 주석이 "들여 쓴 자리 안"이라고 적었다.** 반 글자 들여쓰기에서는 폭 1em인 〔 칸의 왼쪽 절반이 절 번호 자리에 걸친다. 주석을 고쳤다.
+- **〔가 절 번호와 겹치지 않는지 보는 시험이 없었다.** 이 PR로 〔 칸이 절 번호 자리에 걸치게 되었으므로, 〔가 운문에 붙는 2026-05-06에서 절 번호를 가장 긴 "150"으로 바꿔 〔 글자가 절 번호 글자 오른쪽에 있는지 보는 e2e를 더했다(폭 390px에 18px, 320px에 24px). 〔를 왼쪽으로 더 당기면 두 건 모두 실패한다.
+- 고치지 않은 것: 한 글자(1em)를 ADR-054의 「검토한 대안」에 남기지 않은 것. 사용자가 남기지 않기로 했다.
