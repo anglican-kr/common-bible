@@ -1205,9 +1205,8 @@ def test_name_rows_are_in_the_order_of_the_days_they_open(page):
     assert names[at:at + 8] == lent_week, names
 
 
-def test_late_days_put_the_rows_in_date_order_and_keep_focus(browser):
-    """3초가 지나 날짜를 넣으면 줄을 날짜 차례로 다시 늘어놓는다. 줄을 새로 만들지 않고 옮기며, 포커스가 있던 링크에 포커스가 남고 그 줄이
-    화면에 보인다(ADR-044 §1)."""
+def _late_advent_rows(browser):
+    """교회력 엔진의 자료를 붙잡아 `대림`의 줄을 날짜 없이 그린다. 줄은 워커가 보낸 전례년 순서라 동계재가 맨 끝이다."""
     ctx = browser.new_context(service_workers="block")
     held = []
     ctx.route("**/lectionary/eucharist-readings.json", lambda route: held.append(route))
@@ -1215,27 +1214,47 @@ def test_late_days_put_the_rows_in_date_order_and_keep_focus(browser):
     _fix_today(page)
     page.goto(f"{BASE_URL}/search?q={quote('대림')}&group=lectionary")
     page.wait_for_selector(".lect-rows a.cal-row", timeout=20_000)
-    # 날짜를 계산하기 전에는 워커가 보낸 전례년 순서라 동계재가 맨 끝이다
     titles = page.locator(".lect-rows .cal-row-title").all_inner_texts()
     assert titles[-1] == "모든 신자의 성소를 위한 동계재", titles
-    page.locator(".lect-rows > li").last.locator("a.cal-row").focus()
-    page.evaluate("document.activeElement.dataset.mark = 'focused'")
+    return ctx, page, held, titles
+
+
+def test_late_days_put_the_rows_in_date_order_before_the_screen_is_touched(browser):
+    """3초가 지나 날짜를 넣을 때 그린 뒤 화면을 건드리지 않았으면 줄을 날짜 차례로 다시 늘어놓는다(ADR-044 §1)."""
+    ctx, page, held, _ = _late_advent_rows(browser)
     for route in held:
         route.continue_()
     _wait_days(page)
     titles = page.locator(".lect-rows .cal-row-title").all_inner_texts()
     at = titles.index("모든 신자의 성소를 위한 동계재")
     assert titles[at - 1] == "성탄 5일 전" and titles[at + 1] == "대림4주일", titles
+    assert _open_dates(page) == sorted(_open_dates(page))
+    ctx.close()
+
+
+def test_late_days_keep_the_drawn_order_once_the_screen_is_touched(browser):
+    """그린 뒤 스크롤했거나 포커스가 목록 안에 있으면 날짜만 넣고 차례는 그대로 둔다. 누르려던 줄이 손가락 아래에서 다른 날로 바뀌거나
+    화면 읽기 프로그램으로 듣던 차례가 바뀌지 않게 한다(사용자 결정 2026-11-23, 코드 리뷰)."""
+    # 스크롤한 뒤
+    ctx, page, held, drawn = _late_advent_rows(browser)
+    page.mouse.move(100, 400)
+    page.mouse.wheel(0, 300)
+    for route in held:
+        route.continue_()
+    _wait_days(page)
+    assert page.locator(".lect-rows .cal-row-title").all_inner_texts() == drawn
+    assert "2025년 12월 20일 (토)" in page.locator(".lect-rows > li").last.locator(".cal-row-meta").inner_text()
+    ctx.close()
+
+    # 포커스가 목록 안에 있을 때(키 입력 없이 옮긴 포커스도). 줄의 글만 바꾸므로 같은 링크에 포커스가 남는다
+    ctx, page, held, drawn = _late_advent_rows(browser)
+    page.locator(".lect-rows > li").last.locator("a.cal-row").focus()
+    page.evaluate("document.activeElement.dataset.mark = 'focused'")
+    for route in held:
+        route.continue_()
+    _wait_days(page)
+    assert page.locator(".lect-rows .cal-row-title").all_inner_texts() == drawn
     assert page.evaluate("document.activeElement?.dataset.mark") == "focused"
-    assert page.evaluate("document.activeElement.querySelector('.cal-row-title').textContent") == "모든 신자의 성소를 위한 동계재"
-    # 목록 끝에서 가운데로 옮긴 줄이 상단 바와 탭 바 사이에 보인다(WCAG 2.4.7, 코드 리뷰 2026-11-23)
-    page.wait_for_function("""() => {
-        const box = document.activeElement.getBoundingClientRect();
-        const top = document.getElementById('sticky-group').getBoundingClientRect().bottom;
-        const dock = document.getElementById('tab-dock')?.getBoundingClientRect();
-        const bottom = dock && dock.height > 0 ? dock.top : innerHeight;
-        return box.top >= top && box.bottom <= bottom;
-    }""", timeout=5_000)
     ctx.close()
 
 

@@ -727,7 +727,7 @@ function yearRowsOf(found, perYear, years, lunarSpan = null) {
  * @param {any} a  LectItem @param {any} b  LectItem @returns {number}
  */
 function lectStepOrder(a, b) {
-  if (a.hits && b.hits) {
+  if (a.hits?.length && b.hits?.length) {
     const [x, y] = [a.hits[0], b.hits[0]];
     return Number(y.full) - Number(x.full) || y.overlap - x.overlap;
   }
@@ -1362,6 +1362,9 @@ function appendLectGroup(container, lect, screen) {
   // `lect.items`의 차례가 같아야 `patchLectDays`가 줄마다 제 날짜를 넣는다
   lect.items = lectItemsByDay(lect, screen.days);
   const rows = el("ul", { className: "lect-rows", role: "list" });
+  // 3초가 지나 날짜가 오면 그린 뒤 사용자가 화면을 건드렸는지 본다(`patchLectDays`)
+  watchUserInput();
+  _lectDrawnAt.set(rows, performance.now());
   for (const item of lect.items) rows.appendChild(buildLectRow(lectRowOf(item, screen.readingLabel, screen.days?.get(item) ?? null, screen.today)));
   container.appendChild(rows);
 }
@@ -1874,10 +1877,29 @@ async function withLectDays(result, screen, deadline, isStale) {
 }
 
 /**
- * 3초가 지나 계산이 끝난 날짜를 그린 줄에 넣고, 줄을 날짜 차례로 다시 늘어놓는다(ADR-044 §1, `lectItemsByDay`). 줄의 글만 바꾸고 줄을
- * 새로 만들지 않는다. 옮긴 줄에 포커스가 있었으면 그 링크에 다시 두고(WCAG 2.4.3), 그 줄이 화면 밖으로 갔으면 화면 가운데로 가져온다
- * (WCAG 2.4.7, 코드 리뷰 2026-11-23). 독서 표기는 처음 그린 것(`labelOf`)을 그대로 쓴다.
- * 나중에 받아도 다시 그리지 않기로 했다(ADR-044 §1).
+ * 사용자가 마지막으로 화면을 건드린 때(누르기, 스크롤, 키 입력, `performance.now()`)와 전례일 줄 목록을 그린 때. 3초가 지나 온 날짜로 줄을
+ * 다시 늘어놓을지 정한다(`patchLectDays`). `scroll` 이벤트는 보지 않는다. 화면 전환과 스크롤 기억도 그 이벤트를 낸다.
+ */
+let _lastUserInput = 0;
+let _userInputWatched = false;
+/** @type {WeakMap<Element, number>} */
+const _lectDrawnAt = new WeakMap();
+
+/** Note the user's own input from now on, once: pointer, touch, wheel and key events. */
+function watchUserInput() {
+  if (_userInputWatched) return;
+  _userInputWatched = true;
+  const note = () => { _lastUserInput = performance.now(); };
+  for (const type of ["pointerdown", "touchstart", "wheel", "keydown"]) {
+    document.addEventListener(type, note, { capture: true, passive: true });
+  }
+}
+
+/**
+ * 3초가 지나 계산이 끝난 날짜를 그린 줄에 넣는다(ADR-044 §1). 줄의 글만 바꾸고 줄을 새로 만들지 않아 포커스가 남는다. 그린 뒤 사용자가
+ * 화면을 건드리지 않았고 포커스가 목록 밖이면 줄을 날짜 차례로 다시 늘어놓고(`lectItemsByDay`), 건드렸으면 차례를 그대로 둔다. 누르려던
+ * 줄이 손가락 아래에서 다른 날로 바뀌거나 화면 읽기 프로그램으로 듣던 차례가 바뀌지 않게 하려는 것이다(사용자 결정 2026-11-23, 코드 리뷰).
+ * 독서 표기는 처음 그린 것(`labelOf`)을 그대로 쓴다. 나중에 받아도 다시 그리지 않기로 했다(ADR-044 §1).
  * @param {HTMLElement} target @param {any} lect @param {SearchScreen} screen
  * @param {(setId: string, slot: string) => string | null} labelOf
  */
@@ -1896,22 +1918,11 @@ function patchLectDays(target, lect, screen, labelOf) {
   });
   const sorted = lectItemsByDay(lect, screen.days);
   if (rows.length !== lect.items.length || sorted.every((item, i) => item === lect.items[i])) return;
+  // A list with no drawing time counts as touched: it stays as drawn
+  const touched = (_lectDrawnAt.get(list) ?? -Infinity) <= _lastUserInput || list.contains(document.activeElement);
+  if (touched) return;
   lect.items = sorted;
-  // Moving a node out of the document drops its focus, so put it back on the same link
-  const focused = document.activeElement instanceof HTMLElement && list.contains(document.activeElement) ? document.activeElement : null;
   for (const item of sorted) list.appendChild(/** @type {HTMLElement} */ (rowOf.get(item)));
-  if (!focused) return;
-  if (document.activeElement !== focused) focused.focus({ preventScroll: true });
-  // The focused row may have moved out of sight: bring it back between the sticky top bar and the tab dock
-  // (WCAG 2.4.7). Centred, so neither bar covers it. A row still in sight stays put
-  const edge = (/** @type {string} */ id, /** @type {"top" | "bottom"} */ side, /** @type {number} */ fallback) => {
-    const box = document.getElementById(id)?.getBoundingClientRect();
-    return box && box.height > 0 ? box[side] : fallback;
-  };
-  const box = focused.getBoundingClientRect();
-  if (box.top < edge("sticky-group", "bottom", 0) || box.bottom > edge("tab-dock", "top", window.innerHeight)) {
-    focused.scrollIntoView({ block: "center" });
-  }
 }
 
 /**
