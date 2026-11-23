@@ -272,7 +272,7 @@ def test_optional_bracket_clears_the_verse_number(browser, width, font):
         spots = page.evaluate(_BRACKET_CLEARS_NUMBER)
     finally:
         ctx.close()
-    assert spots
+    assert len(spots) == 2, spots   # 2026-05-06의 운문 〔 두 곳
     assert all(s["bracketLeft"] >= s["numRight"] for s in spots), spots
 
 
