@@ -5863,20 +5863,12 @@ html.cite-sheet-open {
   vertical-align: -0.15em;
 }
 
-/* ── Loading / Error ── */
+/* ── Loading ── */
 .loading {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   text-align: center;
   padding: 3rem var(--space-4);
   color: var(--text-secondary);
-  font-size: var(--font-base);
-}
-
-.error {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  text-align: center;
-  padding: 3rem var(--space-4);
-  color: var(--danger-text);
   font-size: var(--font-base);
 }
 

@@ -247,7 +247,7 @@ window.appParallels = (/** @returns {AppParallels} */ () => {
   // fire when a `.parallel-tooltip-ref` is clicked — and ref-links only
   // exist while a parallel tooltip is visible. Each `_openTooltipForAnchor`
   // overwrites with the freshly-opened anchor, and `_activateRefLink` clears
-  // after use. Between tooltip-close (ESC / outside click) and the NEXT
+  // after use. Between tooltip-close (ESC / outside click / route change) and the NEXT
   // tooltip open, `_activeAnchor` may go stale, but the consumer cannot fire
   // in that window (no visible ref-link to click). So no proactive clearing
   // is needed — and indeed an aggressive outside-click clear has been shown

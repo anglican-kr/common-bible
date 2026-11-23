@@ -1244,6 +1244,9 @@ export interface AppCitations {
     body: string | ReadonlyArray<string | HTMLElement>,
   ) => void;
   closeNoteTooltip: () => void;
+  // 포커스를 옮기지 않고 주석 툴팁을 닫는다. 화면이 바뀔 때 routing.js route()가 시작할 때 부르고, 끝날 때는
+  // `ifAnchorGone`으로 표지가 문서에서 사라진 툴팁만 닫는다.
+  hideNoteTooltip: (opts?: { ifAnchorGone?: boolean }) => void;
   openCiteSheet: (
     src: string,
     parallels: ReadonlyArray<CiteParallelRef> | null,
@@ -1532,7 +1535,6 @@ declare global {
   //   parsePath, route, navigate → views.js (Phase 7)
   //   setTitle                   → views.js (Phase 7)
   //   hideAudioBar               → audio player section (Phase 7)
-  //   renderError                → views.js (Phase 7)
   function announce(msg: string): void;
   function openInstallModal(): void;
   function maybeShowInstallNudge(): void;
@@ -1610,5 +1612,6 @@ declare global {
   function navigate(path: string): void;
   function setTitle(text: string): void;
   function hideAudioBar(): void;
-  function renderError(msg: string): void;
+  // views.js — the search view's full-screen failure, drawn in the results' place (ADR-048 §6).
+  function renderSearchFailure(title: string, target: HTMLElement): void;
 }
