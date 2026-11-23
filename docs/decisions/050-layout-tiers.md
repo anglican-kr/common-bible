@@ -92,7 +92,7 @@ Apple HIG 「Tab bars」는 iPadOS 18부터 iPad 앱의 탭 바를 화면 위쪽
 
 - 본문 칸(`--max-width` 720px)은 어느 레이아웃에서나 같다.
 - 까닭: 이 ADR은 레이아웃을 정하는 일만 다룬다. 칸의 폭을 바꾸면 모든 화면에서 줄이 바뀌는 자리가 달라지므로, 측정과 시안을 따로 보고 정한다.
-- 720px은 근거가 기록되어 있지 않고, px로 정해 두어 글자 크기 설정을 따라 바뀌지 않는다. 칸의 폭과 본문의 줄바꿈은 설계 문서 [`design/responsive-composition.md`](../design/responsive-composition.md)에서 측정과 함께 다룬다.
+- 720px은 근거가 기록되어 있지 않고, px로 정해 두어 글자 크기 설정을 따라 바뀌지 않는다. 칸의 폭과 본문의 줄바꿈은 설계 문서 [`design/responsive-composition.md`](../design/responsive-composition.md)에서 측정과 함께 다룬다. 운문의 줄바꿈은 [ADR-053](053-poetry-line-wrap.md)이 정했다.
 - 칸 바깥의 자리를 쓰는 일은 화면마다 따로 정한다. 북마크와 인용 패널을 본문 옆에 열어 두는 일은 ADR-043 「미결 사항」 2, 캘린더 월간 표를 넓히는 일은 캘린더 화면(ADR-038)에서 정한다.
 
 ## 구현 단계

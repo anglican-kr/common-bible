@@ -26,7 +26,7 @@ import { citationSource, halfVerseMark, selectionCitation, formatVerseRanges, ve
 
 const {
   _$, el, clearNode, chUnit, chUnitNoun, chapterTitle, chapterLabel, verseRefLabel, missingChapterText, hasBatchim, hangingQuoteClass,
-  emptyState, scrollUnderBar,
+  emptyState, scrollUnderBar, wrapQuoteRuns,
 } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
 const {
@@ -1105,6 +1105,15 @@ function citePieceSpace(seg, next, chipShows) {
 // ── END PIECE_SPACE ──
 
 /**
+ * The ◯ that closes a cantor's half-line (ADR-039 계응), as drawn by the psalm and the lectionary's 영광송.
+ * The U+2060 word joiner in front keeps ◯ on the line of the word right before it where no space comes between
+ * (영광송): a poetry line breaks only at spaces (ADR-053 §2), and ◯ is a symbol the browser may break before.
+ * The psalm's space before ◯ is made a no-break space where the mark is drawn (appendVerses). Copies drop U+2060
+ * (verse-spec.js serializeVerseRange, lectionary.js gloriaCopyText).
+ */
+const RESPONSORY_MARK = "\u2060◯";
+
+/**
  * The drawing options appendVerses and appendVersesWithAids share: address highlights, DOM ids.
  * @typedef {{ hlQuery?: string|null, hlVerse?: number|null, hlVerseEnd?: number|null, hlSegments?: Array<{start:number,end:number,part?:string}>|null, instanceKeys?: ReadonlyArray<string>|null, idPrefix?: string }} VerseDrawOptions
  */
@@ -1340,9 +1349,18 @@ function appendVerses(article, verses, opts = {}) {
       // where a response actually follows — a trailing cantor line with nothing
       // answering it gets no cue ("마지막 아닌 홀수 줄").
       if (!seg.response && segIdx < segs.length - 1 && segs[segIdx + 1]?.response && lastSpan) {
+        // ◯ stays on the line of the half-line's last word (ADR-053 §2): a poetry line breaks at spaces, so the space
+        // before ◯ would let it go to the next line alone — Chrome breaks there even with U+2060 after the space. It
+        // becomes a no-break space of the same length, so search highlighting and half-verse cutting count the same;
+        // copies turn it back into a space (verse-spec.js serializeVerseRange).
+        const tail = lastSpan.lastChild;
+        if (tail?.nodeType === Node.TEXT_NODE) {
+          const text = /** @type {Text} */ (tail);
+          if (text.data.endsWith(" ")) text.data = `${text.data.slice(0, -1)}\u00a0`;
+        }
         lastSpan.appendChild(el("span", {
           className: "responsory-mark", "aria-hidden": "true",
-        }, "◯"));
+        }, RESPONSORY_MARK));
       }
       // ADR-022: append cite chip after this segment if it carries one and
       // dedup decided this position should render (not suppressed).
@@ -1390,6 +1408,7 @@ function appendVerses(article, verses, opts = {}) {
 function appendVersesWithAids(article, verses, chapter, opts = {}) {
   appendVerses(article, verses, { ...opts, parallels: chapter.parallels, chapter: chapter.chapter });
   window.appCitations?.wrapNoteAnchorsInArticle(article, verses);
+  wrapQuoteRuns(article);   // after the note anchors: it splits text nodes (helpers.js)
 }
 
 /**
@@ -2120,6 +2139,6 @@ export {
   DIVISION_LABELS,
   renderBookList, renderChapterList, renderChapter, renderPrologue,
   renderLoading, renderBibleFailure,
-  appendVerses, appendVersesWithAids,
+  appendVerses, appendVersesWithAids, RESPONSORY_MARK,
   LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, applyTitleCompactness, renderLiturgicalFailure, renderLiturgicalLoadFailure,
 };

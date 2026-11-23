@@ -37,7 +37,7 @@
 
 import { loadChapter, loadBooks, getBooksCache } from "./data-fetch.js";
 import {
-  appendVersesWithAids, bindCopyAttribution, absentVerseNumbers,
+  appendVersesWithAids, bindCopyAttribution, absentVerseNumbers, RESPONSORY_MARK,
   LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
   applyTitleCompactness,
 } from "./views.js";
@@ -1621,14 +1621,14 @@ function buildCollects(m) {
 /** 영광송 블록의 복사 글자 — 줄마다 한 줄, 선창 줄 끝에 「 ◯」(시편 본문 복사와 같은 방식). @param {Element} box @returns {string} */
 function gloriaCopyText(box) {
   return [...box.querySelectorAll(".lect-gloria-line")]
-    .map((line) => [...line.childNodes].map((c) => (c.textContent || "").trim()).filter(Boolean).join(" "))
+    .map((line) => [...line.childNodes].map((c) => (c.textContent || "").replace(/\u2060/g, "").trim()).filter(Boolean).join(" "))
     .join("\n");
 }
 
 function buildGloria() {
   const box = el("div", { className: "lect-gloria", lang: "ko", role: "group", "aria-label": "영광송" });
   const v = el("span", { className: "lect-gloria-line" }, GLORIA.versicle);
-  v.appendChild(el("span", { className: "responsory-mark", "aria-hidden": "true" }, "◯"));
+  v.appendChild(el("span", { className: "responsory-mark", "aria-hidden": "true" }, RESPONSORY_MARK));
   box.appendChild(v);
   box.appendChild(el("span", { className: "lect-gloria-line verse-response" }, GLORIA.response));
   return box;
@@ -1764,7 +1764,16 @@ function trimHalfVerses(article, verseSpec, bookId, chapter) {
       dropSiblings(spans[0], /** @type {Element} */ (first.previousElementSibling));
     }
     if (last !== spans[spans.length - 1]) {
-      last.querySelectorAll(".responsory-mark").forEach((n) => n.remove());
+      last.querySelectorAll(".responsory-mark").forEach((n) => {
+        // The no-break space that held ◯ to the last word (views.js appendVerses) goes back to a space: a line-end
+        // no-break space does not hang past the edge like a space does, so it could push that word to a line of its own.
+        const before = n.previousSibling;
+        if (before?.nodeType === Node.TEXT_NODE) {
+          const text = /** @type {Text} */ (before);
+          if (text.data.endsWith("\u00a0")) text.data = `${text.data.slice(0, -1)} `;
+        }
+        n.remove();
+      });
       dropSiblings(/** @type {Element} */ (last.nextElementSibling), spans[spans.length - 1]);
     }
     const num = first.querySelector(".verse-num");
@@ -1873,7 +1882,13 @@ function cutLineText(span, text, keepTail) {
   const [node, offset] = hit;
   const cut = pos - offset;
   const anchor = node.parentElement?.closest(".note-anchor");
-  if (anchor && cut > 0 && cut < node.length) anchor.replaceWith(...anchor.childNodes);
+  if (anchor) {
+    // The anchor's text can be several nodes (helpers.js wrapQuoteRuns splits it), so a boundary at the start of one of
+    // them is still inside the anchor: compare with where the anchor's whole text starts and ends.
+    const inside = nodes.filter(([n]) => anchor.contains(n));
+    const [lastNode, lastStart] = inside[inside.length - 1];
+    if (pos > inside[0][1] && pos < lastStart + lastNode.length) anchor.replaceWith(...anchor.childNodes);
+  }
   // At offset 0 the range stops before the line's child that holds the node, so a note anchor that begins right at the
   // boundary goes whole to its side instead of leaving an empty button behind.
   /** @type {Node} */

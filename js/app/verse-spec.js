@@ -465,6 +465,8 @@ function serializeVerseRange(firstNode, lastNode) {
   work.querySelectorAll(".hemistich-break").forEach((n) => { n.textContent = "\n"; });
   return (work.textContent ?? "")
     .replace(/\u2060/g, "")
+    // The space before a responsory ◯ is drawn as a no-break space so ◯ does not wrap alone (views.js appendVerses).
+    .replace(/\u00a0/g, " ")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();

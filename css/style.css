@@ -1027,9 +1027,13 @@ body.cites-shown .lect-bracket--chips-off { display: none; }
   font-size: var(--font-md);
   line-height: var(--leading-loose);
 }
+/* The psalm's poetry lines: wrapped lines one letter further in, breaks at spaces (ADR-053, .verse.verse-poetry). */
 .lect-gloria-line {
   display: block;
-  padding-left: 2rem;
+  padding-left: calc(2rem + 1em);
+  text-indent: -1em;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 /* ── 캘린더 뷰 (calendar tab, ADR-038 §1 · §2 A2) ──
@@ -4297,8 +4301,27 @@ mark.search-highlight {
   display: block;
   /* 8pt 그리드가 아니라 .verse-num 의 hanging gutter(width:2rem · margin-left:-2rem)에
      결합된 값 — 절 번호와 본문이 같은 거터를 공유하고 큰 폰트에서 rem 으로 함께 스케일하도록
-     의도적으로 2rem 유지(토큰 스냅 제외). */
-  padding-left: 2rem;
+     의도적으로 2rem 유지(토큰 스냅 제외).
+     ADR-053: 넘어간 줄은 한 글자 더 들여 쓴다. The box starts 1em further in and the first
+     line is pulled back by 1em, so the first line (and the gutter it hangs the number into)
+     stays at 2rem while wrapped lines start at 2rem + 1em. `text-indent: 1em hanging` would
+     keep the padding at 2rem, but Chrome only has it from 146 (2026-03). */
+  padding-left: calc(2rem + 1em);
+  text-indent: -1em;
+  /* ADR-053: 운문의 행만 띄어쓰기 자리에서 줄을 바꾼다. A word longer than the line still breaks. */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+/* text-indent is inherited: an inline-block inside the line (.verse-num, .versicle-mark,
+   .lect-bracket--hang) would pull its own glyph 1em left of its box. */
+.verse.verse-poetry * {
+  text-indent: 0;
+}
+
+/* A quote between two letters stays on their line (helpers.js wrapQuoteRuns, ADR-053 §2). */
+.verse.verse-poetry .quote-run {
+  white-space: nowrap;
 }
 
 .verse.verse-poetry .verse-num {
@@ -4476,13 +4499,14 @@ body.cites-shown .cite-chip--poetry:focus-visible {
 }
 
 /* Poetry-segment chip renders on its own line below the verse (ADR-022 §6 운문 예외).
-   Indent matches `.verse.verse-poetry` (2rem padding-left) so the chip aligns with
-   the poetry body text rather than the verse-number gutter. The gap above is padding,
-   not margin, so a selected verse's background reaches the chip. */
+   Indent matches the first line of `.verse.verse-poetry` (2rem: its 2rem + 1em padding-left
+   less the -1em text-indent, ADR-053) so the chip aligns with the poetry body text rather
+   than the verse-number gutter. The gap above is padding, not margin, so a selected
+   verse's background reaches the chip. */
 body.cites-shown .cite-chip--poetry {
   display: block;
   padding-top: 0.2em;
-  /* .verse.verse-poetry 와 동일하게 2rem (거터 결합값, 토큰 스냅 제외). */
+  /* .verse.verse-poetry 첫 줄의 자리와 같은 2rem (거터 결합값, 토큰 스냅 제외). */
   padding-left: 2rem;
   text-align: left;
 }

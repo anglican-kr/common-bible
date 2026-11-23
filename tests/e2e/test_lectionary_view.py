@@ -586,7 +586,9 @@ async () => {
   const dt = new DataTransfer();
   const ev = new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: dt });
   a.dispatchEvent(ev);   // 실제 브라우저처럼 선택 안쪽에서 올라온다
-  return [dt.getData('text/plain'), a.getAttribute('data-vref'), b.getAttribute('data-vref'), a.textContent.trim().slice(0, 6), b.textContent.trim().slice(-6)];
+  // The lines' text as a copy writes it: U+2060 dropped, the no-break space before ◯ a space (verse-spec.js serializeVerseRange).
+  const asCopied = (el) => el.textContent.replace(/\u2060/g, '').replace(/\u00a0/g, ' ').trim();
+  return [dt.getData('text/plain'), a.getAttribute('data-vref'), b.getAttribute('data-vref'), asCopied(a).slice(0, 6), asCopied(b).slice(-6)];
 }
 """
 

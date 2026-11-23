@@ -15,6 +15,7 @@ import vm from "node:vm";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadAppHelpers } from "./harness.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../..");
@@ -77,4 +78,38 @@ test("옮겨 실린 절은 모두 인용 시트의 탐색 범위(앞뒤 3장) �
     assert.equal(r.fromChapter, physical, label);
     assert.ok(r.verses.some((v) => v.number === number && v.chapter_ref === ch), label);
   }
+});
+
+// 운문에서 두 글자 사이의 따옴표는 양옆 글자와 줄바꿈하지 않는 상자로 묶는다(helpers.js wrapQuoteRuns, ADR-053 §2).
+// 묶음은 글자 조각 하나 안에서만 만들고, 어절 주석은 그 전에 낱말을 제 상자로 떼어 낸다. 그래서 주석의 경계가 묶음
+// 자리를 가르면 그 행은 따옴표 옆에서 다시 줄이 바뀔 수 있다. 지금 데이터에는 그런 주석이 없다(2026-11-23) — 생기면
+// 여기서 걸린다.
+test("운문의 어절 주석은 따옴표 묶음 자리를 가르지 않는다", { skip: SKIP }, () => {
+  const { quoteRuns } = loadAppHelpers();
+  let anchors = 0;
+  /** @type {string[]} */
+  const split = [];
+  for (const name of fs.readdirSync(BIBLE_DIR)) {
+    if (!/^.+-\d+\.json$/.test(name)) continue;
+    const data = JSON.parse(fs.readFileSync(path.join(BIBLE_DIR, name), "utf8"));
+    for (const v of data.verses ?? []) {
+      const words = (v.notes ?? []).map((n) => n.anchor).filter(Boolean);
+      if (!words.length) continue;
+      for (const seg of v.segments ?? []) {
+        if (seg.type !== "poetry") continue;
+        for (const line of seg.text.split("\n")) {
+          const runs = Array.from(quoteRuns(line));
+          for (const word of words) {
+            for (let at = line.indexOf(word); at >= 0; at = line.indexOf(word, at + word.length)) {
+              anchors++;
+              const end = at + word.length;
+              if (runs.some(([s, e]) => (s < at && at < e) || (s < end && end < e))) split.push(`${name} ${v.number}: ${word}`);
+            }
+          }
+        }
+      }
+    }
+  }
+  assert.ok(anchors > 0, "data/bible 의 운문에서 어절 주석을 하나도 찾지 못했다");
+  assert.deepEqual(split, []);
 });
