@@ -157,6 +157,64 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     return "";
   }
 
+  const QUOTE_MARKS = "‘’“”'\"";
+
+  /**
+   * Where a poetry line must not break around a quotation mark (ADR-053 §2): the runs [start, end) of `text` made of
+   * a quote with a letter on both sides and those two letters, overlapping runs joined. A poetry line breaks only at
+   * spaces, but a browser may break on either side of a quote that sits between two Korean letters (Unicode line
+   * breaking, LB19a), so 「‘구원’이라」 could end a line at 「‘구원’」 and start the next with 「이라」. A quote with a space
+   * on one side needs no run: the browser does not break after an opening quote that follows a space, nor before a
+   * closing one that a space follows (LB15a, LB15b).
+   * @param {string} text
+   * @returns {Array<[number, number]>}
+   */
+  function quoteRuns(text) {
+    /** @type {Array<[number, number]>} */
+    const runs = [];
+    const solid = (/** @type {string} */ c) => !!c && /\S/.test(c);
+    for (let i = 1; i < text.length - 1; i++) {
+      if (!QUOTE_MARKS.includes(text[i]) || !solid(text[i - 1]) || !solid(text[i + 1])) continue;
+      const last = runs[runs.length - 1];
+      if (last && last[1] >= i - 1) last[1] = i + 2;
+      else runs.push([i - 1, i + 2]);
+    }
+    return runs;
+  }
+
+  /**
+   * Draw each quoteRuns run of the poetry lines under `root` in a span that does not wrap (`.quote-run`), so the
+   * quote stays on the line of the letters beside it. Only the text nodes are split — the text, and so copies and
+   * search highlighting, stay the same. Runs inside the verse number, ¶ and ◯ boxes are left alone.
+   * Call it after note anchors are wrapped: an anchor word is looked for inside one text node (citations.js
+   * _wrapAnchor), and a run would split it.
+   * @param {ParentNode} root
+   */
+  function wrapQuoteRuns(root) {
+    for (const line of root.querySelectorAll(".verse.verse-poetry")) {
+      /** @type {Text[]} */
+      const nodes = [];
+      const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        if (!n.parentElement?.closest(".verse-num, .versicle-mark, .responsory-mark, .quote-run")) nodes.push(/** @type {Text} */ (n));
+      }
+      for (const node of nodes) {
+        const text = node.data;
+        const runs = quoteRuns(text);
+        if (!runs.length) continue;
+        const frag = document.createDocumentFragment();
+        let at = 0;
+        for (const [start, end] of runs) {
+          if (start > at) frag.appendChild(document.createTextNode(text.slice(at, start)));
+          frag.appendChild(el("span", { className: "quote-run" }, text.slice(start, end)));
+          at = end;
+        }
+        if (at < text.length) frag.appendChild(document.createTextNode(text.slice(at)));
+        node.replaceWith(frag);
+      }
+    }
+  }
+
   /**
    * Toggle background `inert` + `aria-hidden` for elements outside the
    * currently active modal/drawer. Selectors should match the elements
@@ -627,7 +685,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   }
 
   return {
-    _$, chUnit, chUnitNoun, chapterTitle, chapterLabel, verseRefLabel, missingChapterText, hasBatchim, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
+    _$, chUnit, chUnitNoun, chapterTitle, chapterLabel, verseRefLabel, missingChapterText, hasBatchim, el, clearNode, hangingQuoteClass, quoteRuns, wrapQuoteRuns, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
     HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot, SCROLL_ANCHORING, barBottom, scrollUnderBar,
     publishBarHeight, isFormerNorthChurch, churchName, parishGroups, LARGE_LAYOUT_QUERY, isLargeLayout, isSmallLayout, TOUCH_INPUT_QUERY, isTouchInput,
     SHEET_INERT_SELECTORS,

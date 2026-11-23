@@ -24,7 +24,7 @@ import {
   parseVerseSpec, specCoversVerse, chapterMaxVerse, verseInstanceKeys,
 } from "./verse-spec.js";
 
-const { _$, el, clearNode, chUnit, chapterTitle, emptyState } = window.appHelpers;
+const { _$, el, clearNode, chUnit, chapterTitle, emptyState, wrapQuoteRuns } = window.appHelpers;
 const { loadBookmarks } = window.appStorage;
 
 const $app = _$("app");
@@ -421,6 +421,7 @@ async function renderBookmarkReadView(folderId = null) {
       // Clean 봉독 surface (ADR-035): no study-aid chrome — cite chips suppressed
       // (hideCites), parallels (ADR-027 ※) not passed, note anchors not wrapped.
       appendVerses(article, verses, { hideCites: true, instanceKeys: selKeys });
+      wrapQuoteRuns(article);   // a quote stays on the line of the letters beside it (ADR-053 §2)
       section.appendChild(article);
       appendedAny = true;
     }

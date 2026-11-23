@@ -984,6 +984,8 @@ export interface AppHelpers {
   clearNode: (node: Node) => void;
   /** 운문 줄 머리 따옴표의 걸침 클래스(ADR-006) — 따옴표가 아니면 "". */
   hangingQuoteClass: (ch: string | undefined) => string;
+  quoteRuns: (text: string) => Array<[number, number]>;
+  wrapQuoteRuns: (root: ParentNode) => void;
   setInert: (on: boolean, selectors: string) => void;
   trapFocus: (container: HTMLElement) => () => void;
   dragReleaseAction: (h: number, vh: number, minH?: number) => "close" | "snap-min" | "stay";

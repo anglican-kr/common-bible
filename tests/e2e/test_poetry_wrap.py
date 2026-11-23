@@ -69,6 +69,13 @@ def _open(ctx, path, ready):
     return page
 
 
+def _assert_breaks_at_spaces(span, where):
+    """Every line break falls on a space. The space is counted on the line it was measured on: after a `.quote-run`
+    box it may sit at the start of the next line, where it takes no width."""
+    for prev, line in zip(span["lines"], span["lines"][1:]):
+        assert prev["text"].endswith(" ") or line["text"].startswith(" "), ("a line broke inside a word", where, span)
+
+
 def _assert_hangs(span, where):
     """Every line after the first starts one letter inside the first line's start (2rem + 1em)."""
     want = 2 * span["rem"] + span["em"]
@@ -111,8 +118,30 @@ def test_long_liturgical_psalm_lines_wrap_at_spaces_without_overflow(browser):
     assert len(wrapped) >= 5, len(wrapped)
     for span in spans:
         _assert_hangs(span, "lps 20")
-        for line in span["lines"][:-1]:
-            assert line["text"].endswith(" "), ("a line broke inside a word", span)
+        _assert_breaks_at_spaces(span, "lps 20")
+
+
+@pytest.mark.parametrize("path, vref, width, font, word", [
+    ("/isa/1", "26c", 390, 18, "마을’이라"),        # 그제야 너는 ‘정의의 도시, 성실한 마을’이라 불릴 것이다.
+    ("/isa/61", "3e", 390, 18, "숲’이라"),
+    ("/wis/18", "24c", 390, 18, "하느님’이라는"),
+    ("/isa/61", "6b", 320, 24, "봉사자’라"),
+])
+def test_quote_stays_with_its_particle(browser, path, vref, width, font, word):
+    """따옴표가 두 글자 사이에 있으면 그 두 글자와 같은 줄에 있다(ADR-053 §2). 브라우저는 한국어 사이의 따옴표 앞뒤에서 줄을
+    바꿀 수 있어, 띄어쓰기 자리에서만 줄을 바꿔도 "‘구원’" / "이라"처럼 낱말이 나뉘었다. 따옴표와 양옆 글자를 줄바꿈하지 않는
+    상자(`.quote-run`)로 묶는다(helpers.js wrapQuoteRuns). 고른 행과 폭은 묶기 전에 이 기기의 글꼴로 따옴표 옆에서 줄이 바뀌던 곳이다."""
+    ctx = _phone(browser, width=width, font=font)
+    sel = f".chapter-text .verse-poetry[data-vref='{vref}']"
+    try:
+        page = _open(ctx, path, sel)
+        [span] = page.evaluate(LINES, sel)
+    finally:
+        ctx.close()
+    assert len(span["lines"]) >= 2, span   # the line still wraps here
+    assert any(word in line["text"] for line in span["lines"]), (word, span)
+    _assert_breaks_at_spaces(span, f"{path} {vref}")
+    _assert_hangs(span, f"{path} {vref}")
 
 
 # 선창 끝의 ◯ 가 마지막 낱말과 같은 줄에 있는가 — ◯ 마다 그 앞 마지막 글자와 세로 가운데를 견준다.
@@ -219,8 +248,7 @@ def test_gloria_lines_hang_like_the_psalm(browser):
         assert len(span["lines"]) >= 2, span
         assert span["lines"][0]["x"] == pytest.approx(2 * span["rem"], abs=0.6), span
         _assert_hangs(span, "gloria")
-        for line in span["lines"][:-1]:
-            assert line["text"].endswith(" "), ("a line broke inside a word", span)
+        _assert_breaks_at_spaces(span, "gloria")
 
 
 def test_prose_still_breaks_by_letter(browser):

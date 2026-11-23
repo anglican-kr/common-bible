@@ -14,6 +14,7 @@
 //   - el (createElement + attrs + children)
 //   - clearNode (firstChild loop)
 //   - hangingQuoteClass (leading quote → gutter class, straight + curly)
+//   - quoteRuns (a quote between two letters and those letters stay on one poetry line, ADR-053 §2)
 //   - setInert (inert + aria-hidden toggle on selector matches)
 //   - trapFocus (Tab / Shift-Tab cycling within a container)
 //   - dragReleaseAction (bottom-sheet drag-resize release thresholds)
@@ -577,6 +578,43 @@ test("hangingQuoteClass: empty line and undefined do not hang", () => {
   // `line[0]` is undefined on an empty line — must not throw or hang.
   assert.equal(h.helpers.hangingQuoteClass(undefined), "");
   assert.equal(h.helpers.hangingQuoteClass(""), "");
+});
+
+// ── quoteRuns ──────────────────────────────────────────────────────────────
+
+/** @param {string} text @returns {string[]} the run texts, as an array of this realm (the vm's arrays compare unequal) */
+function runTexts(h, text) {
+  return Array.from(h.helpers.quoteRuns(text), ([s, e]) => text.slice(s, e));
+}
+
+test("quoteRuns: a closing quote between a word and its particle holds both letters (이사 1:26, 61:3)", () => {
+  const h = loadHelpers();
+  assert.deepEqual(runTexts(h, "그제야 너는 ‘정의의 도시, 성실한 마을’이라 불릴 것이다. "), ["을’이"]);
+  assert.deepEqual(runTexts(h, "‘주께서 심으신 정의의 느티나무 숲’이라 하여라. "), ["숲’이"]);
+  assert.deepEqual(runTexts(h, "너의 이름은 “찬양”이라 이름지어 "), ["양”이"]);
+});
+
+test("quoteRuns: a quote with a space on one side needs no run — the browser does not break there", () => {
+  const h = loadHelpers();
+  assert.deepEqual(runTexts(h, "너는 ‘정의의 도시’ 하고 "), []);   // opening after a space, closing before one
+  assert.deepEqual(runTexts(h, "“주여, 어찌하여” "), []);        // a line that opens and ends with quotes
+  assert.deepEqual(runTexts(h, "말하였다.” "), []);
+  assert.deepEqual(runTexts(h, "말하였다.”"), []);               // at the end of the text too
+});
+
+test("quoteRuns: runs that touch become one, and straight quotes count too", () => {
+  const h = loadHelpers();
+  assert.deepEqual(runTexts(h, "이것은 ‘가’라 한다 "), ["가’라"]);
+  assert.deepEqual(runTexts(h, "부르기를‘나의 백성’이라"), ["를‘나", "성’이"]);
+  assert.deepEqual(runTexts(h, "그것을 '말씀'이라 하였다"), ["씀'이"]);
+  assert.deepEqual(runTexts(h, "하였다.’”그리고"), [".’”그"]);   // two quotes in a row are one run
+  assert.deepEqual(runTexts(h, "일반 글"), []);
+  assert.deepEqual(runTexts(h, ""), []);
+});
+
+test("quoteRuns: a no-break space is a space — the one before ◯ makes no run", () => {
+  const h = loadHelpers();
+  assert.deepEqual(runTexts(h, "‘주님’\u00a0"), []);
 });
 
 // ── setInert ───────────────────────────────────────────────────────────────

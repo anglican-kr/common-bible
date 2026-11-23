@@ -26,7 +26,7 @@ import { citationSource, halfVerseMark, selectionCitation, formatVerseRanges, ve
 
 const {
   _$, el, clearNode, chUnit, chUnitNoun, chapterTitle, chapterLabel, verseRefLabel, missingChapterText, hasBatchim, hangingQuoteClass,
-  emptyState, scrollUnderBar,
+  emptyState, scrollUnderBar, wrapQuoteRuns,
 } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
 const {
@@ -1408,6 +1408,7 @@ function appendVerses(article, verses, opts = {}) {
 function appendVersesWithAids(article, verses, chapter, opts = {}) {
   appendVerses(article, verses, { ...opts, parallels: chapter.parallels, chapter: chapter.chapter });
   window.appCitations?.wrapNoteAnchorsInArticle(article, verses);
+  wrapQuoteRuns(article);   // after the note anchors: it splits text nodes (helpers.js)
 }
 
 /**

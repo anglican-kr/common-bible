@@ -4319,6 +4319,11 @@ mark.search-highlight {
   text-indent: 0;
 }
 
+/* A quote between two letters stays on their line (helpers.js wrapQuoteRuns, ADR-053 §2). */
+.verse.verse-poetry .quote-run {
+  white-space: nowrap;
+}
+
 .verse.verse-poetry .verse-num {
   display: inline-block;
   box-sizing: border-box;
