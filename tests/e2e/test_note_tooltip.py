@@ -297,7 +297,9 @@ LECTIONARY_WORD = f".lect-reading[data-slot='first'] {ANCHOR}"
 
 
 def _open_recording(browser, viewport, path, anchor=ANCHOR):
-    ctx = browser.new_context(viewport=viewport)
+    # 서비스 워커를 막는다. 워커가 설치를 마치고 페이지를 넘겨받으면(`clients.claim()`) 장의 자료 요청이 워커를 거쳐
+    # `page.route`가 붙잡지 못한다(뒤로 가기 시험).
+    ctx = browser.new_context(viewport=viewport, service_workers="block")
     ctx.add_init_script(CLEAR_APP_STORAGE)
     ctx.add_init_script(_COACHMARK_SEEN)
     ctx.add_init_script(_RECORD_FOLLOWERS)
