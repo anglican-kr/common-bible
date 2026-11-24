@@ -69,7 +69,7 @@ def test_guard_covers_every_analytics_address_the_csp_allows():
 def test_request_to_an_analytics_address_fails_before_leaving_the_browser(browser, url):
     """Chromium은 막는 주소의 이름을 풀지 못한다. 아무 `route`도 없는 컨텍스트에서 보낸 요청이 대답 없이 바로 실패한다.
     서비스 워커가 보내는 요청도 같은 이름 풀이를 거친다. 워커가 화면을 넘겨받은 경우는 여기서 보지 못한다. 기본 설정의 로컬 서버에서는
-    워커가 설치를 끝내지 못한다(known-issues §79)."""
+    워커가 설치를 끝내지 못한다(known-issues §80)."""
     ctx = browser.new_context()
     page = ctx.new_page()
     try:

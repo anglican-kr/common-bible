@@ -143,7 +143,7 @@ def style_in_state(cdp, expression, prop, state="hover"):
 # 아래 두 장치가 e2e의 요청이 구글에 가지 않게 한다. 태그가 없어도 앱은 그대로 돈다. 방문 기록은 `gtag-init.js`의 대기열(`dataLayer`)에 쌓인다.
 #  - Chromium: 태그와 그 요청이 가는 주소의 이름을 풀지 못하게 한다(`browser_type_launch_args`). 서비스 워커가 보내는 요청까지
 #    막힌다. 이 앱의 워커는 넘겨받은 화면의 GET 요청을 모두 제가 받아 보내는데, Playwright의 `route`는 워커가 보낸 요청을 잡지
-#    못한다. 기본 설정의 로컬 서버에서는 워커가 설치를 끝내지 못해 화면을 넘겨받지 않지만(known-issues §79), 서버를 `--cache`로
+#    못한다. 기본 설정의 로컬 서버에서는 워커가 설치를 끝내지 못해 화면을 넘겨받지 않지만(known-issues §80), 서버를 `--cache`로
 #    띄우면 넘겨받는다.
 #  - 다른 브라우저: 이름 풀이를 바꿀 수 없어, 컨텍스트마다 `guard_analytics`로 대신 대답한다(`browser`). 워커가 넘겨받은
 #    화면에서 워커가 보내는 요청은 막지 못한다.
