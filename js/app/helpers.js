@@ -239,10 +239,12 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
    * and ◯ go in a span that does not wrap (`.responsory-hold`). A no-break space before ◯ is not enough everywhere —
    * Safari on an iPhone broke between 「경배하여라.」 and the no-break space and took ◯ to the next line (2026-11-24).
    * The box holds only the last letter of the word, so a word longer than the line can still break inside it.
-   * Only text nodes are split — the text, and so copies and search highlighting, stay the same.
-   * Call it after wrapQuoteRuns: a quote run is looked for inside one text node, and the box would split one. A box the
-   * walk meets on its way back (a quote run, a note anchor, a search highlight) goes in whole when it holds no space;
-   * one that holds a space stays out, so the box never takes a word that cannot wrap.
+   * Only text nodes and search highlights are split — the text, and so copies, stay the same.
+   * Call it after wrapQuoteRuns: a quote run is looked for inside one text node, and the box would split one. A search
+   * highlight (`mark.search-highlight`) is split like a text node into two marks, so the box holds only its last letter:
+   * held whole, a long highlighted word and ◯ could run past the line (/lps/99?hl=대답해주셨습니다 at 320px, 24px).
+   * Another box the walk meets on its way back (a quote run, a note anchor) goes in whole when it holds no space; one
+   * that holds a space stays out, so the box never takes a word that cannot wrap.
    * @param {ParentNode} root
    */
   function holdResponsoryMarks(root) {
@@ -258,6 +260,23 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
           if (at < 0) { run.unshift(text); continue; }
           found = true;
           if (at < text.data.length) run.unshift(at > 0 ? text.splitText(at) : text);
+        } else if (n instanceof Element && n.matches("mark.search-highlight") && n.childNodes.length === 1
+          && n.firstChild?.nodeType === Node.TEXT_NODE) {
+          const text = /** @type {Text} */ (n.firstChild);
+          const at = holdStart(text.data);
+          if (at < 0) { run.unshift(n); continue; }
+          found = true;
+          if (at === 0) run.unshift(n);
+          else if (at < text.data.length) {
+            // A second mark of the same kind takes the tail, so the box takes no more. The two drop their padding and
+            // rounding where they meet, so the word keeps its width and the highlight looks like one (css/style.css).
+            const tail = /** @type {Element} */ (n.cloneNode(false));
+            tail.append(text.splitText(at));
+            n.classList.add("search-highlight--cut-end");
+            tail.classList.add("search-highlight--cut-start");
+            n.after(tail);
+            run.unshift(tail);
+          }
         } else if (n instanceof Element && !n.matches(".verse-num, .versicle-mark, .pilcrow, .lect-bracket, .hanging-quote")) {
           const text = n.textContent || "";
           if (HOLD_SPACE.test(text)) { found = true; break; }

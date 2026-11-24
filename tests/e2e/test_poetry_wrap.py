@@ -227,6 +227,34 @@ def test_responsory_mark_is_held_even_where_the_browser_breaks_anywhere(browser,
     assert len(marks) == 14 and all(m["same"] for m in marks), marks
 
 
+# 전례시편 99:8 선창 줄의 검색 강조와 ◯ 상자 — [강조 글자, 왼쪽 안쪽 여백, 오른쪽 안쪽 여백, 상자 안인가], 줄이 칸을 넘는가.
+_HIGHLIGHT_HELD = r"""() => {
+  const span = document.querySelector(".chapter-text .verse-poetry[data-vref='8a']");
+  const marks = [...span.querySelectorAll('mark.search-highlight')].map(m => {
+    const cs = getComputedStyle(m);
+    return [m.textContent, cs.paddingLeft, cs.paddingRight, !!m.closest('.responsory-hold')];
+  });
+  return { marks, over: span.scrollWidth > span.clientWidth + 0.5 };
+}"""
+
+
+def test_search_highlight_before_the_mark_is_cut_so_the_box_holds_one_letter(browser):
+    """◯ 바로 앞의 낱말을 검색어로 강조해 열면, 강조를 둘로 나눠 ◯ 상자는 강조의 마지막 글자만 담는다(helpers.js
+    holdResponsoryMarks). 강조를 통째로 담으면 폭 320px에 글자 24px에서 "대답해주셨습니다. ◯"가 줄바꿈하지 않는 상자째
+    본문 칸을 2px 넘었다(2026-11-24 리뷰). 나뉜 두 강조는 맞닿는 쪽의 안쪽 여백이 없어 하나로 보인다."""
+    ctx = _phone(browser, width=320, font=24)
+    try:
+        page = _open(ctx, "/lps/99?hl=%EB%8C%80%EB%8B%B5%ED%95%B4%EC%A3%BC%EC%85%A8%EC%8A%B5%EB%8B%88%EB%8B%A4",
+                     ".chapter-text mark.search-highlight")
+        got = page.evaluate(_HIGHLIGHT_HELD)
+        marks = page.evaluate(MARK_ON_WORD_LINE, ".chapter-text .verse-poetry[data-vref='8a'] .responsory-mark")
+    finally:
+        ctx.close()
+    assert got["marks"] == [["대답해주셨습니", "1px", "0px", False], ["다", "0px", "1px", True]], got
+    assert not got["over"], got
+    assert len(marks) == 1 and marks[0]["same"], marks
+
+
 # 전례독서 시편 슬롯의 104:35 줄들 — [보이는 글자, ◯나 ◯ 상자가 있는가].
 _PSALM_104_35 = """() => [...document.querySelectorAll(".lect-reading[data-slot='psalm'] .verse[data-vkey^='35/']")]
   .map((s) => [s.textContent, !!s.querySelector('.responsory-mark, .responsory-hold')])"""

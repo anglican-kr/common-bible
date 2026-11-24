@@ -3703,6 +3703,20 @@ mark.search-highlight {
   background: rgba(196, 154, 108, 0.3);
 }
 
+/* A highlight cut in two before a responsory ◯ (helpers.js holdResponsoryMarks): no padding or rounding where the
+   halves meet, so the word keeps its width and reads as one highlight. */
+mark.search-highlight--cut-end {
+  padding-right: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+mark.search-highlight--cut-start {
+  padding-left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
 .verse-highlight {
   background: rgba(107, 58, 42, 0.08) !important;
   border-radius: var(--radius-sm);
