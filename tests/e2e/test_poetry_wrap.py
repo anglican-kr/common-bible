@@ -255,6 +255,29 @@ def test_search_highlight_before_the_mark_is_cut_so_the_box_holds_one_letter(bro
     assert len(marks) == 1 and marks[0]["same"], marks
 
 
+def test_search_highlight_split_by_a_quote_run_is_cut_too(browser):
+    """강조한 낱말 안에 따옴표가 있어 따옴표 묶음이 강조를 여러 조각으로 나눠도, 강조를 둘로 나눠 ◯ 상자는 마지막 글자만 담는다
+    (helpers.js holdResponsoryMarks, 2026-11-24 리뷰). 강조를 통째로 담으면 폭 320px에 글자 24px에서 줄이 본문 칸을 넘을 수 있다.
+    실데이터에는 ◯ 앞의 낱말 안에 따옴표가 있는 줄이 없어, 99:8의 선창을 "… 대답해‘주’셨습니다."로 바꿔 그린다."""
+    root = Path(__file__).resolve().parents[2] / "data"
+    chapter = json.loads((root / "bible" / "lps-99.json").read_text(encoding="utf-8"))
+    [v8] = [v for v in chapter["verses"] if v["number"] == 8]
+    assert v8["segments"][0]["text"] == "주, 우리 하느님, 그들에게 대답해주셨습니다.", v8
+    v8["segments"][0]["text"] = "주, 우리 하느님, 그들에게 대답해‘주’셨습니다."
+    ctx = _phone(browser, width=320, font=24)
+    try:
+        ctx.route("**/data/bible/lps-99.json", lambda route: route.fulfill(json=chapter))
+        page = _open(ctx, "/lps/99?hl=%EB%8C%80%EB%8B%B5%ED%95%B4%E2%80%98%EC%A3%BC%E2%80%99%EC%85%A8%EC%8A%B5%EB%8B%88%EB%8B%A4",
+                     ".chapter-text mark.search-highlight")
+        got = page.evaluate(_HIGHLIGHT_HELD)
+        marks = page.evaluate(MARK_ON_WORD_LINE, ".chapter-text .verse-poetry[data-vref='8a'] .responsory-mark")
+    finally:
+        ctx.close()
+    assert [m[0] for m in got["marks"]] == ["대답해‘주’셨습니", "다"] and got["marks"][-1][3], got
+    assert not got["over"], got
+    assert len(marks) == 1 and marks[0]["same"], marks
+
+
 # 전례독서 시편 슬롯의 104:35 줄들 — [보이는 글자, ◯나 ◯ 상자가 있는가].
 _PSALM_104_35 = """() => [...document.querySelectorAll(".lect-reading[data-slot='psalm'] .verse[data-vkey^='35/']")]
   .map((s) => [s.textContent, !!s.querySelector('.responsory-mark, .responsory-hold')])"""

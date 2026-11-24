@@ -1899,13 +1899,17 @@ function cutLineText(span, text, keepTail) {
     const [lastNode, lastStart] = inside[inside.length - 1];
     if (pos > inside[0][1] && pos < lastStart + lastNode.length) anchor.replaceWith(...anchor.childNodes);
   }
-  // At offset 0 the range stops before the outermost box that begins with the node, so a note anchor that begins right at
-  // the boundary goes whole to its side instead of leaving an empty button behind. It climbs only out of boxes the node
-  // begins: the ◯ box (helpers.js holdResponsoryMarks) can hold the last word's quote run before the node, and cutting
-  // before the whole box took that word to the wrong side (review 2026-11-24).
+  // At offset 0 the range stops before the line's child that holds the node, so a note anchor that begins right at the
+  // boundary goes whole to its side instead of leaving an empty button behind. It does not climb out of a ◯ box
+  // (helpers.js holdResponsoryMarks) the node does not begin: the box can hold the last word's quote run before the node,
+  // and cutting before the whole box took that word to the wrong side (review 2026-11-24).
   /** @type {Node} */
   let top = node;
-  while (top.parentNode && top.parentNode !== span && top.parentNode.firstChild === top) top = top.parentNode;
+  while (top.parentNode && top.parentNode !== span) {
+    const parent = top.parentNode;
+    if (parent instanceof Element && parent.classList.contains("responsory-hold") && parent.firstChild !== top) break;
+    top = parent;
+  }
   const range = document.createRange();
   if (keepTail) {
     // 절 번호 · U+2060 뒤부터 문구 앞까지 — 줄 머리의 ¶ 도 버리는 앞부분에 든다
