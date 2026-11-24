@@ -149,6 +149,9 @@ def style_in_state(cdp, expression, prop, state="hover"):
 #    기기에서도 이 주소들은 프록시를 거치지 않게 한다(`no_proxy`).
 #  - 다른 브라우저: 이름 풀이를 바꿀 수 없어, 컨텍스트마다 `guard_analytics`로 대신 대답한다(`browser`). 워커가 넘겨받은
 #    화면에서 워커가 보내는 요청은 막지 못한다.
+#  - 어느 브라우저든 묶음을 시작할 때 한 번, 막는 주소로 보낸 요청이 정말 브라우저를 떠나지 않는지 본다
+#    (`analytics_guard_holds`). 떠나는 기기에서는 묶음을 멈춘다. 운영체제의 프록시 설정이나 자동 설정 파일처럼 위의 장치가
+#    손대지 못하는 경로가 있다.
 # 방문 기록을 세는 시험은 제 컨텍스트에 흉내 낸 태그를 `route`로 싣는다(`test_navigation.py`의 `FAKE_GTAG`). `route`는 이름
 # 풀이보다 먼저 적용되고, 나중에 등록한 `route`가 먼저 등록한 것보다 먼저 적용된다.
 
@@ -166,6 +169,8 @@ ANALYTICS_URL = re.compile(
     "^https?://(" + "|".join(re.escape(h).replace(r"\*", "[^/:]*") for h in ANALYTICS_HOSTS) + r")(:\d+)?(/|$)"
 )
 ANALYTICS_GUARD_HEADER = "x-e2e-analytics-guard"   # `guard_analytics`가 대신 한 대답에 붙는다
+# 장치가 듣는지 볼 때 보내 보는 주소. 측정 ID도 방문 내용도 싣지 않아, 구글까지 가더라도 기록되지 않는다.
+ANALYTICS_PROBE_URL = "https://www.google-analytics.com/e2e-guard-check"
 
 
 def is_analytics_url(url) -> bool:
@@ -210,6 +215,42 @@ def browser_type_launch_args(browser_type_launch_args, browser_name):
     if browser_name != "chromium":
         return browser_type_launch_args
     return analytics_launch_args(browser_type_launch_args, os.environ)
+
+
+def analytics_guard_outcome(browser) -> str:
+    """막는 주소로 요청을 하나 보내 보고 어떻게 끝났는지 돌려준다. `"blocked"`는 요청이 브라우저를 떠나지 않았다는 뜻이다. 이름
+    풀이에서 실패했거나 `guard_analytics`가 대신 대답했다. 그 밖의 값(`"answered"`나 실패한 까닭)은 요청이 프록시나 구글로
+    갔다는 뜻이다."""
+    ctx = browser.new_context()
+    try:
+        page = ctx.new_page()
+        seen = []
+        page.on("requestfailed", lambda req: seen.append(req.failure))
+        page.on("response", lambda res: seen.append("guard" if res.headers.get(ANALYTICS_GUARD_HEADER) else "answered"))
+        page.goto("about:blank")
+        page.evaluate("(url) => fetch(url, { mode: 'no-cors' }).then(() => {}, () => {})", ANALYTICS_PROBE_URL)
+        for _ in range(40):   # 알림은 fetch가 끝난 바로 뒤에 온다
+            if seen:
+                break
+            page.wait_for_timeout(50)
+    finally:
+        ctx.close()
+    if seen in (["net::ERR_NAME_NOT_RESOLVED"], ["guard"]):
+        return "blocked"
+    return seen[0] if seen else "no notice"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def analytics_guard_holds(browser):
+    """묶음을 시작할 때 한 번, 막는 주소로 보낸 요청이 브라우저를 떠나지 않는지 본다. 떠나는 기기에서는 묶음을 멈춘다. 그대로 돌리면
+    `localhost`의 방문이 실제 통계에 섞인다. 운영체제의 프록시 설정이나 자동 설정 파일로 프록시를 정한 기기가 그럴 수 있다."""
+    outcome = analytics_guard_outcome(browser)
+    if outcome != "blocked":
+        pytest.exit(
+            f"e2e를 멈춘다. 이 기기에서는 구글 애널리틱스로 가는 요청이 막히지 않는다({ANALYTICS_PROBE_URL}: {outcome}). "
+            "프록시 설정을 확인한다(tests/e2e/conftest.py의 「구글 애널리틱스로 가는 요청을 막는다」).",
+            returncode=1,
+        )
 
 
 @pytest.fixture(scope="session")

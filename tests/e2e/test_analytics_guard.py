@@ -5,6 +5,7 @@
   - the guarded addresses cover every Google address the CSP in index.html allows for the tag, wildcards included
   - Chromium cannot resolve those addresses, so a request fails before it leaves the browser
   - the same holds on a machine whose environment sets a proxy: those addresses bypass the proxy
+  - the check the suite runs once at the start tells a browser that is cut off from one whose requests leave it
   - the app's own screens never get an answer from them (first screen, reload, in-app navigation), and the app
       keeps queueing its page views without the tag
   - `guard_analytics` (the stand-in other browsers use) answers in place of Google, and a route a test adds
@@ -26,6 +27,7 @@ from .conftest import (
     ANALYTICS_TAG_URL,
     BASE_URL,
     CLEAR_APP_STORAGE,
+    analytics_guard_outcome,
     analytics_launch_args,
     guard_analytics,
     is_analytics_url,
@@ -109,7 +111,8 @@ def test_request_to_an_analytics_address_fails_before_leaving_the_browser(browse
 
 
 class _RefusingProxy(socketserver.ThreadingTCPServer):
-    """받은 요청의 첫 줄만 적고 거절하는 프록시. 아무것도 바깥으로 보내지 않는다."""
+    """받은 요청의 첫 줄만 적고 거절하는 프록시. 아무것도 바깥으로 보내지 않는다. 머리글을 끝까지 읽고 대답한다. 읽지 않은 것을
+    남긴 채 닫으면 연결이 초기화(RST)되어 브라우저가 502를 받지 못할 수 있다."""
     allow_reuse_address = True
     daemon_threads = True
 
@@ -122,6 +125,8 @@ class _RefusingProxy(socketserver.ThreadingTCPServer):
                 line = self.rfile.readline().decode("latin-1").strip()
                 if line:
                     proxy.asked.append(line)
+                while self.rfile.readline().strip():
+                    pass
                 self.wfile.write(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
 
         super().__init__(("127.0.0.1", 0), Handler)
@@ -137,7 +142,11 @@ def test_analytics_addresses_bypass_a_proxy_set_in_the_environment(browser_type,
     def launch_args_with(address, how):
         if how == "env":
             names = ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY")
-            return {**browser_type_launch_args, "env": {**browser_type_launch_args["env"], **{name: address for name in names}}}
+            # GNOME이나 KDE 세션에서는 Chromium이 환경 변수 대신 데스크톱의 프록시 설정을 읽는다. 세션을 알리는 변수를 빼
+            # 환경 변수를 읽게 한다.
+            desktop = ("XDG_CURRENT_DESKTOP", "DESKTOP_SESSION", "GNOME_DESKTOP_SESSION_ID", "KDE_FULL_SESSION")
+            env = {k: v for k, v in browser_type_launch_args["env"].items() if k not in desktop}
+            return {**browser_type_launch_args, "env": {**env, **{name: address for name in names}}}
         return analytics_launch_args({**browser_type_launch_args, "proxy": {"server": address}}, browser_type_launch_args["env"])
 
     for how in (*(["env"] if sys.platform.startswith("linux") else []), "launch-option"):
@@ -163,6 +172,28 @@ def test_analytics_addresses_bypass_a_proxy_set_in_the_environment(browser_type,
                 proxied.close()
             proxy.shutdown()
             proxy.server_close()
+
+
+@pytest.mark.only_browser("chromium")
+def test_guard_check_tells_a_cut_off_browser_from_one_whose_requests_leave(browser, browser_type, browser_type_launch_args):
+    """묶음을 시작할 때의 확인(`analytics_guard_holds`)이 쓰는 `analytics_guard_outcome`은 막힌 브라우저에서 `"blocked"`를 돌려주고,
+    요청이 브라우저를 떠나는 브라우저에서는 다른 값을 돌려준다. 뒤의 경우는 이름 풀이 규칙을 뺀 채 시험용 프록시로 보내는 브라우저를
+    하나 띄워 본다. 운영체제의 프록시 설정을 쓰는 기기가 이와 같다. 요청은 프록시가 거절해 바깥으로 가지 않는다."""
+    assert analytics_guard_outcome(browser) == "blocked"
+
+    proxy = _RefusingProxy()
+    leaking = None
+    try:
+        args = [arg for arg in browser_type_launch_args.get("args", []) if not arg.startswith("--host-resolver-rules=")]
+        server = f"http://127.0.0.1:{proxy.server_address[1]}"
+        leaking = browser_type.launch(**{**browser_type_launch_args, "args": args, "proxy": {"server": server}})
+        assert analytics_guard_outcome(leaking) == "net::ERR_TUNNEL_CONNECTION_FAILED"
+        assert "CONNECT www.google-analytics.com:443 HTTP/1.1" in proxy.asked, proxy.asked   # 요청이 프록시까지 갔다
+    finally:
+        if leaking:
+            leaking.close()
+        proxy.shutdown()
+        proxy.server_close()
 
 
 @pytest.mark.only_browser("chromium")
