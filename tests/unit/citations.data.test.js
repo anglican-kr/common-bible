@@ -119,6 +119,7 @@ test("운문의 어절 주석은 따옴표 묶음 자리를 가르지 않는다"
 // 본문 칸을 넘을 수 있고, 공백이 있는 주석은 상자에 들지 않아 Safari가 그 뒤에서 ◯를 넘길 수 있다(2026-11-24 리뷰). 지금
 // 전례시편과 송가에는 어절 주석이 없다(2026-11-24) — 선창 줄의 마지막 낱말에 주석이 생기면 여기서 걸린다.
 test("◯가 붙는 선창 줄의 마지막 낱말에는 어절 주석이 없다", { skip: SKIP }, () => {
+  const { hangingQuoteClass } = loadAppHelpers();
   let cantorLines = 0;
   /** @type {string[]} */
   const touched = [];
@@ -134,7 +135,11 @@ test("◯가 붙는 선창 줄의 마지막 낱말에는 어절 주석이 없다
         const segLines = seg.text.split("\n").filter((l) => l !== "");
         const cantor = !seg.response && !!segs[i + 1]?.response;
         if (cantor) cantorLines++;
-        segLines.forEach((l, j) => lines.push([l, cantor && j === segLines.length - 1]));
+        // 운문 행 머리의 따옴표는 따로 그리므로(views.js appendVerses의 hangingQuoteClass) 주석을 찾는 글자에 들지 않는다.
+        segLines.forEach((l, j) => {
+          const text = seg.type === "poetry" && hangingQuoteClass(l[0]) ? l.slice(1) : l;
+          lines.push([text, cantor && j === segLines.length - 1]);
+        });
       });
       for (const note of v.notes ?? []) {
         const word = note.anchor;
