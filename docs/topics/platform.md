@@ -150,7 +150,6 @@ index.html은 모듈(`<script type="module">`)을 적힌 순서대로 실행한�
 - **known-issues §12.4** **pitfalls §31(영어 뒤 조사 붙여 쓰기) 전에 쓴 문서에 띄어 쓴 곳이 많다**(문서). #354는 그 PR에서 쓰거나 고친 줄만 고쳤다. 머지된 원장은 고칠 수 없으므로, 나머지(정리 층 문서와 코드 주석)를 따로 한꺼번에 정리할지 정한다.
 - **known-issues §12.5** **`architecture.md` §4.3 아래쪽 그림**(상태 머신, 전송, 저장 상자)의 테두리가 한글 폭 때문에 어긋나 있다. 내용은 맞다. 오래된 일이다.
 - **known-issues §13.5** **WebKit이 `books.json`을 두 번 받는다**(main부터). `index.html`의 `<link rel="preload" … as="fetch" crossorigin>`으로 미리 받은 것을 `pre-fetch.js`의 `fetch()`가 쓰지 못해, 「preloaded but not used」 경고가 난다. **고치는 법**: preload 링크의 요청 방식(credentials 등)을 `fetch()`와 맞추거나, 둘 중 하나만 둔다. WebKit과 Chromium 둘 다에서 요청 수로 확인한다.
-- **known-issues §57** **저장소의 `.python-version`이 이 기기에 없는 pyenv 가상 환경(`common-bible-env`)을 가리킨다**(2026-11-23, PR #638 코드 리뷰에서 찾음). 그래서 `pyenv exec python -m pytest`가 실행되지 않고, 리뷰 도구도 e2e를 돌리지 못했다. 작업 폴더의 e2e는 `docs/workflow.md` 「작업 중 함정」대로 `~/.pyenv/versions/3.14.6/bin/python`으로 돌린다(이 Python에 pytest와 Playwright가 있다). **고치는 길은 둘이다**: 기기에 `common-bible-env`를 만들거나(`pyenv virtualenv 3.14.6 common-bible-env`와 `requirements.txt` 설치), `.python-version`을 설치된 버전(`3.14.6`)으로 바꾼다. 다른 기기와 CI가 이 파일을 쓰는지 먼저 본다.
 
 ### known-issues §30 — `coding-pitfalls.md`와 주제 문서의 긴 사례 고쳐 쓰기 (2026-10-24)
 
