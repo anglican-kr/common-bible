@@ -1,4 +1,5 @@
 ---
+pr: 664
 date: 2026-11-24
 branch: docs/quote-iphone-check
 title: "docs: 따옴표 묶음의 실제 아이폰 확인 기록"
