@@ -30,6 +30,7 @@ title: "style: 하단 막대를 본문 글자 선에 맞추기"
 - e2e `test_safe_area_sides.py` 30건 통과(16건에서 늘었다). 하단 막대 시험을 글자 16, 18, 24px로 늘리고, 낮고 넓은 창(1280×500)과 가로의 16px 오디오 바를 더했다. dev의 CSS로 돌리면 17건이 실패한다. 통과하는 13건은 바뀌지 않아야 하는 경우다(양쪽 안전 영역의 24px, 세로의 휴대폰, 알림, 북마크 시트, 16px이 아닌 오디오 바).
 - 관련 e2e: 하단 막대와 본문 칸 폭을 보는 `test_rem_widths.py`, `test_layout_tiers.py`, `test_tabbar.py`, `test_audio.py`, `test_audio_controls.py`, `test_update_toast.py`, `test_features.py`와, 가로나 좁은 창을 쓰는 시험 셋(`test_calendar_view.py`의 짧은 화면 시트, `test_bookmark_export_import.py`의 가로 화면 가져오기, `test_settings.py`의 699px 단추). 위와 합쳐 133건이 통과했다(4분).
 - 측정(Chromium, 안전 영역은 개발자 프로토콜로 흉내): 가로 휴대폰 6종(874, 956, 852, 844, 812, 667pt와 안전 영역 62, 62, 59, 47, 50, 0)과 글자 16-24px의 30가지에서 첫 탭과 검색 원형이 본문 글자의 양 끝과 같고, 오디오 바의 컨트롤이 막대를 넘거나 서로 겹치지 않는다. 세로의 휴대폰(16, 18, 24px)은 전과 같은 16px이다.
+
 ## 갱신한 문서
 
 - `docs/decisions/030-morphing-tab-bar.md`: §1 「구조」의 좌우 끝, 「간격과 슬롯」의 결과 문장, §5 「가로 모드」의 미니 폭, 「검토한 대안」에 옛 방법(화면 끝에서 그쪽 안전 영역 안쪽 16px)을 더하고 본문 칸의 가운데에 두는 대안을 그것으로 바꿨다.
@@ -38,3 +39,7 @@ title: "style: 하단 막대를 본문 글자 선에 맞추기"
 - `docs/topics/routing.md` 「모핑 탭 바」의 좌우 위치와 가로 오디오.
 - `tests/README.md`의 `test_safe_area_sides.py` 줄(30건).
 - `docs/known-issues.md` §82, `docs/topics/audio.md` 「남은 일」의 §82 절.
+
+## 리뷰 반영
+
+1회차(`/code-review medium --fix`): 사소한 지적 하나를 고쳤다. 원장의 「갱신한 문서」 제목 앞에 빈 줄이 없었다. 새 위치 식, 같은 토큰을 쓰는 규칙(탭 독, 오디오 바의 떠 있는 바와 미니, 이어 읽기 알약), 탭 인디케이터와 알림 위치 계산, 시험의 기대값과 건수, 문서에 남은 옛 설명은 문제가 없었다. 중요한 지적이 없어 리뷰를 멈췄다.
