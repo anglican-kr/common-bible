@@ -187,15 +187,20 @@ def guard_analytics(ctx) -> None:
 def analytics_launch_args(launch_args, environ):
     """Chromium을 띄우는 인자에 구글 애널리틱스 주소의 이름을 풀지 못하게 하는 규칙을 더한다. 요청은 `net::ERR_NAME_NOT_RESOLVED`로
     바로 실패한다. 프록시를 거치는 요청은 프록시가 이름을 풀어 이 규칙이 적용되지 않으므로, 브라우저의 환경 변수 `no_proxy`에도 이
-    주소들을 더해 프록시를 거치지 않게 한다. Chromium은 프록시를 환경 변수(`https_proxy` 등)에서 읽는다."""
+    주소들을 더해 프록시를 거치지 않게 한다. Chromium은 프록시를 환경 변수(`https_proxy` 등)에서 읽는다. 띄우는 인자로 프록시를
+    정했으면(`proxy`) 환경 변수는 쓰이지 않으므로, 그 프록시가 건너뛰는 주소(`bypass`)에 더한다."""
     rules = ", ".join(f"MAP {host} ~NOTFOUND" for host in ANALYTICS_HOSTS)
     kept = [v for v in (environ.get("no_proxy"), environ.get("NO_PROXY")) if v]
     no_proxy = ",".join(dict.fromkeys([*kept, *ANALYTICS_HOSTS]))
-    return {
+    guarded = {
         **launch_args,
         "args": [*launch_args.get("args", []), f"--host-resolver-rules={rules}"],
         "env": {**environ, **launch_args.get("env", {}), "no_proxy": no_proxy, "NO_PROXY": no_proxy},
     }
+    proxy = launch_args.get("proxy")
+    if proxy:
+        guarded["proxy"] = {**proxy, "bypass": ",".join(v for v in (proxy.get("bypass"), *ANALYTICS_HOSTS) if v)}
+    return guarded
 
 
 @pytest.fixture(scope="session")

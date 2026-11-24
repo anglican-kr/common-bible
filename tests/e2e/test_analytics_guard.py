@@ -25,13 +25,17 @@ from .conftest import (
     ANALYTICS_TAG_URL,
     BASE_URL,
     CLEAR_APP_STORAGE,
+    analytics_launch_args,
     guard_analytics,
     is_analytics_url,
     wait_app_ready,
 )
 
-# CSP가 허용한 바깥 주소 가운데 애널리틱스가 아닌 것. 드라이브 동기화와 로그인(OAuth)이 쓴다.
-NOT_ANALYTICS = {"oauth2.googleapis.com", "www.googleapis.com", "content.googleapis.com"}
+# CSP가 허용한 바깥 주소 가운데 애널리틱스가 아닌 것. 드라이브 동기화와 로그인(OAuth), 그리고 글꼴이 쓴다.
+NOT_ANALYTICS = {
+    "oauth2.googleapis.com", "www.googleapis.com", "content.googleapis.com",
+    "fonts.googleapis.com", "fonts.gstatic.com",
+}
 
 # 구글 태그가 요청을 보내는 것이 확인된 주소(원장 `docs/changes/2026-11-24-csp-google-signals.md`)와 태그 스크립트의 주소.
 # 측정 ID도 방문 내용도 싣지 않아, 장치가 없어져 구글까지 가더라도 기록되지 않는다.
@@ -45,16 +49,22 @@ PAGE_VIEWS = "() => (window.dataLayer || []).filter((a) => a[0] === 'event' && a
 
 
 def _csp_hosts():
-    """`index.html`의 CSP에서 스크립트, 요청, 이미지에 허용한 바깥 주소(호스트 표기)."""
-    html = urllib.request.urlopen(f"{BASE_URL}/index.html").read().decode("utf-8")
+    """`index.html`의 CSP가 허용한 바깥 주소(호스트 표기). 지시문을 가리지 않고 모두 읽는다. 태그가 쓰는 주소는 어느 지시문에나
+    더해질 수 있다(구글 시그널의 `frame-src` 등). 경로와 포트는 떼고 호스트만 남긴다. 환경 변수의 프록시는 쓰지 않는다.
+    로컬 서버는 프록시 너머에 없다."""
+    direct = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    with direct.open(f"{BASE_URL}/index.html") as res:
+        html = res.read().decode("utf-8")
     policy = re.search(r'http-equiv="Content-Security-Policy"\s+content="([^"]+)"', html).group(1)
     hosts = set()
     for directive in policy.split(";"):
         if not directive.strip():
             continue
-        name, *sources = directive.split()
-        if name in ("script-src", "connect-src", "img-src"):
-            hosts.update(s[len("https://"):] for s in sources if s.startswith("https://"))
+        _name, *sources = directive.split()
+        for source in sources:
+            scheme, sep, rest = source.partition("://")
+            if sep and scheme in ("https", "http", "wss", "ws"):
+                hosts.add(rest.split("/", 1)[0].split(":", 1)[0])
     return hosts
 
 
@@ -71,7 +81,7 @@ def test_guard_covers_every_analytics_address_the_csp_allows():
         for sample in samples:
             assert any(fnmatch.fnmatchcase(sample, pattern) for pattern in ANALYTICS_HOSTS), f"막는 목록이 덮지 않는다: {host}({sample})"
             assert is_analytics_url(f"https://{sample}/g/collect"), sample
-    for host in NOT_ANALYTICS | {"fonts.googleapis.com", "fonts.gstatic.com"}:
+    for host in NOT_ANALYTICS:
         assert not is_analytics_url(f"https://{host}/"), f"애널리틱스가 아닌 주소를 막는다: {host}"
 
 
@@ -119,25 +129,36 @@ class _RefusingProxy(socketserver.ThreadingTCPServer):
 def test_analytics_addresses_bypass_a_proxy_set_in_the_environment(browser_type, browser_type_launch_args):
     """환경 변수로 프록시를 정한 기기에서도 막는 주소로 가는 요청은 프록시에 가지 않고 이름 풀이에서 실패한다. 프록시를 거치면 프록시가
     이름을 풀어 규칙이 적용되지 않으므로, 이 주소들은 프록시를 거치지 않게 해 두었다(`analytics_launch_args`의 `no_proxy`).
-    이 묶음을 띄우는 인자 그대로, 환경 변수에 프록시만 더해 브라우저를 하나 더 띄워 본다."""
-    proxy = _RefusingProxy()
-    address = f"http://127.0.0.1:{proxy.server_address[1]}"
-    env = {**browser_type_launch_args["env"], **{name: address for name in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY")}}
-    proxied = browser_type.launch(**{**browser_type_launch_args, "env": env})
-    try:
-        page = proxied.new_context().new_page()
-        failures = []
-        page.on("requestfailed", lambda req: failures.append((req.url, req.failure)))
-        page.goto("about:blank")
-        control = "https://e2e-proxy-control.invalid/"   # 막는 주소가 아닌 곳은 프록시로 간다. 프록시가 실제로 쓰이는지 본다
-        for url in [*PROBES, control]:
-            assert page.evaluate(FETCH, url) == "failed", url
-        assert failures == [*((url, "net::ERR_NAME_NOT_RESOLVED") for url in PROBES), (control, "net::ERR_TUNNEL_CONNECTION_FAILED")]
-        assert proxy.asked == ["CONNECT e2e-proxy-control.invalid:443 HTTP/1.1"]
-    finally:
-        proxied.close()
-        proxy.shutdown()
-        proxy.server_close()
+    이 묶음을 띄우는 인자 그대로, 환경 변수에 프록시만 더해 브라우저를 하나 더 띄워 본다. 띄우는 인자로 프록시를 정한 경우(`proxy`)도
+    같은지 한 번 더 띄워 본다."""
+    def launch_args_with(address, how):
+        if how == "env":
+            names = ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY")
+            return {**browser_type_launch_args, "env": {**browser_type_launch_args["env"], **{name: address for name in names}}}
+        return analytics_launch_args({"proxy": {"server": address}}, browser_type_launch_args["env"])
+
+    for how in ("env", "launch-option"):
+        proxy = _RefusingProxy()
+        proxied = None
+        try:
+            proxied = browser_type.launch(**launch_args_with(f"http://127.0.0.1:{proxy.server_address[1]}", how))
+            page = proxied.new_context().new_page()
+            failures = []
+            page.on("requestfailed", lambda req: failures.append((req.url, req.failure)))
+            page.goto("about:blank")
+            control = "https://e2e-proxy-control.invalid/"   # 막는 주소가 아닌 곳은 프록시로 간다. 프록시가 실제로 쓰이는지 본다
+            for url in [*PROBES, control]:
+                assert page.evaluate(FETCH, url) == "failed", (how, url)
+            assert failures == [*((url, "net::ERR_NAME_NOT_RESOLVED") for url in PROBES), (control, "net::ERR_TUNNEL_CONNECTION_FAILED")], how
+            # 브라우저가 스스로 보내는 요청이 프록시에 섞여 올 수 있어, 목록 전체를 견주지 않는다.
+            assert "CONNECT e2e-proxy-control.invalid:443 HTTP/1.1" in proxy.asked, (how, proxy.asked)
+            through_proxy = [line for line in proxy.asked if is_analytics_url("https://" + line.split()[1].split("://")[-1])]
+            assert through_proxy == [], (how, through_proxy)
+        finally:
+            if proxied:
+                proxied.close()
+            proxy.shutdown()
+            proxy.server_close()
 
 
 @pytest.mark.only_browser("chromium")
