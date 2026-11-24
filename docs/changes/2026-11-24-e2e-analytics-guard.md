@@ -1,4 +1,5 @@
 ---
+pr: 659
 date: 2026-11-24
 branch: fix/e2e-analytics-guard
 title: "fix: e2e가 구글 애널리틱스에 요청을 보내지 않게 하기"
