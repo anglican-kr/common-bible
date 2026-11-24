@@ -4,6 +4,8 @@ Prerequisites: a dev server must be running at BASE_URL.
     python3 scripts/serve.py 8080
 """
 
+import re
+
 import pytest
 
 BASE_URL = "http://localhost:8080"
@@ -134,6 +136,78 @@ def style_in_state(cdp, expression, prop, state="hover"):
         })["result"]["value"]
     finally:
         cdp.send("CSS.forcePseudoState", {"nodeId": node, "forcedPseudoClasses": []})
+
+
+# ── 구글 애널리틱스로 가는 요청을 막는다(known-issues §61) ─────────────────────────────────────────────
+# e2e가 여는 화면은 `index.html`이 싣는 구글 태그(gtag.js)를 그대로 받아, `localhost`의 방문을 사용자가 보는 통계로 보냈다.
+# 아래 두 장치가 e2e의 요청이 구글에 가지 않게 한다. 태그가 없어도 앱은 그대로 돈다. 방문 기록은 `gtag-init.js`의 대기열(`dataLayer`)에 쌓인다.
+#  - Chromium: 태그와 그 요청이 가는 주소의 이름을 풀지 못하게 한다(`browser_type_launch_args`). 서비스 워커가 보내는 요청까지
+#    막힌다. 이 앱의 워커는 넘겨받은 화면의 GET 요청을 모두 제가 받아 보내는데, Playwright의 `route`는 워커가 보낸 요청을 잡지
+#    못한다. 기본 설정의 로컬 서버에서는 워커가 설치를 끝내지 못해 화면을 넘겨받지 않지만(known-issues §79), 서버를 `--cache`로
+#    띄우면 넘겨받는다.
+#  - 다른 브라우저: 이름 풀이를 바꿀 수 없어, 컨텍스트마다 `guard_analytics`로 대신 대답한다(`browser`). 워커가 넘겨받은
+#    화면에서 워커가 보내는 요청은 막지 못한다.
+# 방문 기록을 세는 시험은 제 컨텍스트에 흉내 낸 태그를 `route`로 싣는다(`test_navigation.py`의 `FAKE_GTAG`). `route`는 이름
+# 풀이보다 먼저 적용되고, 나중에 등록한 `route`가 먼저 등록한 것보다 먼저 적용된다.
+
+# 태그와 그 요청에 `index.html`의 CSP가 허용한 주소. Chromium의 호스트 규칙에 쓰는 표기다(`*`는 아무 글자열).
+# CSP에 구글 주소를 더하면 여기에도 더한다(`test_analytics_guard.py`가 견준다).
+ANALYTICS_HOSTS = (
+    "*.googletagmanager.com",       # 태그 스크립트(gtag.js)
+    "*.google-analytics.com",       # 수집(g/collect)
+    "analytics.google.com",         # 구글 시그널을 켠 속성의 수집
+    "*.analytics.google.com",
+    "*.g.doubleclick.net",          # 구글 시그널(stats.g.doubleclick.net)
+    "www.google.com",               # 페이지를 떠날 때의 수집
+    "www.google.co.kr",             # 구글 시그널(ads/ga-audiences)
+)
+ANALYTICS_TAG_URL = re.compile(r"^https://www\.googletagmanager\.com/gtag/js")
+ANALYTICS_URL = re.compile(
+    "^https://(" + "|".join(re.escape(h).replace(r"\*", "[^/]*") for h in ANALYTICS_HOSTS) + ")(/|$)"
+)
+ANALYTICS_GUARD_HEADER = "x-e2e-analytics-guard"   # `guard_analytics`가 대신 한 대답에 붙는다
+
+
+def is_analytics_url(url) -> bool:
+    """구글 태그나 그 요청이 가는 주소인가."""
+    return bool(ANALYTICS_URL.match(url))
+
+
+def guard_analytics(ctx) -> None:
+    """이 컨텍스트가 구글 애널리틱스로 보내는 요청에 대신 대답한다. 태그 스크립트에는 빈 스크립트를, 그 밖의 주소에는 빈 성공 응답(204)을
+    준다. 막으면 진짜 태그가 다시 보내므로 막지 않는다(pitfalls §43)."""
+    def answer(route):
+        if ANALYTICS_TAG_URL.match(route.request.url):
+            route.fulfill(status=200, content_type="text/javascript", body="", headers={ANALYTICS_GUARD_HEADER: "1"})
+        else:
+            route.fulfill(status=204, headers={ANALYTICS_GUARD_HEADER: "1"})
+    ctx.route(ANALYTICS_URL, answer)
+
+
+@pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args, browser_name):
+    """Chromium이 구글 애널리틱스 주소의 이름을 풀지 못하게 한다. 요청은 `net::ERR_NAME_NOT_RESOLVED`로 바로 실패한다."""
+    if browser_name != "chromium":
+        return browser_type_launch_args
+    rules = ", ".join(f"MAP {host} ~NOTFOUND" for host in ANALYTICS_HOSTS)
+    args = [*browser_type_launch_args.get("args", []), f"--host-resolver-rules={rules}"]
+    return {**browser_type_launch_args, "args": args}
+
+
+@pytest.fixture(scope="session")
+def browser(browser, browser_name):
+    """Chromium이 아니면 `browser.new_context`가 만드는 컨텍스트마다 `guard_analytics`를 실행한다. 시험은 컨텍스트를 이 메서드로
+    직접 만들고(`desktop_context`와 `mobile_context`, pytest-playwright의 `context`도 이 메서드를 호출한다), 페이지를 바로 만드는 곳은 없다."""
+    if browser_name != "chromium":
+        new_context = browser.new_context
+
+        def guarded_new_context(*args, **kwargs):
+            ctx = new_context(*args, **kwargs)
+            guard_analytics(ctx)
+            return ctx
+
+        browser.new_context = guarded_new_context
+    return browser
 
 
 @pytest.fixture(scope="session")
