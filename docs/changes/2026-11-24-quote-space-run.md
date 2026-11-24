@@ -1,4 +1,5 @@
 ---
+pr: 661
 date: 2026-11-24
 branch: fix/quote-space-run
 title: "fix: Safari에서 운문 행의 여는 따옴표만 줄 끝에 남는 줄바꿈"
