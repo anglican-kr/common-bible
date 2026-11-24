@@ -113,3 +113,35 @@ test("운문의 어절 주석은 따옴표 묶음 자리를 가르지 않는다"
   assert.ok(anchors > 0, "data/bible 의 운문에서 어절 주석을 하나도 찾지 못했다");
   assert.deepEqual(split, []);
 });
+
+// 선창 끝 ◯는 마지막 글자와 함께 줄바꿈하지 않는 상자에 넣는다(helpers.js holdResponsoryMarks, ADR-053 §2). 검색 강조는
+// 둘로 나눠 마지막 글자만 상자에 넣지만, 어절 주석은 단추라 나누지 못한다. 공백이 없는 주석은 통째로 상자에 들어 긴 낱말이
+// 본문 칸을 넘을 수 있고, 공백이 있는 주석은 상자에 들지 않아 Safari가 그 뒤에서 ◯를 넘길 수 있다(2026-11-24 리뷰). 지금
+// 전례시편과 송가에는 어절 주석이 없다(2026-11-24) — 선창 줄의 마지막 낱말에 주석이 생기면 여기서 걸린다.
+test("◯가 붙는 선창 줄의 마지막 낱말에는 어절 주석이 없다", { skip: SKIP }, () => {
+  let cantorLines = 0;
+  /** @type {string[]} */
+  const touched = [];
+  for (const name of fs.readdirSync(BIBLE_DIR)) {
+    if (!/^(lps|cant)-\d+\.json$/.test(name)) continue;
+    const data = JSON.parse(fs.readFileSync(path.join(BIBLE_DIR, name), "utf8"));
+    for (const v of data.verses ?? []) {
+      const segs = v.segments ?? [];
+      const words = (v.notes ?? []).map((n) => n.anchor).filter(Boolean);
+      segs.forEach((seg, i) => {
+        if (seg.response || !segs[i + 1]?.response) return;   // ◯ 는 응답이 따라오는 선창 줄 끝에만 붙는다
+        cantorLines++;
+        const lines = seg.text.split("\n");
+        const line = lines[lines.length - 1];
+        const lastWord = line.lastIndexOf(" ") + 1;
+        for (const word of words) {
+          for (let at = line.indexOf(word); at >= 0; at = line.indexOf(word, at + word.length)) {
+            if (at + word.length > lastWord) touched.push(`${name} ${v.number}: ${word}`);
+          }
+        }
+      });
+    }
+  }
+  assert.ok(cantorLines > 2000, `◯가 붙는 선창 줄이 ${cantorLines}개뿐이다`);
+  assert.deepEqual(touched, []);
+});

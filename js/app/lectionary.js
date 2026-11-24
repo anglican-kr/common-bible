@@ -1774,11 +1774,12 @@ function trimHalfVerses(article, verseSpec, bookId, chapter) {
       last.querySelectorAll(".responsory-mark").forEach((n) => {
         // The no-break space that held ◯ to the last word (views.js appendVerses) goes back to a space: a line-end
         // no-break space does not hang past the edge like a space does, so it could push that word to a line of its own.
-        const before = n.previousSibling;
-        if (before?.nodeType === Node.TEXT_NODE) {
-          const text = /** @type {Text} */ (before);
-          if (text.data.endsWith("\u00a0")) text.data = `${text.data.slice(0, -1)} `;
-        }
+        // The text right before ◯ in the line — inside the ◯ box it can sit in a cut search highlight, not beside ◯.
+        const walker = document.createTreeWalker(last, NodeFilter.SHOW_TEXT);
+        /** @type {Text | null} */
+        let before = null;
+        for (let t = walker.nextNode(); t && !n.contains(t); t = walker.nextNode()) before = /** @type {Text} */ (t);
+        if (before?.data.endsWith("\u00a0")) before.data = `${before.data.slice(0, -1)} `;
         // The box that held ◯ to the letter before it (helpers.js holdResponsoryMarks) goes too, its letters left in place.
         const hold = n.parentElement?.classList.contains("responsory-hold") ? n.parentElement : null;
         n.remove();

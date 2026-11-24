@@ -286,7 +286,7 @@ _PSALM_104_35 = """() => [...document.querySelectorAll(".lect-reading[data-slot=
 def test_half_verse_cut_gives_back_the_space_before_a_dropped_mark(browser):
     """반절의 뒷줄을 버려 선창 줄이 마지막 줄로 남으면 ◯는 지워지고(lectionary.js trimHalfVerses), ◯를 붙잡던 줄바꿈 없는 공백도
     보통 공백으로 돌아간다. 줄 끝의 줄바꿈 없는 공백은 보통 공백과 달리 폭을 차지해 마지막 낱말을 다음 줄로 밀 수 있다.
-    ◯를 마지막 글자에 붙잡던 상자(`.responsory-hold`)도 풀려 글자만 남는다.
+    ◯와 마지막 글자를 함께 넣은 상자(`.responsory-hold`)도 풀려 글자만 남는다.
     실데이터의 전례시편 반절은 앞줄을 버리는 104:35하 하나뿐이라, 반절 표와 독서 표를 104:35상으로 바꿔 그린다(2025-06-08)."""
     root = Path(__file__).resolve().parents[2] / "data" / "lectionary"
     halves = json.loads((root / "half-verses.json").read_text(encoding="utf-8"))
