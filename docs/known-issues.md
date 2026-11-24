@@ -424,7 +424,7 @@ ADR-038 §3의 렌더 기반이 복원하는 전례 표기는 계응 ◯(`.respo
 
 ## 57. `.python-version`이 이 기기에 없는 pyenv 가상 환경을 가리킨다 (2026-11-23) — 해소 (2026-11-24)
 
-> **해소됨 (2026-11-24) — 본문을 지웠다.** 저장소에서 `.python-version`을 지우고 `.gitignore`에 넣었다(사용자 결정). 이 파일은 2025-07-27에 저장소가 Python 파이프라인을 품고 있을 때 pyenv 가상 환경(`common-bible-env`)을 고르려고 넣었는데, 파이프라인은 데이터 저장소로 옮겨 갔고 이 기기에는 그 환경이 없어 `pyenv exec python -m pytest`가 실행되지 않았다. 이제 pyenv는 기기의 기본 버전(`pyenv global`)을 쓴다. 고친 내용은 원장 `docs/changes/2026-11-24-drop-python-version.md`. 머지된 원장과 메모가 절을 번호로 가리키므로 번호는 그대로 둔다.
+> **해소됨 (2026-11-24) — 본문을 지웠다.** 저장소에서 `.python-version`을 지우고 `.gitignore`에 넣었다(사용자 결정). 이 파일은 2025-07-27에 저장소가 Python 파이프라인을 품고 있을 때 pyenv 가상 환경(`common-bible-env`)을 고르려고 넣었는데, 파이프라인은 데이터 저장소로 옮겨 갔고 이 기기에는 그 환경이 없어 `pyenv exec python -m pytest`가 실행되지 않았다. 이제 pyenv는 기기의 기본 버전(`pyenv global`)을 쓰고, 그 버전은 3.14 이상이어야 한다(`docs/workflow.md` 「작업 중 함정」의 「e2e 서버」). 고친 내용은 원장 `docs/changes/2026-11-24-drop-python-version.md`. 머지된 원장과 메모가 절을 번호로 가리키므로 번호는 그대로 둔다.
 
 ---
 
