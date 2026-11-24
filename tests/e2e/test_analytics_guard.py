@@ -47,6 +47,9 @@ PROBES = [f"https://{host}/e2e-guard-check" for host in (
     "stats.g.doubleclick.net", "www.google.com", "www.google.co.kr",
 )]
 
+# 값이 주소 목록이 아닌 CSP 지시문. 값의 낱말(`allow-scripts`, 보고 경로)을 주소로 읽지 않는다.
+NOT_SOURCE_LISTS = {"sandbox", "report-uri", "report-to", "trusted-types", "require-trusted-types-for", "plugin-types"}
+
 FETCH = "(url) => fetch(url, { mode: 'no-cors' }).then(() => 'answered', () => 'failed')"
 PAGE_VIEWS = "() => (window.dataLayer || []).filter((a) => a[0] === 'event' && a[1] === 'page_view').length"
 
@@ -64,7 +67,9 @@ def _csp_hosts():
     for directive in policy.split(";"):
         if not directive.strip():
             continue
-        _name, *sources = directive.split()
+        name, *sources = directive.split()
+        if name.lower() in NOT_SOURCE_LISTS:
+            continue
         for source in sources:
             if source.startswith("'") or source.endswith(":"):
                 continue
