@@ -1,4 +1,5 @@
 ---
+pr: 658
 date: 2026-11-24
 branch: claude/gracious-rubin-0c1ghm
 title: "fix: Safari에서 선창 끝 ◯가 혼자 넘어가는 줄바꿈"
