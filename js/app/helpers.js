@@ -215,6 +215,65 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     }
   }
 
+  const HOLD_LETTER = /[\p{L}\p{N}]/u;
+  const HOLD_SPACE = /[ \t\n\r\f]/;   // a space a line may break at — not the no-break space before ◯
+
+  /**
+   * Where the box that holds a responsory ◯ on its line starts in `text`, the text right before ◯ (ADR-053 §2): at the
+   * last letter, so the box holds that letter, the punctuation after it, the space and ◯ (「경배하여라. ◯」 → 「라. ◯」).
+   * The box starts after a space when only punctuation follows the space, and -1 means the text holds no letter or
+   * space, so all of it goes in the box and the text before it is looked at next.
+   * @param {string} text
+   * @returns {number}
+   */
+  function holdStart(text) {
+    for (let i = text.length - 1; i >= 0; i--) {
+      if (HOLD_LETTER.test(text[i])) return i;
+      if (HOLD_SPACE.test(text[i])) return i + 1;
+    }
+    return -1;
+  }
+
+  /**
+   * Hold each responsory ◯ under `root` on the line of the letter before it (ADR-053 §2): the letter, what follows it
+   * and ◯ go in a span that does not wrap (`.responsory-hold`). A no-break space before ◯ is not enough everywhere —
+   * Safari on an iPhone broke between 「경배하여라.」 and the no-break space and took ◯ to the next line (2026-11-24).
+   * The box holds only the last letter of the word, so a word longer than the line can still break inside it.
+   * Only text nodes are split — the text, and so copies and search highlighting, stay the same.
+   * Call it after wrapQuoteRuns: a quote run is looked for inside one text node, and the box would split one. A box the
+   * walk meets on its way back (a quote run, a note anchor, a search highlight) goes in whole when it holds no space;
+   * one that holds a space stays out, so the box never takes a word that cannot wrap.
+   * @param {ParentNode} root
+   */
+  function holdResponsoryMarks(root) {
+    for (const mark of root.querySelectorAll(".responsory-mark")) {
+      if (mark.parentElement?.classList.contains("responsory-hold")) continue;
+      /** @type {ChildNode[]} */
+      const run = [mark];
+      let found = false;
+      for (let n = mark.previousSibling; n && !found; n = n.previousSibling) {
+        if (n.nodeType === Node.TEXT_NODE) {
+          const text = /** @type {Text} */ (n);
+          const at = holdStart(text.data);
+          if (at < 0) { run.unshift(text); continue; }
+          found = true;
+          if (at < text.data.length) run.unshift(at > 0 ? text.splitText(at) : text);
+        } else if (n instanceof Element && !n.matches(".verse-num, .versicle-mark, .pilcrow, .lect-bracket, .hanging-quote")) {
+          const text = n.textContent || "";
+          if (HOLD_SPACE.test(text)) { found = true; break; }
+          run.unshift(n);
+          found = HOLD_LETTER.test(text);
+        } else {
+          break;   // the head of the line: the verse number, ¶, 〔 or a hanging quote
+        }
+      }
+      if (!found || run.length < 2) continue;
+      const hold = el("span", { className: "responsory-hold" });
+      run[0].before(hold);
+      hold.append(...run);
+    }
+  }
+
   /**
    * Toggle background `inert` + `aria-hidden` for elements outside the
    * currently active modal/drawer. Selectors should match the elements
@@ -685,7 +744,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   }
 
   return {
-    _$, chUnit, chUnitNoun, chapterTitle, chapterLabel, verseRefLabel, missingChapterText, hasBatchim, el, clearNode, hangingQuoteClass, quoteRuns, wrapQuoteRuns, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
+    _$, chUnit, chUnitNoun, chapterTitle, chapterLabel, verseRefLabel, missingChapterText, hasBatchim, el, clearNode, hangingQuoteClass, quoteRuns, wrapQuoteRuns, holdStart, holdResponsoryMarks, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
     HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot, SCROLL_ANCHORING, barBottom, scrollUnderBar,
     publishBarHeight, isFormerNorthChurch, churchName, parishGroups, LARGE_LAYOUT_QUERY, isLargeLayout, isSmallLayout, TOUCH_INPUT_QUERY, isTouchInput,
     SHEET_INERT_SELECTORS,

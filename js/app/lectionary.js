@@ -50,7 +50,7 @@ import {
 
 const {
   _$, el, clearNode, emptyState, isModifiedClick, headerIcon, HEADER_ICON_PATHS, isFormerNorthChurch,
-  LARGE_LAYOUT_QUERY, isLargeLayout, datePickerTrigger, chapterTitle,
+  LARGE_LAYOUT_QUERY, isLargeLayout, datePickerTrigger, chapterTitle, holdResponsoryMarks,
 } = window.appHelpers;
 const { loadLectionaryTrack, saveLectionaryTrack, loadLectionaryCardsFolded, saveLectionaryCardsFolded, loadLectionaryAltShow, loadParish, loadBaptismalSaint } = window.appStorage;
 
@@ -1618,11 +1618,17 @@ function buildCollects(m) {
 }
 
 /** 영광송 — 선창 ◯ 응답, 계응 시편과 같은 표지(`responsory-mark` · `verse-response`). */
-/** 영광송 블록의 복사 글자 — 줄마다 한 줄, 선창 줄 끝에 「 ◯」(시편 본문 복사와 같은 방식). @param {Element} box @returns {string} */
+/**
+ * 영광송 블록의 복사 글자 — 줄마다 한 줄, 선창 줄 끝에 「 ◯」(시편 본문 복사와 같은 방식). ◯는 앞 글자와 함께 줄바꿈하지 않는
+ * 상자에 들어 있어(helpers.js holdResponsoryMarks), 줄의 글자를 이은 뒤 ◯ 앞에 공백을 넣는다.
+ * @param {Element} box @returns {string}
+ */
 function gloriaCopyText(box) {
-  return [...box.querySelectorAll(".lect-gloria-line")]
-    .map((line) => [...line.childNodes].map((c) => (c.textContent || "").replace(/\u2060/g, "").trim()).filter(Boolean).join(" "))
-    .join("\n");
+  return [...box.querySelectorAll(".lect-gloria-line")].map((line) => {
+    const copy = /** @type {Element} */ (line.cloneNode(true));
+    copy.querySelectorAll(".responsory-mark").forEach((m) => { m.textContent = " ◯"; });
+    return (copy.textContent || "").replace(/\u2060/g, "").replace(/ +/g, " ").trim();
+  }).join("\n");
 }
 
 function buildGloria() {
@@ -1631,6 +1637,7 @@ function buildGloria() {
   v.appendChild(el("span", { className: "responsory-mark", "aria-hidden": "true" }, RESPONSORY_MARK));
   box.appendChild(v);
   box.appendChild(el("span", { className: "lect-gloria-line verse-response" }, GLORIA.response));
+  holdResponsoryMarks(box);   // 「께」와 ◯ 를 한 줄에(ADR-053 §2)
   return box;
 }
 
@@ -1772,7 +1779,10 @@ function trimHalfVerses(article, verseSpec, bookId, chapter) {
           const text = /** @type {Text} */ (before);
           if (text.data.endsWith("\u00a0")) text.data = `${text.data.slice(0, -1)} `;
         }
+        // The box that held ◯ to the letter before it (helpers.js holdResponsoryMarks) goes too, its letters left in place.
+        const hold = n.parentElement?.classList.contains("responsory-hold") ? n.parentElement : null;
         n.remove();
+        hold?.replaceWith(...hold.childNodes);
       });
       dropSiblings(/** @type {Element} */ (last.nextElementSibling), spans[spans.length - 1]);
     }

@@ -69,7 +69,7 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
       .join(";");
   }
 
-  const { el, clearNode, hangingQuoteClass, wrapQuoteRuns, headerIcon, HEADER_ICON_PATHS, barBottom } = window.appHelpers;
+  const { el, clearNode, hangingQuoteClass, wrapQuoteRuns, holdResponsoryMarks, headerIcon, HEADER_ICON_PATHS, barBottom } = window.appHelpers;
   const { createOverlay, attachSheetDrag, attachSheetResize } = window.appOverlay;
 
   /**
@@ -851,6 +851,7 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
     }
 
     wrapQuoteRuns(article);   // a quote stays on the line of the letters beside it (ADR-053 §2)
+    holdResponsoryMarks(article);   // and ◯ on the line of the letter before it
     container.appendChild(article);
   }
 

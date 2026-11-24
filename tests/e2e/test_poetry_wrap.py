@@ -162,12 +162,13 @@ MARK_ON_WORD_LINE = r"""(sel) => [...document.querySelectorAll(sel)].map(m => {
 })"""
 
 
-@pytest.mark.parametrize("path", ["/lps/20", "/lps/104"])
-def test_responsory_mark_stays_with_the_last_word(browser, path):
+@pytest.mark.parametrize("path,width,font", [("/lps/20", 390, 18), ("/lps/104", 390, 18), ("/lps/99", 320, 24)])
+def test_responsory_mark_stays_with_the_last_word(browser, path, width, font):
     """선창 끝의 ◯는 마지막 낱말과 같은 줄에 있다(ADR-053 §2). 띄어쓰기 자리에서만 줄을 바꾸면 ◯ 앞의 공백에서
     줄이 바뀌어 ◯만 다음 줄로 넘어갈 수 있다(기본 글자 크기의 휴대폰에서 20:5와 104:24). 그 공백은 줄바꿈 없는 공백으로
-    그리고, 복사하면 보통 공백이다(`test_copy.py`의 「… ◯」)."""
-    ctx = _phone(browser)
+    그리고, 복사하면 보통 공백이다(`test_copy.py`의 「… ◯」). 99:8의 "대답해주셨습니다. ◯"는 폭 320px에 글자 24px에서 한 줄보다
+    길어, ◯ 혼자가 아니라 마지막 글자와 함께 넘어간다(◯ 상자, 2026-11-24)."""
+    ctx = _phone(browser, width=width, font=font)
     try:
         page = _open(ctx, path, ".chapter-text .responsory-mark")
         marks = page.evaluate(MARK_ON_WORD_LINE, ".chapter-text .responsory-mark")
@@ -189,14 +190,47 @@ def test_gloria_mark_stays_with_the_last_word(browser):
     assert len(marks) == 1 and marks[0]["same"], marks
 
 
-# 전례독서 시편 슬롯의 104:35 줄들 — [보이는 글자, ◯가 있는가].
+# 운문의 행이 어느 글자 옆에서나 줄을 바꿀 수 있게 한다(`line-break: anywhere`). 줄바꿈 없는 공백(U+00A0)과 낱말 잇기
+# 문자(U+2060)도 막지 못하는 줄바꿈이다. 앱의 CSP는 끼워 넣은 스타일을 막으므로 컨텍스트가 CSP를 건너뛴다.
+_BREAK_ANYWHERE = ".verse-poetry, .lect-gloria-line { line-break: anywhere; }"
+_MARK_HELD = r"""() => [...document.querySelectorAll('.responsory-mark')].map(m => {
+  const hold = m.parentElement;
+  return hold.classList.contains('responsory-hold') && getComputedStyle(hold).whiteSpace === 'nowrap'
+    ? hold.textContent.replace(/⁠/g, '') : null;
+})"""
+
+
+@pytest.mark.parametrize("width", [310, 358, 406])
+def test_responsory_mark_is_held_even_where_the_browser_breaks_anywhere(browser, width):
+    """◯와 그 앞의 마지막 글자는 줄바꿈하지 않는 상자(`.responsory-hold`)에 함께 들어 있어(helpers.js holdResponsoryMarks),
+    브라우저가 어느 자리에서 줄을 바꾸든 ◯가 혼자 다음 줄로 가지 않는다(ADR-053 §2). 아이폰의 Safari는 "경배하여라."와 그 뒤의
+    줄바꿈 없는 공백 사이에서 줄을 바꿔 ◯만 넘겼다(2026-11-24, 전례시편 96:9와 11). Chromium에서는 그 공백이 막아 재현되지
+    않으므로, 어느 글자 옆에서나 줄을 바꾸게 해서 시험한다. 상자가 없으면 고른 폭마다 ◯가 혼자 넘어간다(310px에서 영광송 포함
+    다섯 곳). 2026-11-24 전례독서는 시편 96편과 영광송이다."""
+    ctx = browser.new_context(viewport={"width": width, "height": 844}, is_mobile=True, has_touch=True,
+                              user_agent=IPHONE_UA, bypass_csp=True)
+    ctx.add_init_script(CLEAR_APP_STORAGE + "localStorage.setItem('bible-font-size', '18');")
+    try:
+        page = _open(ctx, "/lectionary/2026-11-24", ".lect-gloria .responsory-mark")
+        page.add_style_tag(content=_BREAK_ANYWHERE)
+        held = page.evaluate(_MARK_HELD)
+        marks = page.evaluate(MARK_ON_WORD_LINE, ".chapter-text .responsory-mark, .lect-gloria .responsory-mark")
+    finally:
+        ctx.close()
+    assert len(held) == 14 and None not in held, held   # 시편 96편 13곳과 영광송
+    assert "라.\u00a0◯" in held and "께◯" in held, held   # 96:9 "경배하여라.", 영광송 "성령께"
+    assert len(marks) == 14 and all(m["same"] for m in marks), marks
+
+
+# 전례독서 시편 슬롯의 104:35 줄들 — [보이는 글자, ◯나 ◯ 상자가 있는가].
 _PSALM_104_35 = """() => [...document.querySelectorAll(".lect-reading[data-slot='psalm'] .verse[data-vkey^='35/']")]
-  .map((s) => [s.textContent, !!s.querySelector('.responsory-mark')])"""
+  .map((s) => [s.textContent, !!s.querySelector('.responsory-mark, .responsory-hold')])"""
 
 
 def test_half_verse_cut_gives_back_the_space_before_a_dropped_mark(browser):
     """반절의 뒷줄을 버려 선창 줄이 마지막 줄로 남으면 ◯는 지워지고(lectionary.js trimHalfVerses), ◯를 붙잡던 줄바꿈 없는 공백도
     보통 공백으로 돌아간다. 줄 끝의 줄바꿈 없는 공백은 보통 공백과 달리 폭을 차지해 마지막 낱말을 다음 줄로 밀 수 있다.
+    ◯를 마지막 글자에 붙잡던 상자(`.responsory-hold`)도 풀려 글자만 남는다.
     실데이터의 전례시편 반절은 앞줄을 버리는 104:35하 하나뿐이라, 반절 표와 독서 표를 104:35상으로 바꿔 그린다(2025-06-08)."""
     root = Path(__file__).resolve().parents[2] / "data" / "lectionary"
     halves = json.loads((root / "half-verses.json").read_text(encoding="utf-8"))

@@ -4417,6 +4417,11 @@ mark.search-highlight {
   user-select: none;
 }
 
+/* ◯ and the last letter before it stay on one line (helpers.js holdResponsoryMarks, ADR-053 §2). */
+.responsory-hold {
+  white-space: nowrap;
+}
+
 /* 무번호 후속 구절(¶) — 절 번호 자리에 온다. .verse-num 과 같은 자리를 쓰되
    운문 들여쓰기 규칙(위 .verse-poetry .verse-num)과 어긋나지 않도록 같은 폭. */
 .versicle-mark {
