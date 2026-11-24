@@ -4,6 +4,7 @@ Prerequisites: a dev server must be running at BASE_URL.
     python3 scripts/serve.py 8080
 """
 
+import os
 import re
 
 import pytest
@@ -144,26 +145,25 @@ def style_in_state(cdp, expression, prop, state="hover"):
 #  - Chromium: 태그와 그 요청이 가는 주소의 이름을 풀지 못하게 한다(`browser_type_launch_args`). 서비스 워커가 보내는 요청까지
 #    막힌다. 이 앱의 워커는 넘겨받은 화면의 GET 요청을 모두 제가 받아 보내는데, Playwright의 `route`는 워커가 보낸 요청을 잡지
 #    못한다. 기본 설정의 로컬 서버에서는 워커가 설치를 끝내지 못해 화면을 넘겨받지 않지만(known-issues §80), 서버를 `--cache`로
-#    띄우면 넘겨받는다.
+#    띄우면 넘겨받는다. 프록시를 거치는 요청은 프록시가 이름을 풀어 이 규칙이 적용되지 않는다. 그래서 환경 변수로 프록시를 정한
+#    기기에서도 이 주소들은 프록시를 거치지 않게 한다(`no_proxy`).
 #  - 다른 브라우저: 이름 풀이를 바꿀 수 없어, 컨텍스트마다 `guard_analytics`로 대신 대답한다(`browser`). 워커가 넘겨받은
 #    화면에서 워커가 보내는 요청은 막지 못한다.
 # 방문 기록을 세는 시험은 제 컨텍스트에 흉내 낸 태그를 `route`로 싣는다(`test_navigation.py`의 `FAKE_GTAG`). `route`는 이름
 # 풀이보다 먼저 적용되고, 나중에 등록한 `route`가 먼저 등록한 것보다 먼저 적용된다.
 
-# 태그와 그 요청에 `index.html`의 CSP가 허용한 주소. Chromium의 호스트 규칙에 쓰는 표기다(`*`는 아무 글자열).
-# CSP에 구글 주소를 더하면 여기에도 더한다(`test_analytics_guard.py`가 견준다).
+# 태그와 그 요청에 `index.html`의 CSP가 허용한 주소를 모두 덮는 목록. Chromium의 호스트 규칙에 쓰는 표기다(`*`는 아무 글자열이고
+# 점도 포함한다). CSP에 구글 주소를 더하면 여기에도 더한다(`test_analytics_guard.py`가 견준다).
 ANALYTICS_HOSTS = (
-    "*.googletagmanager.com",       # 태그 스크립트(gtag.js)
-    "*.google-analytics.com",       # 수집(g/collect)
-    "analytics.google.com",         # 구글 시그널을 켠 속성의 수집
-    "*.analytics.google.com",
-    "*.g.doubleclick.net",          # 구글 시그널(stats.g.doubleclick.net)
-    "www.google.com",               # 페이지를 떠날 때의 수집
-    "www.google.co.kr",             # 구글 시그널(ads/ga-audiences)
+    "*.googletagmanager.com",   # 태그 스크립트(gtag.js)
+    "*.google-analytics.com",   # 수집(g/collect)
+    "*.google.com",             # 구글 시그널을 켠 속성의 수집(analytics.google.com), 페이지를 떠날 때의 수집(www.google.com)
+    "*.g.doubleclick.net",      # 구글 시그널(stats.g.doubleclick.net)
+    "www.google.co.kr",         # 구글 시그널(ads/ga-audiences)
 )
 ANALYTICS_TAG_URL = re.compile(r"^https://www\.googletagmanager\.com/gtag/js")
 ANALYTICS_URL = re.compile(
-    "^https://(" + "|".join(re.escape(h).replace(r"\*", "[^/]*") for h in ANALYTICS_HOSTS) + ")(/|$)"
+    "^https?://(" + "|".join(re.escape(h).replace(r"\*", "[^/:]*") for h in ANALYTICS_HOSTS) + r")(:\d+)?(/|$)"
 )
 ANALYTICS_GUARD_HEADER = "x-e2e-analytics-guard"   # `guard_analytics`가 대신 한 대답에 붙는다
 
@@ -184,14 +184,26 @@ def guard_analytics(ctx) -> None:
     ctx.route(ANALYTICS_URL, answer)
 
 
+def analytics_launch_args(launch_args, environ):
+    """Chromium을 띄우는 인자에 구글 애널리틱스 주소의 이름을 풀지 못하게 하는 규칙을 더한다. 요청은 `net::ERR_NAME_NOT_RESOLVED`로
+    바로 실패한다. 프록시를 거치는 요청은 프록시가 이름을 풀어 이 규칙이 적용되지 않으므로, 브라우저의 환경 변수 `no_proxy`에도 이
+    주소들을 더해 프록시를 거치지 않게 한다. Chromium은 프록시를 환경 변수(`https_proxy` 등)에서 읽는다."""
+    rules = ", ".join(f"MAP {host} ~NOTFOUND" for host in ANALYTICS_HOSTS)
+    kept = [v for v in (environ.get("no_proxy"), environ.get("NO_PROXY")) if v]
+    no_proxy = ",".join(dict.fromkeys([*kept, *ANALYTICS_HOSTS]))
+    return {
+        **launch_args,
+        "args": [*launch_args.get("args", []), f"--host-resolver-rules={rules}"],
+        "env": {**environ, **launch_args.get("env", {}), "no_proxy": no_proxy, "NO_PROXY": no_proxy},
+    }
+
+
 @pytest.fixture(scope="session")
 def browser_type_launch_args(browser_type_launch_args, browser_name):
-    """Chromium이 구글 애널리틱스 주소의 이름을 풀지 못하게 한다. 요청은 `net::ERR_NAME_NOT_RESOLVED`로 바로 실패한다."""
+    """Chromium이 구글 애널리틱스 주소의 이름을 풀지 못하게 한다(`analytics_launch_args`)."""
     if browser_name != "chromium":
         return browser_type_launch_args
-    rules = ", ".join(f"MAP {host} ~NOTFOUND" for host in ANALYTICS_HOSTS)
-    args = [*browser_type_launch_args.get("args", []), f"--host-resolver-rules={rules}"]
-    return {**browser_type_launch_args, "args": args}
+    return analytics_launch_args(browser_type_launch_args, os.environ)
 
 
 @pytest.fixture(scope="session")
