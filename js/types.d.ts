@@ -986,6 +986,8 @@ export interface AppHelpers {
   hangingQuoteClass: (ch: string | undefined) => string;
   quoteRuns: (text: string) => Array<[number, number]>;
   wrapQuoteRuns: (root: ParentNode) => void;
+  holdStart: (text: string) => number;
+  holdResponsoryMarks: (root: ParentNode) => void;
   setInert: (on: boolean, selectors: string) => void;
   trapFocus: (container: HTMLElement) => () => void;
   dragReleaseAction: (h: number, vh: number, minH?: number) => "close" | "snap-min" | "stay";

@@ -50,7 +50,7 @@ import {
 
 const {
   _$, el, clearNode, emptyState, isModifiedClick, headerIcon, HEADER_ICON_PATHS, isFormerNorthChurch,
-  LARGE_LAYOUT_QUERY, isLargeLayout, datePickerTrigger, chapterTitle,
+  LARGE_LAYOUT_QUERY, isLargeLayout, datePickerTrigger, chapterTitle, holdResponsoryMarks,
 } = window.appHelpers;
 const { loadLectionaryTrack, saveLectionaryTrack, loadLectionaryCardsFolded, saveLectionaryCardsFolded, loadLectionaryAltShow, loadParish, loadBaptismalSaint } = window.appStorage;
 
@@ -1618,11 +1618,17 @@ function buildCollects(m) {
 }
 
 /** 영광송 — 선창 ◯ 응답, 계응 시편과 같은 표지(`responsory-mark` · `verse-response`). */
-/** 영광송 블록의 복사 글자 — 줄마다 한 줄, 선창 줄 끝에 「 ◯」(시편 본문 복사와 같은 방식). @param {Element} box @returns {string} */
+/**
+ * 영광송 블록의 복사 글자 — 줄마다 한 줄, 선창 줄 끝에 「 ◯」(시편 본문 복사와 같은 방식). ◯는 앞 글자와 함께 줄바꿈하지 않는
+ * 상자에 들어 있어(helpers.js holdResponsoryMarks), 줄의 글자를 이은 뒤 ◯ 앞에 공백을 넣는다.
+ * @param {Element} box @returns {string}
+ */
 function gloriaCopyText(box) {
-  return [...box.querySelectorAll(".lect-gloria-line")]
-    .map((line) => [...line.childNodes].map((c) => (c.textContent || "").replace(/\u2060/g, "").trim()).filter(Boolean).join(" "))
-    .join("\n");
+  return [...box.querySelectorAll(".lect-gloria-line")].map((line) => {
+    const copy = /** @type {Element} */ (line.cloneNode(true));
+    copy.querySelectorAll(".responsory-mark").forEach((m) => { m.textContent = " ◯"; });
+    return (copy.textContent || "").replace(/\u2060/g, "").replace(/ +/g, " ").trim();
+  }).join("\n");
 }
 
 function buildGloria() {
@@ -1631,6 +1637,7 @@ function buildGloria() {
   v.appendChild(el("span", { className: "responsory-mark", "aria-hidden": "true" }, RESPONSORY_MARK));
   box.appendChild(v);
   box.appendChild(el("span", { className: "lect-gloria-line verse-response" }, GLORIA.response));
+  holdResponsoryMarks(box);   // 「께」와 ◯ 를 한 줄에(ADR-053 §2)
   return box;
 }
 
@@ -1767,12 +1774,16 @@ function trimHalfVerses(article, verseSpec, bookId, chapter) {
       last.querySelectorAll(".responsory-mark").forEach((n) => {
         // The no-break space that held ◯ to the last word (views.js appendVerses) goes back to a space: a line-end
         // no-break space does not hang past the edge like a space does, so it could push that word to a line of its own.
-        const before = n.previousSibling;
-        if (before?.nodeType === Node.TEXT_NODE) {
-          const text = /** @type {Text} */ (before);
-          if (text.data.endsWith("\u00a0")) text.data = `${text.data.slice(0, -1)} `;
-        }
+        // The text right before ◯ in the line — inside the ◯ box it can sit in a cut search highlight, not beside ◯.
+        const walker = document.createTreeWalker(last, NodeFilter.SHOW_TEXT);
+        /** @type {Text | null} */
+        let before = null;
+        for (let t = walker.nextNode(); t && !n.contains(t); t = walker.nextNode()) before = /** @type {Text} */ (t);
+        if (before?.data.endsWith("\u00a0")) before.data = `${before.data.slice(0, -1)} `;
+        // The box that held ◯ to the letter before it (helpers.js holdResponsoryMarks) goes too, its letters left in place.
+        const hold = n.parentElement?.classList.contains("responsory-hold") ? n.parentElement : null;
         n.remove();
+        hold?.replaceWith(...hold.childNodes);
       });
       dropSiblings(/** @type {Element} */ (last.nextElementSibling), spans[spans.length - 1]);
     }
@@ -1890,10 +1901,16 @@ function cutLineText(span, text, keepTail) {
     if (pos > inside[0][1] && pos < lastStart + lastNode.length) anchor.replaceWith(...anchor.childNodes);
   }
   // At offset 0 the range stops before the line's child that holds the node, so a note anchor that begins right at the
-  // boundary goes whole to its side instead of leaving an empty button behind.
+  // boundary goes whole to its side instead of leaving an empty button behind. It does not climb out of a ◯ box
+  // (helpers.js holdResponsoryMarks) the node does not begin: the box can hold the last word's quote run before the node,
+  // and cutting before the whole box took that word to the wrong side (review 2026-11-24).
   /** @type {Node} */
   let top = node;
-  while (top.parentNode && top.parentNode !== span) top = top.parentNode;
+  while (top.parentNode && top.parentNode !== span) {
+    const parent = top.parentNode;
+    if (parent instanceof Element && parent.classList.contains("responsory-hold") && parent.firstChild !== top) break;
+    top = parent;
+  }
   const range = document.createRange();
   if (keepTail) {
     // 절 번호 · U+2060 뒤부터 문구 앞까지 — 줄 머리의 ¶ 도 버리는 앞부분에 든다
@@ -1907,6 +1924,10 @@ function cutLineText(span, text, keepTail) {
     range.setEndAfter(/** @type {Node} */ (span.lastChild));
   }
   range.deleteContents();
+  // A ◯ box whose ◯ was cut off holds nothing to the line any more: its letters go back to the line.
+  span.querySelectorAll(".responsory-hold").forEach((h) => {
+    if (!h.querySelector(".responsory-mark")) h.replaceWith(...h.childNodes);
+  });
   if (!keepTail) span.appendChild(document.createTextNode(" "));
   return true;
 }

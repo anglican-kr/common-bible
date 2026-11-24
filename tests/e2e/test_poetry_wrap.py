@@ -149,25 +149,31 @@ def test_quote_stays_with_its_particle(browser, path, vref, width, font, word):
     _assert_wrapped_lines_at_text_edge(span, f"{path} {vref}")
 
 
-# 선창 끝의 ◯ 가 마지막 낱말과 같은 줄에 있는가 — ◯ 마다 그 앞 마지막 글자와 세로 가운데를 견준다.
+# 선창 끝의 ◯ 가 마지막 낱말과 같은 줄에 있는가 — ◯ 마다 그 행에서 ◯ 앞의 마지막 글자와 세로 가운데를 견준다. 행 전체에서
+# 찾으므로 ◯ 상자(`.responsory-hold`)가 글자를 담지 못해도 상자 밖의 글자와 견준다. 글자가 없으면 실패로 돌려준다.
 MARK_ON_WORD_LINE = r"""(sel) => [...document.querySelectorAll(sel)].map(m => {
-  const walker = document.createTreeWalker(m.parentElement, NodeFilter.SHOW_TEXT);
+  const line = m.closest('.verse, .lect-gloria-line');
+  const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
   let n, last = null;
   while ((n = walker.nextNode()) && !m.contains(n)) {
+    if (n.parentElement.closest('.verse-num, .versicle-mark')) continue;
     for (let i = n.data.length - 1; i >= 0; i--) if (n.data[i].trim() && n.data[i] !== '\u2060') { last = [n, i]; break; }
   }
+  const key = line.dataset.vkey || 'gloria';
+  if (!last) return { key, same: false };
   const r = document.createRange(); r.setStart(last[0], last[1]); r.setEnd(last[0], last[1] + 1);
   const a = r.getClientRects()[0], b = m.getBoundingClientRect();
-  return { key: m.parentElement.dataset.vkey, same: Math.abs((a.top + a.height / 2) - (b.top + b.height / 2)) < 6 };
+  return { key, same: Math.abs((a.top + a.height / 2) - (b.top + b.height / 2)) < 6 };
 })"""
 
 
-@pytest.mark.parametrize("path", ["/lps/20", "/lps/104"])
-def test_responsory_mark_stays_with_the_last_word(browser, path):
+@pytest.mark.parametrize("path,width,font", [("/lps/20", 390, 18), ("/lps/104", 390, 18), ("/lps/99", 320, 24)])
+def test_responsory_mark_stays_with_the_last_word(browser, path, width, font):
     """선창 끝의 ◯는 마지막 낱말과 같은 줄에 있다(ADR-053 §2). 띄어쓰기 자리에서만 줄을 바꾸면 ◯ 앞의 공백에서
     줄이 바뀌어 ◯만 다음 줄로 넘어갈 수 있다(기본 글자 크기의 휴대폰에서 20:5와 104:24). 그 공백은 줄바꿈 없는 공백으로
-    그리고, 복사하면 보통 공백이다(`test_copy.py`의 「… ◯」)."""
-    ctx = _phone(browser)
+    그리고, 복사하면 보통 공백이다(`test_copy.py`의 「… ◯」). 99:8의 "대답해주셨습니다. ◯"는 폭 320px에 글자 24px에서 한 줄보다
+    길어, ◯ 혼자가 아니라 마지막 글자와 함께 넘어간다(◯ 상자, 2026-11-24)."""
+    ctx = _phone(browser, width=width, font=font)
     try:
         page = _open(ctx, path, ".chapter-text .responsory-mark")
         marks = page.evaluate(MARK_ON_WORD_LINE, ".chapter-text .responsory-mark")
@@ -189,14 +195,98 @@ def test_gloria_mark_stays_with_the_last_word(browser):
     assert len(marks) == 1 and marks[0]["same"], marks
 
 
-# 전례독서 시편 슬롯의 104:35 줄들 — [보이는 글자, ◯가 있는가].
+# 운문의 행이 어느 글자 옆에서나 줄을 바꿀 수 있게 한다(`line-break: anywhere`). 줄바꿈 없는 공백(U+00A0)과 낱말 잇기
+# 문자(U+2060)도 막지 못하는 줄바꿈이다. 앱의 CSP는 끼워 넣은 스타일을 막으므로 컨텍스트가 CSP를 건너뛴다.
+_BREAK_ANYWHERE = ".verse-poetry, .lect-gloria-line { line-break: anywhere; }"
+_MARK_HELD = r"""() => [...document.querySelectorAll('.responsory-mark')].map(m => {
+  const hold = m.parentElement;
+  return hold.classList.contains('responsory-hold') && getComputedStyle(hold).whiteSpace === 'nowrap'
+    ? hold.textContent.replace(/⁠/g, '') : null;
+})"""
+
+
+@pytest.mark.parametrize("width", [310, 358, 406])
+def test_responsory_mark_is_held_even_where_the_browser_breaks_anywhere(browser, width):
+    """◯와 그 앞의 마지막 글자는 줄바꿈하지 않는 상자(`.responsory-hold`)에 함께 들어 있어(helpers.js holdResponsoryMarks),
+    브라우저가 어느 자리에서 줄을 바꾸든 ◯가 혼자 다음 줄로 가지 않는다(ADR-053 §2). 아이폰의 Safari는 "경배하여라."와 그 뒤의
+    줄바꿈 없는 공백 사이에서 줄을 바꿔 ◯만 넘겼다(2026-11-24, 전례시편 96:9와 11). Chromium에서는 그 공백이 막아 재현되지
+    않으므로, 어느 글자 옆에서나 줄을 바꾸게 해서 시험한다. 상자가 없으면 고른 폭마다 ◯가 혼자 넘어간다(310px에서 영광송 포함
+    다섯 곳). 2026-11-24 전례독서는 시편 96편과 영광송이다."""
+    ctx = browser.new_context(viewport={"width": width, "height": 844}, is_mobile=True, has_touch=True,
+                              user_agent=IPHONE_UA, bypass_csp=True)
+    ctx.add_init_script(CLEAR_APP_STORAGE + "localStorage.setItem('bible-font-size', '18');")
+    try:
+        page = _open(ctx, "/lectionary/2026-11-24", ".lect-gloria .responsory-mark")
+        page.add_style_tag(content=_BREAK_ANYWHERE)
+        held = page.evaluate(_MARK_HELD)
+        marks = page.evaluate(MARK_ON_WORD_LINE, ".chapter-text .responsory-mark, .lect-gloria .responsory-mark")
+    finally:
+        ctx.close()
+    assert len(held) == 14 and None not in held, held   # 시편 96편 13곳과 영광송
+    assert "라.\u00a0◯" in held and "께◯" in held, held   # 96:9 "경배하여라.", 영광송 "성령께"
+    assert len(marks) == 14 and all(m["same"] for m in marks), marks
+
+
+# 전례시편 99:8 선창 줄의 검색 강조와 ◯ 상자 — [강조 글자, 왼쪽 안쪽 여백, 오른쪽 안쪽 여백, 상자 안인가], 줄이 칸을 넘는가.
+_HIGHLIGHT_HELD = r"""() => {
+  const span = document.querySelector(".chapter-text .verse-poetry[data-vref='8a']");
+  const marks = [...span.querySelectorAll('mark.search-highlight')].map(m => {
+    const cs = getComputedStyle(m);
+    return [m.textContent, cs.paddingLeft, cs.paddingRight, !!m.closest('.responsory-hold')];
+  });
+  return { marks, over: span.scrollWidth > span.clientWidth + 0.5 };
+}"""
+
+
+def test_search_highlight_before_the_mark_is_cut_so_the_box_holds_one_letter(browser):
+    """◯ 바로 앞의 낱말을 검색어로 강조해 열면, 강조를 둘로 나눠 ◯ 상자는 강조의 마지막 글자만 담는다(helpers.js
+    holdResponsoryMarks). 강조를 통째로 담으면 폭 320px에 글자 24px에서 "대답해주셨습니다. ◯"가 줄바꿈하지 않는 상자째
+    본문 칸을 2px 넘었다(2026-11-24 리뷰). 나뉜 두 강조는 맞닿는 쪽의 안쪽 여백이 없어 하나로 보인다."""
+    ctx = _phone(browser, width=320, font=24)
+    try:
+        page = _open(ctx, "/lps/99?hl=%EB%8C%80%EB%8B%B5%ED%95%B4%EC%A3%BC%EC%85%A8%EC%8A%B5%EB%8B%88%EB%8B%A4",
+                     ".chapter-text mark.search-highlight")
+        got = page.evaluate(_HIGHLIGHT_HELD)
+        marks = page.evaluate(MARK_ON_WORD_LINE, ".chapter-text .verse-poetry[data-vref='8a'] .responsory-mark")
+    finally:
+        ctx.close()
+    assert got["marks"] == [["대답해주셨습니", "1px", "0px", False], ["다", "0px", "1px", True]], got
+    assert not got["over"], got
+    assert len(marks) == 1 and marks[0]["same"], marks
+
+
+def test_search_highlight_split_by_a_quote_run_is_cut_too(browser):
+    """강조한 낱말 안에 따옴표가 있어 따옴표 묶음이 강조를 여러 조각으로 나눠도, 강조를 둘로 나눠 ◯ 상자는 마지막 글자만 담는다
+    (helpers.js holdResponsoryMarks, 2026-11-24 리뷰). 강조를 통째로 담으면 폭 320px에 글자 24px에서 줄이 본문 칸을 넘을 수 있다.
+    실데이터에는 ◯ 앞의 낱말 안에 따옴표가 있는 줄이 없어, 99:8의 선창을 "… 대답해‘주’셨습니다."로 바꿔 그린다."""
+    root = Path(__file__).resolve().parents[2] / "data"
+    chapter = json.loads((root / "bible" / "lps-99.json").read_text(encoding="utf-8"))
+    [v8] = [v for v in chapter["verses"] if v["number"] == 8]
+    assert v8["segments"][0]["text"] == "주, 우리 하느님, 그들에게 대답해주셨습니다.", v8
+    v8["segments"][0]["text"] = "주, 우리 하느님, 그들에게 대답해‘주’셨습니다."
+    ctx = _phone(browser, width=320, font=24)
+    try:
+        ctx.route("**/data/bible/lps-99.json", lambda route: route.fulfill(json=chapter))
+        page = _open(ctx, "/lps/99?hl=%EB%8C%80%EB%8B%B5%ED%95%B4%E2%80%98%EC%A3%BC%E2%80%99%EC%85%A8%EC%8A%B5%EB%8B%88%EB%8B%A4",
+                     ".chapter-text mark.search-highlight")
+        got = page.evaluate(_HIGHLIGHT_HELD)
+        marks = page.evaluate(MARK_ON_WORD_LINE, ".chapter-text .verse-poetry[data-vref='8a'] .responsory-mark")
+    finally:
+        ctx.close()
+    assert [m[0] for m in got["marks"]] == ["대답해‘주’셨습니", "다"] and got["marks"][-1][3], got
+    assert not got["over"], got
+    assert len(marks) == 1 and marks[0]["same"], marks
+
+
+# 전례독서 시편 슬롯의 104:35 줄들 — [보이는 글자, ◯나 ◯ 상자가 있는가].
 _PSALM_104_35 = """() => [...document.querySelectorAll(".lect-reading[data-slot='psalm'] .verse[data-vkey^='35/']")]
-  .map((s) => [s.textContent, !!s.querySelector('.responsory-mark')])"""
+  .map((s) => [s.textContent, !!s.querySelector('.responsory-mark, .responsory-hold')])"""
 
 
 def test_half_verse_cut_gives_back_the_space_before_a_dropped_mark(browser):
     """반절의 뒷줄을 버려 선창 줄이 마지막 줄로 남으면 ◯는 지워지고(lectionary.js trimHalfVerses), ◯를 붙잡던 줄바꿈 없는 공백도
     보통 공백으로 돌아간다. 줄 끝의 줄바꿈 없는 공백은 보통 공백과 달리 폭을 차지해 마지막 낱말을 다음 줄로 밀 수 있다.
+    ◯와 마지막 글자를 함께 넣은 상자(`.responsory-hold`)도 풀려 글자만 남는다.
     실데이터의 전례시편 반절은 앞줄을 버리는 104:35하 하나뿐이라, 반절 표와 독서 표를 104:35상으로 바꿔 그린다(2025-06-08)."""
     root = Path(__file__).resolve().parents[2] / "data" / "lectionary"
     halves = json.loads((root / "half-verses.json").read_text(encoding="utf-8"))
@@ -247,6 +337,36 @@ def test_half_verse_cut_inside_a_note_anchor_split_by_a_quote_run(browser):
     assert [text.replace("⁠", "").replace(" ", " ").strip() for text, _ in lines] == [
         "원’히 사라져 버려라. ◯", "내 영혼아, 주님을 찬미하여라. 알렐루야!"], lines
     assert notes == 0, lines   # 반쪽 어절에 온전한 어절의 주석 단추가 남지 않는다
+
+
+def test_half_verse_cut_at_a_piece_inside_the_mark_box_keeps_the_last_word(browser):
+    """반절 경계가 ◯ 상자(`.responsory-hold`) 안의 두 번째 글자 조각 첫머리에 떨어지면, 그 조각 앞에서 자른다(lectionary.js
+    cutLineText). 상자 전체 앞에서 자르면 상자에 든 마지막 낱말까지 지웠다(2026-11-24 리뷰). 마지막 낱말에 따옴표가 있으면 따옴표
+    묶음이 상자의 첫 조각이 되므로, 104:35의 첫 줄을 "… 버‘려’라."로 바꾸고 상(上)의 경계 문구를 "버‘려’라"로 그린다(2025-06-08)."""
+    root = Path(__file__).resolve().parents[2] / "data"
+    halves = json.loads((root / "lectionary" / "half-verses.json").read_text(encoding="utf-8"))
+    [entry] = [e for e in halves["entries"] if (e["bookId"], e["chapter"], e["verse"]) == ("lps", 104, 35)]
+    entry.update(half="a", line=1, text="버‘려’라")   # 상: 첫 줄의 이 문구까지
+    readings = (root / "lectionary" / "eucharist-readings.json").read_text(encoding="utf-8")
+    readings = readings.replace('"verseSpec": "24-34,35b"', '"verseSpec": "24-34,35a"').replace(
+        '"verseSpec": "1-9,24,35b"', '"verseSpec": "1-9,24,35a"')
+    chapter = json.loads((root / "bible" / "lps-104.json").read_text(encoding="utf-8"))
+    [v35] = [v for v in chapter["verses"] if v["number"] == 35]
+    v35["segments"][0]["text"] = "악인들아, 이 세상에서 영원히 사라져 버‘려’라."
+    ctx = browser.new_context(service_workers="block")
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    try:
+        ctx.route("**/data/lectionary/half-verses.json", lambda route: route.fulfill(json=halves))
+        ctx.route("**/data/lectionary/eucharist-readings.json",
+                  lambda route: route.fulfill(body=readings, content_type="application/json"))
+        ctx.route("**/data/bible/lps-104.json", lambda route: route.fulfill(json=chapter))
+        page = _open(ctx, "/lectionary/2025-06-08", ".lect-reading[data-slot='psalm'] .chapter-text .verse")
+        lines = page.evaluate(_PSALM_104_35)
+    finally:
+        ctx.close()
+    assert [text.replace("\u2060", "").strip() for text, _ in lines] == ["악인들아, 이 세상에서 영원히 사라져 버‘려’라"], lines
+    [(_, has_mark)] = lines
+    assert not has_mark, lines   # ◯를 잘라 낸 상자도 풀린다
 
 
 # 전례독서 운문의 〔(`.lect-bracket--hang`)마다 [절 번호 글자의 오른쪽 끝, 〔 글자 칸의 왼쪽 끝]. 절 번호는 가장 긴 「150」으로

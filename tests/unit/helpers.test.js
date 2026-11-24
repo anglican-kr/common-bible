@@ -15,6 +15,7 @@
 //   - clearNode (firstChild loop)
 //   - hangingQuoteClass (leading quote → gutter class, straight + curly)
 //   - quoteRuns (a quote between two letters and those letters stay on one poetry line, ADR-053 §2)
+//   - holdStart (where the box that holds a responsory ◯ on the line of the letter before it starts, ADR-053 §2)
 //   - setInert (inert + aria-hidden toggle on selector matches)
 //   - trapFocus (Tab / Shift-Tab cycling within a container)
 //   - dragReleaseAction (bottom-sheet drag-resize release thresholds)
@@ -615,6 +616,33 @@ test("quoteRuns: runs that touch become one, and straight quotes count too", () 
 test("quoteRuns: a no-break space is a space — the one before ◯ makes no run", () => {
   const h = loadHelpers();
   assert.deepEqual(runTexts(h, "‘주님’\u00a0"), []);
+});
+
+// ── holdStart ──────────────────────────────────────────────────────────────
+
+/** @param {ReturnType<typeof loadHelpers>} h @param {string} text @returns {string | null} the part of `text` the ◯ box holds */
+function heldText(h, text) {
+  const at = h.helpers.holdStart(text);
+  return at < 0 ? null : text.slice(at);
+}
+
+test("holdStart: the box holds the last letter and what follows it — the punctuation and the no-break space", () => {
+  const h = loadHelpers();
+  // Safari on an iPhone broke between 「경배하여라.」 and the no-break space (전례시편 96:9, 2026-11-24).
+  assert.equal(heldText(h, "거룩한 광채 입으신 주님을 경배하여라. "), "라. ");
+  assert.equal(heldText(h, "그는 정의로 세상을 재판하시며 "), "며 ");
+  assert.equal(heldText(h, "하느님이 어디 있느냐?” "), "냐?” ");   // 전례시편 10:4
+  assert.equal(heldText(h, "끊어 버리자!”, "), "자!”, ");          // 전례시편 2:3
+  assert.equal(heldText(h, "영광이 성부와 성자와 성령께"), "께");           // 영광송: ◯ 앞에 공백이 없다
+});
+
+test("holdStart: after a space when only punctuation follows it; -1 when the text has no letter or space", () => {
+  const h = loadHelpers();
+  assert.equal(heldText(h, "그 날에 — "), "— ");
+  assert.equal(heldText(h, "주님의 것 "), "");          // the box starts after the space and takes nothing from this text
+  assert.equal(h.helpers.holdStart(". "), -1);    // the letter is in a box before it (a note anchor, a highlight)
+  assert.equal(h.helpers.holdStart("⁠"), -1);
+  assert.equal(h.helpers.holdStart(""), -1);
 });
 
 // ── setInert ───────────────────────────────────────────────────────────────
