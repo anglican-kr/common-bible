@@ -1,4 +1,5 @@
 ---
+pr: 663
 date: 2026-11-24
 branch: chore/drop-python-version
 title: "chore: .python-version 삭제 및 무시 목록 등록"
