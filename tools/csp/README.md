@@ -10,6 +10,8 @@ python3 -I tools/csp/csp_sweep.py --sw             # 서비스 워커를 켜고(
 
 종료 코드 `0`은 위반 없음, `1`은 위반 있음이다. `2`는 위반은 없지만 실행하지 못한 단계가 있다는 뜻이다(선택자가 바뀌었거나 데이터가 없어 점검 범위가 줄었다). 그 환경에 없는 컨트롤(mp3를 못 트는 브라우저의 오디오 바)은 「건너뛴 단계」로 따로 적는다.
 
+이 점검은 e2e와 달리 구글에 진짜 요청을 보낸다. 구글 태그가 실제로 어느 주소로 요청을 보내는지 봐야 하기 때문이다. 그래서 점검할 때마다 `localhost`의 방문이 애널리틱스 통계에 조금 섞인다(2026-11-24).
+
 WebKit으로도 실행할 수 있다(`--browser webkit`). 이 클론의 호스트에는 Playwright WebKit이 쓰는 라이브러리가 없어 그대로는 실행되지 않는다. 실행하는 법은 `docs/coding-pitfalls.md` §34에 있다.
 
 **위반이 나오면** 먼저 그것이 앱이 하는 일인지(같은 출처의 스크립트, 스타일, 요청), 외부 서비스가 바꾼 것인지 판단한다. 외부 서비스라면 그 서비스의 공식 CSP 안내(구글 태그는 [Google 태그 CSP 안내](https://developers.google.com/tag-platform/security/guides/csp))를 확인하되, 와일드카드를 그대로 받지 말고 실제로 나가는 주소만 적는다. 예를 들어 2026-10-18에는 애널리틱스가 페이지를 떠날 때 `https://www.google.com/g/collect`로 보내는 요청이 막혀 있었다. 안내는 `https://*.google.com`을 권했지만 나가는 곳은 `www.google.com` 하나였다(원장 `docs/changes/2026-10-18-csp-google-collect.md`). 인라인 `<style>`을 고쳤으면 해시는 `scripts/csp_hashes.py --fix`가 맞추고 `tests/unit/csp.test.js`가 확인한다.

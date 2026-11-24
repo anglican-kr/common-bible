@@ -446,9 +446,9 @@ ADR-038 §3의 렌더 기반이 복원하는 전례 표기는 계응 ◯(`.respo
 
 ---
 
-## 61. 저장소의 e2e가 구글 애널리틱스에 진짜 수집 요청을 보낸다 (2026-11-24)
+## 61. 저장소의 e2e가 구글 애널리틱스에 진짜 수집 요청을 보낸다 (2026-11-24) — 해소 (2026-11-24)
 
-- §61 → [topics/platform.md](topics/platform.md)
+> **해소됨 (2026-11-24) — 본문을 지웠다.** e2e가 띄우는 Chromium이 구글 태그와 그 요청이 가는 주소의 이름을 풀지 못하게 했다(`tests/e2e/conftest.py`). 화면의 태그 요청은 바로 실패하고 앱은 대기열(`dataLayer`)에만 쌓는다. 막는 주소가 `index.html`의 CSP가 허용한 구글 주소를 모두 덮는지는 `test_analytics_guard.py`가 본다. 지금 동작은 `topics/platform.md` 「방문 기록」, 고친 내용과 확인한 것은 원장 `docs/changes/2026-11-24-e2e-analytics-guard.md`. 릴리스 전의 CSP 점검(`tools/csp`)은 전처럼 구글에 진짜 요청을 보낸다. 머지된 원장과 메모가 절을 번호로 가리키므로 번호는 그대로 둔다.
 
 ---
 
@@ -557,6 +557,12 @@ ADR-038 §3의 렌더 기반이 복원하는 전례 표기는 계응 ◯(`.respo
 ## 79. 아이폰의 Safari가 운문 행의 여는 따옴표 뒤에서 줄을 바꾼다 (2026-11-24) — 해소 (2026-11-24)
 
 - §79 → [topics/design-system.md](topics/design-system.md). 해소 기록은 그 절에 있다.
+
+---
+
+## 80. 로컬 서버의 기본 설정에서는 서비스 워커가 설치를 끝내지 못한다 (2026-11-24)
+
+- §80 → [topics/platform.md](topics/platform.md)
 
 ---
 
