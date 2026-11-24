@@ -206,11 +206,16 @@
      바 높이(~3.5rem) + 하단 오프셋 + 여유. safe-area 는 바와 동일 비율(0.75). */
   --tabbar-reserve: calc(4.5rem + env(safe-area-inset-bottom) * 0.75);
   /* How far the bottom dock row (tab dock, audio bar, landscape resume pill) keeps from the screen's left and
-     right edges: --space-4 inside that side's safe area. Each side on its own, since the row is not centered.
-     A landscape iPhone put the first tab and the search circle in the ~62pt side safe areas (ADR-030 §1,
-     known-issues §60). Without side safe areas (portrait) this is plain --space-4. */
-  --dock-left: calc(var(--space-4) + env(safe-area-inset-left, 0px));
-  --dock-right: calc(var(--space-4) + env(safe-area-inset-right, 0px));
+     right edges: the line the reading column's text starts and ends on, i.e. the centered column's side margin
+     plus its --space-4 padding (ADR-030 §1). The first tab then lines up with the body text and the header's
+     edge buttons at every font size. Pinned to the screen edges instead, the row stood 15px (18px text) to
+     55px (16px) outside the text on a landscape iPhone 17, where 40rem is narrower than the screen.
+     The column fills the screen in portrait (plain --space-4) and never enters the side safe areas (it leaves
+     out twice the larger one, --max-width below), so neither does the row. Being centered, the two sides are
+     equal even where only one side has a safe area. 100vw matches the width --max-width is taken from: the
+     app hides scrollbars (`scrollbar-width: none`), so the screen and the page are the same width. */
+  --dock-left: calc((100vw - var(--max-width)) / 2 + var(--space-4));
+  --dock-right: var(--dock-left);
 
   /* ── Layout ── */
   /* 40rem = 720px at the default 18px; follows the font-size setting (ADR-055 §2). Never wider than the
@@ -5223,8 +5228,8 @@ html.cite-sheet-open {
   display: flex;
   align-items: center;
   /* ADR-030: 탭바=왼쪽 끝, 검색 그룹=오른쪽 끝. 검색 그룹(#tab-search-dock)의
-     margin-left:auto 가 우측으로 밀어붙인다. 좌우 padding(--dock-left/right, 안전 영역 안쪽의
-     --space-4) + left/right 0 으로 오디오 바(같은 토큰의 left/right)와 좌우 가장자리 정렬. 탭 바↔검색
+     margin-left:auto 가 우측으로 밀어붙인다. 좌우 padding(--dock-left/right, 본문 글자가 시작하고 끝나는
+     선) + left/right 0 으로 오디오 바(같은 토큰의 left/right)와 좌우 가장자리 정렬. 탭 바↔검색
      간격은 dock gap 이 아니라 #tab-bar margin-right 가 준다. */
   padding: 0 var(--dock-right) 0 var(--dock-left);
   /* 순수 레이아웃 레이어 — 어떤 표면도 없음(완전 투명). */
