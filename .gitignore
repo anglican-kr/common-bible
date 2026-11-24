@@ -56,6 +56,8 @@ ENV/
 env.bak/
 venv.bak/
 .venv/
+# pyenv가 고르는 Python 버전(`pyenv local`). 기기마다 설치된 버전이 달라 저장소에 두지 않는다(known-issues §57)
+.python-version
 
 # IDE 설정
 .vscode/
