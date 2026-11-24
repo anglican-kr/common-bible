@@ -4350,7 +4350,7 @@ mark.search-highlight--cut-start {
   text-indent: 0;
 }
 
-/* A quote between two letters stays on their line (helpers.js wrapQuoteRuns, ADR-053 §2). */
+/* A quote stays on the line of the letters beside it (helpers.js wrapQuoteRuns, ADR-053 §2). */
 .verse.verse-poetry .quote-run {
   white-space: nowrap;
 }

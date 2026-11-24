@@ -80,12 +80,12 @@ test("옮겨 실린 절은 모두 인용 시트의 탐색 범위(앞뒤 3장) �
   }
 });
 
-// 운문에서 두 글자 사이의 따옴표는 양옆 글자와 줄바꿈하지 않는 상자로 묶는다(helpers.js wrapQuoteRuns, ADR-053 §2).
+// 운문에서 따옴표는 양옆의 공백 아닌 글자와 줄바꿈하지 않는 상자로 묶는다(helpers.js wrapQuoteRuns, ADR-053 §2).
 // 묶음은 글자 조각 하나 안에서만 만들고, 어절 주석은 그 전에 낱말을 제 상자로 떼어 낸다. 그래서 주석의 경계가 묶음
-// 자리를 가르면 그 행은 따옴표 옆에서 다시 줄이 바뀔 수 있다. 지금 데이터에는 그런 주석이 없다(2026-11-23) — 생기면
-// 여기서 걸린다.
+// 자리를 가르면 그 행은 따옴표 옆에서 다시 줄이 바뀔 수 있다. 지금 데이터에는 그런 주석이 없다(2026-11-23, 공백이 한쪽에
+// 있는 따옴표까지 묶은 뒤 2026-11-24) — 생기면 여기서 걸린다.
 test("운문의 어절 주석은 따옴표 묶음 자리를 가르지 않는다", { skip: SKIP }, () => {
-  const { quoteRuns } = loadAppHelpers();
+  const { quoteRuns, hangingQuoteClass } = loadAppHelpers();
   let anchors = 0;
   /** @type {string[]} */
   const split = [];
@@ -97,7 +97,9 @@ test("운문의 어절 주석은 따옴표 묶음 자리를 가르지 않는다"
       if (!words.length) continue;
       for (const seg of v.segments ?? []) {
         if (seg.type !== "poetry") continue;
-        for (const line of seg.text.split("\n")) {
+        for (const whole of seg.text.split("\n")) {
+          // 운문 행 머리의 따옴표는 따로 그려(views.js appendVerses의 hangingQuoteClass) 묶음에 들지 않는다.
+          const line = hangingQuoteClass(whole[0]) ? whole.slice(1) : whole;
           const runs = Array.from(quoteRuns(line));
           for (const word of words) {
             for (let at = line.indexOf(word); at >= 0; at = line.indexOf(word, at + word.length)) {

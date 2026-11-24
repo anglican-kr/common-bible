@@ -14,7 +14,7 @@
 //   - el (createElement + attrs + children)
 //   - clearNode (firstChild loop)
 //   - hangingQuoteClass (leading quote → gutter class, straight + curly)
-//   - quoteRuns (a quote between two letters and those letters stay on one poetry line, ADR-053 §2)
+//   - quoteRuns (a quote and the character beside it on each side that is not a space stay on one poetry line, ADR-053 §2)
 //   - holdStart (where the box that holds a responsory ◯ on the line of the letter before it starts, ADR-053 §2)
 //   - setInert (inert + aria-hidden toggle on selector matches)
 //   - trapFocus (Tab / Shift-Tab cycling within a container)
@@ -590,32 +590,44 @@ function runTexts(h, text) {
 
 test("quoteRuns: a closing quote between a word and its particle holds both letters (이사 1:26, 61:3)", () => {
   const h = loadHelpers();
-  assert.deepEqual(runTexts(h, "그제야 너는 ‘정의의 도시, 성실한 마을’이라 불릴 것이다. "), ["을’이"]);
-  assert.deepEqual(runTexts(h, "‘주께서 심으신 정의의 느티나무 숲’이라 하여라. "), ["숲’이"]);
-  assert.deepEqual(runTexts(h, "너의 이름은 “찬양”이라 이름지어 "), ["양”이"]);
+  assert.deepEqual(runTexts(h, "그제야 너는 ‘정의의 도시, 성실한 마을’이라 불릴 것이다. "), ["‘정", "을’이"]);
+  assert.deepEqual(runTexts(h, "‘주께서 심으신 정의의 느티나무 숲’이라 하여라. "), ["‘주", "숲’이"]);
+  assert.deepEqual(runTexts(h, "너의 이름은 “찬양”이라 이름지어 "), ["“찬양”이"]);
 });
 
-test("quoteRuns: a quote with a space on one side needs no run — the browser does not break there", () => {
+test("quoteRuns: a quote with a space on one side goes with the character on its other side (전례시편 96:10)", () => {
   const h = loadHelpers();
-  assert.deepEqual(runTexts(h, "너는 ‘정의의 도시’ 하고 "), []);   // opening after a space, closing before one
-  assert.deepEqual(runTexts(h, "“주여, 어찌하여” "), []);        // a line that opens and ends with quotes
-  assert.deepEqual(runTexts(h, "말하였다.” "), []);
-  assert.deepEqual(runTexts(h, "말하였다.”"), []);               // at the end of the text too
+  // Safari on an iPhone broke after this 「“」 and left it at the end of the line (2026-11-24).
+  assert.deepEqual(runTexts(h, "이 땅을 든든하게 세우신 주 앞에서 “주님이 왕이시다.”고 만방에 외쳐라.\u00a0"), ["“주", ".”고"]);
+  assert.deepEqual(runTexts(h, "너는 ‘정의의 도시’ 하고 "), ["‘정", "시’"]);   // opening after a space, closing before one
+  assert.deepEqual(runTexts(h, "“주여, 어찌하여” "), ["“주", "여”"]);        // a text that opens and ends with quotes
+  assert.deepEqual(runTexts(h, "말하였다.” "), [".”"]);
+  assert.deepEqual(runTexts(h, "말하였다.”"), [".”"]);                       // at the end of the text too
+  assert.deepEqual(runTexts(h, "아이고!’ 곡하는"), ["!’"]);
+});
+
+test("quoteRuns: a quote with spaces on both sides makes no run", () => {
+  const h = loadHelpers();
+  assert.deepEqual(runTexts(h, "가 “ 나"), []);
+  assert.deepEqual(runTexts(h, "”"), []);
 });
 
 test("quoteRuns: runs that touch become one, and straight quotes count too", () => {
   const h = loadHelpers();
-  assert.deepEqual(runTexts(h, "이것은 ‘가’라 한다 "), ["가’라"]);
+  assert.deepEqual(runTexts(h, "이것은 ‘가’라 한다 "), ["‘가’라"]);
   assert.deepEqual(runTexts(h, "부르기를‘나의 백성’이라"), ["를‘나", "성’이"]);
-  assert.deepEqual(runTexts(h, "그것을 '말씀'이라 하였다"), ["씀'이"]);
+  assert.deepEqual(runTexts(h, "그것을 '말씀'이라 하였다"), ["'말씀'이"]);   // 「'말」 and 「씀'이」 touch
   assert.deepEqual(runTexts(h, "하였다.’”그리고"), [".’”그"]);   // two quotes in a row are one run
+  assert.deepEqual(runTexts(h, "구원하리라.’” "), [".’”"]);
+  assert.deepEqual(runTexts(h, "보고 “‘일어나"), ["“‘일"]);
   assert.deepEqual(runTexts(h, "일반 글"), []);
   assert.deepEqual(runTexts(h, ""), []);
 });
 
-test("quoteRuns: a no-break space is a space — the one before ◯ makes no run", () => {
+test("quoteRuns: a no-break space is a space — the quote before ◯ goes only with the letter before it", () => {
   const h = loadHelpers();
-  assert.deepEqual(runTexts(h, "‘주님’\u00a0"), []);
+  assert.deepEqual(runTexts(h, "‘하느님’\u00a0"), ["‘하", "님’"]);
+  assert.deepEqual(runTexts(h, "‘주님’\u00a0"), ["‘주님’"]);   // 「‘주」 and 「님’」 touch
 });
 
 // ── holdStart ──────────────────────────────────────────────────────────────
