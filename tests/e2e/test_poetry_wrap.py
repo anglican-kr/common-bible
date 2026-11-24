@@ -316,6 +316,36 @@ def test_half_verse_cut_inside_a_note_anchor_split_by_a_quote_run(browser):
     assert notes == 0, lines   # 반쪽 어절에 온전한 어절의 주석 단추가 남지 않는다
 
 
+def test_half_verse_cut_at_a_piece_inside_the_mark_box_keeps_the_last_word(browser):
+    """반절 경계가 ◯ 상자(`.responsory-hold`) 안의 두 번째 글자 조각 첫머리에 떨어지면, 그 조각 앞에서 자른다(lectionary.js
+    cutLineText). 상자 전체 앞에서 자르면 상자에 든 마지막 낱말까지 지웠다(2026-11-24 리뷰). 마지막 낱말에 따옴표가 있으면 따옴표
+    묶음이 상자의 첫 조각이 되므로, 104:35의 첫 줄을 "… 버‘려’라."로 바꾸고 상(上)의 경계 문구를 "버‘려’라"로 그린다(2025-06-08)."""
+    root = Path(__file__).resolve().parents[2] / "data"
+    halves = json.loads((root / "lectionary" / "half-verses.json").read_text(encoding="utf-8"))
+    [entry] = [e for e in halves["entries"] if (e["bookId"], e["chapter"], e["verse"]) == ("lps", 104, 35)]
+    entry.update(half="a", line=1, text="버‘려’라")   # 상: 첫 줄의 이 문구까지
+    readings = (root / "lectionary" / "eucharist-readings.json").read_text(encoding="utf-8")
+    readings = readings.replace('"verseSpec": "24-34,35b"', '"verseSpec": "24-34,35a"').replace(
+        '"verseSpec": "1-9,24,35b"', '"verseSpec": "1-9,24,35a"')
+    chapter = json.loads((root / "bible" / "lps-104.json").read_text(encoding="utf-8"))
+    [v35] = [v for v in chapter["verses"] if v["number"] == 35]
+    v35["segments"][0]["text"] = "악인들아, 이 세상에서 영원히 사라져 버‘려’라."
+    ctx = browser.new_context(service_workers="block")
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    try:
+        ctx.route("**/data/lectionary/half-verses.json", lambda route: route.fulfill(json=halves))
+        ctx.route("**/data/lectionary/eucharist-readings.json",
+                  lambda route: route.fulfill(body=readings, content_type="application/json"))
+        ctx.route("**/data/bible/lps-104.json", lambda route: route.fulfill(json=chapter))
+        page = _open(ctx, "/lectionary/2025-06-08", ".lect-reading[data-slot='psalm'] .chapter-text .verse")
+        lines = page.evaluate(_PSALM_104_35)
+    finally:
+        ctx.close()
+    assert [text.replace("\u2060", "").strip() for text, _ in lines] == ["악인들아, 이 세상에서 영원히 사라져 버‘려’라"], lines
+    [(_, has_mark)] = lines
+    assert not has_mark, lines   # ◯를 잘라 낸 상자도 풀린다
+
+
 # 전례독서 운문의 〔(`.lect-bracket--hang`)마다 [절 번호 글자의 오른쪽 끝, 〔 글자 칸의 왼쪽 끝]. 절 번호는 가장 긴 「150」으로
 # 바꿔 잰다(시편의 가장 큰 절 번호). 절 번호는 생성 글자(::before)라 같은 글꼴로 캔버스에서 폭을 잰다.
 _BRACKET_CLEARS_NUMBER = r"""() => [...document.querySelectorAll('.verse-poetry .lect-bracket--hang')].map(b => {
