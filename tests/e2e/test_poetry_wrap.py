@@ -239,13 +239,14 @@ _QUOTE_SPLITS = r"""() => {
         const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + 1);
         const rects = [...r.getClientRects()];
         const rect = rects.find(x => x.width > 0) || rects[0];
-        chars.push({ c: n.data[i], y: rect.top + rect.height / 2 });
+        // A character with no box keeps its place, so the ones on either side of it are not taken for neighbours.
+        chars.push({ c: n.data[i], y: rect ? rect.top + rect.height / 2 : null });
       }
     }
     chars.forEach((q, i) => {
-      if (!'‘’“”\'"'.includes(q.c)) return;
+      if (!'‘’“”\'"'.includes(q.c) || q.y === null) return;
       for (const nb of [chars[i - 1], chars[i + 1]]) {
-        if (nb && /\S/.test(nb.c) && Math.abs(nb.y - q.y) > 6) {
+        if (nb && nb.y !== null && /\S/.test(nb.c) && Math.abs(nb.y - q.y) > 6) {
           out.push([span.dataset.vkey, chars.slice(Math.max(0, i - 4), i + 4).map(c => c.c).join('')]);
         }
       }
