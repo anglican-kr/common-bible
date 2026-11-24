@@ -29,6 +29,15 @@ title: "fix: Safari에서 운문 행의 여는 따옴표만 줄 끝에 남는 �
 ## 갱신한 문서
 
 - `docs/decisions/053-poetry-line-wrap.md`: §2의 따옴표 규칙에 공백이 한쪽에 있는 따옴표를 더하고, 「검토한 대안」에 그 따옴표를 묶지 않던 안을 적었다.
-- `docs/topics/design-system.md`: 「지금 동작」의 따옴표 묶음 규칙, 「남은 일」의 known-issues §79를 해소로 적었다.
-- `docs/known-issues.md`: §79를 해소로 적었다.
+- `docs/topics/design-system.md`: 「지금 동작」의 따옴표 묶음 규칙, 「남은 일」의 known-issues §79를 해소로 적고 §81을 더했다.
+- `docs/known-issues.md`: §79를 해소로 적고 §81을 더했다.
+- `docs/architecture.md`: 부록 A의 ADR-053 줄을 ADR 요약에 맞췄다.
 - `tests/README.md`: `helpers.test.js`와 `test_poetry_wrap.py`의 설명과 건수, 합계.
+
+## 리뷰 반영
+
+1회차(`/code-review medium --fix`, 2026-11-24): 4건.
+
+- **검색 강조나 어절 주석이 따옴표 옆 낱말을 감싸면 따옴표를 묶지 못한다**(전부터 있던 것): 고치지 않고 known-issues §81로 적었다. "주님이"로 검색해 전례시편 96편을 열면 "“"가 글자 조각 끝에 남아 묶이지 않는 것을 Chromium으로 확인했다. 고치려면 묶음이 글자 조각 밖의 강조와 주석까지 다뤄야 하고, ◯ 상자와 반절 자르기도 함께 봐야 해 이 PR의 범위를 넘는다.
+- **e2e의 따옴표 검사가 화면 상자가 없는 글자에서 멈출 수 있다**: 고쳤다. 리뷰 도구는 그런 글자를 건너뛰게 했는데, 그러면 그 양옆 글자가 이웃으로 잡힌다. 자리는 지키고 줄 비교에서만 뺀다. `test_poetry_wrap.py` 26건 통과.
+- **ADR 인덱스(`docs/architecture.md`)와 CSS 주석이 두 글자 사이의 따옴표만 묶는다고 적었다**: 둘 다 고쳤다.
