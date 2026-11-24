@@ -1,4 +1,5 @@
 ---
+pr: 662
 date: 2026-11-24
 branch: style/dock-body-line
 title: "style: 하단 막대를 본문 글자 선에 맞추기"
