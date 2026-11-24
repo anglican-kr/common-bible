@@ -107,23 +107,42 @@ def test_dock_row_lines_up_with_the_body_text(browser, path, storage, audio, mid
 
 
 @pytest.mark.only_browser("chromium")
-@pytest.mark.parametrize("viewport, font, start", [
-    ({"width": 390, "height": 844}, 18, 16),    # 세로로 든 휴대폰은 본문 칸이 화면 폭이라 전처럼 화면 끝에서 16px이다
-    ({"width": 1280, "height": 500}, 18, 296),  # 높이가 600px보다 낮은 넓은 창도 탭 바를 쓴다. 화면 끝이 아니라 본문 칸 아래다
-], ids=["portrait-phone", "short-wide-window"])
-def test_dock_row_without_side_safe_areas(browser, viewport, font, start):
-    """좌우 안전 영역이 없어도 첫 탭과 검색 원형은 본문 글자의 양 끝에 있다. 세로로 든 휴대폰에서는 그 선이 화면 끝에서 16px이다."""
-    ctx = _ctx(browser, viewport, font)
+def test_portrait_dock_row_stays_16px_from_the_screen_edges(browser):
+    """세로로 든 휴대폰은 본문 칸이 화면 폭이라, 첫 탭과 검색 원형이 전처럼 화면 끝에서 16px이고 본문 글자의 양 끝과 같다."""
+    ctx = _ctx(browser, {"width": 390, "height": 844})
     try:
         page = ctx.new_page()
         emulate_side_safe_areas(page, 0, 0, bottom=34)
         page.goto(f"{BASE_URL}/ps/23")
         page.wait_for_selector("article.chapter-text .verse", timeout=20_000)
-        assert abs(_text_edges(page)[0] - start) < 1
-        assert abs(_box(page, "#tab-bar")["left"] - start) < 1
-        assert abs(_box(page, "#tab-search")["right"] - (viewport["width"] - start)) < 1
+        assert abs(_text_edges(page)[0] - EDGE) < 1
+        assert abs(_box(page, "#tab-bar")["left"] - EDGE) < 1
+        assert abs(_box(page, "#tab-search")["right"] - (390 - EDGE)) < 1
     finally:
         ctx.close()
+
+
+@pytest.mark.only_browser("chromium")
+def test_dock_row_lines_up_in_a_desktop_window_that_shows_scrollbars(browser_type, browser_type_launch_args):
+    """높이가 600px보다 낮은 데스크톱의 넓은 창도 탭 바를 쓴다(ADR-050 §2). 첫 탭과 검색 원형은 화면 끝이 아니라 본문 칸 아래,
+    본문 글자의 양 끝에 있다(1280px 창의 18px에서 296px과 984px).
+    `--dock-left`는 화면 폭(`100vw`)에서 본문 칸의 폭을 빼 셈하고, 본문 칸은 문서 폭의 가운데에 있다. 두 폭이 같은 것은 앱이
+    스크롤바를 숨기기 때문이다(`scrollbar-width: none`). Playwright가 띄우는 Chromium은 스크롤바를 숨기는 인자(`--hide-scrollbars`)를
+    기본으로 붙여, 그 규칙이 없어져도 다른 시험은 알지 못한다. 그래서 이 시험만 그 인자를 빼고 띄운다(통계 차단 인자는 그대로다).
+    규칙을 지우면 스크롤바가 15px을 차지해 본문 글자가 288.5px에서 시작하고 첫 탭은 296px에 남는다."""
+    b = browser_type.launch(**{**browser_type_launch_args, "ignore_default_args": ["--hide-scrollbars"]})
+    try:
+        ctx = b.new_context(viewport={"width": 1280, "height": 500})
+        ctx.add_init_script(CLEAR_APP_STORAGE + "try { localStorage.setItem('bible-font-size', '18'); } catch(_) {}")
+        page = ctx.new_page()
+        page.goto(f"{BASE_URL}/ps/23")
+        page.wait_for_selector("article.chapter-text .verse", timeout=20_000)
+        text_left, text_right = _text_edges(page)
+        tab, search = _box(page, "#tab-bar"), _box(page, "#tab-search")
+        assert abs(text_left - 296) < 1 and abs(text_right - 984) < 1, (text_left, text_right)
+        assert abs(tab["left"] - text_left) < 1 and abs(search["right"] - text_right) < 1, (tab, search, text_left, text_right)
+    finally:
+        b.close()
 
 
 @pytest.mark.only_browser("chromium")
