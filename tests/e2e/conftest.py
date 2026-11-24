@@ -190,12 +190,13 @@ def analytics_launch_args(launch_args, environ):
     주소들을 더해 프록시를 거치지 않게 한다. Chromium은 프록시를 환경 변수(`https_proxy` 등)에서 읽는다. 띄우는 인자로 프록시를
     정했으면(`proxy`) 환경 변수는 쓰이지 않으므로, 그 프록시가 건너뛰는 주소(`bypass`)에 더한다."""
     rules = ", ".join(f"MAP {host} ~NOTFOUND" for host in ANALYTICS_HOSTS)
-    kept = [v for v in (environ.get("no_proxy"), environ.get("NO_PROXY")) if v]
+    env = {**environ, **launch_args.get("env", {})}   # 띄우는 인자의 환경 변수가 먼저다. 거기서 정한 `no_proxy`도 그대로 둔다
+    kept = [v for v in (env.get("no_proxy"), env.get("NO_PROXY")) if v]
     no_proxy = ",".join(dict.fromkeys([*kept, *ANALYTICS_HOSTS]))
     guarded = {
         **launch_args,
         "args": [*launch_args.get("args", []), f"--host-resolver-rules={rules}"],
-        "env": {**environ, **launch_args.get("env", {}), "no_proxy": no_proxy, "NO_PROXY": no_proxy},
+        "env": {**env, "no_proxy": no_proxy, "NO_PROXY": no_proxy},
     }
     proxy = launch_args.get("proxy")
     if proxy:

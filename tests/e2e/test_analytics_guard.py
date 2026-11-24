@@ -14,6 +14,7 @@
 import fnmatch
 import re
 import socketserver
+import sys
 import threading
 import urllib.request
 
@@ -50,7 +51,8 @@ PAGE_VIEWS = "() => (window.dataLayer || []).filter((a) => a[0] === 'event' && a
 
 def _csp_hosts():
     """`index.html`의 CSP가 허용한 바깥 주소(호스트 표기). 지시문을 가리지 않고 모두 읽는다. 태그가 쓰는 주소는 어느 지시문에나
-    더해질 수 있다(구글 시그널의 `frame-src` 등). 경로와 포트는 떼고 호스트만 남긴다. 환경 변수의 프록시는 쓰지 않는다.
+    더해질 수 있다(구글 시그널의 `frame-src` 등). 경로와 포트는 떼고 호스트만 남긴다. 스킴 없이 적은 주소(`www.google.com`)도
+    읽는다. 따옴표로 묶은 낱말(`'self'`)과 스킴만 적은 것(`data:`)은 주소가 아니다. 환경 변수의 프록시는 쓰지 않는다.
     로컬 서버는 프록시 너머에 없다."""
     direct = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     with direct.open(f"{BASE_URL}/index.html") as res:
@@ -62,9 +64,10 @@ def _csp_hosts():
             continue
         _name, *sources = directive.split()
         for source in sources:
-            scheme, sep, rest = source.partition("://")
-            if sep and scheme in ("https", "http", "wss", "ws"):
-                hosts.add(rest.split("/", 1)[0].split(":", 1)[0])
+            if source.startswith("'") or source.endswith(":"):
+                continue
+            _scheme, sep, rest = source.partition("://")
+            hosts.add((rest if sep else source).split("/", 1)[0].split(":", 1)[0])
     return hosts
 
 
@@ -130,14 +133,14 @@ def test_analytics_addresses_bypass_a_proxy_set_in_the_environment(browser_type,
     """환경 변수로 프록시를 정한 기기에서도 막는 주소로 가는 요청은 프록시에 가지 않고 이름 풀이에서 실패한다. 프록시를 거치면 프록시가
     이름을 풀어 규칙이 적용되지 않으므로, 이 주소들은 프록시를 거치지 않게 해 두었다(`analytics_launch_args`의 `no_proxy`).
     이 묶음을 띄우는 인자 그대로, 환경 변수에 프록시만 더해 브라우저를 하나 더 띄워 본다. 띄우는 인자로 프록시를 정한 경우(`proxy`)도
-    같은지 한 번 더 띄워 본다."""
+    같은지 한 번 더 띄워 본다. Chromium이 환경 변수의 프록시를 읽는 것은 리눅스에서뿐이라, 환경 변수의 경우는 리눅스에서만 본다."""
     def launch_args_with(address, how):
         if how == "env":
             names = ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY")
             return {**browser_type_launch_args, "env": {**browser_type_launch_args["env"], **{name: address for name in names}}}
-        return analytics_launch_args({"proxy": {"server": address}}, browser_type_launch_args["env"])
+        return analytics_launch_args({**browser_type_launch_args, "proxy": {"server": address}}, browser_type_launch_args["env"])
 
-    for how in ("env", "launch-option"):
+    for how in (*(["env"] if sys.platform.startswith("linux") else []), "launch-option"):
         proxy = _RefusingProxy()
         proxied = None
         try:
@@ -152,7 +155,8 @@ def test_analytics_addresses_bypass_a_proxy_set_in_the_environment(browser_type,
             assert failures == [*((url, "net::ERR_NAME_NOT_RESOLVED") for url in PROBES), (control, "net::ERR_TUNNEL_CONNECTION_FAILED")], how
             # 브라우저가 스스로 보내는 요청이 프록시에 섞여 올 수 있어, 목록 전체를 견주지 않는다.
             assert "CONNECT e2e-proxy-control.invalid:443 HTTP/1.1" in proxy.asked, (how, proxy.asked)
-            through_proxy = [line for line in proxy.asked if is_analytics_url("https://" + line.split()[1].split("://")[-1])]
+            through_proxy = [line for line in proxy.asked
+                             if len(line.split()) > 1 and is_analytics_url("https://" + line.split()[1].split("://")[-1])]
             assert through_proxy == [], (how, through_proxy)
         finally:
             if proxied:
@@ -174,14 +178,22 @@ def test_app_screens_get_no_answer_from_analytics_and_keep_queueing_page_views(b
         ctx.on("response", lambda res: answers.append(res.url) if is_analytics_url(res.url) else None)
         ctx.on("requestfailed", lambda req: failed_tags.append(req.failure) if ANALYTICS_TAG_URL.match(req.url) else None)
 
+        def wait_failed_tags(count):   # 실패 알림은 화면이 준비된 뒤에 올 수도 있다
+            for _ in range(50):
+                if len(failed_tags) >= count:
+                    break
+                page.wait_for_timeout(100)
+
         page.goto(f"{BASE_URL}/")
         wait_app_ready(page)
         page.wait_for_function(f"() => ({PAGE_VIEWS})() >= 1")
+        wait_failed_tags(1)
         assert failed_tags == ["net::ERR_NAME_NOT_RESOLVED"]   # 화면이 태그를 청했고, 이름 풀이에서 실패했다
 
         page.reload()
         wait_app_ready(page)
         page.wait_for_function(f"() => ({PAGE_VIEWS})() >= 1")
+        wait_failed_tags(2)
         assert failed_tags == ["net::ERR_NAME_NOT_RESOLVED"] * 2
 
         page.evaluate("() => window.navigate('/john/3')")
