@@ -127,19 +127,27 @@ test("◯가 붙는 선창 줄의 마지막 낱말에는 어절 주석이 없다
     const data = JSON.parse(fs.readFileSync(path.join(BIBLE_DIR, name), "utf8"));
     for (const v of data.verses ?? []) {
       const segs = v.segments ?? [];
-      const words = (v.notes ?? []).map((n) => n.anchor).filter(Boolean);
+      // 절의 행을 그리는 차례로 — [글자, ◯ 가 붙는 선창 줄인가]. ◯ 는 응답이 따라오는 선창의 마지막 줄 끝에만 붙는다.
+      /** @type {Array<[string, boolean]>} */
+      const lines = [];
       segs.forEach((seg, i) => {
-        if (seg.response || !segs[i + 1]?.response) return;   // ◯ 는 응답이 따라오는 선창 줄 끝에만 붙는다
-        cantorLines++;
-        const lines = seg.text.split("\n");
-        const line = lines[lines.length - 1];
-        const lastWord = line.lastIndexOf(" ") + 1;
-        for (const word of words) {
+        const segLines = seg.text.split("\n").filter((l) => l !== "");
+        const cantor = !seg.response && !!segs[i + 1]?.response;
+        if (cantor) cantorLines++;
+        segLines.forEach((l, j) => lines.push([l, cantor && j === segLines.length - 1]));
+      });
+      for (const note of v.notes ?? []) {
+        const word = note.anchor;
+        if (!word) continue;
+        // 주석은 절의 행을 차례로 보며 `anchor_occurrence`번째로 나온 자리에 붙는다(citations.js _wrapAnchor).
+        let count = 0;
+        for (const [line, cantor] of lines) {
           for (let at = line.indexOf(word); at >= 0; at = line.indexOf(word, at + word.length)) {
-            if (at + word.length > lastWord) touched.push(`${name} ${v.number}: ${word}`);
+            if (++count !== (note.anchor_occurrence || 1)) continue;
+            if (cantor && at + word.length > line.lastIndexOf(" ") + 1) touched.push(`${name} ${v.number}: ${word}`);
           }
         }
-      });
+      }
     }
   }
   assert.ok(cantorLines > 2000, `◯가 붙는 선창 줄이 ${cantorLines}개뿐이다`);
