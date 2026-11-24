@@ -161,23 +161,30 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
 
   /**
    * Where a poetry line must not break around a quotation mark (ADR-053 §2): the runs [start, end) of `text` made of
-   * a quote with a letter on both sides and those two letters, overlapping runs joined. A poetry line breaks only at
-   * spaces, but a browser may break on either side of a quote that sits between two Korean letters (Unicode line
-   * breaking, LB19a), so 「‘구원’이라」 could end a line at 「‘구원’」 and start the next with 「이라」. A quote with a space
-   * on one side needs no run: the browser does not break after an opening quote that follows a space, nor before a
-   * closing one that a space follows (LB15a, LB15b).
+   * a quote and the character right beside it on each side that is not a space, runs that touch joined. A poetry line
+   * breaks only at spaces, but a browser may break on either side of a quote that sits between two Korean letters
+   * (Unicode line breaking, LB19a), so 「‘구원’이라」 could end a line at 「‘구원’」 and start the next with 「이라」.
+   * A quote with a space on one side goes with the character on its other side: Unicode forbids a break after an
+   * opening quote that follows a space and before a closing one that a space follows (LB15a, LB15b), yet Safari on an
+   * iPhone broke after the 「“」 of 「주 앞에서 “주님이」 and left it at the end of the line (2026-11-24, 전례시편 96:10).
+   * A quote at either end of `text` goes with its one neighbour; one with spaces on both sides makes no run.
    * @param {string} text
    * @returns {Array<[number, number]>}
    */
   function quoteRuns(text) {
     /** @type {Array<[number, number]>} */
     const runs = [];
-    const solid = (/** @type {string} */ c) => !!c && /\S/.test(c);
-    for (let i = 1; i < text.length - 1; i++) {
-      if (!QUOTE_MARKS.includes(text[i]) || !solid(text[i - 1]) || !solid(text[i + 1])) continue;
+    const solid = (/** @type {string | undefined} */ c) => !!c && /\S/.test(c);
+    for (let i = 0; i < text.length; i++) {
+      if (!QUOTE_MARKS.includes(text[i])) continue;
+      const before = solid(text[i - 1]);
+      const after = solid(text[i + 1]);
+      if (!before && !after) continue;
+      const start = before ? i - 1 : i;
+      const end = after ? i + 2 : i + 1;
       const last = runs[runs.length - 1];
-      if (last && last[1] >= i - 1) last[1] = i + 2;
-      else runs.push([i - 1, i + 2]);
+      if (last && last[1] >= start) last[1] = Math.max(last[1], end);
+      else runs.push([start, end]);
     }
     return runs;
   }

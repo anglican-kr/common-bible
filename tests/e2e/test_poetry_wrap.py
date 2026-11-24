@@ -227,6 +227,56 @@ def test_responsory_mark_is_held_even_where_the_browser_breaks_anywhere(browser,
     assert len(marks) == 14 and all(m["same"] for m in marks), marks
 
 
+# 운문 행의 따옴표마다, 공백이 아닌 옆 글자가 다른 줄에 있는 곳 — [행의 열쇠, 따옴표 둘레의 글자]. 절 번호, ¶, ◯는 줄 밖이라 뺀다.
+_QUOTE_SPLITS = r"""() => {
+  const out = [];
+  for (const span of document.querySelectorAll('.lect-reading .verse-poetry')) {
+    const chars = [];
+    const walker = document.createTreeWalker(span, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (n.parentElement.closest('.verse-num, .versicle-mark, .pilcrow, .responsory-mark')) continue;
+      for (let i = 0; i < n.data.length; i++) {
+        const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + 1);
+        const rects = [...r.getClientRects()];
+        const rect = rects.find(x => x.width > 0) || rects[0];
+        // A character with no box keeps its place, so the ones on either side of it are not taken for neighbours.
+        chars.push({ c: n.data[i], y: rect ? rect.top + rect.height / 2 : null });
+      }
+    }
+    chars.forEach((q, i) => {
+      if (!'‘’“”\'"'.includes(q.c) || q.y === null) return;
+      for (const nb of [chars[i - 1], chars[i + 1]]) {
+        if (nb && nb.y !== null && /\S/.test(nb.c) && Math.abs(nb.y - q.y) > 6) {
+          out.push([span.dataset.vkey, chars.slice(Math.max(0, i - 4), i + 4).map(c => c.c).join('')]);
+        }
+      }
+    });
+  }
+  return out;
+}"""
+
+
+@pytest.mark.parametrize("width", [360, 366, 374])
+def test_quote_after_a_space_is_held_even_where_the_browser_breaks_anywhere(browser, width):
+    """공백이 한쪽에 있는 따옴표도 다른 쪽 글자와 줄바꿈하지 않는 상자(`.quote-run`)에 함께 들어 있어(helpers.js quoteRuns),
+    브라우저가 어느 자리에서 줄을 바꾸든 따옴표가 그 글자와 다른 줄로 가지 않는다(ADR-053 §2). 아이폰의 Safari는 전례시편
+    96:10의 "주 앞에서 “주님이"를 여는 따옴표 뒤에서 나눠 따옴표를 줄 끝에 남겼다(2026-11-24, known-issues §79). Chromium에서는
+    재현되지 않으므로, 어느 글자 옆에서나 줄을 바꾸게 해서 시험한다. 상자가 없으면 고른 폭마다 "“"와 "주"가 다른 줄에 있다."""
+    ctx = browser.new_context(viewport={"width": width, "height": 844}, is_mobile=True, has_touch=True,
+                              user_agent=IPHONE_UA, bypass_csp=True)
+    ctx.add_init_script(CLEAR_APP_STORAGE + "localStorage.setItem('bible-font-size', '18');")
+    try:
+        page = _open(ctx, "/lectionary/2026-11-24", ".lect-gloria .responsory-mark")
+        page.add_style_tag(content=_BREAK_ANYWHERE)
+        runs = page.evaluate("""() => [...document.querySelectorAll('.lect-reading .verse-poetry .quote-run')]
+          .filter(r => getComputedStyle(r).whiteSpace === 'nowrap').map(r => r.textContent)""")
+        splits = page.evaluate(_QUOTE_SPLITS)
+    finally:
+        ctx.close()
+    assert "“주" in runs and ".”고" in runs, runs   # 96:10 "주 앞에서 “주님이 왕이시다.”고"
+    assert splits == [], splits
+
+
 # 전례시편 99:8 선창 줄의 검색 강조와 ◯ 상자 — [강조 글자, 왼쪽 안쪽 여백, 오른쪽 안쪽 여백, 상자 안인가], 줄이 칸을 넘는가.
 _HIGHLIGHT_HELD = r"""() => {
   const span = document.querySelector(".chapter-text .verse-poetry[data-vref='8a']");
