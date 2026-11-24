@@ -149,16 +149,21 @@ def test_quote_stays_with_its_particle(browser, path, vref, width, font, word):
     _assert_wrapped_lines_at_text_edge(span, f"{path} {vref}")
 
 
-# 선창 끝의 ◯ 가 마지막 낱말과 같은 줄에 있는가 — ◯ 마다 그 앞 마지막 글자와 세로 가운데를 견준다.
+# 선창 끝의 ◯ 가 마지막 낱말과 같은 줄에 있는가 — ◯ 마다 그 행에서 ◯ 앞의 마지막 글자와 세로 가운데를 견준다. 행 전체에서
+# 찾으므로 ◯ 상자(`.responsory-hold`)가 글자를 담지 못해도 상자 밖의 글자와 견준다. 글자가 없으면 실패로 돌려준다.
 MARK_ON_WORD_LINE = r"""(sel) => [...document.querySelectorAll(sel)].map(m => {
-  const walker = document.createTreeWalker(m.parentElement, NodeFilter.SHOW_TEXT);
+  const line = m.closest('.verse, .lect-gloria-line');
+  const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
   let n, last = null;
   while ((n = walker.nextNode()) && !m.contains(n)) {
+    if (n.parentElement.closest('.verse-num, .versicle-mark')) continue;
     for (let i = n.data.length - 1; i >= 0; i--) if (n.data[i].trim() && n.data[i] !== '\u2060') { last = [n, i]; break; }
   }
+  const key = line.dataset.vkey || 'gloria';
+  if (!last) return { key, same: false };
   const r = document.createRange(); r.setStart(last[0], last[1]); r.setEnd(last[0], last[1] + 1);
   const a = r.getClientRects()[0], b = m.getBoundingClientRect();
-  return { key: m.parentElement.dataset.vkey, same: Math.abs((a.top + a.height / 2) - (b.top + b.height / 2)) < 6 };
+  return { key, same: Math.abs((a.top + a.height / 2) - (b.top + b.height / 2)) < 6 };
 })"""
 
 
