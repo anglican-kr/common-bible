@@ -26,7 +26,7 @@ import { citationSource, halfVerseMark, selectionCitation, formatVerseRanges, ve
 
 const {
   _$, el, clearNode, chUnit, chUnitNoun, chapterTitle, chapterLabel, verseRefLabel, missingChapterText, hasBatchim, hangingQuoteClass,
-  emptyState, scrollUnderBar, wrapQuoteRuns,
+  emptyState, scrollUnderBar, wrapQuoteRuns, holdResponsoryMarks,
 } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
 const {
@@ -1108,8 +1108,9 @@ function citePieceSpace(seg, next, chipShows) {
  * The ◯ that closes a cantor's half-line (ADR-039 계응), as drawn by the psalm and the lectionary's 영광송.
  * The U+2060 word joiner in front keeps ◯ on the line of the word right before it where no space comes between
  * (영광송): a poetry line breaks only at spaces (ADR-053 §2), and ◯ is a symbol the browser may break before.
- * The psalm's space before ◯ is made a no-break space where the mark is drawn (appendVerses). Copies drop U+2060
- * (verse-spec.js serializeVerseRange, lectionary.js gloriaCopyText).
+ * The psalm's space before ◯ is made a no-break space where the mark is drawn (appendVerses). Both hold in Chromium,
+ * not in every Safari, so ◯ and the letter before it are also drawn in a box that does not wrap (helpers.js
+ * holdResponsoryMarks). Copies drop U+2060 (verse-spec.js serializeVerseRange, lectionary.js gloriaCopyText).
  */
 const RESPONSORY_MARK = "\u2060◯";
 
@@ -1409,6 +1410,7 @@ function appendVersesWithAids(article, verses, chapter, opts = {}) {
   appendVerses(article, verses, { ...opts, parallels: chapter.parallels, chapter: chapter.chapter });
   window.appCitations?.wrapNoteAnchorsInArticle(article, verses);
   wrapQuoteRuns(article);   // after the note anchors: it splits text nodes (helpers.js)
+  holdResponsoryMarks(article);   // after the quote runs, for the same reason
 }
 
 /**

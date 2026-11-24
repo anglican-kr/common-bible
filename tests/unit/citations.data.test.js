@@ -113,3 +113,48 @@ test("운문의 어절 주석은 따옴표 묶음 자리를 가르지 않는다"
   assert.ok(anchors > 0, "data/bible 의 운문에서 어절 주석을 하나도 찾지 못했다");
   assert.deepEqual(split, []);
 });
+
+// 선창 끝 ◯는 마지막 글자와 함께 줄바꿈하지 않는 상자에 넣는다(helpers.js holdResponsoryMarks, ADR-053 §2). 검색 강조는
+// 둘로 나눠 마지막 글자만 상자에 넣지만, 어절 주석은 단추라 나누지 못한다. 공백이 없는 주석은 통째로 상자에 들어 긴 낱말이
+// 본문 칸을 넘을 수 있고, 공백이 있는 주석은 상자에 들지 않아 Safari가 그 뒤에서 ◯를 넘길 수 있다(2026-11-24 리뷰). 지금
+// 전례시편과 송가에는 어절 주석이 없다(2026-11-24) — 선창 줄의 마지막 낱말에 주석이 생기면 여기서 걸린다.
+test("◯가 붙는 선창 줄의 마지막 낱말에는 어절 주석이 없다", { skip: SKIP }, () => {
+  const { hangingQuoteClass } = loadAppHelpers();
+  let cantorLines = 0;
+  /** @type {string[]} */
+  const touched = [];
+  for (const name of fs.readdirSync(BIBLE_DIR)) {
+    if (!/^(lps|cant)-\d+\.json$/.test(name)) continue;
+    const data = JSON.parse(fs.readFileSync(path.join(BIBLE_DIR, name), "utf8"));
+    for (const v of data.verses ?? []) {
+      const segs = v.segments ?? [];
+      // 절의 행을 그리는 차례로 — [글자, ◯ 가 붙는 선창 줄인가]. ◯ 는 응답이 따라오는 선창의 마지막 줄 끝에만 붙는다.
+      /** @type {Array<[string, boolean]>} */
+      const lines = [];
+      segs.forEach((seg, i) => {
+        const segLines = seg.text.split("\n").filter((l) => l !== "");
+        const cantor = !seg.response && !!segs[i + 1]?.response;
+        if (cantor) cantorLines++;
+        // 운문 행 머리의 따옴표는 따로 그리므로(views.js appendVerses의 hangingQuoteClass) 주석을 찾는 글자에 들지 않는다.
+        segLines.forEach((l, j) => {
+          const text = seg.type === "poetry" && hangingQuoteClass(l[0]) ? l.slice(1) : l;
+          lines.push([text, cantor && j === segLines.length - 1]);
+        });
+      });
+      for (const note of v.notes ?? []) {
+        const word = note.anchor;
+        if (!word) continue;
+        // 주석은 절의 행을 차례로 보며 `anchor_occurrence`번째로 나온 자리에 붙는다(citations.js _wrapAnchor).
+        let count = 0;
+        for (const [line, cantor] of lines) {
+          for (let at = line.indexOf(word); at >= 0; at = line.indexOf(word, at + word.length)) {
+            if (++count !== (note.anchor_occurrence || 1)) continue;
+            if (cantor && at + word.length > line.lastIndexOf(" ") + 1) touched.push(`${name} ${v.number}: ${word}`);
+          }
+        }
+      }
+    }
+  }
+  assert.ok(cantorLines > 2000, `◯가 붙는 선창 줄이 ${cantorLines}개뿐이다`);
+  assert.deepEqual(touched, []);
+});

@@ -24,7 +24,7 @@ import {
   parseVerseSpec, specCoversVerse, chapterMaxVerse, verseInstanceKeys,
 } from "./verse-spec.js";
 
-const { _$, el, clearNode, chUnit, chapterTitle, emptyState, wrapQuoteRuns } = window.appHelpers;
+const { _$, el, clearNode, chUnit, chapterTitle, emptyState, wrapQuoteRuns, holdResponsoryMarks } = window.appHelpers;
 const { loadBookmarks } = window.appStorage;
 
 const $app = _$("app");
@@ -422,6 +422,7 @@ async function renderBookmarkReadView(folderId = null) {
       // (hideCites), parallels (ADR-027 ※) not passed, note anchors not wrapped.
       appendVerses(article, verses, { hideCites: true, instanceKeys: selKeys });
       wrapQuoteRuns(article);   // a quote stays on the line of the letters beside it (ADR-053 §2)
+      holdResponsoryMarks(article);   // and ◯ on the line of the letter before it
       section.appendChild(article);
       appendedAny = true;
     }
