@@ -554,6 +554,6 @@ ADR-038 §3의 렌더 기반이 복원하는 전례 표기는 계응 ◯(`.respo
 
 ---
 
-## 79. 아이폰의 Safari가 운문 행의 여는 따옴표 뒤에서 줄을 바꾼다 (2026-11-24)
+## 79. 아이폰의 Safari가 운문 행의 여는 따옴표 뒤에서 줄을 바꾼다 (2026-11-24) — 해소 (2026-11-24)
 
-- §79 → [topics/design-system.md](topics/design-system.md)
+- §79 → [topics/design-system.md](topics/design-system.md). 해소 기록은 그 절에 있다.
