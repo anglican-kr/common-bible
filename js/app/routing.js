@@ -364,7 +364,7 @@ const loadLectionaryView = () => Promise.all([
 
 /** @type {Record<"calendar" | "lectionary", string>} */
 const LAZY_VIEW_DESCRIPTIONS = {
-  calendar: "대한성공회 교회력 — 날마다의 전례일 · 전례색, 날짜를 누르면 그날의 전례독서",
+  calendar: "대한성공회 캘린더 — 교회력 · 전례독서",
   lectionary: "대한성공회 감사성찬례 전례독서 — 본기도 · 제1독서 · 시편 · 제2독서 · 복음",
 };
 
