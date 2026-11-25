@@ -50,7 +50,7 @@ import {
 
 const {
   _$, el, clearNode, emptyState, isModifiedClick, headerIcon, HEADER_ICON_PATHS, isFormerNorthChurch,
-  LARGE_LAYOUT_QUERY, isLargeLayout, datePickerTrigger, chapterTitle, holdResponsoryMarks,
+  LARGE_LAYOUT_QUERY, isLargeLayout, datePickerTrigger, calendarDropTrigger, chapterTitle, holdResponsoryMarks,
 } = window.appHelpers;
 const { loadLectionaryTrack, saveLectionaryTrack, loadLectionaryCardsFolded, saveLectionaryCardsFolded, loadLectionaryAltShow, loadParish, loadBaptismalSaint } = window.appStorage;
 
@@ -1322,7 +1322,7 @@ function buildDateStep(dir, href, label) {
  * 남는 범위 끝에서 포커스가 돌아갈 대체 자리다. 데스크톱에서 성서 목록으로 가는 길은 상단 바의 「성서」 탭이다(ADR-043 §3).
  * @param {{ title: HTMLElement, todayHref: string,
  *   prev: { href: string | null, label: string }, next: { href: string | null, label: string },
- *   view?: { href: string, label: string, icon: string } }} o
+ *   view?: { href: string, label: string, icon: string } | { trigger: HTMLElement } }} o
  */
 function commitDateBar(o) {
   const start = el("span", { className: "lect-bar-start" });
@@ -1332,7 +1332,8 @@ function commitDateBar(o) {
   mid.appendChild(el("span", { className: "lect-date" }, o.title));
   mid.appendChild(buildDateStep("next", o.next.href, o.next.label));
   const end = el("span", { className: "lect-bar-end" });
-  if (o.view) {
+  if (o.view && "trigger" in o.view) end.appendChild(o.view.trigger);   // 작은 화면: 월간 달력을 내리는 단추(ADR-058 §3)
+  else if (o.view) {
     end.appendChild(el("a", {
       className: "title-view-btn", href: o.view.href, "aria-label": o.view.label, title: o.view.label, "data-focus-key": "view",
     }, headerIcon(o.view.icon)));
@@ -1366,8 +1367,18 @@ if (typeof window.matchMedia === "function") {
     const start = $title.querySelector(":scope > .lect-bar-start");
     const end = $title.querySelector(":scope > .lect-bar-end");
     if (today && start && end) placeToday(today, start, end);
+    // 전례독서의 줄은 레이아웃마다 다르다(날짜 단추와 보기 전환 단추, 달력을 내리는 단추). 다시 그리고 포커스를 돌려준다
+    if (titleModel && $title.querySelector(".lect-date-label") && window.parsePath?.().view === "lectionary") {
+      const active = document.activeElement;
+      const key = active instanceof HTMLElement && $title.contains(active) ? active.dataset.focusKey : null;
+      commitTitleDateNav(titleModel);
+      if (key) /** @type {HTMLElement | null} */ ($title.querySelector(`[data-focus-key="${key}"]`))?.focus({ preventScroll: true });
+    }
   });
 }
+
+/** 날짜 이동 줄에 그린 전례독서. 레이아웃이 바뀌면 같은 줄을 다시 그린다. @type {LectionaryModel | null} */
+let titleModel = null;
 
 /**
  * 머리에 보이는 날짜 — "2026-12-28" → "26.12.28"(YY.MM.DD, 요일 없음, 사용자 결정 2026-11-05). 스크린 리더는 숨긴 전체 날짜를 읽는다.
@@ -1388,6 +1399,23 @@ function commitTitleDateNav(m) {
   const p = /** @type {{ y: number, m: number, d: number }} */ (parseDate(m.date));
   const shown = titleDateText(p);
   const label = el("time", { className: "lect-date-label", datetime: m.date }, shown);
+  titleModel = m;
+  if (!isLargeLayout()) {
+    // 작은 화면의 날짜는 글자이고, 오른쪽 단추가 월간 달력을 내린다(ADR-058 §3). 스크린 리더는 날짜 글자 뒤에 숨긴 전체 날짜를 읽는다
+    const drop = calendarDropTrigger(`${shown}, ${dateLabel(m.date)}, 날짜 고르기`);
+    drop.dataset.date = m.date;
+    drop.addEventListener("click", (e) => openDatePicker(drop, e.detail > 0));
+    label.textContent = "";
+    label.append(el("span", { "aria-hidden": "true" }, shown), el("span", { className: "sr-only" }, dateLabel(m.date)));
+    commitDateBar({
+      title: label,
+      todayHref: m.hrefs.today,
+      prev: { href: m.hrefs.prev, label: "전날" },
+      next: { href: m.hrefs.next, label: "다음날" },
+      view: { trigger: drop },
+    });
+    return;
+  }
   // 캘린더의 달 제목과 같은 단추다(helpers.js `datePickerTrigger`). 판에서 날을 고르면 새 화면의 이 단추로 포커스가 돌아온다. 단추의 이름은
   // 보이는 글(「27.05.02」)로 시작하고 전체 날짜를 덧붙인다. 음성으로 조작하는 사용자가 보이는 글을 말해도 누를 수 있어야 한다(WCAG 2.5.3,
   // 코드 리뷰 2026-11-18). 스크린 리더는 이 이름으로 전체 날짜를 읽는다

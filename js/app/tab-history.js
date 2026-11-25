@@ -72,10 +72,9 @@ window.tabHistory = (() => {
   /** @type {Map<string, number>} */
   const scrollMemory = new Map();
   // 마지막으로 본 캘린더 보기(달이나 목록). 전례독서에서 탭을 누르면 여기로 돌아온다. 앱을 다시 열어도 이어지도록 저장해 둔 값으로
-  // 시작한다. 저장한 값이 없으면 이번 달이고, 탭 슬롯이 줄어드는 좁은 화면은 오늘 줄의 목록이다(ADR-038 §2). 모듈 스크립트는 문서
+  // 시작한다. 저장한 값이 없으면 이번 달이고, 작은 화면에서는 같은 주소가 오늘 줄의 목록으로 열린다(ADR-058 §1). 모듈 스크립트는 문서
   // 순서로 실행되므로 storage.js가 먼저다.
-  let lastCalendarView = window.appStorage?.loadCalendarLastView()
-    ?? (window.matchMedia("(max-width: 339px)").matches ? "/calendar/list" : "/calendar");
+  let lastCalendarView = window.appStorage?.loadCalendarLastView() ?? "/calendar";
   /** @type {Record<"home"|"search"|"bookmarks"|"settings"|"calendar", string>} */
   const lastPathForTab = {
     home: "/",

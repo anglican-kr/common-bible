@@ -129,7 +129,7 @@ def test_today_stays_before_the_previous_step_on_mobile(mobile_context):
     """⑤ 모바일 — 「오늘」은 왼쪽 칸 그대로다(ADR-038 §1)."""
     page = mobile_context.new_page()
     page.goto(f"{BASE}/calendar/2026-12")
-    page.wait_for_selector(".cal-grid", timeout=20_000)
+    page.wait_for_selector(".cal-rows", timeout=20_000)
     today = _box(page, "#page-title .lect-today")
     prev = _box(page, "#page-title a.lect-datenav-btn[data-focus-key='prev']")
     assert today["right"] <= prev["left"] + 8
@@ -418,6 +418,9 @@ def test_today_keeps_the_focus_when_it_moves(desktop_context):
     for width, cell in ((600, ".lect-bar-start"), (1280, ".lect-bar-end")):
         page.set_viewport_size({"width": width, "height": 700})
         page.wait_for_function(f"() => document.querySelector('#page-title {cell} .lect-today')")
+        # 월간은 작은 화면에서 목록으로 다시 그려진다(ADR-058 §1). 다 그린 뒤에도 포커스가 남는다
+        page.wait_for_selector(".cal-rows", timeout=20_000)
+        page.wait_for_timeout(200)
         assert page.evaluate("() => document.activeElement.classList.contains('lect-today')"), width
 
 
@@ -516,7 +519,7 @@ def test_chapter_title_is_cut_with_an_ellipsis_when_two_steps_are_not_enough(bro
         ctx.close()
 
 
-@pytest.mark.parametrize("path, ready", [("lectionary/2026-12-24", ".lect-day"), ("calendar/2027-12", ".cal-grid")])
+@pytest.mark.parametrize("path, ready", [("lectionary/2026-12-24", ".lect-day"), ("calendar/2027-12", ".cal-rows")])
 def test_date_row_title_is_not_fitted_like_a_chapter_title(browser, path, ready):
     """⑪ 캘린더와 전례독서의 날짜 단추는 장 제목 단추와 같은 클래스(`title-picker-btn`)를 쓰지만, ‹ ›와 「오늘」이 함께 있는
     다른 배치라 장 제목의 줄인 글씨나 말줄임을 받지 않는다(코드 리뷰 2026-11-19)."""

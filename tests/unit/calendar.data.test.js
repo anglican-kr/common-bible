@@ -179,7 +179,7 @@ test("2025 ~ 2027 의 모든 월간 표 — 그달 칸은 링크 · 색이 있�
       const cells = ctx.buildMonthGrid(y, m, "2026-10-15", resolve).weeks.flat();
       assert.strictEqual(cells.length, 42);
       for (const c of cells.filter((x) => x.inMonth)) {
-        assert.strictEqual(c.href, `/lectionary/${c.date}`, c.date);
+        assert.strictEqual(c.href, c.isToday ? "/calendar/list" : `/calendar/list/${c.date}`, c.date);
         assert.ok(c.colors.length >= 1 && c.colors.every((k) => ["white", "red", "green", "violet"].includes(k)), `${c.date} ${c.colors}`);
         if (c.weekday === 0) assert.ok(c.cellName, `${c.date} 주일 칸 이름이 비었다`);
         assert.ok(c.primary, `${c.date} 대표 없음`);
@@ -251,7 +251,7 @@ const churchIdOf = (name) => read("local-observances.json").parishes.find((p) =>
 
 test("목록 줄. 소속교회를 고르면 전례독서 화면처럼 축성일이 제목이고, 교구 설립일 줄이 생긴다(ADR-041 §6)", { skip: SKIP }, () => {
   const yongin = churchIdOf("용인성당");   // 서울교구, 축성일 01.31
-  same([rowOf("2025-01-31").title, rowOf("2025-01-31", yongin).title], ["연중 3주 금요일", "용인성당 축성일"]);
+  same([rowOf("2025-01-31").title, rowOf("2025-01-31", yongin).title], ["연중 3주", "용인성당 축성일"]);
   assert.strictEqual(rowOf("2025-01-31", yongin).level, "");   // 굵기는 그날의 기본 독서(평일)를 따른다
   const founding = rowOf("2026-05-27", yongin);
   assert.ok(founding.lines.includes("1965년 5월 27일 서울교구설립일"), founding.lines.join(" | "));
@@ -263,14 +263,14 @@ test("목록 줄. 세례명을 고르면 전례독서 화면처럼 그 성인의
   const leonard = read("sanctoral.json").saints.find((s) => s.title === "레오나드(은수자, 6세기)").id;
   const none = rowOf("2026-11-06");
   const mine = rowOf("2026-11-06", "", leonard);
-  same([none.title, mine.title], ["연중 31주 금요일", "연중 31주 금요일"]);
+  same([none.title, mine.title], ["연중 31주", "연중 31주"]);
   assert.ok(mine.lines.includes("레오나드(은수자, 6세기) 축일"), mine.lines.join(" | "));
   same([...mine.lines].sort(), [...none.lines].sort());   // 같은 글이 두 번 보이지 않고, 빠지는 글도 없다
 });
 
 test("목록 줄 — 11.6은 전례독서처럼 제목이 평일 이름이고 레오나드는 이름 줄이다", { skip: SKIP }, () => {
   const r = rowOf("2026-11-06");
-  assert.strictEqual(r.title, "연중 31주 금요일");
+  assert.strictEqual(r.title, "연중 31주");
   assert.strictEqual(day("2026-11-06").cellName, "레오나드");   // 월간 칸은 그대로다
   same(r.meta, ["짝수해", "소재일"]);
   same(r.lines, ["레오나드(은수자, 6세기) 축일", "삼흥리성당 축성일"]);
@@ -294,18 +294,22 @@ test("목록 줄 — 주일, 전례년 첫날, 옮겨 온 축일, 저녁 전례,
   assert.ok(headModel("2026-12-13").colorAlt.length > 0);
 });
 
-test("목록 줄 — 2025-2030의 모든 날에 줄이 있고 글이 제목 영역과 같다", { skip: SKIP }, () => {
+test("목록 줄 — 2025-2030의 모든 날에 줄이 있고 글이 제목 영역과 같다(제목과 다른 전례일의 요일만 뺀다, ADR-058 §2)", { skip: SKIP }, () => {
+  const keeps = new Set();   // 요일이 남은 제목
   for (let d = "2025-01-01"; d <= "2030-12-31"; d = ctx.addDays(d, 1)) {
     const m = headModel(d);
     const head = ctx.headLinesOf(m);
     const r = ctx.listRowOf(m, "2026-11-07");
     assert.ok(r.title && r.title !== "—", d);
-    assert.strictEqual(r.title, head.title, d);
-    same(r.lines, [...head.notes, ...head.names, ...head.others], d);
+    assert.strictEqual(r.title, ctx.rowTextOf(head.title), d);
+    same(r.lines, [...head.notes, ...head.names, ...head.others.map(ctx.rowTextOf)], d);
+    if (/[월화수목금토]요일/.test(r.title)) keeps.add(r.title.replace(/[월화수목금토]요일/g, "X요일"));
     assert.ok(r.colors.length > 0, d);
     assert.ok(!/undefined|null/.test(r.label), `${d}: ${r.label}`);
     for (const text of [r.title, ...r.meta, ...r.lines]) assert.ok(r.label.includes(text), `${d}: ${text}`);   // 보이는 글이 링크 이름에 있다(WCAG 2.5.3)
   }
+  // 요일이 남는 제목은 ADR-058 §2가 든 날뿐이다. 새 이름이 생기면 요일을 뺄지 정해야 한다
+  same([...keeps].sort(), ["성 X요일", "성주간 X요일", "성탄 후 X요일", "재의 X요일", "재의 X요일 후 X요일"]);
 });
 
 test("목록 — 위아래로 이어지는 날짜마다 줄이 있다(달과 해를 넘을 때 포함)", { skip: SKIP }, () => {

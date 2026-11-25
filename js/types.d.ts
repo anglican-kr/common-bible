@@ -1033,6 +1033,7 @@ export interface AppHelpers {
   DATE_PICKER_FOCUS_KEY: string;
   /** 날짜 고르기 판을 여는 상단 바의 제목 단추(캘린더의 달, 전례독서의 날짜). */
   datePickerTrigger: (content: Node, label?: string) => HTMLButtonElement;
+  calendarDropTrigger: (label: string) => HTMLButtonElement;
   /** 상단 바의 높이를 `:root`의 `--top-bar-h`에 넣고, 높이가 바뀔 때마다 고친다(CSS용). app.js가 시작할 때 한 번 호출한다. */
   publishBarHeight: () => void;
 }

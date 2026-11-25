@@ -703,6 +703,11 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   width: var(--touch-target);
   height: var(--touch-target);
   margin-block: calc((var(--font-lg) * var(--leading-snug) - var(--touch-target)) / 2);
+  /* 작은 화면에서는 단추다(달력을 내린다, ADR-058 §3). 브라우저의 단추 모양을 지운다 */
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
   color: var(--accent);
   transition: opacity var(--duration-fast);
 }
@@ -1181,8 +1186,9 @@ a.cal-cell:focus-visible { background: var(--bg-card); }
    같은 선으로 나눈다. 위쪽 줄을 더해도 보던 줄이 그 자리에 있는 것은 브라우저의 스크롤 고정이 맡는다. Safari 27 전에는 코드가 고친다(ADR-038 §2).
    스크롤 고정은 화면 맨 위의 내용을 기준으로 삼는다. 상단 바에 가려진 줄이 기준이면 글꼴을 늦게 받아 그 줄의 높이가 바뀔 때 보던 줄이 밀리므로,
    상단 바의 높이를 알린다. 그 높이는 글자 크기, 상태 표시줄 높이, 데스크톱에서 접히는 윗줄에 따라 바뀌어 숫자로 적지 않고 잰 값을 쓴다
-   (--top-bar-h, helpers.js publishBarHeight). */
-html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
+   (--top-bar-h, helpers.js publishBarHeight). 8px은 맨 위 줄로 치지 않는 앞줄의 자투리다(calendar.js ROW_PEEK_PX). 앞줄이 0.5px만 보여도 브라우저가
+   그 줄을 기준으로 삼아, 늦게 온 글꼴로 그 줄이 한 줄 길어지면 보던 줄이 밀렸다(2026-11-26). */
+html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + 8px); }
 .cal-list-month {
   margin: 0;
   padding: var(--space-6) 0 var(--space-2);
@@ -1285,8 +1291,8 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
   overflow-wrap: anywhere;
 }
 
-/* ── 날짜 고르기(ADR-038 §2 「날짜 고르기」, DESIGN.md §6) ──
-   상단 바의 달 제목이 여는 판. 휴대폰과 터치 기기에서는 바텀 시트이고, 마우스를 쓰는 넓은 화면에서는 제목 아래 팝오버다(같은 요소). 칸에는
+/* ── 날짜 고르기(ADR-038 §2 「날짜 고르기」, ADR-058 §3, DESIGN.md §6) ──
+   큰 화면에서는 상단 바의 달 제목이 여는 팝오버이고, 작은 화면에서는 오른쪽 달력 아이콘이 상단 바 아래로 내리는 월간 달력이다(같은 요소). 칸에는
    테두리를 두지 않고 지금 보는 것만 강조색으로 채운다. 오늘은 테두리 원이다. 강조색이 글자색과 거의 같아 글자색만으로는 구별되지 않는다. */
 
 /* 상단 바의 달 제목 단추. 장 고르기 단추(.title-picker-btn)의 모양을 쓰되 펼침 표시(⌄)는 달지 않아, 전례독서의 날짜와 같은 글자로 보인다
@@ -1298,8 +1304,8 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
 }
 .lect-date > .cal-title-btn::after { content: none; }
 
-/* 시트: 책 고르기 시트(.book-filter-scrim, .book-filter-sheet, .book-filter-handle)와 같은 뒤 가림, 둥근 위쪽, 위로 뜨는 그림자, 손잡이.
-   높이는 내용만큼이다(HIG Sheets의 medium detent 정도). */
+/* 내려오는 달력: 상단 바의 아래 끝에서 시작해 높이는 내용만큼이다. 자리(top)와 높이 제한(max-height)은 calendar.js `placePicker`가 상단 바를 재어
+   준다. 뒤 가림도 상단 바 아래부터라, 달력을 연 아이콘이 있는 상단 바는 가리지 않는다. */
 .cal-picker-scrim {
   position: fixed;
   inset: 0;
@@ -1313,26 +1319,21 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
   margin-inline: auto;
   max-width: var(--max-width);
   z-index: 71;
-  padding: 0 var(--space-3) calc(var(--space-6) + env(safe-area-inset-bottom));
+  padding: var(--space-1) max(var(--space-3), env(safe-area-inset-right)) var(--space-3) max(var(--space-3), env(safe-area-inset-left));
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-size: var(--font-base);
   line-height: var(--leading-snug);
   color: var(--text);
   background: var(--bg);
-  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-  box-shadow: var(--shadow-sheet);
-  /* 화면이 낮으면(휴대폰을 가로로 든 때) 시트를 화면 안에 두고 판의 칸만 스크롤한다. 책 고르기 시트와 같은 높이 제한이다.
-     팝오버는 calendar.js가 창의 남은 높이를 max-height로 준다(`placePicker`). */
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  box-shadow: var(--shadow-2);
+  /* 화면이 낮으면(휴대폰을 가로로 든 때) 판을 화면 안에 두고 판의 칸만 스크롤한다 */
   display: flex;
   flex-direction: column;
-  max-height: 85vh;
-  max-height: 85dvh;
 }
-.cal-picker-top,
 .cal-picker-head { flex-shrink: 0; }
 /* 칸의 포커스 테두리가 스크롤 상자에 잘리지 않게 안쪽 여백을 두고, 같은 크기의 바깥 여백을 음수로 두어 자리는 그대로 둔다 */
 .cal-picker-body {
@@ -1342,35 +1343,34 @@ html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
   padding: 4px;
   margin: -4px;
 }
-/* 여는 움직임과 닫는 움직임은 transform을 쓰고, 손잡이로 끌어 내린 만큼은 calendar.js가 translate 속성으로 시트를 옮긴다(`attachPickerDrag`).
-   두 속성은 겹쳐 그려지므로, 여는 움직임 중에 끌어도 시트가 손가락을 따라온다. */
+/* 상단 바 아래에서 미끄러져 내려오고 위로 올라간다. 상단 바 위로 나가는 부분은 잘라(clip-path) 바를 덮지 않는다. 그림자가 잘리지 않게 아래와 옆은 여유를 둔다 */
+@keyframes cal-picker-in-down {
+  from { clip-path: inset(0 -32px 100% -32px); transform: translateY(-16px); }
+  to { clip-path: inset(0 -32px -32px -32px); transform: none; }
+}
+@keyframes cal-picker-out-up {
+  from { clip-path: inset(0 -32px -32px -32px); transform: none; }
+  to { clip-path: inset(0 -32px 100% -32px); transform: translateY(-16px); }
+}
 .cal-picker:not([hidden]):not(.cal-picker-closing) {
-  animation: bm-drawer-in-up var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94) backwards;
+  animation: cal-picker-in-down var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94) backwards;
 }
 .cal-picker.cal-picker-closing {
-  animation: bm-drawer-out-down var(--duration-base) ease-in both;
+  animation: cal-picker-out-up var(--duration-base) ease-in both;
   pointer-events: none;
 }
-/* 손잡이 줄: 가운데 손잡이를 아래로 끌면 닫히고, 오른쪽 「닫기」로도 닫는다 */
-.cal-picker-top {
-  position: relative;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  min-height: var(--touch-target);
-  touch-action: none;
-}
-.cal-picker-top::before {
-  content: "";
+/* 「닫기」는 화면에 보이지 않다가 포커스를 받으면 나타난다(calendar.js `ensurePicker`) */
+.cal-picker-close:not(:focus) {
   position: absolute;
-  top: var(--space-2);
-  left: 50%;
-  transform: translateX(-50%);
-  width: 2.25rem;
-  height: 0.25rem;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--text) 25%, transparent);
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
+.cal-picker-close:focus { align-self: flex-end; }
 /* 바텀 시트와 사이드 패널의 「닫기」 글자 단추. 날짜 고르기 시트, 인용 시트, 북마크 패널, 책 고르기 시트가 같이 쓰고 자리는 머리의 오른쪽 끝이다
    (DESIGN.md 「시트 vs 모달」, 사용자 결정 2026-11-17). 글자 크기와 색, 최소 크기(44px)가 모두 같다. 모달은 ×를 그대로 둔다. */
 .sheet-close {
@@ -1564,7 +1564,7 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
     box-shadow: var(--shadow-2);
   }
   .cal-picker:not([hidden]):not(.cal-picker-closing) { animation: none; }
-  .cal-picker-top { display: none; }
+  .cal-picker-close { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

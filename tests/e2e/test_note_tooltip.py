@@ -407,7 +407,7 @@ def test_note_tooltip_closes_on_tab_bar_icon_and_tab_keeps_focus(browser):
         assert page.evaluate("([x, y]) => document.elementFromPoint(x, y) instanceof SVGElement", [x, y])
         page.mouse.click(x, y)
         _wait_route_end(page, title)
-        assert page.evaluate("() => location.pathname") == "/calendar"
+        assert page.evaluate("() => location.pathname") == "/calendar/list"   # 작은 화면의 캘린더는 목록이다(ADR-058 §1)
         assert page.evaluate(_FOLLOWERS) == {"open": False, "listeners": 0, "observers": 0}
         assert page.evaluate("() => document.activeElement === document.querySelector('#tab-bar [data-tab=\"calendar\"]')")
     finally:
