@@ -1,6 +1,7 @@
 ---
 date: 2026-11-26
 branch: feat/calendar-small-screen
+pr: 669
 title: "feat: 휴대폰의 캘린더를 목록과 내려오는 달력으로"
 ---
 
