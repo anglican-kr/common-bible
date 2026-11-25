@@ -1,4 +1,5 @@
 ---
+pr: 668
 date: 2026-11-24
 branch: docs/daily-office-design
 title: "docs: 성무일과 설계와 ADR-056 · 057 · 058"
