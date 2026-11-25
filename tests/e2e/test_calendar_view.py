@@ -22,7 +22,14 @@ import re
 
 import pytest
 
-from .conftest import CLEAR_APP_STORAGE, IPHONE_UA, assert_sheet_close_button, emulate_status_bar, press_center
+from .conftest import (
+    CLEAR_APP_STORAGE,
+    IPHONE_UA,
+    assert_sheet_close_button,
+    emulate_side_safe_areas,
+    emulate_status_bar,
+    press_center,
+)
 
 BASE = "http://localhost:8080"
 
@@ -1521,6 +1528,30 @@ def test_calendar_redraws_when_the_window_crosses_the_layout_boundary(desktop_co
     assert page.locator(".cal-rows").count() >= 1   # 목록은 두 레이아웃에 있어 그대로다
 
 
+def test_layout_redraw_waits_for_an_open_overlay(desktop_context):
+    """월간 위에 설정이 열린 채 경계를 넘으면 설정을 닫지 않고, 닫은 뒤에 목록으로 다시 그린다."""
+    page = desktop_context.new_page()
+    _open(page, "calendar/2027-03")
+    page.locator(".settings-btn:visible").first.click()
+    page.wait_for_timeout(300)
+    assert page.evaluate("window.appOverlay.anyOverlayOpen()")
+    page.set_viewport_size({"width": 500, "height": 800})
+    page.wait_for_timeout(500)
+    assert page.evaluate("window.appOverlay.anyOverlayOpen()")
+    page.keyboard.press("Escape")
+    page.wait_for_url(f"{BASE}/calendar/list/2027-03-01")
+    page.wait_for_selector(".cal-rows")
+
+
+def test_view_button_focus_moves_to_the_drop_button_across_the_boundary(desktop_context):
+    """작은 화면에는 보기 전환 단추가 없으므로 그 포커스는 달력을 내리는 단추로 간다(WCAG 2.4.3)."""
+    page = desktop_context.new_page()
+    _open_list(page, "calendar/list/2027-03-10")
+    page.evaluate("document.querySelector('#page-title a.title-view-btn').focus({ preventScroll: true })")
+    page.set_viewport_size({"width": 500, "height": 800})
+    page.wait_for_selector("#page-title button.cal-picker-trigger:focus", timeout=3000)
+
+
 def test_tab_in_scrolled_list_goes_back_to_today(mobile_context):
     """멀리 넘겨 둔 목록에서 탭을 누르면 오늘 줄로 간다. 방문 기록이 한 항목 늘어 뒤로 가기가 보던 줄로 돌아간다(ADR-038 §2)."""
     page = mobile_context.new_page()
@@ -1824,6 +1855,20 @@ def test_dropped_calendar_slides_down_and_up_unless_motion_is_reduced(mobile_con
     assert names() == []
     page.keyboard.press("Escape")
     assert page.evaluate("document.querySelector('.cal-picker').hidden") is True
+
+
+@pytest.mark.only_browser("chromium")
+def test_dropped_calendar_stays_above_the_home_indicator(mobile_context):
+    """가로로 든 휴대폰에서 내려온 달력은 홈 표시줄의 자리(아래 안전 영역) 위에서 끝난다(코드 리뷰 2026-11-26)."""
+    page = mobile_context.new_page()
+    page.set_viewport_size({"width": 667, "height": 375})
+    _freeze_today(page)
+    emulate_side_safe_areas(page, 0, 0, bottom=21)
+    _open_list(page, "calendar/list/2027-01-30")   # 여섯 주인 달은 판이 최대 높이가 된다
+    _open_picker(page)
+    state = page.evaluate("""() => ({ bottom: document.querySelector('.cal-picker').getBoundingClientRect().bottom, h: innerHeight,
+        scrolls: (b => b.scrollHeight > b.clientHeight)(document.querySelector('.cal-picker-body')) })""")
+    assert state["scrolls"] and state["bottom"] <= state["h"] - 21, state
 
 
 def test_dropped_calendar_fits_a_short_screen_and_scrolls_only_its_cells(mobile_context):

@@ -2669,6 +2669,22 @@ def test_title_row_follows_the_layout_when_the_window_crosses_the_boundary(deskt
     assert page.evaluate("document.activeElement.matches('#page-title .cal-picker-trigger')")
 
 
+@pytest.mark.parametrize("picker_open", [False, True])
+def test_focus_survives_the_layout_boundary(desktop_context, picker_open):
+    """보기 전환 단추에 포커스가 있거나 판이 열린 채 경계를 넘어도 포커스는 새 줄의 날짜 고르기 단추에 있다(WCAG 2.4.3)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2027-05-02")
+    if picker_open:
+        page.locator("#page-title .cal-title-btn").click()
+        page.wait_for_selector(".cal-picker :focus")
+    else:
+        page.evaluate("document.querySelector('#page-title a.title-view-btn').focus({ preventScroll: true })")
+    page.set_viewport_size({"width": 500, "height": 800})
+    page.wait_for_selector("#page-title button.title-view-btn")
+    page.wait_for_selector("#page-title button.cal-picker-trigger:focus", timeout=3000)
+    assert page.locator(".cal-picker:not([hidden])").count() == 0
+
+
 def test_title_date_says_so_when_the_picker_cannot_load(browser):
     """판을 불러오지 못하면(서비스 워커가 아직 없는 첫 방문에 연결이 끊긴 때) 날짜를 눌러도 아무 일이 없는 것처럼 보이지 않게 알리고, 알림은
     라이브 영역에도 들어간다(코드 리뷰 2026-11-18)."""

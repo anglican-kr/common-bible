@@ -1359,7 +1359,7 @@ function placeToday(today, start, end) {
   if (focused && today instanceof HTMLElement) today.focus({ preventScroll: true });
 }
 
-// 앱 화면의 크기가 작은 화면과 큰 화면의 경계를 넘으면(ADR-050 §2) 이미 그린 줄의 「오늘」을 그 레이아웃의 칸으로 옮긴다. 다시 그리지 않으므로 스크롤이 그대로이고,
+// 앱 화면의 크기가 작은 화면과 큰 화면의 경계를 넘으면(ADR-050 §2) 이미 그린 줄의 「오늘」을 그 레이아웃의 칸으로 옮긴다. 본문은 다시 그리지 않으므로 스크롤이 그대로이고,
 // 포커스는 placeToday 가 돌려준다.
 if (typeof window.matchMedia === "function") {
   window.matchMedia(LARGE_LAYOUT_QUERY).addEventListener("change", () => {
@@ -1372,7 +1372,9 @@ if (typeof window.matchMedia === "function") {
       const active = document.activeElement;
       const key = active instanceof HTMLElement && $title.contains(active) ? active.dataset.focusKey : null;
       commitTitleDateNav(titleModel);
-      if (key) /** @type {HTMLElement | null} */ ($title.querySelector(`[data-focus-key="${key}"]`))?.focus({ preventScroll: true });
+      // 작은 화면에는 보기 전환 단추가 없어 날짜 고르기 단추가 포커스를 넘겨받는다
+      const twin = key ? $title.querySelector(`[data-focus-key="${key}"]`) ?? $title.querySelector(".cal-picker-trigger") : null;
+      if (twin instanceof HTMLElement) twin.focus({ preventScroll: true });
     }
   });
 }
@@ -1392,7 +1394,7 @@ function titleDateText(p) {
  * 전례독서의 머리 — 제목 자리에 날짜 이동 줄을 그린다(사용자 결정 2026-11-03: 스크롤해도 날짜와 「오늘」이 보이고 하루씩 옮길
  * 수 있게. 그전엔 본문 맨 위 줄이었고, 머리에는 「전례독서」가 있었다). 「전례독서」는 문서 제목(setTitle)에 남는다. 보이는 날짜는
  * 짧은 표기이고(`titleDateText`), 스크린 리더는 날짜 단추의 이름으로 전체 날짜를 읽는다. 오른쪽 단추는 마지막으로 쓴 보기의 그 날짜로 간다(ADR-038 §2).
- * 날짜는 날짜 고르기 판을 여는 단추다(ADR-038 §2 「날짜 고르기」, 사용자 결정 2026-11-18). 캘린더의 달 제목과 같은 단추이고 펼침 표시는 없다.
+ * 큰 화면의 날짜는 날짜 고르기 판을 여는 단추다(ADR-038 §2 「날짜 고르기」, 사용자 결정 2026-11-18). 캘린더의 달 제목과 같은 단추이고 펼침 표시는 없다.
  * @param {LectionaryModel} m
  */
 function commitTitleDateNav(m) {

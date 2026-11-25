@@ -3,8 +3,9 @@
 
 // Calendar tab (ADR-038 §1 · §2 — A2). The church calendar a month at a time at
 // /calendar[/YYYY-MM], or as a list without ends at /calendar/list[/YYYY-MM-DD]:
-// every day is a link to its lectionary page
-// (/lectionary/YYYY-MM-DD — the A3 view), showing the day's representative name
+// a month cell links to the day's row in the list, a list row to the day's
+// lectionary page (/lectionary/YYYY-MM-DD — the A3 view). The small layout has
+// the list only (ADR-058 §1). Each day shows its representative name
 // and its liturgical colour dots. The engine decides what each day IS
 // (resolveDate — ADR-037 §6, design §5.5); this module only decides what a cell
 // SHOWS. Only the small calendar bundle is preloaded (design §3.5 — ~105KB of
@@ -857,7 +858,8 @@ function placePicker() {
     const top = Math.max(Math.round(barBottom()), 0);
     p.panel.style.left = "";
     p.panel.style.top = p.scrim.style.top = `${top}px`;
-    p.panel.style.maxHeight = `${Math.max(window.innerHeight - top - PICKER_POPOVER_GAP, 0)}px`;
+    // 화면이 낮으면 판이 화면 아래까지 온다. 홈 표시줄의 자리는 비운다
+    p.panel.style.maxHeight = `calc(${Math.max(window.innerHeight - top - PICKER_POPOVER_GAP, 0)}px - env(safe-area-inset-bottom, 0px))`;
     return;
   }
   p.scrim.style.top = "";
@@ -1555,6 +1557,8 @@ async function renderCalendarView(parsed) {
     return renderLiturgicalLoadFailure("calendar");
   }
   if (isStale()) return PAGE_TITLE;
+  // 자료를 받는 사이 창이 작은 화면이 되었을 수 있다
+  if (isSmallLayout()) return renderListView(parsed.month === null ? null : toKey(target.y, target.m, 1), today, isStale);
   const model = buildMonthGrid(target.y, target.m, today, resolveDate);
   commitMonth(model);
   window.tabHistory?.rememberCalendarView();   // 제대로 그린 보기만 기억한다 — 위의 실패 화면은 남지 않는다(ADR-038 §1)
@@ -1564,25 +1568,46 @@ async function renderCalendarView(parsed) {
 /**
  * 앱 화면이 작은 화면과 큰 화면의 경계를 넘으면(iPad에서 창을 나눌 때) 열린 판을 닫고 그 레이아웃의 캘린더로 바꾼다(ADR-058 §1). 목록은 두 레이아웃에
  * 있으므로 상단 바의 줄만 다시 그려 보던 줄이 그대로다. 월간은 작은 화면에 없으므로 라우터가 목록으로 다시 그린다. 포커스는 같은 단추로
- * 돌려준다(WCAG 2.4.3). 판을 먼저 닫는 것은 route()가 닫으면 닫는 움직임이 시작되기 때문이다.
+ * 돌려주고, 그 레이아웃에 없는 단추였으면 날짜 고르기 단추로 간다(WCAG 2.4.3). 판을 먼저 닫는 것은 route()가 닫으면 닫는 움직임이 시작되기 때문이다.
+ * 설정처럼 다른 창이 열려 있으면 route()가 그 창을 닫으므로, 창이 닫힌 뒤에 다시 그린다.
  */
-async function onLayoutChange() {
+function onLayoutChange() {
+  const wasOpen = !!picker?.overlay.isOpen;
   layoutSwitching = true;
   picker?.overlay.close();
   layoutSwitching = false;
-  if (window.parsePath?.().view !== "calendar") return;
+  // 전례독서의 줄은 lectionary.js가 먼저 다시 그려, 판을 연 단추가 이미 문서에 없다. 새 단추로 포커스를 돌려준다
+  if (wasOpen && !pickerState?.trigger.isConnected) {
+    focusInPicker(/** @type {HTMLElement | null} */ (_$("page-title").querySelector(".cal-picker-trigger")));
+  }
+  const here = window.parsePath?.();
+  if (here?.view !== "calendar") return;
+  if (!activeList?.root.isConnected || here.mode !== "list") {
+    window.appOverlay.whenNoOverlayOpen(() => { void redrawForLayout(); });
+    return;
+  }
+  const spot = layoutFocusSpot();
+  const p = /** @type {{ y: number, m: number, d: number }} */ (parseDate(`${activeList.month}-01`));
+  commitMonthBar(listMonthOf(p.y, p.m, activeList.today), "list");
+  restoreFocusSpot(spot, null);
+}
+
+/** 레이아웃이 바뀌기 전의 포커스 자리. 작은 화면에는 보기 전환 단추가 없다. */
+function layoutFocusSpot() {
   const active = document.activeElement;
   const spot = active && focusSpotOf(active, new Event("resize"), null);
-  if (activeList?.root.isConnected) {
-    const p = /** @type {{ y: number, m: number, d: number }} */ (parseDate(`${activeList.month}-01`));
-    commitMonthBar(listMonthOf(p.y, p.m, activeList.today), "list");
-  } else {
-    await window.route?.();
-  }
+  return spot && { ...spot, fallback: spot.fallback ?? DATE_PICKER_FOCUS_KEY };
+}
+
+/** 지금 레이아웃의 캘린더로 다시 그린다. 다른 창이 닫히기를 기다리는 동안 다른 화면으로 갔으면 그리지 않는다. */
+async function redrawForLayout() {
+  if (window.parsePath?.().view !== "calendar") return;
+  const spot = layoutFocusSpot();
+  await window.route?.();
   restoreFocusSpot(spot, null);
 }
 if (typeof window.matchMedia === "function") {
-  window.matchMedia(LARGE_LAYOUT_QUERY).addEventListener("change", () => { void onLayoutChange(); });
+  window.matchMedia(LARGE_LAYOUT_QUERY).addEventListener("change", onLayoutChange);
 }
 
 // 전례독서 화면은 이 모듈을 부팅 때 받지 않고 날짜를 누를 때 불러와 판을 연다(lectionary.js `openDatePicker`, 보기 "lectionary")
