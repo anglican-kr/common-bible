@@ -1198,10 +1198,6 @@ def test_list_address_follows_the_top_row_when_scrolling_stops(mobile_context, a
     assert page.title() == "2027년 1월 캘린더 목록 — 공동번역성서"
 
 
-# 앱이 방문 기록으로 보낸 것(`trackPageView` — gtag-init.js가 dataLayer에 쌓는다)
-APP_PAGE_VIEWS = "() => (window.dataLayer || []).filter((a) => a[0] === 'event' && a[1] === 'page_view').map((a) => a[2].page_location)"
-
-
 def test_list_waits_for_scrollend_before_treating_the_scroll_as_stopped(mobile_context):
     """관성 스크롤의 끝자락은 스크롤 이벤트가 띄엄띄엄 와서, 이벤트가 잠시 없어도 아직 움직이는 중일 수 있다. `scrollend`가 있는 브라우저에서는
     그것을 기다려 주소를 적고 줄을 고친다. 오지 않으면 스크롤 이벤트가 1초 동안 없을 때 멈춘 것으로 본다."""
@@ -1221,6 +1217,10 @@ def test_list_waits_for_scrollend_before_treating_the_scroll_as_stopped(mobile_c
     moved = page.evaluate("() => location.pathname")
     page.evaluate("() => { window.__passScrollend = true; window.dispatchEvent(new Event('scrollend')); }")
     page.wait_for_function("p => location.pathname !== p", arg=moved, timeout=600)   # scrollend 뒤에는 바로(200ms) 적는다
+
+
+# 앱이 방문 기록으로 보낸 것(`trackPageView` — gtag-init.js가 dataLayer에 쌓는다)
+APP_PAGE_VIEWS = "() => (window.dataLayer || []).filter((a) => a[0] === 'event' && a[1] === 'page_view').map((a) => a[2].page_location)"
 
 
 def test_list_saves_the_address_after_stopping_without_sending_a_page_view(mobile_context):
