@@ -1543,6 +1543,16 @@ def test_layout_redraw_waits_for_an_open_overlay(desktop_context):
     page.wait_for_selector(".cal-rows")
 
 
+def test_month_cell_focus_moves_to_the_drop_button_across_the_boundary(desktop_context):
+    """월간 칸에 포커스가 있는 채 작은 화면이 되면, 목록으로 다시 그린 뒤 포커스는 달력을 내리는 단추로 간다(WCAG 2.4.3, 코드 리뷰 2026-11-26)."""
+    page = desktop_context.new_page()
+    _open(page, "calendar/2027-03")
+    _cell(page, "2027-03-10").focus()
+    page.set_viewport_size({"width": 500, "height": 800})
+    page.wait_for_url(f"{BASE}/calendar/list/2027-03-01")
+    page.wait_for_selector("#page-title button.cal-picker-trigger:focus", timeout=3000)
+
+
 def test_view_button_focus_moves_to_the_drop_button_across_the_boundary(desktop_context):
     """작은 화면에는 보기 전환 단추가 없으므로 그 포커스는 달력을 내리는 단추로 간다(WCAG 2.4.3)."""
     page = desktop_context.new_page()
@@ -1845,9 +1855,18 @@ def test_dropped_calendar_slides_down_and_up_unless_motion_is_reduced(mobile_con
     page.wait_for_selector(".cal-picker:not([hidden])")
     names = lambda: page.evaluate("document.querySelector('.cal-picker').getAnimations().map(a => a.animationName)")
     assert names() == ["cal-picker-in-down"]
+    # 움직이는 동안 보이는 위 끝(옮긴 자리 + 위쪽 자르기)이 상단 바의 아래 끝에 있어 바를 덮지 않는다(코드 리뷰 2026-11-26)
+    visible_top = """(t) => { const p = document.querySelector('.cal-picker'); const a = p.getAnimations()[0]; a.pause();
+        a.currentTime = a.effect.getTiming().duration * t; const m = getComputedStyle(p).clipPath.match(/^inset\\((-?[\\d.]+)px/);
+        const top = p.getBoundingClientRect().top + (m ? Number(m[1]) : 0);
+        const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom; a.play(); return top - bar; }"""
+    for t in (0, 0.25, 0.5, 0.75):
+        assert page.evaluate(visible_top, t) >= -0.5, t
     page.wait_for_timeout(500)
     page.keyboard.press("Escape")
     assert names() == ["cal-picker-out-up"]
+    for t in (0.25, 0.5, 0.75, 1):
+        assert page.evaluate(visible_top, t) >= -0.5, t
     page.wait_for_selector(".cal-picker", state="hidden")
     page.emulate_media(reduced_motion="reduce")
     _press(page, ".cal-picker-trigger")

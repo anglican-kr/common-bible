@@ -1592,11 +1592,17 @@ function onLayoutChange() {
   restoreFocusSpot(spot, null);
 }
 
-/** 레이아웃이 바뀌기 전의 포커스 자리. 작은 화면에는 보기 전환 단추가 없다. */
+/**
+ * 레이아웃이 바뀌기 전의 포커스 자리. 작은 화면에는 보기 전환 단추가 없다. 월간 칸처럼 돌려줄 자리(`data-focus-key`)가 없는 요소에 있었으면
+ * 다시 그린 뒤 날짜 고르기 단추로 간다(WCAG 2.4.3).
+ */
 function layoutFocusSpot() {
   const active = document.activeElement;
-  const spot = active && focusSpotOf(active, new Event("resize"), null);
-  return spot && { ...spot, fallback: spot.fallback ?? DATE_PICKER_FOCUS_KEY };
+  if (!(active instanceof HTMLElement) || active === document.body) return null;
+  const spot = focusSpotOf(active, new Event("resize"), null);
+  if (spot) return { ...spot, fallback: spot.fallback ?? DATE_PICKER_FOCUS_KEY };
+  if (!$app.contains(active) && !_$("page-title").contains(active)) return null;
+  return { key: DATE_PICKER_FOCUS_KEY, fallback: null, y: window.scrollY, top: 0, offset: null, pointer: false };
 }
 
 /** 지금 레이아웃의 캘린더로 다시 그린다. 다른 창이 닫히기를 기다리는 동안 다른 화면으로 갔으면 그리지 않는다. */

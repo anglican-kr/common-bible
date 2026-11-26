@@ -1343,14 +1343,15 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + 8px); }
   padding: 4px;
   margin: -4px;
 }
-/* 상단 바 아래에서 미끄러져 내려오고 위로 올라간다. 상단 바 위로 나가는 부분은 잘라(clip-path) 바를 덮지 않는다. 그림자가 잘리지 않게 아래와 옆은 여유를 둔다 */
+/* 상단 바 아래에서 미끄러져 내려오고 위로 올라간다. 상단 바 위로 나가는 부분은 잘라(clip-path) 바를 덮지 않는다. 그림자가 잘리지 않게 아래와 옆은 여유를 둔다.
+   clip-path는 transform과 함께 옮겨지므로, 위로 옮긴 만큼(16px) 위쪽을 더 잘라 보이는 위 끝이 늘 상단 바의 아래 끝에 있게 한다 */
 @keyframes cal-picker-in-down {
-  from { clip-path: inset(0 -32px 100% -32px); transform: translateY(-16px); }
+  from { clip-path: inset(16px -32px 100% -32px); transform: translateY(-16px); }
   to { clip-path: inset(0 -32px -32px -32px); transform: none; }
 }
 @keyframes cal-picker-out-up {
   from { clip-path: inset(0 -32px -32px -32px); transform: none; }
-  to { clip-path: inset(0 -32px 100% -32px); transform: translateY(-16px); }
+  to { clip-path: inset(16px -32px 100% -32px); transform: translateY(-16px); }
 }
 .cal-picker:not([hidden]):not(.cal-picker-closing) {
   animation: cal-picker-in-down var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94) backwards;
@@ -1371,7 +1372,7 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + 8px); }
   clip-path: inset(50%);
 }
 .cal-picker-close:focus { align-self: flex-end; }
-/* 바텀 시트와 사이드 패널의 「닫기」 글자 단추. 날짜 고르기 시트, 인용 시트, 북마크 패널, 책 고르기 시트가 같이 쓰고 자리는 머리의 오른쪽 끝이다
+/* 바텀 시트와 사이드 패널의 「닫기」 글자 단추. 인용 시트, 북마크 패널, 책 고르기 시트가 같이 쓰고 자리는 머리의 오른쪽 끝이다. 날짜 고르기도 같은 단추를 쓰지만 포커스를 받을 때만 보인다
    (DESIGN.md 「시트 vs 모달」, 사용자 결정 2026-11-17). 글자 크기와 색, 최소 크기(44px)가 모두 같다. 모달은 ×를 그대로 둔다. */
 .sheet-close {
   flex-shrink: 0;
