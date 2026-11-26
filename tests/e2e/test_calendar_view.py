@@ -1528,6 +1528,23 @@ def test_calendar_redraws_when_the_window_crosses_the_layout_boundary(desktop_co
     assert page.locator(".cal-rows").count() >= 1   # 목록은 두 레이아웃에 있어 그대로다
 
 
+def test_layout_redraw_sends_no_page_view(desktop_context):
+    """경계를 넘어 월간을 목록으로 다시 그려도 방문은 보내지 않는다. 읽는 분이 화면을 연 것이 아니다(ADR-038 §2, 코드 리뷰 2026-11-26).
+    그 뒤 줄을 눌러 전례독서로 가면 전처럼 방문 1건이다."""
+    page = desktop_context.new_page()
+    _open(page, "calendar/2027-03")
+    page.wait_for_function(f"() => ({APP_PAGE_VIEWS})().length === 1")   # 월간을 연 방문
+    page.set_viewport_size({"width": 500, "height": 800})
+    page.wait_for_url(f"{BASE}/calendar/list/2027-03-01")
+    page.wait_for_selector(".cal-rows")
+    page.wait_for_timeout(500)   # 앱은 방문을 브라우저가 한가할 때 보낸다
+    assert page.evaluate(APP_PAGE_VIEWS) == [f"{BASE}/calendar/2027-03"]
+    _press(page, "li[data-date='2027-03-01'] a.cal-row")
+    page.wait_for_url(f"{BASE}/lectionary/2027-03-01")
+    page.wait_for_function(f"() => ({APP_PAGE_VIEWS})().length === 2")
+    assert page.evaluate(APP_PAGE_VIEWS)[1] == f"{BASE}/lectionary/2027-03-01"
+
+
 def test_layout_redraw_waits_for_an_open_overlay(desktop_context):
     """월간 위에 설정이 열린 채 경계를 넘으면 설정을 닫지 않고, 닫은 뒤에 목록으로 다시 그린다."""
     page = desktop_context.new_page()

@@ -1611,7 +1611,7 @@ declare global {
   function clearAllCaches(): Promise<void>;
   // routing.js — the view-discriminated route descriptor (`Route` above).
   function parsePath(): Route;
-  function route(): Promise<void>;
+  function route(opts?: { pageView?: boolean }): Promise<void>;
   function navigate(path: string): void;
   function setTitle(text: string): void;
   function hideAudioBar(): void;

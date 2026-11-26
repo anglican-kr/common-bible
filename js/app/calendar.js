@@ -1607,11 +1607,14 @@ function layoutFocusSpot() {
   return { key: DATE_PICKER_FOCUS_KEY, fallback: null, y: window.scrollY, top: 0, offset: null, pointer };
 }
 
-/** 지금 레이아웃의 캘린더로 다시 그린다. 다른 창이 닫히기를 기다리는 동안 다른 화면으로 갔으면 그리지 않는다. */
+/**
+ * 지금 레이아웃의 캘린더로 다시 그린다. 다른 창이 닫히기를 기다리는 동안 다른 화면으로 갔으면 그리지 않는다. 읽는 분이 화면을 연 것이
+ * 아니므로 방문은 보내지 않는다(ADR-038 §2).
+ */
 async function redrawForLayout() {
   if (window.parsePath?.().view !== "calendar") return;
   const spot = layoutFocusSpot();
-  await window.route?.();
+  await window.route?.({ pageView: false });
   restoreFocusSpot(spot, null);
 }
 if (typeof window.matchMedia === "function") {
