@@ -109,7 +109,7 @@ def test_calendar_tab_loads_the_three_modules_once(browser):
         page.wait_for_selector(".book-list", timeout=20_000)
         assert seen == []
         _calendar_tab(page).click()
-        page.wait_for_selector(".cal-grid", timeout=20_000)
+        page.wait_for_selector(".cal-rows", timeout=20_000)   # 작은 화면의 캘린더는 목록이다(ADR-058 §1)
         assert sorted(seen) == sorted(LAZY), seen
         month = page.inner_text(".cal-month")
         page.locator("#page-title a.lect-datenav-btn[data-focus-key='next']").click()
@@ -203,8 +203,8 @@ def test_calendar_module_failure_shows_reload_that_recovers(browser):
         assert button.bounding_box()["height"] >= 44
         page.unroute(f"**{CALENDAR}")
         button.click()
-        page.wait_for_selector(".cal-grid", timeout=20_000)
-        assert page.url == f"{BASE}/calendar"
+        page.wait_for_selector(".cal-rows", timeout=20_000)
+        assert page.url == f"{BASE}/calendar/list"   # 작은 화면의 /calendar는 오늘 줄의 목록이다(ADR-058 §1)
         assert page.evaluate("() => performance.getEntriesByType('navigation')[0].type") == "reload"
         assert errors == [], errors
     finally:
@@ -363,13 +363,13 @@ def test_late_chapter_failure_does_not_paint_over_calendar(browser):
         page.evaluate("() => window.navigate('/john/4')")
         _wait_held(page, held, "john-4.json")
         _calendar_tab(page).click()
-        page.wait_for_selector(".cal-grid", timeout=20_000)
+        page.wait_for_selector(".cal-rows", timeout=20_000)
         # 낡은 route()가 실패를 받았다는 신호(공용 catch의 console.error — fetch의 TypeError)
         with page.expect_console_message(lambda m: m.type == "error" and "Failed to fetch" in m.text):
             held[0].abort()
         page.evaluate(TWO_FRAMES)
-        assert page.locator(".cal-grid").count() == 1
+        assert page.locator(".cal-list").count() == 1
         assert page.locator("#app .empty-state").count() == 0
-        assert urllib.parse.urlparse(page.url).path == "/calendar"
+        assert urllib.parse.urlparse(page.url).path == "/calendar/list"
     finally:
         ctx.close()

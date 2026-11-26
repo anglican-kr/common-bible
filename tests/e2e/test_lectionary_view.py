@@ -1445,9 +1445,10 @@ def test_sick_day_is_an_alternate_reading(mobile_context):
     assert blank["rects"] == 1, blank     # 줄이 나뉘지 않는다
     assert blank["width"] > 48, blank     # 공백이 하나로 줄어들지 않았다(세 글자 이름이 들어간다)
     assert blank["after"] == "을/를", blank
-    # 캘린더 칸은 그날의 전례일 색이다
+    # 캘린더 칸은 그날의 전례일 색이다. 월간은 큰 화면에 있다(ADR-058 §1)
+    page.set_viewport_size({"width": 1280, "height": 800})
     page.goto(f"{BASE}/calendar/2028-02")
-    cell = page.locator('a[href="/lectionary/2028-02-11"]').first
+    cell = page.locator('.cal-grid a.cal-cell[href="/calendar/list/2028-02-11"]')
     cell.wait_for()
     assert cell.get_attribute("aria-label") == "2월 11일 금요일, 병자를 위한 기도일, 녹색"
 
@@ -1820,7 +1821,7 @@ def _title_date(page):
       const r = (s) => document.querySelector(s).getBoundingClientRect();
       const shown = document.querySelector('#page-title .lect-date-label');
       const d = shown.getBoundingClientRect(), t = r('#page-title .lect-today');
-      return { text: shown.textContent, left: d.left, right: d.right, mid: (d.left + d.right) / 2, top: d.top, bottom: d.bottom,
+      return { text: (shown.querySelector('[aria-hidden]') || shown).textContent, left: d.left, right: d.right, mid: (d.left + d.right) / 2, top: d.top, bottom: d.bottom,
                todayLeft: t.left, todayRight: t.right, todayMid: (t.top + t.bottom) / 2,
                prev: r("#page-title a.lect-datenav-btn[aria-label='전날']").left,
                next: r("#page-title a.lect-datenav-btn[aria-label='다음날']").right,
@@ -1839,9 +1840,15 @@ def test_title_row_is_the_date_nav_and_only_the_date_text_is_centered(mobile_con
     assert title.locator("a.lect-datenav-btn[aria-label='다음날']").count() == 1
     assert title.locator("a.lect-today").inner_text() == "오늘"
     assert title.locator(".lect-date time").get_attribute("datetime") == "2026-12-30"
-    # 스크린 리더는 날짜 단추의 이름으로 전체 날짜를 읽고, 이름은 보이는 글로 시작한다(WCAG 2.5.3)
-    assert title.locator(".lect-date .cal-title-btn").get_attribute("aria-label") == "26.12.30, 2026년 12월 30일 (수), 날짜 고르기"
-    assert title.locator(".title-view-btn").get_attribute("href") == "/calendar/2026-12"
+    # 작은 화면의 날짜는 누르는 단추가 아니고 스크린 리더는 숨긴 전체 날짜를 읽는다. 오른쪽 단추가 월간 달력을 내린다(ADR-058 §3)
+    assert title.locator(".lect-date button").count() == 0
+    assert title.locator(".lect-date time [aria-hidden='true']").inner_text() == "26.12.30"
+    assert title.locator(".lect-date time .sr-only").text_content() == "2026년 12월 30일 (수)"
+    drop = title.locator("button.title-view-btn")
+    assert drop.get_attribute("aria-label") == "26.12.30, 2026년 12월 30일 (수), 날짜 고르기"
+    assert drop.get_attribute("aria-haspopup") == "dialog"
+    drop_box = drop.bounding_box()
+    assert drop_box["width"] >= 44 and drop_box["height"] >= 44, drop_box
     assert title.locator(".title-home-btn").count() == 0   # 성서 목록의 입구는 탭 바의 홈 탭과 데스크톱 상단 바의 「성서」 탭이다(ADR-043 §3)
     assert "전례독서" in page.evaluate("() => document.title")   # 「전례독서」는 문서 제목에 남는다
     # 탭 영역 44px — 줄 높이는 제목 한 줄 그대로(음수 여백)
@@ -2348,7 +2355,7 @@ def test_calendar_list_row_follows_my_dedication(desktop_context):
     page.wait_for_selector(".cal-rows", timeout=20_000)
     row = page.locator("li[data-date='2025-01-31'] a.cal-row")
     assert row.locator(".cal-row-title").inner_text() == "용인성당 축성일"
-    assert "연중 3주 금요일" in row.inner_text()
+    assert row.locator(".cal-row-line").all_inner_texts() == ["연중 3주"]   # 다른 전례일도 요일을 뺀다(ADR-058 §2)
     assert "용인성당" not in page.title()
 
 
@@ -2571,7 +2578,7 @@ def test_collect_number_and_fold_keep_their_color_after_a_tap(browser, touch):
         ctx.close()
 
 
-# ── 날짜 고르기(ADR-038 §2 「날짜 고르기」, 사용자 결정 2026-11-18) ──
+# ── 날짜 고르기(ADR-038 §2 「날짜 고르기」, 사용자 결정 2026-11-18. 작은 화면의 달력은 ADR-058 §3) ──
 
 def _picker_state(page):
     return page.evaluate("""() => {
@@ -2584,21 +2591,20 @@ def _picker_state(page):
     }""")
 
 
-def test_title_date_opens_the_day_picker_and_a_day_opens_its_lectionary(mobile_context):
-    """전례독서 상단 바의 날짜는 날짜 고르기 판을 여는 단추다. 펼침 표시는 없다. 그달의 날 판이 시트로 열리고 지금 보는 날이 골라져 있다.
-    날을 고르면 그날의 전례독서가 열리고(고른 전례일과 독서 세트는 남기지 않는다), 포커스는 새 화면의 날짜 단추로 돌아온다. 오늘은 날짜 없이
-    /lectionary다."""
+def test_title_icon_drops_the_month_calendar_and_a_day_opens_its_lectionary(mobile_context):
+    """작은 화면의 전례독서에서 오른쪽 아이콘은 캘린더와 같은 월간 달력을 내린다(ADR-058 §3). 그달의 날 판이 상단 바 아래로 내려오고 지금 보는 날이
+    골라져 있다. 날을 고르면 그날의 전례독서가 열리고(고른 전례일과 독서 세트는 남기지 않는다), 포커스는 새 화면의 아이콘으로 돌아온다. 오늘은
+    날짜 없이 /lectionary다."""
     page = mobile_context.new_page()
     page.clock.set_fixed_time(datetime.datetime(2026, 11, 17, 12))
     _open(page, "lectionary/2027-05-02")
-    btn = "#page-title .lect-date > .cal-title-btn"
+    btn = "#page-title button.title-view-btn"
     assert page.get_attribute(btn, "aria-label") == "27.05.02, 2027년 5월 2일 (일), 날짜 고르기"
-    assert page.get_attribute(btn, "aria-haspopup") == "dialog"
-    assert page.locator(f"{btn} time[datetime='2027-05-02']").count() == 1
-    assert page.evaluate("s => getComputedStyle(document.querySelector(s), '::after').content", btn) == "none"
     press_center(page, btn)
     page.wait_for_selector(".cal-picker:not([hidden])")
-    page.wait_for_timeout(400)   # 시트가 올라오고 판을 불러와 포커스가 옮겨 간다
+    page.wait_for_timeout(400)   # 판을 불러와 달력이 내려오고 포커스가 옮겨 간다
+    gap = page.evaluate("document.querySelector('.cal-picker').getBoundingClientRect().top - document.getElementById('sticky-group').getBoundingClientRect().bottom")
+    assert abs(gap) <= 1, gap
     assert _picker_state(page) == {"name": "날짜 고르기", "title": "2027년 5월", "current": "/lectionary/2027-05-02",
                                    "focus": "/lectionary/2027-05-02"}, _picker_state(page)
     assert page.get_attribute(btn, "aria-expanded") == "true"
@@ -2607,7 +2613,7 @@ def test_title_date_opens_the_day_picker_and_a_day_opens_its_lectionary(mobile_c
     page.wait_for_selector("#page-title .lect-date time[datetime='2027-05-10']")
     page.wait_for_timeout(300)
     assert _picker_state(page) is None
-    assert page.evaluate("document.activeElement.matches('#page-title .cal-title-btn')")
+    assert page.evaluate("s => document.activeElement === document.querySelector(s)", btn)
     assert page.get_attribute(btn, "aria-expanded") == "false"
     # 오늘은 날짜 없는 주소다
     _open(page, "lectionary/2026-11-20")
@@ -2623,6 +2629,12 @@ def test_title_date_opens_the_picker_as_a_popover_on_desktop(desktop_context):
     page.clock.set_fixed_time(datetime.datetime(2026, 11, 17, 12))
     _open(page, "lectionary/2027-05-02")
     btn = "#page-title .lect-date > .cal-title-btn"
+    # 스크린 리더는 날짜 단추의 이름으로 전체 날짜를 읽고, 이름은 보이는 글로 시작한다(WCAG 2.5.3). 펼침 표시는 없다
+    assert page.get_attribute(btn, "aria-label") == "27.05.02, 2027년 5월 2일 (일), 날짜 고르기"
+    assert page.get_attribute(btn, "aria-haspopup") == "dialog"
+    assert page.locator(f"{btn} time[datetime='2027-05-02']").count() == 1
+    assert page.evaluate("s => getComputedStyle(document.querySelector(s), '::after').content", btn) == "none"
+    assert page.get_attribute("#page-title a.title-view-btn", "href") == "/calendar/2027-05"
     page.evaluate("s => document.querySelector(s).focus({ preventScroll: true })", btn)
     page.keyboard.press("Enter")
     page.wait_for_selector(".cal-picker:not([hidden])")
@@ -2637,6 +2649,40 @@ def test_title_date_opens_the_picker_as_a_popover_on_desktop(desktop_context):
     page.wait_for_timeout(200)
     assert _picker_state(page) is None
     assert page.evaluate("s => document.activeElement === document.querySelector(s)", btn)
+
+
+def test_title_row_follows_the_layout_when_the_window_crosses_the_boundary(desktop_context):
+    """창이 레이아웃의 경계를 넘으면 다시 읽지 않고 상단 바의 줄만 그 레이아웃의 것으로 바꾼다. 읽던 자리와 포커스는 그대로다(ADR-058 §1)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2027-05-02")
+    page.evaluate("window.scrollTo({ top: 300, behavior: 'instant' })")
+    page.wait_for_timeout(300)
+    page.evaluate("document.querySelector('#page-title .cal-title-btn').focus({ preventScroll: true })")
+    page.set_viewport_size({"width": 500, "height": 800})
+    page.wait_for_selector("#page-title button.title-view-btn")
+    assert page.locator("#page-title .cal-title-btn").count() == 0
+    assert page.evaluate("document.activeElement.matches('#page-title .cal-picker-trigger')")
+    assert page.evaluate("scrollY") > 0
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.wait_for_selector("#page-title a.title-view-btn")
+    assert page.locator("#page-title .cal-title-btn").count() == 1
+    assert page.evaluate("document.activeElement.matches('#page-title .cal-picker-trigger')")
+
+
+@pytest.mark.parametrize("picker_open", [False, True])
+def test_focus_survives_the_layout_boundary(desktop_context, picker_open):
+    """보기 전환 단추에 포커스가 있거나 판이 열린 채 경계를 넘어도 포커스는 새 줄의 날짜 고르기 단추에 있다(WCAG 2.4.3)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2027-05-02")
+    if picker_open:
+        page.locator("#page-title .cal-title-btn").click()
+        page.wait_for_selector(".cal-picker :focus")
+    else:
+        page.evaluate("document.querySelector('#page-title a.title-view-btn').focus({ preventScroll: true })")
+    page.set_viewport_size({"width": 500, "height": 800})
+    page.wait_for_selector("#page-title button.title-view-btn")
+    page.wait_for_selector("#page-title button.cal-picker-trigger:focus", timeout=3000)
+    assert page.locator(".cal-picker:not([hidden])").count() == 0
 
 
 def test_title_date_says_so_when_the_picker_cannot_load(browser):

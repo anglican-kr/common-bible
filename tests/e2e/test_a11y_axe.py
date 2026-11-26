@@ -134,18 +134,33 @@ def test_a11y_calendar_month(browser):
         ctx.close()
 
 
-def test_a11y_calendar_month_mobile(browser):
-    """캘린더 월간 표 모바일(2026년 9월 — 사계재 자 · 백 점 · 탭 바 넷째 탭) — critical/serious 위반 0건."""
+def test_a11y_calendar_mobile(browser):
+    """캘린더 모바일(월간 주소가 여는 목록, 달력 아이콘, 탭 바 넷째 탭. ADR-058 §1) — critical/serious 위반 0건."""
     from .conftest import IPHONE_UA, MOBILE_VIEWPORT
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA, is_mobile=True, has_touch=True)
     ctx.add_init_script(CLEAR_APP_STORAGE)
     try:
         page = ctx.new_page()
         page.goto(f"{BASE}/calendar/2026-09")
-        page.wait_for_selector(".calendar .cal-grid", timeout=20_000)
+        page.wait_for_selector(".calendar .cal-rows", timeout=20_000)
         page.wait_for_selector("#tab-bar [data-tab='calendar'][aria-current='page']")
         v = _violations(page)
         assert not v, f"Calendar mobile: {len(v)} violation(s):\n{_fmt(v)}"
+    finally:
+        ctx.close()
+
+
+def test_a11y_calendar_month_touch(browser):
+    """캘린더 월간 표, 큰 화면의 터치 기기(2026년 9월 — 사계재 자 · 백 점) — critical/serious 위반 0건."""
+    from .conftest import IPHONE_UA
+    ctx = browser.new_context(viewport={"width": 1024, "height": 768}, user_agent=IPHONE_UA, is_mobile=True, has_touch=True)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    try:
+        page = ctx.new_page()
+        page.goto(f"{BASE}/calendar/2026-09")
+        page.wait_for_selector(".calendar .cal-grid", timeout=20_000)
+        v = _violations(page)
+        assert not v, f"Calendar month (touch): {len(v)} violation(s):\n{_fmt(v)}"
     finally:
         ctx.close()
 
@@ -199,7 +214,7 @@ def test_a11y_search_local_days(browser):
 
 
 def test_a11y_calendar_date_picker(browser):
-    """캘린더 날짜 고르기(ADR-038 §2): 목록의 날 판(시트, 전례색 점)과 해 판, 월간의 달 판(팝오버) — critical/serious 위반 0건.
+    """캘린더 날짜 고르기(ADR-038 §2, ADR-058 §3): 작은 화면 목록의 날 판(내려오는 달력, 전례색 점)과 해 판, 월간의 달 판(팝오버) — critical/serious 위반 0건.
     판은 요소의 click()으로 연다. Playwright의 click은 누르기 전에 상단 바 안의 단추를 화면 안으로 스크롤한다(test_calendar_view.py `_press`)."""
     from .conftest import IPHONE_UA, MOBILE_VIEWPORT
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
@@ -208,7 +223,7 @@ def test_a11y_calendar_date_picker(browser):
         page = ctx.new_page()
         page.goto(f"{BASE}/calendar/list/2027-02-01")
         page.wait_for_selector(".cal-rows", timeout=20_000)
-        page.evaluate("() => document.querySelector('.cal-title-btn').click()")
+        page.evaluate("() => document.querySelector('.cal-picker-trigger').click()")
         page.wait_for_selector(".cal-picker:not([hidden]) .cal-picker-dot")
         page.wait_for_timeout(400)
         v = _violations(page, context=".cal-picker")

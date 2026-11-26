@@ -364,7 +364,7 @@ const loadLectionaryView = () => Promise.all([
 
 /** @type {Record<"calendar" | "lectionary", string>} */
 const LAZY_VIEW_DESCRIPTIONS = {
-  calendar: "대한성공회 교회력 — 날마다의 전례일 · 전례색, 날짜를 누르면 그날의 전례독서",
+  calendar: "대한성공회 캘린더 — 교회력 · 전례독서",
   lectionary: "대한성공회 감사성찬례 전례독서 — 본기도 · 제1독서 · 시편 · 제2독서 · 복음",
 };
 
@@ -441,13 +441,19 @@ function redrawIfSyncedSettingsChanged() {
   return route();
 }
 
-async function route() {
+/**
+ * 주소의 화면을 그린다.
+ * @param {{ pageView?: boolean }} [opts]  `pageView: false`면 방문(page_view)을 보내지 않는다. 읽는 분이 화면을 연 것이 아니라 창 크기가 바뀌어
+ *   다시 그릴 때 쓴다(calendar.js `redrawForLayout`). 주소를 바꿔도 방문이 늘지 않는 것과 같은 원칙이다(ADR-038 §2, 사용자 결정 2026-11-23).
+ */
+async function route(opts) {
+  const pageView = opts?.pageView !== false;
   // In vulgate mode, deuterocanon has no separate tab — redirect to old_testament. Ahead of the sequence number below,
   // so a caller of route() holds the number of the route that draws the view (settings-ui.js redrawThenAnnounce).
   const target = parsePath();
   if (target.view === "division" && target.division === "deuterocanon" && loadBookOrder() === "vulgate") {
     history.pushState(null, "", "/old_testament");
-    return route();
+    return route(opts);
   }
   const isInitialLoad = _isInitialLoad;
   _isInitialLoad = false;
@@ -556,7 +562,7 @@ async function route() {
         dismissLaunchScreen();
         updatePageMeta();
       }
-      trackPageView();
+      if (pageView) trackPageView();
       return;
     }
 
@@ -573,7 +579,7 @@ async function route() {
         window.renderBookmarksView();
         dismissLaunchScreen();
         updatePageMeta({ title: "북마크", description: "공동번역성서 북마크 목록" });
-        trackPageView();
+        if (pageView) trackPageView();
         return;
       }
       // Desktop fallback: show the book list, then open the bookmark drawer
@@ -584,7 +590,7 @@ async function route() {
       dismissLaunchScreen();
       updatePageMeta({ title: "북마크", description: "공동번역성서 북마크 목록" });
       openBookmarkDrawer(null, null);
-      trackPageView();
+      if (pageView) trackPageView();
       return;
     }
 
@@ -605,7 +611,7 @@ async function route() {
       const readTitle = await window.renderBookmarkReadView(parsed.folderId);
       if (isStale()) return;
       updatePageMeta({ title: readTitle || "북마크 읽기", description: "북마크한 본문 모아 읽기" });
-      trackPageView();
+      if (pageView) trackPageView();
       return;
     }
 
@@ -622,7 +628,7 @@ async function route() {
         : await openLazyView("lectionary", loadLectionaryView, parsed, isStale);
       if (title === null) return;
       updatePageMeta({ title, description: LAZY_VIEW_DESCRIPTIONS[view] });
-      trackPageView();
+      if (pageView) trackPageView();
       return;
     }
 
@@ -631,7 +637,7 @@ async function route() {
         window.renderSettingsView();
         dismissLaunchScreen();
         updatePageMeta({ title: "설정", description: "공동번역성서 설정" });
-        trackPageView();
+        if (pageView) trackPageView();
         return;
       }
       // Desktop fallback: settings is a popover anchored to the header gear, not
@@ -645,7 +651,7 @@ async function route() {
       /** @type {HTMLElement | null} */
       const gear = document.querySelector("#settings-anchor .settings-btn");
       if (gear) gear.click();
-      trackPageView();
+      if (pageView) trackPageView();
       return;
     }
 
@@ -672,7 +678,7 @@ async function route() {
       dismissLaunchScreen(); // Start fade-out immediately
       renderBookList(books, divisionOrder()[0]);
       updatePageMeta();
-      trackPageView();
+      if (pageView) trackPageView();
       return;
     }
 
@@ -685,7 +691,7 @@ async function route() {
         title: divLabel,
         description: `공동번역성서 ${divLabel} 목록`,
       });
-      trackPageView();
+      if (pageView) trackPageView();
       return;
     }
 
@@ -704,7 +710,7 @@ async function route() {
         title: book.name_ko,
         description: `${book.name_ko} — 공동번역성서 전문 읽기`,
       });
-      trackPageView();
+      if (pageView) trackPageView();
       return;
     }
 
@@ -744,7 +750,7 @@ async function route() {
         title: `${book.name_ko} 머리말`,
         description: `${book.name_ko} 머리말 — 공동번역성서`,
       });
-      trackPageView();
+      if (pageView) trackPageView();
       return;
     }
 
@@ -774,7 +780,7 @@ async function route() {
       // 송가는 송가 이름이다(「이사야 셋째 송가」, ADR-047 §2)
       const label = chapterLabel(book, chapter);
       updatePageMeta({ title: label, description: `${label} — 공동번역성서` });
-      trackPageView();
+      if (pageView) trackPageView();
     }
   } catch (err) {
     console.error(err);

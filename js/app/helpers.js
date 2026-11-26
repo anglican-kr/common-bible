@@ -558,11 +558,24 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
    */
   function datePickerTrigger(content, label) {
     const button = /** @type {HTMLButtonElement} */ (el("button", {
-      type: "button", className: "title-picker-btn cal-title-btn", "aria-haspopup": "dialog", "aria-expanded": "false",
+      type: "button", className: "title-picker-btn cal-title-btn cal-picker-trigger", "aria-haspopup": "dialog", "aria-expanded": "false",
       "data-focus-key": DATE_PICKER_FOCUS_KEY,
     }, content));
     if (label) button.setAttribute("aria-label", label);
     return button;
+  }
+
+  /**
+   * The small layout's calendar button at the right end of the top bar (ADR-058 §3): it drops the month calendar down from under the
+   * bar. It stands where the large layout has the view link, so it takes that link's look, and it shares the title button's focus key.
+   * @param {string} label  its accessible name (「2026년 11월, 날짜 고르기」)
+   * @returns {HTMLButtonElement}
+   */
+  function calendarDropTrigger(label) {
+    return /** @type {HTMLButtonElement} */ (el("button", {
+      type: "button", className: "title-view-btn cal-picker-trigger", "aria-haspopup": "dialog", "aria-expanded": "false",
+      "aria-label": label, "data-focus-key": DATE_PICKER_FOCUS_KEY,
+    }, headerIcon(HEADER_ICON_PATHS.viewMonth)));
   }
 
   /**
@@ -796,7 +809,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot, SCROLL_ANCHORING, barBottom, scrollUnderBar,
     publishBarHeight, isFormerNorthChurch, churchName, parishGroups, LARGE_LAYOUT_QUERY, isLargeLayout, isSmallLayout, TOUCH_INPUT_QUERY, isTouchInput,
     SHEET_INERT_SELECTORS,
-    DATE_PICKER_FOCUS_KEY, datePickerTrigger, versionFooter,
+    DATE_PICKER_FOCUS_KEY, datePickerTrigger, calendarDropTrigger, versionFooter,
   };
 })();
 

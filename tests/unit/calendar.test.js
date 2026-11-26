@@ -145,7 +145,8 @@ test("buildMonthGrid: 2026년 10월 — 1일(목)이 있는 주의 일요일 9.2
   for (let i = 0; i < 42; i++) assert.strictEqual(cells[i].weekday, i % 7, cells[i].date);   // 일요일 시작
   assert.strictEqual(calls.length, 42);   // 칸마다 한 번 — 앞뒤 달 칸도 엔진에 묻는다
   same(m.hrefs, { prev: "/calendar/2026-09", next: "/calendar/2026-11", today: "/calendar", view: "/calendar/list" });   // 이번 달은 오늘 줄로
-  assert.strictEqual(cells[0].href, "/lectionary/2026-09-27");
+  assert.strictEqual(cells[0].href, "/calendar/list/2026-09-27");   // 칸은 목록의 그날 줄로 간다(ADR-058 §1)
+  assert.strictEqual(cells.find((c) => c.isToday).href, "/calendar/list");   // 오늘 줄의 주소에는 날짜를 적지 않는다
 });
 
 test("buildMonthGrid: 1일이 일요일인 달(2026년 2월 — 4주로 끝나는 달)도 6주 — 줄 수가 달마다 바뀌지 않는다", () => {
@@ -201,7 +202,7 @@ test("calendarDay: 대표가 성인 축일이면 그 이름 — 괄호 설명은
   same(d.others, []);   // 격자 후보(연중 28주 목요일)는 줄에도 싣지 않는다 — 독서 화면의 칩이 맡는다
   same(d.colors, ["white"]);
   assert.strictEqual(d.cycle, null);   // 평일은 주기를 싣지 않는다
-  assert.strictEqual(d.href, "/lectionary/2026-10-15");
+  assert.strictEqual(d.href, "/calendar/list/2026-10-15");
 });
 
 test("calendarDay: 주일은 격자 이름을 「연중29주」처럼 줄인다(ADR-038 §2) — 줄과 링크 이름은 그대로", () => {
@@ -450,12 +451,12 @@ test("listRowOf: 평범한 평일도 줄이 있고 보통 굵기다 — 날짜, 
   assert.strictEqual(r.href, "/lectionary/2026-10-15");
   assert.strictEqual(r.isToday, false);
   assert.strictEqual(r.level, "");
-  assert.strictEqual(r.title, "연중 28주 목요일");
+  assert.strictEqual(r.title, "연중 28주");   // 요일은 왼쪽 날짜 칸이 보인다(ADR-058 §2)
   same(r.colors, [{ code: "green", name: "녹색", or: false }]);
   same(r.meta, ["짝수해"]);
   assert.strictEqual(r.mark, null);
   same(r.lines, []);
-  assert.strictEqual(r.label, "10월 15일 목요일, 연중 28주 목요일, 녹색, 짝수해");
+  assert.strictEqual(r.label, "10월 15일 목요일, 연중 28주, 녹색, 짝수해");
 });
 
 test("listRowOf: 글의 차례는 제목 영역과 같다 — 안내, 이름 줄, 다른 전례일", () => {
@@ -470,10 +471,19 @@ test("listRowOf: 글의 차례는 제목 영역과 같다 — 안내, 이름 줄
     colors: ["white"], fast: "minor",
   }), "2026-12-07");
   same(r.meta, ["짝수해", "소재일"]);
-  same(r.lines, ["12월 6일에서 옮겨 옴", "누군가 축일을 12월 8일로 옮김", "암브로스(밀라노의 주교) 축일", "서울산성당 축성일", "대림 2주 월요일"]);
+  same(r.lines, ["12월 6일에서 옮겨 옴", "누군가 축일을 12월 8일로 옮김", "암브로스(밀라노의 주교) 축일", "서울산성당 축성일", "대림 2주"]);
   assert.strictEqual(r.level, "major");
   assert.strictEqual(r.isToday, true);
   assert.ok(r.label.startsWith("오늘, 12월 7일 월요일, 성 니콜라(대한성공회 수호성인), 백색, 짝수해, 소재일, 12월 6일에서 옮겨 옴"), r.label);
+});
+
+test("rowTextOf: 절기와 주 번호로 만든 평일 이름에서만 요일을 뺀다(ADR-058 §2)", () => {
+  same(["연중 34주 화요일", "대림 1주 월요일", "부활 2주 토요일", "성탄 1주 목요일", "사순 3주 수요일 · 저녁"].map(ctx.rowTextOf),
+    ["연중 34주", "대림 1주", "부활 2주", "성탄 1주", "사순 3주 · 저녁"]);
+  // 요일이 이름의 일부이거나 주 번호가 없으면 그대로다
+  for (const keep of ["성주간 월요일", "재의 수요일", "재의 수요일 후 목요일", "성 금요일", "성탄 후 화요일", "대림1주일", "연중 34주일", "레오나드(은수자, 6세기) 축일"]) {
+    assert.strictEqual(ctx.rowTextOf(keep), keep);
+  }
 });
 
 test("listRowOf: 굵기 — 주일과 대축일, 주요축일은 major, 축일은 minor", () => {
