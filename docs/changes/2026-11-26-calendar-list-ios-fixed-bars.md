@@ -1,6 +1,7 @@
 ---
 date: 2026-11-26
 branch: fix/calendar-list-ios-fixed-bars
+pr: 670
 title: "fix: 아이폰의 캘린더 목록에서 상단 바와 탭 바가 떨어지던 것"
 ---
 
