@@ -1599,10 +1599,12 @@ function onLayoutChange() {
 function layoutFocusSpot() {
   const active = document.activeElement;
   if (!(active instanceof HTMLElement) || active === document.body) return null;
+  // 새 단추는 전의 단추에 포커스 테두리가 있었을 때만 그린다. 누르거나 탭하면 테두리가 없고, 창 크기가 바뀐 것은 입력이 아니다
+  const pointer = !active.matches(":focus-visible");
   const spot = focusSpotOf(active, new Event("resize"), null);
-  if (spot) return { ...spot, fallback: spot.fallback ?? DATE_PICKER_FOCUS_KEY };
+  if (spot) return { ...spot, fallback: spot.fallback ?? DATE_PICKER_FOCUS_KEY, pointer };
   if (!$app.contains(active) && !_$("page-title").contains(active)) return null;
-  return { key: DATE_PICKER_FOCUS_KEY, fallback: null, y: window.scrollY, top: 0, offset: null, pointer: false };
+  return { key: DATE_PICKER_FOCUS_KEY, fallback: null, y: window.scrollY, top: 0, offset: null, pointer };
 }
 
 /** 지금 레이아웃의 캘린더로 다시 그린다. 다른 창이 닫히기를 기다리는 동안 다른 화면으로 갔으면 그리지 않는다. */

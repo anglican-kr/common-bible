@@ -1371,10 +1371,12 @@ if (typeof window.matchMedia === "function") {
     if (titleModel && $title.querySelector(".lect-date-label") && window.parsePath?.().view === "lectionary") {
       const active = document.activeElement;
       const key = active instanceof HTMLElement && $title.contains(active) ? active.dataset.focusKey : null;
+      // 누르거나 탭한 단추에는 포커스 테두리가 없었으므로 새 단추에도 그리지 않는다
+      const ring = active instanceof HTMLElement && active.matches(":focus-visible");
       commitTitleDateNav(titleModel);
       // 작은 화면에는 보기 전환 단추가 없어 날짜 고르기 단추가 포커스를 넘겨받는다
       const twin = key ? $title.querySelector(`[data-focus-key="${key}"]`) ?? $title.querySelector(".cal-picker-trigger") : null;
-      if (twin instanceof HTMLElement) twin.focus({ preventScroll: true });
+      if (twin instanceof HTMLElement) twin.focus(ring ? { preventScroll: true } : { preventScroll: true, focusVisible: false });
     }
   });
 }
