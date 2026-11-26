@@ -1326,14 +1326,18 @@ function saveTopRow(list) {
 
 /** 경계가 화면에서 이만큼(줄 25개쯤) 가까워지면 줄을 더한다. */
 const LIST_EDGE_MARGIN_PX = 2000;
-/** 스크롤 이벤트가 이만큼 없으면 멈춘 것으로 본다. `scrollend`는 Safari 26.2부터라 쓰지 않는다. Safari 27 전의 iOS는 관성의 끝자락에 고쳐도 관성이 끊기므로 넉넉히 둔다. */
+/** 스크롤 이벤트가 이만큼 없으면 멈춘 것으로 본다. Safari 27 전의 iOS는 관성의 끝자락에 고쳐도 관성이 끊기므로 넉넉히 둔다. */
 const LIST_SETTLE_MS = 200;
+/** 스크롤이 끝났다는 이벤트(`scrollend`, Safari 26.2부터). 있으면 멈춤 판단에 함께 쓴다(`startListScroll`). */
+const HAS_SCROLLEND = "onscrollend" in window;
+/** `scrollend`가 오지 않아도 스크롤 이벤트가 이만큼 없으면 멈춘 것으로 본다. */
+const LIST_MOVING_LIMIT_MS = 1000;
 
 /** 지금 목록의 이어 붙이기를 멈춘다 — 목록을 다시 그리거나 월간으로 갈 때. @type {(() => void) | null} */
 let stopList = null;
 
 /**
- * 위아래로 이어 붙이기 시작한다(ADR-038 §2). 아래쪽은 스크롤 중에도 더한다. 위쪽은 스크롤 고정이 있는 브라우저에서만 스크롤 중에 더하고, 없으면 스크롤이
+ * 위아래로 이어 붙이기 시작한다(ADR-038 §2). 아래쪽은 스크롤 중에도 더한다. 위쪽은 스크롤 고정이 있는 브라우저에서 스크롤 값이 0보다 클 때만 스크롤 중에 더하고, 그 밖에는 스크롤이
  * 멈추고 손을 뗀 뒤에 더한다. Safari 27 전의 iOS는 관성 스크롤 중에 스크롤 값을 바꾸면 관성이 끊기기 때문이다(WebKit 버그 187449). 먼 줄 내리기는
  * 어느 브라우저에서나 멈춘 뒤에 한다. 멈춘 뒤에는 맨 위 줄을 주소에 남긴다. 데스크톱에서 상단 바가 접히는 동안에는 맨 위 줄이 달라 보이지만, 스크롤 고정이
  * 프레임마다 스크롤 값을 고쳐 스크롤 이벤트가 이어지므로 멈춤 판단은 접힌 뒤 줄을 다시 맞춘 다음에 실행된다(`scrollToRow`).
@@ -1344,6 +1348,8 @@ function startListScroll(list) {
   const listeners = new AbortController();
   let wantAbove = false;
   let touching = false;
+  let moving = false;
+  let lastScrollAt = 0;
   let timer = 0;
   let frame = 0;
 
@@ -1391,6 +1397,13 @@ function startListScroll(list) {
       return;
     }
     if (touching) return;   // 손을 떼면 다시 잰다
+    // 관성 스크롤의 끝자락은 스크롤 이벤트가 띄엄띄엄 와서 타이머만으로는 멈춘 것으로 잘못 볼 수 있다. `scrollend`가 있으면 그것을 기다린다.
+    // 오지 않는 경우에 대비해, 스크롤 이벤트가 LIST_MOVING_LIMIT_MS 동안 없으면 멈춘 것으로 본다.
+    if (moving && performance.now() - lastScrollAt < LIST_MOVING_LIMIT_MS) {
+      armSettle();
+      return;
+    }
+    moving = false;
     if (wantAbove) {
       wantAbove = false;
       growAbove();
@@ -1417,9 +1430,11 @@ function startListScroll(list) {
         if (entry.isIntersecting) growBelow();
       } else if (!entry.isIntersecting) {
         wantAbove = false;
-      } else if (SCROLL_ANCHORING) {
+      } else if (SCROLL_ANCHORING && window.scrollY > 0) {
         growAbove();
       } else {
+        // 스크롤 값이 0 이하(맨 위, iOS에서 맨 위를 지나 튕기는 중)면 브라우저가 줄을 지키지 않아 코드가 스크롤 값을 고친다. 움직이는 중에 고치면
+        // iOS가 고정 위치의 상단 바와 탭 바를 화면에서 떼어 내용과 함께 움직이므로(iOS 27.2, 2026-11-26) 멈춘 뒤로 미룬다
         wantAbove = true;
         armSettle();
       }
@@ -1432,11 +1447,17 @@ function startListScroll(list) {
       stop();
       return;
     }
+    if (HAS_SCROLLEND) moving = true;
+    lastScrollAt = performance.now();
     armSettle();
     frame ||= requestAnimationFrame(() => {
       frame = 0;
       if (root.isConnected) followTopMonth(list);
     });
+  }, { passive: true, signal });
+  window.addEventListener("scrollend", () => {
+    moving = false;
+    armSettle();
   }, { passive: true, signal });
   /** 손가락 하나를 떼도 이벤트가 나온다. 남은 손가락이 있으면 계속 기다린다. @param {TouchEvent} e */
   const release = (e) => {

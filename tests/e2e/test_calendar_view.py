@@ -1030,6 +1030,27 @@ def test_list_without_scroll_anchoring_adds_rows_above_after_scrolling_stops(mob
     _assert_consecutive(_dates(page))
 
 
+def test_list_at_the_very_top_adds_rows_above_only_after_scrolling_stops(mobile_context):
+    """스크롤 고정이 있어도 스크롤 값이 0 이하(맨 위, iOS에서 튕기는 중)면 브라우저가 줄을 지키지 않아 코드가 스크롤 값을 고친다. 움직이는 중에
+    고치면 iOS가 상단 바와 탭 바를 내용과 함께 움직이므로(iOS 27.2, 2026-11-26), 손을 떼고 멈춘 뒤에 더한다."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2026-12-15")
+    page.wait_for_timeout(1000)   # 처음의 위쪽 채우기를 기다린다
+    first = _dates(page)[0]
+    _touch(page, "touchstart", 1)
+    page.evaluate("() => window.scrollTo({ top: 0, behavior: 'instant' })")
+    page.wait_for_timeout(500)
+    assert _dates(page)[0] == first
+    row = _dates(page)[0]
+    before = _viewport_top(page, row)
+    _touch(page, "touchend", 0)
+    page.wait_for_function("d => document.querySelector('li[data-date]').dataset.date < d", arg=first)
+    page.wait_for_timeout(100)
+    assert abs(_viewport_top(page, row) - before) <= 2
+    assert page.evaluate("() => window.scrollY") > 0
+    _assert_consecutive(_dates(page))
+
+
 @both_anchorings
 def test_desktop_list_holds_the_row_when_the_header_collapses(desktop_context, anchoring):
     """데스크톱은 맨 위에서 위쪽 줄을 더하면 상단 바의 윗줄이 접힌다. 줄은 그 높이(약 46px)보다 많이 움직이지 않고 화면에 남는다."""
@@ -1175,6 +1196,27 @@ def test_list_address_follows_the_top_row_when_scrolling_stops(mobile_context, a
     assert page.evaluate("() => localStorage.getItem('bible-calendar-last-view')") == "/calendar/list/2027-01-15"
     assert page.evaluate("() => history.length") == length
     assert page.title() == "2027년 1월 캘린더 목록 — 공동번역성서"
+
+
+def test_list_waits_for_scrollend_before_treating_the_scroll_as_stopped(mobile_context):
+    """관성 스크롤의 끝자락은 스크롤 이벤트가 띄엄띄엄 와서, 이벤트가 잠시 없어도 아직 움직이는 중일 수 있다. `scrollend`가 있는 브라우저에서는
+    그것을 기다려 주소를 적고 줄을 고친다. 오지 않으면 스크롤 이벤트가 1초 동안 없을 때 멈춘 것으로 본다."""
+    # 브라우저가 내는 scrollend를 앱보다 먼저 받아 막는다. 테스트가 직접 낼 때만 앱에 간다.
+    mobile_context.add_init_script("""
+        window.addEventListener('scrollend', (e) => { if (!window.__passScrollend) e.stopImmediatePropagation(); }, true);
+    """)
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2026-12-15")
+    page.wait_for_timeout(1000)
+    page.evaluate("() => window.scrollBy({ top: 1200, behavior: 'instant' })")
+    page.wait_for_timeout(500)
+    assert page.url.endswith("/calendar/list/2026-12-15")
+    page.wait_for_function("() => !/2026-12-15$/.test(location.pathname)", timeout=3000)   # 1초가 지나면 적는다
+    page.evaluate("() => window.scrollBy({ top: 1200, behavior: 'instant' })")
+    page.wait_for_timeout(300)
+    moved = page.evaluate("() => location.pathname")
+    page.evaluate("() => { window.__passScrollend = true; window.dispatchEvent(new Event('scrollend')); }")
+    page.wait_for_function("p => location.pathname !== p", arg=moved, timeout=600)   # scrollend 뒤에는 바로(200ms) 적는다
 
 
 # 앱이 방문 기록으로 보낸 것(`trackPageView` — gtag-init.js가 dataLayer에 쌓는다)
