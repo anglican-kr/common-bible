@@ -461,7 +461,7 @@ test("listRowOf: 평범한 평일도 줄이 있고 보통 굵기다 — 평일 �
   assert.strictEqual(r.label, "10월 15일 목요일, 녹색");
 });
 
-test("listRowOf: 글의 차례는 제목 영역과 같다 — 안내, 이름 줄, 다른 전례일", () => {
+test("listRowOf: 글의 차례 — 소재일과 축성일 한 줄, 이름 줄, 다른 전례일. 옮김 안내는 적지 않는다", () => {
   const resolved = resolvedOf("2026-12-07", [cand(obs("d1206", "성 니콜라", { rank: "major_feast" }))]);
   const r = ctx.listRowOf(headModel("2026-12-07", resolved, {
     dayName: "성 니콜라(대한성공회 수호성인)",
@@ -473,13 +473,13 @@ test("listRowOf: 글의 차례는 제목 영역과 같다 — 안내, 이름 줄
     colors: ["white"], fast: "minor",
     slots: [{ label: "이사 61:1-3" }, { label: "시편 96" }, { label: "마태 9:35-38" }], track: null,
   }), "2026-12-07", "대림 2주");
-  same(r.meta, ["소재일"]);
-  same(r.lines, ["12월 6일에서 옮겨 옴", "누군가 축일을 12월 8일로 옮김", "암브로스(밀라노의 주교) 축일", "서울산성당 축성일"]);   // 다른 전례일의 평일 이름은 주간 라벨과 같아 적지 않는다
+  same(r.meta, ["소재일", "서울산성당 축성"]);   // 축성일은 소재일과 한 줄이고 「축성」으로 줄인다(사용자 결정 2026-11-27)
+  same(r.lines, ["암브로스(밀라노의 주교)"]);   // 아래 줄의 「축일」도 뗀다(사용자 결정 2026-11-27)   // 옮김 안내는 적지 않는다. 다른 전례일의 평일 이름은 주간 라벨과 같아 적지 않는다
   assert.strictEqual(r.level, "major");
   assert.strictEqual(r.isToday, true);
-  assert.ok(r.label.startsWith("오늘, 12월 7일 월요일, 성 니콜라(대한성공회 수호성인), 백색, 소재일, 12월 6일에서 옮겨 옴"), r.label);
+  assert.ok(r.label.startsWith("오늘, 12월 7일 월요일, 성 니콜라, 대한성공회 수호성인, 백색, 소재일, 서울산성당 축성, 암브로스(밀라노의 주교)"), r.label);
   same(r.readings, [{ name: "감사성찬례", note: null, refs: ["이사 61:1-3", "시편 96", "마태 9:35-38"] }]);
-  assert.ok(r.label.endsWith("서울산성당 축성일, 감사성찬례 이사 61:1-3, 시편 96, 마태 9:35-38"), r.label);
+  assert.ok(r.label.endsWith("암브로스(밀라노의 주교), 감사성찬례 이사 61:1-3, 시편 96, 마태 9:35-38"), r.label);
 });
 
 test("listRowOf: 트랙이 있는 주일은 「감사성찬례」 아래에 트랙 이름을 적는다", () => {
@@ -492,25 +492,31 @@ test("listRowOf: 트랙이 있는 주일은 「감사성찬례」 아래에 트�
   assert.ok(r.label.includes("감사성찬례 복음 주제 열왕하 5:14-17"), r.label);
 });
 
-test("rowTitleOf: 주간 라벨과 같은 평일 이름 대신 첫 축일, 기념일 줄을 올리고 괄호 설명을 아래로 내린다(ADR-060 §2)", () => {
+test("rowTitleOf: 주간 라벨과 같은 평일 이름 대신 첫 축일, 기념일 줄을 올리고 괄호 설명은 제목 바로 아래(subtitle)로 내린다(ADR-060 §2)", () => {
   same(ctx.rowTitleOf("연중 34주", ["클레멘트(로마의 주교, 순교자, 100년경) 축일"], "연중 34주"),
-    { title: "클레멘트 축일", lines: ["로마의 주교, 순교자, 100년경"], raised: true });
+    { title: "클레멘트", subtitle: "로마의 주교, 순교자, 100년경", lines: [], raised: true });
   same(ctx.rowTitleOf("연중 34주", ["알렉산드리아의 카타리나(순교자, 4세기) 축일", "원주성당 축성일"], "연중 34주"),
-    { title: "알렉산드리아의 카타리나 축일", lines: ["순교자, 4세기", "원주성당 축성일"], raised: true });
+    { title: "알렉산드리아의 카타리나", subtitle: "순교자, 4세기", lines: ["원주성당 축성일"], raised: true });
   // 괄호가 둘이면 나누지 않는다 — 나누면 이름이 빠지고 아래 줄이 「랜더스), 와일스(1890년」이 된다(코드 리뷰 2026-11-27)
   for (const name of ["바실(주교, 379년)과 나지안조의 그레고리(주교, 389년) 축일", "대한성공회 최초의 의료선교사 남득시(랜더스), 와일스(1890년) 기념일"]) {
-    same(ctx.rowTitleOf("연중 1주", [name], "연중 1주"), { title: name, lines: [], raised: true });
+    same(ctx.rowTitleOf("연중 1주", [name], "연중 1주"), { title: name.replace(/ (?:축일|기념일)$/, ""), subtitle: null, lines: [], raised: true });
   }
+  // 그날의 제목도 괄호 설명을 아래로 내린다(사용자 결정 2026-11-27). 괄호가 둘이면 그대로다
+  same(ctx.rowTitleOf("성 니콜라(대한성공회 수호성인, 미라의 주교, 326년)", [], "대림 2주"),
+    { title: "성 니콜라", subtitle: "대한성공회 수호성인, 미라의 주교, 326년", lines: [], raised: false });
+  same(ctx.rowTitleOf("마틴 루터(종교개혁자, 1546년)와 종교개혁의 순교자들 기념일", [], "연중 30주"),
+    { title: "마틴 루터(종교개혁자, 1546년)와 종교개혁의 순교자들 기념일", subtitle: null, lines: [], raised: false });
   // 제목이 다른 날도 주간 라벨과 같은 줄(다른 전례일로 내려간 평일)은 적지 않는다(사용자 결정 2026-11-27)
-  same(ctx.rowTitleOf("용인성당 축성일", ["연중 3주"], "연중 3주"), { title: "용인성당 축성일", lines: [], raised: false });
-  same(ctx.rowTitleOf("연중 34주", ["성프란시스수녀회 설립 기념일"], "연중 34주"), { title: "성프란시스수녀회 설립 기념일", lines: [], raised: true });
+  same(ctx.rowTitleOf("용인성당 축성일", ["연중 3주"], "연중 3주"), { title: "용인성당 축성일", subtitle: null, lines: [], raised: false });
+  same(ctx.rowTitleOf("연중 34주", ["성프란시스수녀회 설립 기념일"], "연중 34주"), { title: "성프란시스수녀회 설립", subtitle: null, lines: [], raised: true });
   // 축성일과 옮김 안내는 올리지 않는다. 축일 줄이 뒤에 있으면 그것을 올린다(세례명의 성인 줄은 다른 전례일의 줄에 있다)
-  same(ctx.rowTitleOf("연중 34주", ["평택성당 축성일"], "연중 34주"), { title: "", lines: ["평택성당 축성일"], raised: false });
+  same(ctx.rowTitleOf("연중 34주", ["평택성당 축성일"], "연중 34주"), { title: "", subtitle: null, lines: ["평택성당 축성일"], raised: false });
   same(ctx.rowTitleOf("연중 31주", ["삼흥리성당 축성일", "레오나드(은수자, 6세기) 축일"], "연중 31주"),
-    { title: "레오나드 축일", lines: ["은수자, 6세기", "삼흥리성당 축성일"], raised: true });
-  same(ctx.rowTitleOf("연중 34주", ["성 니콜라 축일을 12월 7일로 옮김"], "연중 34주"), { title: "", lines: ["성 니콜라 축일을 12월 7일로 옮김"], raised: false });
+    { title: "레오나드", subtitle: "은수자, 6세기", lines: ["삼흥리성당 축성일"], raised: true });
+  same(ctx.rowTitleOf("연중 34주", ["성 니콜라 축일을 12월 7일로 옮김"], "연중 34주"), { title: "", subtitle: null, lines: ["성 니콜라 축일을 12월 7일로 옮김"], raised: false });
   // 주간 라벨과 다른 제목(주일, 축일, 「성탄 8일 전」)은 그대로다
-  same(ctx.rowTitleOf("성탄 8일 전", ["누구 축일"], "대림 3주"), { title: "성탄 8일 전", lines: ["누구 축일"], raised: false });
+  same(ctx.rowTitleOf("연중 2주", ["누구 축일"], "연중 2주"), { title: "누구", subtitle: null, lines: [], raised: true });   // 이름 뒤의 「축일」, 「기념일」은 뗀다
+  same(ctx.rowTitleOf("성탄 8일 전", ["누구 축일"], "대림 3주"), { title: "성탄 8일 전", subtitle: null, lines: ["누구"], raised: false });
 });
 
 test("rowTextOf: 절기와 주 번호로 만든 평일 이름에서만 요일을 뺀다(ADR-058 §2)", () => {

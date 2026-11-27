@@ -256,7 +256,7 @@ const churchIdOf = (name) => read("local-observances.json").parishes.find((p) =>
 
 test("목록 줄. 소속교회를 고르면 전례독서 화면처럼 축성일이 제목이고, 교구 설립일 줄이 생긴다(ADR-041 §6)", { skip: SKIP }, () => {
   const yongin = churchIdOf("용인성당");   // 서울교구, 축성일 01.31
-  same([rowOf("2025-01-31").title, rowOf("2025-01-31", yongin).title], ["", "용인성당 축성일"]);   // 평일 이름은 주간 라벨에만 있다(ADR-060 §2)
+  same([rowOf("2025-01-31").title, rowOf("2025-01-31", yongin).title], ["", "용인성당 축성"]);   // 목록은 「축성일」을 「축성」으로 줄인다(사용자 결정 2026-11-27). 평일 이름은 주간 라벨에만 있다(ADR-060 §2)
   assert.strictEqual(rowOf("2025-01-31", yongin).level, "");   // 굵기는 그날의 기본 독서(평일)를 따른다
   const founding = rowOf("2026-05-27", yongin);
   assert.ok(founding.lines.includes("1965년 5월 27일 서울교구설립일"), founding.lines.join(" | "));
@@ -269,18 +269,19 @@ test("목록 줄. 세례명을 고르면 전례독서 화면처럼 그 성인의
   const none = rowOf("2026-11-06");
   const mine = rowOf("2026-11-06", "", leonard);
   // 세례명의 성인 줄은 다른 전례일의 줄에 있지만, 목록은 어느 쪽이든 그 축일을 제목으로 올린다(ADR-060 §2)
-  same([none.title, mine.title], ["레오나드 축일", "레오나드 축일"]);
-  assert.ok(mine.lines.includes("은수자, 6세기"), mine.lines.join(" | "));
+  same([none.title, mine.title], ["레오나드", "레오나드"]);
+  same([none.subtitle, mine.subtitle], ["은수자, 6세기", "은수자, 6세기"]);
   same([...mine.lines].sort(), [...none.lines].sort());   // 같은 글이 두 번 보이지 않고, 빠지는 글도 없다
 });
 
-test("목록 줄 — 11.6은 평일 이름 대신 레오나드 축일이 제목이고, 괄호 설명은 그 아래 줄이다(ADR-060 §2)", { skip: SKIP }, () => {
+test("목록 줄 — 11.6은 평일 이름 대신 레오나드가 제목이고, 괄호 설명은 그 아래 줄이다(ADR-060 §2)", { skip: SKIP }, () => {
   const r = rowOf("2026-11-06");
   assert.strictEqual(r.week, "연중 31주");
-  assert.strictEqual(r.title, "레오나드 축일");
+  assert.strictEqual(r.title, "레오나드");
   assert.strictEqual(day("2026-11-06").cellName, "레오나드");   // 월간 칸은 그대로다
-  same(r.meta, ["소재일"]);   // 해는 적지 않는다
-  same(r.lines, ["은수자, 6세기", "삼흥리성당 축성일"]);
+  same(r.meta, ["소재일", "삼흥리성당 축성"]);   // 해는 적지 않는다. 축성일은 소재일과 한 줄이다(사용자 결정 2026-11-27)
+  assert.strictEqual(r.subtitle, "은수자, 6세기");
+  same(r.lines, []);
   assert.strictEqual(r.level, "minor");   // 올린 제목은 축일처럼 굵다
   same(r.readings.map((x) => x.name), ["감사성찬례"]);
   assert.ok(r.readings[0].refs.length >= 3, r.readings[0].refs.join(" · "));
@@ -297,8 +298,9 @@ test("목록 줄 — 주일, 전례년 첫날, 옮겨 온 축일, 저녁 전례,
   same(first.meta, []);
   const moved = rowOf("2026-12-07");
   assert.ok(moved.title.startsWith("성 니콜라"), moved.title);
-  assert.strictEqual(moved.lines[0], "12월 6일에서 옮겨 옴");
-  same(rowOf("2026-12-06").lines[0], "성 니콜라 축일을 12월 7일로 옮김");
+  // 옮긴 축일의 안내는 목록에 적지 않는다(사용자 결정 2026-11-27). 전례독서 화면에는 있다
+  assert.ok(headModel("2026-12-07").selectedNote, "전례독서 화면에는 옮겨 온 안내가 있다");
+  for (const r of [moved, rowOf("2026-12-06")]) assert.ok(!r.lines.some((l) => /옮겨 옴|옮김/.test(l)) && !r.label.includes("옮"), r.label);
   assert.ok(rowOf("2026-12-24").lines.includes("성탄 밤 · 저녁"));
   same(rowOf("2026-12-13").colors.map((c) => c.code), ["violet"]);   // 대림 3주일의 장미, 청은 전례독서 머리에만
   assert.ok(headModel("2026-12-13").colorAlt.length > 0);
@@ -314,22 +316,30 @@ test("목록 줄 — 2025-2030의 모든 날에 줄이 있고 글이 제목 영�
     const r = ctx.listRowOf(m, "2026-11-07", week);
     weeks.add(week.replace(/\d+/, "N"));
     const base = ctx.rowTextOf(head.title);
-    const all = [...head.notes, ...head.names, ...head.others.map(ctx.rowTextOf)].filter((l) => l !== week);   // 주간 라벨과 같은 줄은 적지 않는다
+    // 옮김 안내(notes)는 적지 않고, 축성일은 대재일, 소재일과 한 줄(meta)이다. 주간 라벨과 같은 줄도 적지 않는다
+    const dedications = headModel(d).dedicationLines;
+    const short = (/** @type {string} */ l) => l.replace(/ (축성|축복)일$/, " $1");   // 「축성일」, 「축복일」은 「축성」, 「축복」으로 줄인다(사용자 결정 2026-11-27)
+    for (const line of dedications) assert.ok(r.meta.includes(short(line)), `${d}: ${line}`);
+    assert.ok(![r.title, ...r.meta].some((t) => /(축성|축복)일$/.test(t)), `${d}: ${r.meta}`);
+    for (const note of head.notes) assert.ok(!r.lines.includes(note), `${d}: ${note}`);
+    const all = [...head.names.filter((l) => !dedications.includes(l)), ...head.others.map(ctx.rowTextOf)].filter((l) => l !== week);
+    const bare = (/** @type {string} */ l) => l.replace(/ (?:축일|기념일)$/, "");   // 아래 줄의 「축일」, 「기념일」도 뗀다(사용자 결정 2026-11-27)
+    assert.ok(!r.lines.some((l) => / (?:축일|기념일)$/.test(l)), `${d}: ${r.lines}`);
     assert.ok(!r.lines.includes(week), `${d}: ${r.lines}`);
-    if (r.title === base && base !== week) same(r.lines, all, d);
+    // 그날 제목의 괄호 설명은 제목 바로 아래(subtitle)로 내린다. 다시 붙이면 원래 제목이다
+    const whole = r.subtitle && base !== week ? `${r.title}(${r.subtitle})` : r.title;
+    if (whole === short(base) && base !== week) same(r.lines, all.map(bare), d);
     else {
       assert.strictEqual(base, week, d);   // 적지 않거나 바꾼 제목은 주간 라벨과 같은 평일 이름뿐이다
       const raised = all.find((l) => / (?:축일|기념일)$/.test(l));
-      if (raised === undefined) same([r.title, r.lines], ["", all], d);
+      if (raised === undefined) same([r.title, r.lines], ["", all.map(bare)], d);
       else {
-        assert.ok(/ (?:축일|기념일)$/.test(r.title), `${d}: ${r.title}`);
-        for (const l of all) if (l !== raised) assert.ok(r.lines.includes(l), `${d}: ${l}`);
-        // 나눈 제목과 설명을 다시 붙이면 원래 이름이다. 괄호가 둘인 이름이 깨지면 여기서 걸린다
-        if (r.title !== raised) {
-          const [, name, kind] = /** @type {RegExpMatchArray} */ (r.title.match(/^(.+) (축일|기념일)$/));
-          assert.strictEqual(`${name}(${r.lines[0]}) ${kind}`, raised, d);
-          for (const t of [r.title, r.lines[0]]) assert.ok(!/[()]/.test(t), `${d}: ${t}`);
-        }
+        assert.ok(!/ (?:축일|기념일)$/.test(r.title), `${d}: ${r.title}`);   // 이름 뒤의 「축일」, 「기념일」은 뗀다(사용자 결정 2026-11-27)
+        for (const l of all) if (l !== raised) assert.ok(r.lines.includes(bare(l)), `${d}: ${l}`);
+        // 제목과 설명에 떼어 낸 「축일」을 다시 붙이면 원래 줄이다. 괄호가 둘인 이름이 깨지면 여기서 걸린다
+        const kind = /** @type {RegExpMatchArray} */ (raised.match(/ (축일|기념일)$/))[1];
+        assert.strictEqual(r.subtitle ? `${r.title}(${r.subtitle}) ${kind}` : `${r.title} ${kind}`, raised, d);
+        if (r.subtitle) for (const t of [r.title, r.subtitle]) assert.ok(!/[()]/.test(t), `${d}: ${t}`);
       }
     }
     if (/[월화수목금토]요일/.test(r.title)) keeps.add(r.title.replace(/[월화수목금토]요일/g, "X요일"));
