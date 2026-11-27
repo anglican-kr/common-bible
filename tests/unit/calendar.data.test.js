@@ -330,21 +330,24 @@ test("목록 줄 — 2025-2030의 모든 날에 줄이 있고 글이 제목 영�
     assert.ok(![r.title, ...r.meta].some((t) => /(축성|축복)일$/.test(t)), `${d}: ${r.meta}`);
     // 옮긴 안내는 적지 않고, 「옮겨 지킬 수 있음」은 남긴다(사용자 결정 2026-11-27)
     const optional = head.notes.filter((n) => / 옮겨 지킬 수 있음$/.test(n));
-    for (const note of head.notes) assert.strictEqual(r.lines.includes(note), optional.includes(note), `${d}: ${note}`);
+    const shownLines = [...r.feasts, ...r.lines];   // 다른 성인의 축일(feasts)은 소재일, 축성일 줄보다 위다(사용자 결정 2026-11-27)
+    for (const note of head.notes) assert.strictEqual(shownLines.includes(note), optional.includes(note), `${d}: ${note}`);
     const all = [...optional, ...head.names.filter((l) => !dedications.includes(l)), ...head.others.map(ctx.rowTextOf)].filter((l) => l !== week);
     const bare = (/** @type {string} */ l) => l.replace(/ (?:축일|기념일)$/, "");   // 아래 줄의 「축일」, 「기념일」도 뗀다(사용자 결정 2026-11-27)
-    assert.ok(!r.lines.some((l) => / (?:축일|기념일)$/.test(l)), `${d}: ${r.lines}`);
-    assert.ok(!r.lines.includes(week), `${d}: ${r.lines}`);
+    // 다른 성인의 축일은 feasts, 그 밖의 줄은 lines다. 두 묶음 안의 차례는 데이터 차례 그대로다
+    const split = (/** @type {string[]} */ xs) => [xs.filter((l) => / 축일$/.test(l)).map(bare), xs.filter((l) => !/ 축일$/.test(l)).map(bare)];
+    assert.ok(!shownLines.some((l) => / (?:축일|기념일)$/.test(l)), `${d}: ${shownLines}`);
+    assert.ok(!shownLines.includes(week), `${d}: ${shownLines}`);
     // 그날 제목의 괄호 설명은 제목 바로 아래(subtitle)로 내린다. 다시 붙이면 원래 제목이다
     const whole = r.subtitle && base !== week ? `${r.title}(${r.subtitle})` : r.title;
-    if (whole === short(base) && base !== week) same(r.lines, all.map(bare), d);
+    if (whole === short(base) && base !== week) same([r.feasts, r.lines], split(all), d);
     else {
       assert.strictEqual(base, week, d);   // 적지 않거나 바꾼 제목은 주간 라벨과 같은 평일 이름뿐이다
       const raised = all.find((l) => / (?:축일|기념일)$/.test(l));
-      if (raised === undefined) same([r.title, r.lines], ["", all.map(bare)], d);
+      if (raised === undefined) same([r.title, r.feasts, r.lines], ["", ...split(all)], d);
       else {
         assert.ok(!/ (?:축일|기념일)$/.test(r.title), `${d}: ${r.title}`);   // 이름 뒤의 「축일」, 「기념일」은 뗀다(사용자 결정 2026-11-27)
-        for (const l of all) if (l !== raised) assert.ok(r.lines.includes(bare(l)), `${d}: ${l}`);
+        same([r.feasts, r.lines], split(all.filter((_, i) => i !== all.indexOf(raised))), d);
         // 제목과 설명에 떼어 낸 「축일」을 다시 붙이면 원래 줄이다. 괄호가 둘인 이름이 깨지면 여기서 걸린다
         const kind = /** @type {RegExpMatchArray} */ (raised.match(/ (축일|기념일)$/))[1];
         assert.strictEqual(r.subtitle ? `${r.title}(${r.subtitle}) ${kind}` : `${r.title} ${kind}`, raised, d);

@@ -1349,6 +1349,12 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
   line-height: var(--leading-snug);
   color: var(--text);
 }
+/* 상단 바에 붙어 고정된 라벨에만 상단 바가 두던 그림자를 둔다(calendar.js markStuckWeek, 사용자 결정 2026-11-27). */
+.cal-week { transition: box-shadow var(--duration-fast) ease; }
+.cal-week.is-stuck { box-shadow: var(--shadow-3); }
+@media (prefers-reduced-motion: reduce) {
+  .cal-week { transition: none; }
+}
 .cal-list .cal-row {
   align-items: stretch;
   gap: 0;
@@ -1366,6 +1372,8 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
 .cal-list .cal-row-day {
   min-width: 0;
   height: auto;
+  /* 날짜와 오른쪽 첫 줄의 글자 위치를 맞춘다. 제목과 같은 줄 높이라 위아래 여유가 같다(사용자 결정 2026-11-27) */
+  line-height: var(--leading-snug);
   border-radius: 0;
   font-size: var(--font-md);
 }
@@ -1398,6 +1406,7 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
 [data-theme="dark"] .cal-row-bar.lit-swatch--white { box-shadow: var(--cal-white-bar-edge); }
 /* 오늘 칸은 진한 바탕이라 라이트 모드에서도 날짜 글자색의 가는 테두리를 두른다. */
 .cal-list .cal-row--today .cal-row-bar { box-shadow: 0 0 0 1px var(--cal-today-text); }
+.cal-list .cal-row-body > :first-child { margin-top: 0; }
 .cal-list .cal-row-body {
   padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
   container-type: inline-size;

@@ -890,7 +890,9 @@ def test_list_shows_every_day_with_the_lectionary_head_text(mobile_context):
         shown = ([t for t in page.locator(".lect-day-saint").all_inner_texts() if short(t) not in meta]
                  + [drop(t.replace(chr(10), "")) for t in page.locator(".lect-choice-text").all_inner_texts()])
         bare = lambda t: re.sub(r" (?:축일|기념일)$", "", t)   # 목록은 이름 뒤의 「축일」, 「기념일」을 뗀다(사용자 결정 2026-11-27)
-        assert [bare(t) for t in shown if t != week] == lines, date
+        shown = [t for t in shown if t != week]
+        feast = lambda t: t.endswith(" 축일")   # 다른 성인의 축일은 축성일, 기념일 줄보다 위다(사용자 결정 2026-11-27)
+        assert [bare(t) for t in shown if feast(t)] + [bare(t) for t in shown if not feast(t)] == lines, date
         if date == "2026-12-07":
             assert notes == ["12월 6일에서 옮겨 옴"], notes   # 전례독서 화면에는 그대로 있다
 
@@ -915,6 +917,24 @@ def test_week_head_stays_under_the_bar_until_the_next_week_pushes_it_away(mobile
     page.wait_for_timeout(400)
     assert page.evaluate(stuck) == ["대림 2주"]
     page.wait_for_url(f"{BASE}/calendar/list/2026-12-06")
+    # 상단 바의 그림자 대신 고정된 라벨에만 그림자를 둔다(사용자 결정 2026-11-27)
+    page.wait_for_function("() => document.querySelectorAll('.cal-week.is-stuck').length === 1")
+    assert page.locator(".cal-week.is-stuck").inner_text() == "대림 2주"
+    assert page.evaluate("() => getComputedStyle(document.getElementById('sticky-group')).boxShadow") == "none"
+    page.wait_for_timeout(400)
+    assert page.evaluate("() => getComputedStyle(document.querySelector('.cal-week.is-stuck')).boxShadow") != "none"
+    page.evaluate("() => window.scrollTo({ top: 0, behavior: 'instant' })")   # 맨 위에서는 라벨이 고정되지 않아 그림자가 없다
+    page.wait_for_function("() => document.querySelectorAll('.cal-week.is-stuck').length === 0")
+
+
+def test_date_cell_and_first_line_start_at_the_same_height(mobile_context):
+    """날짜 칸의 날짜와 오른쪽 칸의 첫 줄(제목, 또는 제목이 없는 날의 소재일, 축성 줄)은 위쪽이 같은 높이에서 시작한다(사용자 결정 2026-11-27)."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2026-12-06")
+    gaps = page.evaluate("""() => ['2026-12-06', '2026-12-07', '2026-12-09'].map((d) => {
+        const li = document.querySelector(`li[data-date="${d}"]`);
+        return li.querySelector('.cal-row-body').firstElementChild.getBoundingClientRect().top - li.querySelector('.cal-row-day').getBoundingClientRect().top; })""")
+    assert all(abs(g) <= 1 for g in gaps), gaps
 
 
 def test_two_colours_of_the_saints_are_two_bars_one_above_the_other(mobile_context):
