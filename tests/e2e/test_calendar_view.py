@@ -913,7 +913,9 @@ def test_week_head_stays_under_the_bar_until_the_next_week_pushes_it_away(mobile
     page.wait_for_timeout(400)
     assert page.evaluate(stuck) == ["대림 1주"]
     page.wait_for_url(f"{BASE}/calendar/list/2026-12-05")
-    page.evaluate("() => window.scrollBy({ top: 100, behavior: 'instant' })")   # 다음 주간 라벨이 앞 라벨을 밀어낸다
+    page.evaluate("() => window.scrollBy({ top: 20, behavior: 'instant' })")   # 다음 주의 라벨이 앞 라벨을 밀어 올리는 동안에도 그림자가 있다
+    page.wait_for_function("() => document.querySelectorAll('.cal-week.is-stuck').length === 1 && document.querySelector('.cal-week.is-stuck').textContent === '대림 1주'")
+    page.evaluate("() => window.scrollBy({ top: 80, behavior: 'instant' })")   # 다음 주간 라벨이 앞 라벨을 밀어낸다
     page.wait_for_timeout(400)
     assert page.evaluate(stuck) == ["대림 2주"]
     page.wait_for_url(f"{BASE}/calendar/list/2026-12-06")
@@ -928,12 +930,17 @@ def test_week_head_stays_under_the_bar_until_the_next_week_pushes_it_away(mobile
 
 
 def test_date_cell_and_first_line_start_at_the_same_height(mobile_context):
-    """날짜 칸의 날짜와 오른쪽 칸의 첫 줄(제목, 또는 제목이 없는 날의 소재일, 축성 줄)은 위쪽이 같은 높이에서 시작한다(사용자 결정 2026-11-27)."""
+    """날짜 칸의 날짜와 오른쪽 칸의 첫 줄(제목, 또는 제목이 없는 날의 소재일, 축성 줄)은 같은 높이에 놓인다. 글자 크기가 다른 첫 줄은
+    가운데를 맞춘다(사용자 결정 2026-11-27). 상자가 아니라 글자 줄의 위치를 잰다."""
     page = mobile_context.new_page()
     _open_list(page, "calendar/list/2026-12-06")
-    gaps = page.evaluate("""() => ['2026-12-06', '2026-12-07', '2026-12-09'].map((d) => {
+    # 2026-12-12는 장절만 있는 날이다. 장절 줄은 「감사성찬례」보다 큰 장절 글자를 잰다
+    gaps = page.evaluate("""() => ['2026-12-06', '2026-12-07', '2026-12-09', '2026-12-11', '2026-12-12'].map((d) => {
         const li = document.querySelector(`li[data-date="${d}"]`);
-        return li.querySelector('.cal-row-body').firstElementChild.getBoundingClientRect().top - li.querySelector('.cal-row-day').getBoundingClientRect().top; })""")
+        const mid = (el) => { const r = document.createRange(); r.selectNodeContents(el); const b = r.getClientRects()[0]; return b.top + b.height / 2; };
+        const first = li.querySelector('.cal-row-body').firstElementChild;
+        const text = first.matches('.cal-row-readings') ? first.querySelector('.cal-row-ref') : (first.firstElementChild ?? first);
+        return mid(text) - mid(li.querySelector('.cal-row-day')); })""")
     assert all(abs(g) <= 1 for g in gaps), gaps
 
 

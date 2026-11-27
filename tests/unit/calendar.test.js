@@ -492,7 +492,7 @@ test("listRowOf: 트랙이 있는 주일은 「감사성찬례」 아래에 트�
   assert.ok(r.label.includes("감사성찬례 복음 주제 열왕하 5:14-17"), r.label);
 });
 
-test("rowTitleOf: 주간 라벨과 같은 평일 이름 대신 첫 축일, 기념일 줄을 올리고 괄호 설명은 제목 바로 아래(subtitle)로 내린다(ADR-060 §2)", () => {
+test("rowTitleOf: 주간 라벨과 같은 평일 이름 대신 첫 축일 줄(없으면 첫 기념일 줄)을 올리고 괄호 설명은 제목 바로 아래(subtitle)로 내린다(ADR-060 §2)", () => {
   same(ctx.rowTitleOf("연중 34주", ["클레멘트(로마의 주교, 순교자, 100년경) 축일"], "연중 34주"),
     { title: "클레멘트", subtitle: "로마의 주교, 순교자, 100년경", feasts: [], lines: [], raised: true });
   same(ctx.rowTitleOf("연중 34주", ["알렉산드리아의 카타리나(순교자, 4세기) 축일", "원주성당 축성일"], "연중 34주"),
@@ -514,6 +514,9 @@ test("rowTitleOf: 주간 라벨과 같은 평일 이름 대신 첫 축일, 기�
   same(ctx.rowTitleOf("연중 31주", ["삼흥리성당 축성일", "레오나드(은수자, 6세기) 축일"], "연중 31주"),
     { title: "레오나드", subtitle: "은수자, 6세기", feasts: [], lines: ["삼흥리성당 축성일"], raised: true });
   same(ctx.rowTitleOf("연중 34주", ["성 니콜라 축일을 12월 7일로 옮김"], "연중 34주"), { title: "", subtitle: null, feasts: [], lines: ["성 니콜라 축일을 12월 7일로 옮김"], raised: false });
+  // 기념일 줄이 앞에 있어도 축일을 올린다(사용자 결정 2026-11-27)
+  same(ctx.rowTitleOf("연중 2주", ["가 기념일", "나(사제, 300년) 축일"], "연중 2주"),
+    { title: "나", subtitle: "사제, 300년", feasts: [], lines: ["가"], raised: true });
   // 주간 라벨과 다른 제목(주일, 축일, 「성탄 8일 전」)은 그대로다
   same(ctx.rowTitleOf("연중 2주", ["누구 축일"], "연중 2주"), { title: "누구", subtitle: null, feasts: [], lines: [], raised: true });   // 이름 뒤의 「축일」, 「기념일」은 뗀다
   same(ctx.rowTitleOf("성탄 8일 전", ["누구 축일"], "대림 3주"), { title: "성탄 8일 전", subtitle: null, feasts: ["누구"], lines: [], raised: false });   // 다른 성인의 축일은 축성일, 기념일 줄보다 위(feasts)다

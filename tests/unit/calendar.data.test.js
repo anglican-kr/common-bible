@@ -343,7 +343,7 @@ test("목록 줄 — 2025-2030의 모든 날에 줄이 있고 글이 제목 영�
     if (whole === short(base) && base !== week) same([r.feasts, r.lines], split(all), d);
     else {
       assert.strictEqual(base, week, d);   // 적지 않거나 바꾼 제목은 주간 라벨과 같은 평일 이름뿐이다
-      const raised = all.find((l) => / (?:축일|기념일)$/.test(l));
+      const raised = all.find((l) => / 축일$/.test(l)) ?? all.find((l) => / 기념일$/.test(l));   // 축일이 먼저다(사용자 결정 2026-11-27)
       if (raised === undefined) same([r.title, r.feasts, r.lines], ["", ...split(all)], d);
       else {
         assert.ok(!/ (?:축일|기념일)$/.test(r.title), `${d}: ${r.title}`);   // 이름 뒤의 「축일」, 「기념일」은 뗀다(사용자 결정 2026-11-27)

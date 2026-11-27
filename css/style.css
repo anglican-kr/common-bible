@@ -1407,6 +1407,11 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
 /* 오늘 칸은 진한 바탕이라 라이트 모드에서도 날짜 글자색의 가는 테두리를 두른다. */
 .cal-list .cal-row--today .cal-row-bar { box-shadow: 0 0 0 1px var(--cal-today-text); }
 .cal-list .cal-row-body > :first-child { margin-top: 0; }
+/* 제목이 없는 날은 첫 줄의 글자가 작아, 그 첫 줄의 가운데를 날짜 글자의 가운데에 맞춘다(사용자 결정 2026-11-27). 줄 높이를 바꾸지 않고
+   그 자리에서 내리기만 한다(position: relative). 위 여백으로 내리면 목록으로 돌아올 때 주소의 줄이 아니라 그 앞 주일 줄이 맨 위에 왔다
+   (e2e test_tab_in_list_keeps_the_list_and_goes_to_today, 2027-03-15). 장절만 있는 날(2026-12-01)도 같다. 첫 줄만 내리면 둘째 줄과의
+   사이가 좁아지므로 오른쪽 칸의 줄을 모두 함께 내린다. */
+.cal-list .cal-row-body:not(:has(> .cal-row-title)) > * { position: relative; top: calc((var(--font-md) - var(--font-xs)) * var(--leading-snug) / 2); }
 .cal-list .cal-row-body {
   padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
   container-type: inline-size;

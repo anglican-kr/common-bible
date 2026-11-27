@@ -471,8 +471,10 @@ function rowTitleOf(title, all, week) {
     const own = title.match(/^([^()]+)\(([^()]+)\)$/);
     return { title: own ? own[1] : title, subtitle: own ? own[2] : null, ...split(lines), raised: false };
   }
-  // 세례명의 성인은 이름 줄이 아니라 다른 전례일의 줄에 있으므로(ADR-041 §5) 차례와 상관없이 첫 축일, 기념일 줄을 올린다
-  const at = lines.findIndex((line) => / (?:축일|기념일)$/.test(line));
+  // 세례명의 성인은 이름 줄이 아니라 다른 전례일의 줄에 있으므로(ADR-041 §5) 차례와 상관없이 첫 축일 줄을 올린다. 축일이 없을 때만
+  // 기념일 줄을 올린다. 기념일 줄이 앞에 있어도 축일이 먼저다(사용자 결정 2026-11-27)
+  const feastAt = lines.findIndex(isFeast);
+  const at = feastAt >= 0 ? feastAt : lines.findIndex((line) => / 기념일$/.test(line));
   if (at < 0) return { title: "", subtitle: null, ...split(lines), raised: false };
   const rest = split(lines.filter((_, i) => i !== at));
   // 괄호가 하나일 때만 나눈다. 둘이면(「바실(주교, 379년)과 나지안조의 그레고리(주교, 389년) 축일」) 이름 전체가 제목이다
@@ -1472,15 +1474,32 @@ function listTitleOf(model) {
 
 /**
  * 상단 바 아래에 고정된 주간 라벨에만 그림자를 둔다(`.is-stuck`). 캘린더 화면은 상단 바의 그림자를 없애고, 그 경계를 고정된 라벨 아래로
- * 옮긴다(사용자 결정 2026-11-27). CSS로는 고정된 상태를 알 수 없어(scroll-state 질의는 Safari에 없다) 스크롤할 때마다 잰다.
+ * 옮긴다(사용자 결정 2026-11-27). CSS로는 고정된 상태를 알 수 없어(scroll-state 질의는 Safari에 없다) 스크롤, 화면 크기, 상단 바 높이가 바뀔
+ * 때마다 잰다. 다음 주의 라벨에 밀려 올라가는 동안도 고정된 것으로 본다.
  * @param {Element} root
  */
 function markStuckWeek(root) {
-  const bar = barBottom();
+  const heads = [...root.querySelectorAll(".cal-week")];
+  if (!heads.length) return;
+  // Compare with the labels' own sticky offset (--top-bar-h), not barBottom(): a ResizeObserver updates that variable a frame
+  // after the bar changes height, and the label sits wherever the variable says.
+  const top = parseFloat(getComputedStyle(heads[0]).top) || 0;
+  // A label is pinned while its week group straddles the line: the group started above it and has not ended yet. That also
+  // covers the label being pushed off by the next week's, so the shadow does not blink out between two weeks.
   // Measure every label first, then toggle: a class change between reads would force a style recalc per label.
-  const states = [...root.querySelectorAll(".cal-week")].map((head) => {
-    const group = /** @type {HTMLElement} */ (head.parentElement);
-    return { head, stuck: group.getBoundingClientRect().top < bar - 0.5 && Math.abs(head.getBoundingClientRect().top - bar) < 1 };
+  // The group has top padding, so a group that started just above the line still shows its label below it, unpinned: also
+  // require the label itself to be at (or pushed above) the line.
+  // Groups are in document order, so once one starts below the line every later one does too: skip measuring those.
+  let below = false;
+  const states = heads.map((head) => {
+    if (below) return { head, stuck: false };
+    const box = /** @type {HTMLElement} */ (head.parentElement).getBoundingClientRect();
+    if (box.top >= top - 0.5) {
+      below = true;
+      return { head, stuck: false };
+    }
+    const at = head.getBoundingClientRect().top;
+    return { head, stuck: box.bottom > top + 0.5 && at <= top + 0.5 };
   });
   for (const { head, stuck } of states) if (head.classList.contains("is-stuck") !== stuck) head.classList.toggle("is-stuck", stuck);
 }
@@ -1548,6 +1567,10 @@ function startListScroll(list) {
   let lastScrollAt = 0;
   let timer = 0;
   let frame = 0;
+  /** 라벨 그림자를 다음 프레임에 한 번만 잰다. */
+  let markFrame = 0;
+  /** @type {ResizeObserver | null} */
+  let barObserver = null;
 
   /** 콜백은 한 번 나온 뒤 경계가 계속 가까워도 다시 나오지 않으므로, 다시 관찰해 다음 프레임의 콜백을 받는다. @param {HTMLElement} edge */
   const observeAgain = (edge) => {
@@ -1577,6 +1600,8 @@ function startListScroll(list) {
     observer.disconnect();
     clearTimeout(timer);
     cancelAnimationFrame(frame);
+    cancelAnimationFrame(markFrame);
+    barObserver?.disconnect();
     if (stopList === stop) stopList = null;
   };
   // 낡은 라우트가 남기면 새 화면의 주소를 덮어쓴다. 다른 화면으로 가는 동안에는 이 목록이 아직 문서에 남아 있을 수 있다.
@@ -1656,9 +1681,20 @@ function startListScroll(list) {
   }, { passive: true, signal });
   // 스크롤하지 않아도 라벨의 고정 상태가 바뀌는 때(같은 자리로 다시 그리기, 화면 크기나 상단 바 높이의 변화)에도 잰다.
   // 다시 그린 목록은 scrollUnderBar가 다음 프레임에 한 번 더 자리를 잡으므로, 그 뒤의 프레임에서 잰다.
-  const markNextFrame = () => requestAnimationFrame(() => { if (root.isConnected) markStuckWeek(root); });
+  const markNextFrame = () => {
+    markFrame ||= requestAnimationFrame(() => {
+      markFrame = 0;
+      if (root.isConnected) markStuckWeek(root);
+    });
+  };
   markNextFrame();
   window.addEventListener("resize", markNextFrame, { passive: true, signal });
+  // 창 크기는 그대로이고 상단 바만 높아지거나 낮아지는 때(데스크톱에서 접히는 윗줄, 이어 읽기 배너, 글자 크기)
+  const sticky = document.getElementById("sticky-group");
+  if (sticky && typeof ResizeObserver === "function") {
+    barObserver = new ResizeObserver(markNextFrame);
+    barObserver.observe(sticky);
+  }
   window.addEventListener("scrollend", () => {
     moving = false;
     armSettle();
