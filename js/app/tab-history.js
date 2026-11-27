@@ -17,8 +17,8 @@
 //     충분하지만, 스크롤 복원은 scrollMemory 가 경로 키로 처리한다. 홈 탭 버튼은 정적
 //     href(「/」)라, tabbar.js 가 다른 탭에서 올 때 클릭을 가로채 lastPath 로 보낸다(이미
 //     그 탭이면 기존대로 정적 href 로 pop-to-root). 캘린더 탭은 calendarTabDest 가 갈 곳을
-//     정하고, 마지막 캘린더 보기(lastCalendarView)만 저장해 앱을 다시 열어도 이어 간다
-//     (ADR-038 §1).
+//     정한다(언제나 오늘 줄의 목록, 2026-11-27). 마지막 캘린더 보기(lastCalendarView)는 저장해 앱을 다시 열어도
+//     이어 가고, 전례독서 머리의 오른쪽 단추가 쓴다(ADR-038 §1).
 //
 // 왜 history.scrollRestoration = "manual" 인가: 기본값 auto 면 popstate(뒤로/앞으로)
 // 시 브라우저가 먼저 스크롤을 옮겨, onRouteStart 가 "떠나는 페이지"의 실제 scrollY 를
@@ -54,24 +54,18 @@ window.tabHistory = (() => {
   }
 
   /**
-   * 캘린더 탭(데스크톱은 헤더의 캘린더 단추)을 누르면 갈 곳(ADR-038 §1). 다른 탭에서는 이 탭의 마지막 화면(전례독서 포함),
-   * 전례독서에서는 마지막 캘린더 보기다. 목록에서는 보기를 유지하고 오늘 줄로 간다(사용자 결정 2026-11-07). 월간에서는 null이다 —
-   * 가로채지 않아 정적 href(이번 달)로 간다.
-   * @param {string} current  지금 경로
-   * @param {string} lastInTab  이 탭의 마지막 화면
-   * @param {string} lastView  마지막 캘린더 보기
-   * @returns {string | null}
+   * 캘린더 탭(데스크톱은 헤더의 캘린더 단추)을 누르면 갈 곳(ADR-038 §1). 어디서 누르든 오늘 줄이 맨 위인 목록이다(사용자 결정
+   * 2026-11-27). 전에는 다른 탭에서 이 탭의 마지막 화면, 전례독서에서 마지막 캘린더 보기로 돌아갔다.
+   * @returns {string}
    */
-  function pickCalendarTabDest(current, lastInTab, lastView) {
-    if (tabOf(current) !== "calendar") return lastInTab;
-    if (isCalendarListPath(current)) return "/calendar/list";
-    return /^\/lectionary(?:[/?#]|$)/.test(current) ? lastView : null;
+  function pickCalendarTabDest() {
+    return "/calendar/list";
   }
   // ── END TABOF ──
 
   /** @type {Map<string, number>} */
   const scrollMemory = new Map();
-  // 마지막으로 본 캘린더 보기(달이나 목록). 전례독서에서 탭을 누르면 여기로 돌아온다. 앱을 다시 열어도 이어지도록 저장해 둔 값으로
+  // 마지막으로 본 캘린더 보기(달이나 목록). 전례독서 머리의 오른쪽 단추가 이 보기로 간다(탭은 2026-11-27부터 쓰지 않는다). 앱을 다시 열어도 이어지도록 저장해 둔 값으로
   // 시작한다. 저장한 값이 없으면 이번 달이고, 작은 화면에서는 같은 주소가 오늘 줄의 목록으로 열린다(ADR-058 §1). 모듈 스크립트는 문서
   // 순서로 실행되므로 storage.js가 먼저다.
   let lastCalendarView = window.appStorage?.loadCalendarLastView() ?? "/calendar";
@@ -81,8 +75,7 @@ window.tabHistory = (() => {
     search: "/search",
     bookmarks: "/bookmarks",
     settings: "/settings",
-    // 캘린더 탭의 첫 착지는 마지막 캘린더 보기다(ADR-038 §1). 전례독서(/lectionary/…)를 보다 다른 탭에
-    // 다녀오면 그 독서 화면으로 돌아온다 — 홈 탭이 읽던 장으로 돌아오는 것과 같다.
+    // 캘린더 탭은 이 값으로 돌아가지 않는다(calendarTabDest, 2026-11-27). 다른 탭과 같이 기록만 한다.
     calendar: lastCalendarView,
   };
   // 가장 최근 완료된 라우트 경로(= 지금 화면). onRouteStart 가 이 경로의 스크롤을
@@ -163,9 +156,9 @@ window.tabHistory = (() => {
     return lastCalendarView;
   }
 
-  /** @returns {string | null} 캘린더 탭을 누르면 갈 곳. null이면 정적 href로 간다. */
+  /** @returns {string} 캘린더 탭을 누르면 갈 곳 — 언제나 오늘 줄의 목록이다(사용자 결정 2026-11-27). */
   function calendarTabDest() {
-    return pickCalendarTabDest(fullPath(), lastPathForTab.calendar, lastCalendarView);
+    return pickCalendarTabDest();
   }
 
   return {

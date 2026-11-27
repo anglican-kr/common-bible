@@ -107,9 +107,8 @@ function enterHomeTab(e) {
   }
 }
 
-// ADR-038 §1: 캘린더 탭. 다른 탭에서 오면 마지막으로 보던 캘린더 화면(전례독서 /lectionary/… 포함)으로,
-// 전례독서에서 누르면 마지막 캘린더 보기로 간다(사용자 결정 2026-11-07, 갈 곳은 tab-history.js calendarTabDest).
-// 캘린더 보기에서 누르면 가로채지 않아 정적 href="/calendar"(이번 달)로 간다.
+// ADR-038 §1: 캘린더 탭. 어디서 누르든 오늘 줄이 맨 위인 목록(/calendar/list)으로 간다(사용자 결정 2026-11-27, 갈 곳은
+// tab-history.js calendarTabDest). 전에는 마지막으로 보던 캘린더 화면이나 마지막 캘린더 보기로 돌아갔다.
 // 데스크톱 상단 바의 「캘린더」 탭(#header-calendar — 탭 바가 없는 넓은 화면의 입구, ADR-043)도 이 처리기를 단다 —
 // 탭과 같은 곳으로 간다(사용자 결정 2026-10-15 · PR #348 리뷰; 그전엔 정적 href 뿐이라 늘 이번 달이었다).
 // 가로 모드의 스크롤 축소(.collapsed)에서는 탭이 다 보여 이 탭도 눌린다 — 같은 동작이고, 라우트가
@@ -121,7 +120,7 @@ function enterCalendarTab(e) {
   if (isModifiedClick(e)) return;
   const th = W.tabHistory;
   const dest = th?.calendarTabDest();
-  if (!th || !dest) return;
+  if (!th || !dest) return;   // 모듈이 아직 없을 때만 정적 href로 간다
   e.preventDefault();
   const here = th.fullPath();
   th.requestRestore();   // 탭 전환은 뒤로 가기처럼 그 화면의 스크롤을 복원한다(POP 의미론). 목록은 스크롤 값을 저장하지 않아 주소의 날짜 줄로 간다.

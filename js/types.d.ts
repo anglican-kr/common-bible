@@ -1200,7 +1200,7 @@ export interface AppStorage {
   // 소속교회의 교회 식별자(ADR-041 §6, 데이터 본당 표의 `church_id`). 빈 문자열은 선택 안 함이다. Drive 동기화 대상.
   loadParish: () => string;
   saveParish: (churchId: string) => void;
-  // 캘린더 탭이 돌아갈 마지막 캘린더 보기의 주소(ADR-038 §1). 앱을 다시 열어도 이어진다(사용자 결정 2026-11-07). 로컬 전용.
+  // 마지막 캘린더 보기의 주소(ADR-038 §1). 전례독서 머리의 오른쪽 단추가 쓴다. 앱을 다시 열어도 이어진다(사용자 결정 2026-11-07). 로컬 전용.
   loadCalendarLastView: () => string | null;
   saveCalendarLastView: (path: string) => void;
 
@@ -1405,7 +1405,7 @@ declare global {
       rememberCalendarView: () => void;
       lastCalendarView: () => string;
       isCalendarListPath: (path: string) => boolean;
-      calendarTabDest: () => string | null;
+      calendarTabDest: () => string;
       _scrollMemory: Map<string, number>;
       _lastPathForTab: Record<"home" | "search" | "bookmarks" | "settings" | "calendar", string>;
     };
