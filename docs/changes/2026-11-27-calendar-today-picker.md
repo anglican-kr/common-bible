@@ -2,6 +2,7 @@
 date: 2026-11-27
 branch: feat/calendar-today-picker
 title: "feat: 캘린더의 오늘은 전례독서로, 탭은 오늘 줄로, 월간 달력의 사각형 표시와 주 사이 선"
+pr: 674
 ---
 
 ## 요약
