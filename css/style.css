@@ -106,7 +106,8 @@
   --cal-date-bg: #f1eee9;
   --cal-today-bg: #22244a;
   --cal-today-text: #ffffff;
-  --cal-white-bar-edge: inset 0 0 0 0.5px #000000;
+  --cal-white-bar-edge: 0 0 0 1px #d9d3c8;
+  --cal-bar-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
 
   /* ── Radius (HIG 곡률 단계 — 기존 사용 값에 매핑, --radius는 하위호환 유지) ── */
   --radius-xs: 4px;
@@ -258,6 +259,7 @@
   --cal-today-bg: #8ab4d8;
   --cal-today-text: #1f1f36;
   --cal-white-bar-edge: inset 0 0 0 1px #ffffff;
+  --cal-bar-shadow: 0 0 0 1px var(--text);
 
   /* Elevation — 다크 배경에서는 옅은 그림자가 묻히므로 alpha 상향 (기존 패턴).
      --shadow 별칭은 :root 에서 var(--shadow-1) 로 정의돼 있어 여기선 --shadow-1
@@ -1352,12 +1354,16 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
   color: var(--cal-today-text);
   font-weight: 700;
 }
+/* 색이 둘이면 막대 둘을 위아래로 둔다. 함께 쓰는 두 색과 성인에 따라 「또는」인 두 색이 같다(ADR-060 §2, 사용자 결정 2026-11-27). */
 .cal-row-colors {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: var(--space-0_5);
   margin: 0.3rem 0 0.25rem;
 }
-/* 끝이 둥근 짧은 가로 막대. 테두리 대신 흰색에만 가는 선을 두른다(사용자 결정 2026-11-26). */
+/* 끝이 둥근 짧은 가로 막대. 라이트 모드는 모든 막대에 옅은 그림자를 두고, 흰색에는 옅은 선을 더한다. 다크 모드는 그림자 대신 날짜 글자색의
+   가는 테두리다. 짙은 바탕에 막대가 묻히기 때문이다. 흰색은 제 선이 있어 테두리를 두르지 않는다(사용자 결정 2026-11-27). */
 .cal-row-bar {
   display: block;
   width: 0.875rem;
@@ -1365,7 +1371,11 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
   border: 0;
   border-radius: var(--radius-pill);
 }
-.cal-row-bar.lit-swatch--white { box-shadow: var(--cal-white-bar-edge); }
+.cal-row-bar { box-shadow: var(--cal-bar-shadow); }
+.cal-row-bar.lit-swatch--white { box-shadow: var(--cal-white-bar-edge), var(--cal-bar-shadow); }
+[data-theme="dark"] .cal-row-bar.lit-swatch--white { box-shadow: var(--cal-white-bar-edge); }
+/* 오늘 칸은 진한 바탕이라 라이트 모드에서도 날짜 글자색의 가는 테두리를 두른다. */
+.cal-list .cal-row--today .cal-row-bar { box-shadow: 0 0 0 1px var(--cal-today-text); }
 .cal-list .cal-row-body {
   padding: var(--space-3) 0 var(--space-3) var(--space-3);
   container-type: inline-size;

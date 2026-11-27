@@ -900,6 +900,18 @@ def test_week_head_stays_under_the_bar_until_the_next_week_pushes_it_away(mobile
     page.wait_for_url(f"{BASE}/calendar/list/2026-12-06")
 
 
+def test_two_colours_of_the_saints_are_two_bars_one_above_the_other(mobile_context):
+    """성인에 따라 「적색 또는 백색」인 날은 막대 둘을 위아래로 둔다. 색 이름은 링크 이름에 있다(ADR-060 §2, 사용자 결정 2026-11-27)."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2026-02-14")
+    row = _row(page, "2026-02-14")
+    assert "적색 또는 백색" in row.get_attribute("aria-label")
+    bars = page.evaluate("""() => [...document.querySelectorAll('li[data-date="2026-02-14"] .cal-row-bar')].map((b) => {
+        const r = b.getBoundingClientRect(); return [b.className.split(' ').pop(), r.top, r.bottom, r.left]; })""")
+    assert [b[0] for b in bars] == ["lit-swatch--red", "lit-swatch--white"], bars
+    assert bars[1][1] >= bars[0][2] and abs(bars[1][3] - bars[0][3]) <= 0.5, bars   # 아래로 쌓고 왼쪽 끝이 같다
+
+
 def test_row_marks_sunday_weight_year_start_and_keeps_alternate_colours_out(mobile_context):
     """주일과 주요축일, 제목으로 올린 축일은 제목이 한 단계 굵고(500) 평일은 보통이다. 해(전례년 첫날의 「나해 시작」 포함)는 적지 않고,
     대체색은 줄에 없다(ADR-060 §2)."""
