@@ -301,6 +301,8 @@ test("목록 줄 — 주일, 전례년 첫날, 옮겨 온 축일, 저녁 전례,
   // 옮긴 축일의 안내는 목록에 적지 않는다(사용자 결정 2026-11-27). 전례독서 화면에는 있다
   assert.ok(headModel("2026-12-07").selectedNote, "전례독서 화면에는 옮겨 온 안내가 있다");
   for (const r of [moved, rowOf("2026-12-06")]) assert.ok(!r.lines.some((l) => /옮겨 옴|옮김/.test(l)) && !r.label.includes("옮"), r.label);
+  // 주일로 옮겨 지킬 수 있다는 안내는 남긴다 — 2026-01-06 공현대축일(사용자 결정 2026-11-27)
+  assert.ok(rowOf("2026-01-06").lines.includes("1월 4일로 옮겨 지킬 수 있음"), rowOf("2026-01-06").lines.join(" | "));
   assert.ok(rowOf("2026-12-24").lines.includes("성탄 밤 · 저녁"));
   same(rowOf("2026-12-13").colors.map((c) => c.code), ["violet"]);   // 대림 3주일의 장미, 청은 전례독서 머리에만
   assert.ok(headModel("2026-12-13").colorAlt.length > 0);
@@ -321,8 +323,10 @@ test("목록 줄 — 2025-2030의 모든 날에 줄이 있고 글이 제목 영�
     const short = (/** @type {string} */ l) => l.replace(/ (축성|축복)일$/, " $1");   // 「축성일」, 「축복일」은 「축성」, 「축복」으로 줄인다(사용자 결정 2026-11-27)
     for (const line of dedications) assert.ok(r.meta.includes(short(line)), `${d}: ${line}`);
     assert.ok(![r.title, ...r.meta].some((t) => /(축성|축복)일$/.test(t)), `${d}: ${r.meta}`);
-    for (const note of head.notes) assert.ok(!r.lines.includes(note), `${d}: ${note}`);
-    const all = [...head.names.filter((l) => !dedications.includes(l)), ...head.others.map(ctx.rowTextOf)].filter((l) => l !== week);
+    // 옮긴 안내는 적지 않고, 「옮겨 지킬 수 있음」은 남긴다(사용자 결정 2026-11-27)
+    const optional = head.notes.filter((n) => / 옮겨 지킬 수 있음$/.test(n));
+    for (const note of head.notes) assert.strictEqual(r.lines.includes(note), optional.includes(note), `${d}: ${note}`);
+    const all = [...optional, ...head.names.filter((l) => !dedications.includes(l)), ...head.others.map(ctx.rowTextOf)].filter((l) => l !== week);
     const bare = (/** @type {string} */ l) => l.replace(/ (?:축일|기념일)$/, "");   // 아래 줄의 「축일」, 「기념일」도 뗀다(사용자 결정 2026-11-27)
     assert.ok(!r.lines.some((l) => / (?:축일|기념일)$/.test(l)), `${d}: ${r.lines}`);
     assert.ok(!r.lines.includes(week), `${d}: ${r.lines}`);

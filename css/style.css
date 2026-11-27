@@ -1288,9 +1288,10 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
   line-height: var(--leading-snug);
   color: var(--text-secondary);
 }
-/* 목록의 대재일, 소재일, 기도 주간, 교회 축성일은 한 줄에 가운뎃점으로 잇는다(사용자 결정 2026-11-27). */
+/* 목록의 대재일, 소재일, 기도 주간, 교회 축성일은 한 줄에 가운뎃점으로 잇는다(사용자 결정 2026-11-27). 가운뎃점은 앞 항목에 붙여
+   줄이 바뀌어도 줄 머리에 오지 않는다(장절의 가운뎃점과 같다). */
 .cal-list .cal-row-meta { column-gap: var(--space-1); }
-.cal-list .cal-row-meta > span + span::before { content: "·"; margin-right: var(--space-1); }
+.cal-list .cal-row-meta > span:not(:last-child)::after { content: "·"; margin-left: var(--space-1); }
 .cal-row-color {
   display: inline-flex;
   align-items: center;

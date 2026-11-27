@@ -866,9 +866,9 @@ def test_list_shows_every_day_with_the_lectionary_head_text(mobile_context):
     # 성인의 설명은 제목 바로 아래, 소재일과 축성일 줄보다 먼저다(사용자 결정 2026-11-27)
     assert leonard.locator(".cal-row-body > *").evaluate_all("els => els.map((e) => e.className.split(' ').pop())")[:3] == \
         ["cal-row-title", "cal-row-subtitle", "cal-row-meta"]
-    # 소재일과 교회 축성일은 한 줄에 가운뎃점으로 잇는다(사용자 결정 2026-11-27)
+    # 소재일과 교회 축성일은 한 줄에 가운뎃점으로 잇는다(사용자 결정 2026-11-27). 가운뎃점은 앞 항목에 붙어 줄 머리에 오지 않는다
     assert leonard.locator(".cal-row-meta > span").all_inner_texts() == ["소재일", "삼흥리성당 축성"]   # 「축성일」은 「축성」으로 줄인다
-    assert leonard.locator(".cal-row-meta").evaluate("m => getComputedStyle(m.children[1], '::before').content") == '"·"'
+    assert leonard.locator(".cal-row-meta").evaluate("m => getComputedStyle(m.children[0], '::after').content") == '"·"'
     for date in ("2026-12-07", "2026-12-24"):
         _open_list(page, f"calendar/list/{date}")
         row = _row(page, date)

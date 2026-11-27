@@ -499,7 +499,9 @@ function listRowOf(m, today, week) {
   const short = (/** @type {string} */ text) => text.replace(/ (축성|축복)일$/, " $1");
   const meta = [...head.meta.filter((item) => item.kind !== "cycle").map((item) => item.text), ...m.dedicationLines.map(short)];
   const names = head.names.filter((line) => !dedications.has(line));
-  const shown = rowTitleOf(rowTextOf(head.title), [...names, ...head.others.map(rowTextOf)], week);
+  // 주일로 옮겨 지킬 수 있다는 안내(「1월 4일로 옮겨 지킬 수 있음」)는 실제로 옮긴 것이 아니라 고를 수 있다는 뜻이라 남긴다(사용자 결정 2026-11-27)
+  const optional = head.notes.filter((note) => / 옮겨 지킬 수 있음$/.test(note));
+  const shown = rowTitleOf(rowTextOf(head.title), [...optional, ...names, ...head.others.map(rowTextOf)], week);
   const { subtitle, lines } = shown;
   const title = short(shown.title);
   const isToday = date === today;
