@@ -2,6 +2,7 @@
 date: 2026-11-27
 branch: style/calendar-full-bleed
 title: "style: 캘린더 목록을 화면 끝까지 그리고 줄을 짧게"
+pr: 672
 ---
 
 ## 요약
