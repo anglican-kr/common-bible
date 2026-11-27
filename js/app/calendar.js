@@ -392,12 +392,12 @@ function rowTextOf(text) {
 }
 
 /**
- * 주 번호가 없고 주일과 절기가 다른 날의 주 머리(ADR-060 §2). 주 중간에 바뀐 절기다. 성탄일부터 다음 주일 전까지는 「성탄 후 주간」, 재의 수요일부터
+ * 주 번호가 없고 주일과 절기가 다른 날의 주간 라벨(ADR-060 §2). 주 중간에 바뀐 절기다. 성탄일부터 다음 주일 전까지는 「성탄 후 주간」, 재의 수요일부터
  * 토요일까지는 「사순 시작」이다(사용자 결정 2026-11-27). 나머지 셋은 계산 범위 끝에서 주일을 풀지 못할 때만 쓴다.
  */
 const SEASON_HEAD = { advent: "대림", christmas: "성탄 후 주간", lent: "사순 시작", easter: "부활", ordinary: "연중" };
 /**
- * 주 번호가 없고 그 주 평일에도 주 번호가 없는 주일의 주 머리. 성지주일은 「성주간」, 성탄일이 주일이면 「성탄 후 주간」이다(ADR-060 §2, 사용자 결정 2026-11-27).
+ * 주 번호가 없고 그 주 평일에도 주 번호가 없는 주일의 주간 라벨. 성지주일은 「성주간」, 성탄일이 주일이면 「성탄 후 주간」이다(ADR-060 §2, 사용자 결정 2026-11-27).
  */
 const UNNUMBERED_SUNDAY_HEAD = { lent: "성주간", christmas: "성탄 후 주간" };
 
@@ -415,7 +415,7 @@ function ownWeekOf(resolved) {
 }
 
 /**
- * 주일의 주 머리. 주일이 주 번호 없는 대축일이면 그 주 평일 독서가 속한 주를 따른다(사용자 결정 2026-11-27). 성령강림대축일의 평일은
+ * 주일의 주간 라벨. 주일이 주 번호 없는 대축일이면 그 주 평일 독서가 속한 주를 따른다(사용자 결정 2026-11-27). 성령강림대축일의 평일은
  * 연중 주간이라(기도서 연중 주일 구간표) 「연중 7주」 같은 이름이다. 평일에도 주 번호가 없으면 `UNNUMBERED_SUNDAY_HEAD`다.
  * @param {ResolvedDate} sunday
  * @param {ResolvedDate | null} monday  그다음 월요일. 계산 범위 밖이면 null
@@ -427,8 +427,8 @@ function sundayWeekOf(sunday, monday) {
 }
 
 /**
- * 그날이 속한 주의 이름 — 목록의 주 머리(ADR-060 §2). 주 번호가 있으면 그것이고, 주일은 `sundayWeekOf`, 주 번호가 없는 평일은 그 주
- * 주일의 머리를 잇는다. 주 중간에 절기가 바뀌어 주일과 절기가 다르면 `SEASON_HEAD`다(대림 4주 안의 성탄일은 「성탄 후 주간」, 재의
+ * 그날이 속한 주의 이름 — 목록의 주간 라벨(ADR-060 §2). 주 번호가 있으면 그것이고, 주일은 `sundayWeekOf`, 주 번호가 없는 평일은 그 주
+ * 주일의 주간 라벨를 잇는다. 주 중간에 절기가 바뀌어 주일과 절기가 다르면 `SEASON_HEAD`다(대림 4주 안의 성탄일은 「성탄 후 주간」, 재의
  * 수요일은 「사순 시작」).
  * @param {ResolvedDate} resolved
  * @param {ResolvedDate | null} sunday  그 주의 주일(그날이 주일이면 그날). 계산 범위 밖이면 null
@@ -447,12 +447,12 @@ function weekLabelOf(resolved, sunday, monday) {
 }
 
 /**
- * 줄의 제목과 그 아래 줄(ADR-060 §2). 주 머리와 같은 평일 이름(「연중 34주」)은 적지 않고, 그 자리에 그날 기리는 성인이나 기념일을 올린다.
+ * 줄의 제목과 그 아래 줄(ADR-060 §2). 주간 라벨과 같은 평일 이름(「연중 34주」)은 적지 않고, 그 자리에 그날 기리는 성인이나 기념일을 올린다.
  * 올린 이름의 괄호 설명은 제목 아래 한 줄로 내린다(「클레멘트(로마의 주교, 순교자, 100년경) 축일」은 「클레멘트 축일」과 「로마의 주교, 순교자,
  * 100년경」). 대표가 아닌 이름 줄(교회 축성일, 옮겨 온 축일의 안내)은 그대로다.
  * @param {string} title  요일을 뺀 제목
  * @param {string[]} lines  제목 아래의 줄
- * @param {string} week  주 머리
+ * @param {string} week  주간 라벨
  * @returns {{ title: string, lines: string[], raised: boolean }}
  */
 function rowTitleOf(title, lines, week) {
@@ -468,7 +468,7 @@ function rowTitleOf(title, lines, week) {
 }
 
 /**
- * 목록 줄 하나(ADR-060 §2, ADR-038 §2 「목록 보기」). 글은 전례독서 제목 영역과 같고(`headLinesOf`), 주 머리와 같은 평일 이름은 적지 않는다(`rowTitleOf`).
+ * 목록 줄 하나(ADR-060 §2, ADR-038 §2 「목록 보기」). 글은 전례독서 제목 영역과 같고(`headLinesOf`), 주간 라벨과 같은 평일 이름은 적지 않는다(`rowTitleOf`).
  * 해(「짝수해」, 「나해 시작」)와 색 이름은 줄에 적지 않는다. 색은 날짜 칸의 막대이고, 색 이름은 링크 이름에 싣는다. 선택 대체색은 싣지 않는다
  * (DESIGN.md §2). 장절은 전례독서 화면이 처음 보이는 독서(기본 전례일, 첫째 세트, 기억한 트랙)다.
  * @param {LectionaryModel} m
@@ -1252,8 +1252,8 @@ function buildRow(row) {
 }
 
 /**
- * 주 하나의 묶음 — 주 머리와 그 주의 줄 목록(ADR-060 §2). 머리는 스크롤하면 상단 바 아래에 고정되고(CSS `position: sticky`), 묶음의
- * 마지막 줄이 지나가면 다음 묶음의 머리에 밀려 사라진다. 고정은 묶음 안에서만 되므로 주마다 묶음을 따로 둔다.
+ * 주 하나의 묶음 — 주간 라벨과 그 주의 줄 목록(ADR-060 §2). 라벨은 스크롤하면 상단 바 아래에 고정되고(CSS `position: sticky`), 묶음의
+ * 마지막 줄이 지나가면 다음 묶음의 주간 라벨에 밀려 사라진다. 고정은 묶음 안에서만 되므로 주마다 묶음을 따로 둔다.
  * @param {string} week
  */
 function buildWeekGroup(week) {
@@ -1264,7 +1264,7 @@ function buildWeekGroup(week) {
 }
 
 /**
- * 그 줄이 이 묶음에 이어지는가. 새 묶음(새 머리)은 주일, 주 이름이 바뀐 줄, 달 묶음의 첫 줄에서 시작한다(ADR-060 §2).
+ * 그 줄이 이 묶음에 이어지는가. 새 묶음(새 라벨)은 주일, 주 이름이 바뀐 줄, 달 묶음의 첫 줄에서 시작한다(ADR-060 §2).
  * @param {HTMLElement | null} group
  * @param {HTMLElement} li  더할 줄
  * @param {HTMLElement | null} after  그 묶음에서 더할 줄 바로 뒤에 오는 줄. 맨 뒤에 더하면 null
@@ -1275,7 +1275,7 @@ function joinsGroup(group, li, after) {
 }
 
 /**
- * 그 날짜의 줄이 고정된 주 머리 바로 아래에 오게 스크롤한다. 달의 첫 줄이면 달 이름이 함께 보이게 달 이름부터 둔다. 데스크톱은 스크롤하면 상단 바가
+ * 그 날짜의 줄이 고정된 주간 라벨 바로 아래에 오게 스크롤한다. 달의 첫 줄이면 달 이름이 함께 보이게 달 이름부터 둔다. 데스크톱은 스크롤하면 상단 바가
  * 접히므로 접힌 뒤에 다시 맞추고, 그사이 독자가 스크롤을 시작하면 맞추지 않는다(helpers.js `scrollUnderBar`, 이어 읽기와 같다).
  * @param {string} date
  */
@@ -1333,7 +1333,7 @@ function addListRows(list, dates, atStart) {
 }
 
 /**
- * 고정된 주 머리의 높이. 머리가 고정된 동안 그 아래가 보이는 자리의 시작이다(ADR-060 §2). 머리는 모두 높이가 같다(CSS `--cal-week-h`).
+ * 고정된 주간 라벨의 높이. 라벨이 고정된 동안 그 아래가 보이는 자리의 시작이다(ADR-060 §2). 라벨은 모두 높이가 같다(CSS `--cal-week-h`).
  * @param {Element} root
  */
 function weekHeadHeight(root) {
@@ -1346,7 +1346,7 @@ function weekHeadHeight(root) {
  */
 const ROW_PEEK_PX = 8;
 
-/** 상단 바와 고정된 주 머리 바로 아래의 달 묶음. @param {HTMLElement} root */
+/** 상단 바와 고정된 주간 라벨 바로 아래의 달 묶음. @param {HTMLElement} root */
 function sectionUnderBar(root) {
   const bottom = barBottom() + weekHeadHeight(root) + ROW_PEEK_PX;
   for (const section of root.querySelectorAll("section")) {
@@ -1355,7 +1355,7 @@ function sectionUnderBar(root) {
   return null;
 }
 
-/** 상단 바와 고정된 주 머리 바로 아래의 줄 — 「맨 위 줄」(ADR-038 §2, ADR-060 §2). @param {HTMLElement} root */
+/** 상단 바와 고정된 주간 라벨 바로 아래의 줄 — 「맨 위 줄」(ADR-038 §2, ADR-060 §2). @param {HTMLElement} root */
 function rowUnderBar(root) {
   const bottom = barBottom() + weekHeadHeight(root) + ROW_PEEK_PX;
   for (const li of /** @type {NodeListOf<HTMLElement>} */ (sectionUnderBar(root)?.querySelectorAll("li[data-date]") ?? [])) {
@@ -1397,7 +1397,7 @@ function trimList(list) {
   keepRowInPlace(list.root, () => {
     for (const li of rows.slice(0, above)) li.remove();
     for (const li of rows.slice(rows.length - below)) li.remove();
-    // 줄이 빈 주 묶음과 달 묶음을 지운다. 남은 묶음은 머리를 지킨다. 위쪽을 내리면 남은 첫 줄의 묶음이 달 묶음의 첫 줄이 된다
+    // 줄이 빈 주 묶음과 달 묶음을 지운다. 남은 묶음은 라벨을 지킨다. 위쪽을 내리면 남은 첫 줄의 묶음이 달 묶음의 첫 줄이 된다
     for (const group of list.root.querySelectorAll(".cal-week-group")) if (!group.querySelector("li[data-date]")) group.remove();
     for (const section of list.root.querySelectorAll("section")) if (!section.querySelector("li[data-date]")) section.remove();
   });

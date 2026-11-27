@@ -256,7 +256,7 @@ const churchIdOf = (name) => read("local-observances.json").parishes.find((p) =>
 
 test("목록 줄. 소속교회를 고르면 전례독서 화면처럼 축성일이 제목이고, 교구 설립일 줄이 생긴다(ADR-041 §6)", { skip: SKIP }, () => {
   const yongin = churchIdOf("용인성당");   // 서울교구, 축성일 01.31
-  same([rowOf("2025-01-31").title, rowOf("2025-01-31", yongin).title], ["", "용인성당 축성일"]);   // 평일 이름은 주 머리에만 있다(ADR-060 §2)
+  same([rowOf("2025-01-31").title, rowOf("2025-01-31", yongin).title], ["", "용인성당 축성일"]);   // 평일 이름은 주간 라벨에만 있다(ADR-060 §2)
   assert.strictEqual(rowOf("2025-01-31", yongin).level, "");   // 굵기는 그날의 기본 독서(평일)를 따른다
   const founding = rowOf("2026-05-27", yongin);
   assert.ok(founding.lines.includes("1965년 5월 27일 서울교구설립일"), founding.lines.join(" | "));
@@ -304,7 +304,7 @@ test("목록 줄 — 주일, 전례년 첫날, 옮겨 온 축일, 저녁 전례,
   assert.ok(headModel("2026-12-13").colorAlt.length > 0);
 });
 
-test("목록 줄 — 2025-2030의 모든 날에 줄이 있고 글이 제목 영역과 같다(평일 이름은 주 머리로, 축일과 기념일은 제목으로, ADR-060 §2)", { skip: SKIP }, () => {
+test("목록 줄 — 2025-2030의 모든 날에 줄이 있고 글이 제목 영역과 같다(평일 이름은 주간 라벨로, 축일과 기념일은 제목으로, ADR-060 §2)", { skip: SKIP }, () => {
   const keeps = new Set();   // 요일이 남은 제목
   const weeks = new Set();
   for (let d = "2025-01-01"; d <= "2030-12-31"; d = ctx.addDays(d, 1)) {
@@ -317,7 +317,7 @@ test("목록 줄 — 2025-2030의 모든 날에 줄이 있고 글이 제목 영�
     const all = [...head.notes, ...head.names, ...head.others.map(ctx.rowTextOf)];
     if (r.title === base && base !== week) same(r.lines, all, d);
     else {
-      assert.strictEqual(base, week, d);   // 적지 않거나 바꾼 제목은 주 머리와 같은 평일 이름뿐이다
+      assert.strictEqual(base, week, d);   // 적지 않거나 바꾼 제목은 주간 라벨과 같은 평일 이름뿐이다
       const raised = all.find((l) => / (?:축일|기념일)$/.test(l));
       if (raised === undefined) same([r.title, r.lines], ["", all], d);
       else {
@@ -333,11 +333,11 @@ test("목록 줄 — 2025-2030의 모든 날에 줄이 있고 글이 제목 영�
   }
   // 요일이 남는 제목은 ADR-058 §2가 든 날뿐이다. 새 이름이 생기면 요일을 뺄지 정해야 한다
   same([...keeps].sort(), ["성 X요일", "성주간 X요일", "성탄 후 X요일", "재의 X요일", "재의 X요일 후 X요일"]);
-  // 주 머리는 「절기 N주」와 주 번호가 없는 셋뿐이다(ADR-060 §2)
+  // 주간 라벨은 「절기 N주」와 주 번호가 없는 셋뿐이다(ADR-060 §2)
   same([...weeks].sort(), ["대림 N주", "부활 N주", "사순 N주", "사순 시작", "성주간", "성탄 N주", "성탄 후 주간", "연중 N주"]);
 });
 
-test("주 머리 — 주 번호가 없는 주일과 주 중간에 절기가 바뀌는 날(ADR-060 §2, 사용자 결정 2026-11-27)", { skip: SKIP }, () => {
+test("주간 라벨 — 주 번호가 없는 주일과 주 중간에 절기가 바뀌는 날(ADR-060 §2, 사용자 결정 2026-11-27)", { skip: SKIP }, () => {
   const cases = {
     "2026-11-22": "연중 34주", "2026-11-26": "연중 34주", "2026-11-29": "대림 1주",
     "2026-12-20": "대림 4주", "2026-12-24": "대림 4주", "2026-12-25": "성탄 후 주간", "2026-12-26": "성탄 후 주간", "2026-12-27": "성탄 1주",

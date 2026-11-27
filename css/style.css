@@ -1300,9 +1300,9 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
   overflow-wrap: anywhere;
 }
 
-/* 목록의 줄(ADR-060 §2). 검색 결과의 전례일 줄도 .cal-row를 쓰므로 목록에만 적용한다. 주마다 묶음(.cal-week-group)이 있고, 묶음의 주 머리는
-   스크롤하면 상단 바 아래에 고정되었다가 묶음의 마지막 줄이 지나가면 다음 머리에 밀려 사라진다(position: sticky는 부모 안에서만 고정된다).
-   머리의 높이는 한 줄로 고정해(--cal-week-h) 스크롤 고정이 머리에 가려진 줄을 기준으로 삼지 않게 하고, 코드가 맨 위 줄을 머리 아래에서 찾는다
+/* 목록의 줄(ADR-060 §2). 검색 결과의 전례일 줄도 .cal-row를 쓰므로 목록에만 적용한다. 주마다 묶음(.cal-week-group)이 있고, 묶음의 주간 라벨은
+   스크롤하면 상단 바 아래에 고정되었다가 묶음의 마지막 줄이 지나가면 다음 주간 라벨에 밀려 사라진다(position: sticky는 부모 안에서만 고정된다).
+   라벨의 높이는 한 줄로 고정해(--cal-week-h) 스크롤 고정이 라벨에 가려진 줄을 기준으로 삼지 않게 하고, 코드가 맨 위 줄을 라벨 아래에서 찾는다
    (calendar.js weekHeadHeight). 날짜 칸은 줄 높이를 채우는 다른 바탕이고, 날짜, 전례색 막대, 요일을 위에서부터 적는다. */
 :root { --cal-week-h: calc(var(--font-sm) * var(--leading-snug) + 2 * var(--space-2) + 1px); }
 .cal-week-group { padding-top: var(--space-3); }
@@ -3250,20 +3250,20 @@ a.scope-pill-main:active,
   padding: var(--space-4) 0;
 }
 
-/* 구분 탭 줄(ADR-033 「책 선택 시트의 구분 탭」). 머리 아래에 늘 있고, 아래의 선이 스크롤되는 칩과 나눈다. 모양은 성서 목록의
+/* 구분 탭 줄(ADR-033 「책 선택 시트의 구분 탭」). 라벨 아래에 늘 있고, 아래의 선이 스크롤되는 칩과 나눈다. 모양은 성서 목록의
    구분 탭(.division-tabs, .division-tab, .division-tab-indicator)을 그대로 쓰고, 여기서는 자리와 단추의 기본 모양만 고친다. */
 .book-filter-tabbar {
   padding: 0 var(--space-4) var(--space-3);
   border-bottom: 1px solid var(--border);
 }
 
-/* 책 목록을 받지 못해 탭 줄을 숨기면 그 아래의 선도 없어진다. 그때는 머리 아래에 선을 둔다 */
+/* 책 목록을 받지 못해 탭 줄을 숨기면 그 아래의 선도 없어진다. 그때는 라벨 아래에 선을 둔다 */
 .book-filter-head:has(+ .book-filter-tabbar[hidden]) {
   padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--border);
 }
 
-/* 두 클래스로 쓴다: 뒤에 오는 .division-tabs의 위 여백(성서 목록 머리 아래의 간격)을 이겨야 한다 */
+/* 두 클래스로 쓴다: 뒤에 오는 .division-tabs의 위 여백(성서 목록 라벨 아래의 간격)을 이겨야 한다 */
 .division-tabs.book-filter-tabs {
   margin: 0;
 }
