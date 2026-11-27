@@ -418,29 +418,31 @@ function ownWeekOf(resolved) {
  * 주일의 주간 라벨. 주일이 주 번호 없는 대축일이면 그 주 평일 독서가 속한 주를 따른다(사용자 결정 2026-11-27). 성령강림대축일의 평일은
  * 연중 주간이라(기도서 연중 주일 구간표) 「연중 7주」 같은 이름이다. 평일에도 주 번호가 없으면 `UNNUMBERED_SUNDAY_HEAD`다.
  * @param {ResolvedDate} sunday
- * @param {ResolvedDate | null} monday  그다음 월요일. 계산 범위 밖이면 null
+ * @param {() => ResolvedDate | null} mondayOf  그다음 월요일. 주일에 주 번호가 없을 때만 부른다. 계산 범위 밖이면 null
  * @returns {string | null}
  */
-function sundayWeekOf(sunday, monday) {
+function sundayWeekOf(sunday, mondayOf) {
   const season = sunday.coord.season || "";
-  return ownWeekOf(sunday) ?? ownWeekOf(monday) ?? /** @type {Record<string, string>} */ (UNNUMBERED_SUNDAY_HEAD)[season] ?? null;
+  return ownWeekOf(sunday) ?? ownWeekOf(mondayOf()) ?? /** @type {Record<string, string>} */ (UNNUMBERED_SUNDAY_HEAD)[season] ?? null;
 }
 
 /**
  * 그날이 속한 주의 이름 — 목록의 주간 라벨(ADR-060 §2). 주 번호가 있으면 그것이고, 주일은 `sundayWeekOf`, 주 번호가 없는 평일은 그 주
- * 주일의 주간 라벨를 잇는다. 주 중간에 절기가 바뀌어 주일과 절기가 다르면 `SEASON_HEAD`다(대림 4주 안의 성탄일은 「성탄 후 주간」, 재의
+ * 주일의 주간 라벨을 잇는다. 주 중간에 절기가 바뀌어 주일과 절기가 다르면 `SEASON_HEAD`다(대림 4주 안의 성탄일은 「성탄 후 주간」, 재의
  * 수요일은 「사순 시작」).
+ * 주일과 월요일은 그날에 주 번호가 없을 때만 푼다. 대부분의 평일은 제 이름에 주 번호가 있어, 줄마다 엔진을 세 번 돌리지 않는다(코드 리뷰 2026-11-27).
  * @param {ResolvedDate} resolved
- * @param {ResolvedDate | null} sunday  그 주의 주일(그날이 주일이면 그날). 계산 범위 밖이면 null
- * @param {ResolvedDate | null} monday  그 주의 월요일. 계산 범위 밖이면 null
+ * @param {() => ResolvedDate | null} sundayOf  그 주의 주일(그날이 주일이면 그날). 계산 범위 밖이면 null
+ * @param {() => ResolvedDate | null} mondayOf  그 주의 월요일. 계산 범위 밖이면 null
  * @returns {string}
  */
-function weekLabelOf(resolved, sunday, monday) {
+function weekLabelOf(resolved, sundayOf, mondayOf) {
   const own = ownWeekOf(resolved);
   if (own) return own;
   const season = resolved.coord.season || "";
+  const sunday = sundayOf();
   if (sunday && (sunday === resolved || sunday.coord.season === season)) {
-    const head = sundayWeekOf(sunday, monday);
+    const head = sundayWeekOf(sunday, mondayOf);
     if (head) return head;
   }
   return /** @type {Record<string, string>} */ (SEASON_HEAD)[season] ?? "";
@@ -449,7 +451,7 @@ function weekLabelOf(resolved, sunday, monday) {
 /**
  * 줄의 제목과 그 아래 줄(ADR-060 §2). 주간 라벨과 같은 평일 이름(「연중 34주」)은 적지 않고, 그 자리에 그날 기리는 성인이나 기념일을 올린다.
  * 올린 이름의 괄호 설명은 제목 아래 한 줄로 내린다(「클레멘트(로마의 주교, 순교자, 100년경) 축일」은 「클레멘트 축일」과 「로마의 주교, 순교자,
- * 100년경」). 대표가 아닌 이름 줄(교회 축성일, 옮겨 온 축일의 안내)은 그대로다.
+ * 100년경」). 괄호가 둘 이상인 이름은 나누지 않는다. 대표가 아닌 이름 줄(교회 축성일, 옮겨 온 축일의 안내)은 그대로다.
  * @param {string} title  요일을 뺀 제목
  * @param {string[]} lines  제목 아래의 줄
  * @param {string} week  주간 라벨
@@ -461,7 +463,8 @@ function rowTitleOf(title, lines, week) {
   const at = lines.findIndex((line) => / (?:축일|기념일)$/.test(line));
   if (at < 0) return { title: "", lines, raised: false };
   const rest = lines.filter((_, i) => i !== at);
-  const paren = lines[at].match(/^(.+?)\((.+)\) (축일|기념일)$/);
+  // 괄호가 하나일 때만 나눈다. 둘이면(「바실(주교, 379년)과 나지안조의 그레고리(주교, 389년) 축일」) 이름 전체가 제목이다
+  const paren = lines[at].match(/^([^()]+)\(([^()]+)\) (축일|기념일)$/);
   return paren
     ? { title: `${paren[1]} ${paren[3]}`, lines: [paren[2], ...rest], raised: true }
     : { title: lines[at], lines: rest, raised: true };
@@ -1693,9 +1696,9 @@ async function renderListView(param, today, isStale) {
     if (!m) return null;
     const sundayDate = addDays(date, -dayOfWeek(date));
     const resolveIn = (/** @type {string | null} */ d) => (d === date ? resolved : (d !== null && isComputableDate(d) ? resolveDate(d) : null));
-    const sunday = resolveIn(sundayDate);
-    const monday = resolveIn(sundayDate !== null ? addDays(sundayDate, 1) : null);
-    return listRowOf(m, today, weekLabelOf(resolved, sunday, monday));
+    const sundayOf = () => resolveIn(sundayDate);
+    const mondayOf = () => resolveIn(sundayDate !== null ? addDays(sundayDate, 1) : null);
+    return listRowOf(m, today, weekLabelOf(resolved, sundayOf, mondayOf));
   }, isStale);
   window.tabHistory?.rememberCalendarView();
   return listTitleOf(month);

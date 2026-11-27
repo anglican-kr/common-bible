@@ -248,7 +248,7 @@ function headModel(d, parish = "", saint = "") {
 /** 그날이 속한 주의 이름 — 목록이 주일을 함께 풀어 정한다(ADR-060 §2). */
 const weekOf = (d) => {
   const sunday = ctx.addDays(d, -ctx.dayOfWeek(d));
-  return ctx.weekLabelOf(resolve(d), resolve(sunday), resolve(ctx.addDays(sunday, 1)));
+  return ctx.weekLabelOf(resolve(d), () => resolve(sunday), () => resolve(ctx.addDays(sunday, 1)));
 };
 const rowOf = (d, parish = "", saint = "") => ctx.listRowOf(headModel(d, parish, saint), "2026-11-07", weekOf(d));
 /** 본당 표에서 교회 이름으로 찾은 교회 식별자. */
@@ -323,6 +323,12 @@ test("목록 줄 — 2025-2030의 모든 날에 줄이 있고 글이 제목 영�
       else {
         assert.ok(/ (?:축일|기념일)$/.test(r.title), `${d}: ${r.title}`);
         for (const l of all) if (l !== raised) assert.ok(r.lines.includes(l), `${d}: ${l}`);
+        // 나눈 제목과 설명을 다시 붙이면 원래 이름이다. 괄호가 둘인 이름이 깨지면 여기서 걸린다
+        if (r.title !== raised) {
+          const [, name, kind] = /** @type {RegExpMatchArray} */ (r.title.match(/^(.+) (축일|기념일)$/));
+          assert.strictEqual(`${name}(${r.lines[0]}) ${kind}`, raised, d);
+          for (const t of [r.title, r.lines[0]]) assert.ok(!/[()]/.test(t), `${d}: ${t}`);
+        }
       }
     }
     if (/[월화수목금토]요일/.test(r.title)) keeps.add(r.title.replace(/[월화수목금토]요일/g, "X요일"));
@@ -347,6 +353,12 @@ test("주간 라벨 — 주 번호가 없는 주일과 주 중간에 절기가 �
     "2022-12-25": "성탄 후 주간", "2022-12-29": "성탄 후 주간", "2023-01-01": "성탄 1주",   // 성탄일이 주일인 해
   };
   same(Object.fromEntries(Object.keys(cases).map((d) => [d, weekOf(d)])), cases);
+});
+
+test("주간 라벨 — 주 번호가 있는 날은 주일과 월요일을 풀지 않는다(코드 리뷰 2026-11-27)", { skip: SKIP }, () => {
+  const never = () => { throw new Error("풀지 않아야 한다"); };
+  assert.strictEqual(ctx.weekLabelOf(resolve("2026-11-26"), never, never), "연중 34주");
+  assert.strictEqual(ctx.weekLabelOf(resolve("2027-05-09"), never, never), "부활 7주");
 });
 
 test("목록 — 위아래로 이어지는 날짜마다 줄이 있다(달과 해를 넘을 때 포함)", { skip: SKIP }, () => {
