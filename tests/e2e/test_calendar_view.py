@@ -682,7 +682,7 @@ def _scroll_down_until(page, date):
             await frame();
         }
         // 그린 줄의 끝에 가까우면 문서 끝에 막혀 올라오지 못하므로, 아래쪽 줄이 더해지는 동안 거듭 스크롤한다
-        const gap = () => find().getBoundingClientRect().top - document.getElementById('sticky-group').getBoundingClientRect().bottom;
+        const gap = () => find().getBoundingClientRect().top - (document.getElementById('sticky-group').getBoundingClientRect().bottom + (document.querySelector('.cal-week')?.getBoundingClientRect().height ?? 0));
         for (let i = 0; i < 120 && Math.abs(gap()) > 1; i++) {
             window.scrollBy({ top: gap(), behavior: 'instant' });
             await frame();
@@ -748,9 +748,9 @@ def _assert_consecutive(dates):
 
 
 def _row_top_under_head(page, date):
-    """그 날짜의 줄 위쪽과 상단 바 아래쪽의 거리."""
+    """그 날짜의 줄 위쪽과 맨 위 줄의 선(상단 바 아래쪽에 고정된 주간 라벨의 높이를 더한 자리, ADR-060 §2)의 거리."""
     return page.evaluate("""d => document.querySelector(`li[data-date="${d}"]`).getBoundingClientRect().top
-        - document.getElementById('sticky-group').getBoundingClientRect().bottom""", date)
+        - (document.getElementById('sticky-group').getBoundingClientRect().bottom + (document.querySelector('.cal-week')?.getBoundingClientRect().height ?? 0))""", date)
 
 
 def test_view_button_switches_between_month_and_list_keeping_the_month(desktop_context):
@@ -807,16 +807,17 @@ def test_list_opens_at_the_row_of_the_address(mobile_context):
 @pytest.mark.only_browser("chromium")
 def test_list_row_and_scroll_padding_follow_the_status_bar_height(mobile_context):
     """상태 표시줄 높이(`env(safe-area-inset-top)`)가 62px이어도 주소의 줄이 상단 바 바로 아래에 온다. 스크롤 여백(`scroll-padding-top`)은
-    잰 상단 바 높이에 맨 위 줄로 치지 않는 8px을 더한 값이고, 기본 글자 크기의 휴대폰에서 상단 바는 60px에 상태 표시줄 높이를 더한 값이다(2026-11-07,
+    잰 상단 바 높이에 고정된 주간 라벨의 높이와 맨 위 줄로 치지 않는 8px을 더한 값이고, 기본 글자 크기의 휴대폰에서 상단 바는 60px에 상태 표시줄 높이를 더한 값이다(2026-11-07,
     상단 바 묶음이 그 높이를 안쪽 위 여백으로 둔다)."""
     inset = 62
     page = mobile_context.new_page()
     emulate_status_bar(page, inset)
     _open_list(page, "calendar/list/2026-12-15")
     assert abs(_row_top_under_head(page, "2026-12-15")) <= 2
-    bar, padding = page.evaluate("""() => [document.getElementById('sticky-group').getBoundingClientRect().bottom,
+    bar, head, padding = page.evaluate("""() => [document.getElementById('sticky-group').getBoundingClientRect().bottom,
+        document.querySelector('.cal-week').getBoundingClientRect().height,
         parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop)]""")
-    assert abs(padding - bar - 8) <= 0.5, (bar, padding)
+    assert abs(padding - bar - head - 8) <= 0.5, (bar, head, padding)   # 고정된 주간 라벨에 가려진 줄도 기준이 아니다(ADR-060 §2)
     assert abs(bar - (60 + inset)) <= 1, bar
 
 
@@ -830,18 +831,38 @@ def test_list_rows_are_announced_as_a_list(mobile_context):
 
 
 def test_list_shows_every_day_with_the_lectionary_head_text(mobile_context):
-    """평범한 평일도 줄이 있고, 줄의 글은 눌러서 간 전례독서의 제목 영역과 같다. 줄 끝에 ›를 두지 않는다."""
+    """평범한 평일도 줄이 있다. 평일 이름은 주간 라벨에만 있고, 그 밖의 줄의 글은 눌러서 간 전례독서의 제목 영역과 같다. 줄 끝에 ›를 두지
+    않는다(ADR-060 §2)."""
     page = mobile_context.new_page()
     _open_list(page, "calendar/list/2026-11-12")
     assert page.locator("section[data-month='2026-11'] .cal-row").count() == 30
     plain = _row(page, "2026-11-12")
-    assert plain.locator(".cal-row-title").inner_text() == "연중 32주"   # 요일은 왼쪽 날짜 칸이 보인다(ADR-058 §2)
+    assert plain.locator(".cal-row-title").count() == 0   # 「연중 32주」는 주간 라벨에 있다
     assert plain.locator(".cal-row-day").inner_text() == "12"
     assert plain.locator(".cal-row-weekday").inner_text() == "목"
     assert plain.locator(".cal-row-line").count() == 0
-    assert "녹색" in plain.locator(".cal-row-meta").inner_text() and "짝수해" in plain.locator(".cal-row-meta").inner_text()
+    assert plain.locator(".cal-row-meta").count() == 0   # 색 이름과 해는 적지 않는다
+    assert plain.locator(".cal-row-bar.lit-swatch--green").count() == 1
+    assert "녹색" in plain.get_attribute("aria-label")
+    assert plain.locator(".cal-row-office").inner_text() == "감사성찬례"
     assert "›" not in plain.inner_text()
-    for date in ("2026-11-06", "2026-12-07", "2026-12-24"):
+    # 주간 라벨은 주일 줄과 달 묶음의 첫 줄 위에만 있다
+    heads = page.evaluate("""() => [...document.querySelectorAll("section[data-month='2026-11'] .cal-week-group")]
+        .map((g) => [g.querySelector("li[data-date]").dataset.date, g.querySelector(".cal-week").textContent])""")
+    assert heads == [["2026-11-01", "연중 31주"], ["2026-11-08", "연중 32주"], ["2026-11-15", "연중 33주"],
+                     ["2026-11-22", "연중 34주"], ["2026-11-29", "대림 1주"]], heads
+    # 달 묶음의 첫 줄이 주일이 아니면 그 줄에도 주간 라벨을 다시 적는다. 위쪽에 한 주를 더하면 새 첫 줄로 옮겨 간다(처음 그린 첫날은 2주 앞의
+    # 목요일이고, 화면이 위쪽 끝에 가까우면 한 주 앞의 목요일까지 더한다)
+    first = page.evaluate("""() => { const groups = [...document.querySelectorAll("section[data-month='2026-10'] .cal-week-group")];
+        const lead = (g) => g.querySelector("li[data-date]");
+        return [lead(groups[0]).dataset.date, groups[0].querySelector(".cal-week").textContent, lead(groups[0]).dataset.week,
+                groups.slice(1).filter((g) => !("sunday" in lead(g).dataset)).length]; }""")
+    assert first[0] in ("2026-10-29", "2026-10-22") and first[1] == first[2] and first[3] == 0, first
+    # 평일 이름 대신 그날 기리는 성인이 제목이고, 괄호 설명은 그 아래 줄이다
+    leonard = _row(page, "2026-11-06")
+    assert leonard.locator(".cal-row-title").inner_text() == "레오나드 축일"
+    assert leonard.locator(".cal-row-line").all_inner_texts() == ["은수자, 6세기", "삼흥리성당 축성일"]
+    for date in ("2026-12-07", "2026-12-24"):
         _open_list(page, f"calendar/list/{date}")
         row = _row(page, date)
         title = row.locator(".cal-row-title").inner_text()
@@ -857,16 +878,53 @@ def test_list_shows_every_day_with_the_lectionary_head_text(mobile_context):
         assert shown == lines, date
 
 
-def test_row_marks_sunday_weight_year_start_and_keeps_alternate_colours_out(mobile_context):
-    """주일과 주요축일은 제목이 한 단계 굵고(500) 평일은 보통이다. 전례년 첫날은 「나해 시작」이고, 대체색은 줄에 없다."""
+def test_week_head_stays_under_the_bar_until_the_next_week_pushes_it_away(mobile_context):
+    """주간 라벨은 상단 바에 닿으면 그 아래에 고정되고, 그 주의 마지막 줄이 지나가면 다음 주간 라벨에 밀려 사라진다. 그동안 주소의 날짜는 고정된
+    라벨 바로 아래의 줄이다(ADR-060 §2, 사용자 결정 2026-11-27)."""
     page = mobile_context.new_page()
-    _open_list(page, "calendar/list/2026-11-29")
+    _open_list(page, "calendar/list/2026-12-02")
+    stuck = """() => { const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
+        return [...document.querySelectorAll('.cal-week')].filter((h) => Math.abs(h.getBoundingClientRect().top - bar) <= 1).map((h) => h.textContent); }"""
+    assert abs(_row_top_under_head(page, "2026-12-02")) <= 2   # 주 중간의 줄로 열면 그 줄이 라벨 바로 아래다
+    assert page.evaluate(stuck) == ["대림 1주"]
+    page.evaluate("""() => { const head = document.querySelector('.cal-week').getBoundingClientRect().height;
+        const r = document.querySelector('li[data-date="2026-12-05"]').getBoundingClientRect();
+        const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
+        window.scrollBy({ top: r.bottom - bar - head - 10, behavior: 'instant' }); }""")   # 토요일 줄의 끝 10px만 라벨 아래에 남긴다
+    page.wait_for_timeout(400)
+    assert page.evaluate(stuck) == ["대림 1주"]
+    page.wait_for_url(f"{BASE}/calendar/list/2026-12-05")
+    page.evaluate("() => window.scrollBy({ top: 100, behavior: 'instant' })")   # 다음 주간 라벨이 앞 라벨을 밀어낸다
+    page.wait_for_timeout(400)
+    assert page.evaluate(stuck) == ["대림 2주"]
+    page.wait_for_url(f"{BASE}/calendar/list/2026-12-06")
+
+
+def test_two_colours_of_the_saints_are_two_bars_one_above_the_other(mobile_context):
+    """성인에 따라 「적색 또는 백색」인 날은 막대 둘을 위아래로 둔다. 색 이름은 링크 이름에 있다(ADR-060 §2, 사용자 결정 2026-11-27)."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2026-02-14")
+    row = _row(page, "2026-02-14")
+    assert "적색 또는 백색" in row.get_attribute("aria-label")
+    bars = page.evaluate("""() => [...document.querySelectorAll('li[data-date="2026-02-14"] .cal-row-bar')].map((b) => {
+        const r = b.getBoundingClientRect(); return [b.className.split(' ').pop(), r.top, r.bottom, r.left]; })""")
+    assert [b[0] for b in bars] == ["lit-swatch--red", "lit-swatch--white"], bars
+    assert bars[1][1] >= bars[0][2] and abs(bars[1][3] - bars[0][3]) <= 0.5, bars   # 아래로 쌓고 왼쪽 끝이 같다
+
+
+def test_row_marks_sunday_weight_year_start_and_keeps_alternate_colours_out(mobile_context):
+    """주일과 주요축일, 제목으로 올린 축일은 제목이 한 단계 굵고(500) 평일은 보통이다. 해(전례년 첫날의 「나해 시작」 포함)는 적지 않고,
+    대체색은 줄에 없다(ADR-060 §2)."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2026-11-12")
     weight = lambda date: page.evaluate("""d => getComputedStyle(document.querySelector(`li[data-date="${d}"] .cal-row-title`)).fontWeight""", date)
     assert weight("2026-11-08") == "500"
-    assert weight("2026-11-12") == "400"
-    assert _row(page, "2026-11-29").locator(".cal-mark").inner_text() == "나해 시작"
+    assert weight("2026-11-06") == "500"
+    _open_list(page, "calendar/list/2026-11-29")
+    assert "나해" not in _row(page, "2026-11-29").inner_text()
     _open_list(page, "calendar/list/2026-12-13")
-    assert _row(page, "2026-12-13").locator(".cal-row-dot").count() == 1
+    assert weight("2026-12-21") == "400"   # 「성탄 4일 전」은 주간 라벨(대림 4주)과 달라 제목에 남는 평일 이름이다
+    assert _row(page, "2026-12-13").locator(".cal-row-bar").count() == 1
 
 
 def test_lectionary_button_returns_to_the_list_at_the_date_shown(desktop_context):
@@ -1094,7 +1152,7 @@ def test_desktop_list_leaves_the_scroll_alone_once_the_reader_scrolls(desktop_co
 
 @pytest.mark.parametrize("width, font", [(390, 16), (390, 24), (1280, 24)], ids=["phone-16", "phone-24", "desktop-24"])
 def test_list_scroll_padding_is_the_measured_bar_height(browser, width, font):
-    """목록의 스크롤 여백(`scroll-padding-top`)은 잰 상단 바의 높이(`--top-bar-h`, helpers.js `publishBarHeight`)에 맨 위 줄로 치지 않는 8px을 더한 값이다. 상단 바는 글자 크기를
+    """목록의 스크롤 여백(`scroll-padding-top`)은 잰 상단 바의 높이(`--top-bar-h`, helpers.js `publishBarHeight`)에 고정된 주간 라벨의 높이(`--cal-week-h`, ADR-060 §2)와 맨 위 줄로 치지 않는 8px을 더한 값이다. 상단 바는 글자 크기를
     따라 높아지고 낮아진다(글자 크기 16px에서 약 57px, 24px에서 약 70px). 60px로 적었을 때는 그 차이만큼 스크롤 고정이 상단 바에 가려진
     줄을 기준으로 삼거나 보이는 줄을 건너뛰었다."""
     ctx = browser.new_context(viewport={"width": width, "height": 800}, user_agent=IPHONE_UA if width < 700 else None)
@@ -1102,13 +1160,14 @@ def test_list_scroll_padding_is_the_measured_bar_height(browser, width, font):
     measure = """() => ({
         padding: parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop),
         bar: document.getElementById('sticky-group').getBoundingClientRect().bottom,
+        head: document.querySelector('.cal-week').getBoundingClientRect().height,
     })"""
     try:
         page = ctx.new_page()
         _open_list(page, "calendar/list/2026-12-15")
         page.wait_for_timeout(1000)
         state = page.evaluate(measure)
-        assert abs(state["padding"] - state["bar"] - 8) <= 0.5, state
+        assert abs(state["padding"] - state["bar"] - state["head"] - 8) <= 0.5, state
     finally:
         ctx.close()
 
@@ -1304,7 +1363,7 @@ def test_scrolling_back_to_today_drops_the_date_from_the_address(mobile_context)
     _scroll_down_until(page, later)
     page.wait_for_url(f"{BASE}/calendar/list/{later}")
     page.evaluate("""d => {
-        const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
+        const bar = (document.getElementById('sticky-group').getBoundingClientRect().bottom + (document.querySelector('.cal-week')?.getBoundingClientRect().height ?? 0));
         window.scrollBy({ top: document.querySelector(`li[data-date="${d}"]`).getBoundingClientRect().top - bar, behavior: 'instant' });
     }""", today.isoformat())
     page.wait_for_url(f"{BASE}/calendar/list")
@@ -1319,7 +1378,7 @@ def test_list_left_open_overnight_uses_the_new_today_for_the_address(mobile_cont
     assert page.locator("li[data-date='2026-12-15'] a[aria-current='date']").count() == 1
     page.clock.set_fixed_time(datetime.datetime(2026, 12, 16, 12))
     put_under_bar = """d => {
-        const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
+        const bar = (document.getElementById('sticky-group').getBoundingClientRect().bottom + (document.querySelector('.cal-week')?.getBoundingClientRect().height ?? 0));
         window.scrollBy({ top: document.querySelector(`li[data-date="${d}"]`).getBoundingClientRect().top - bar, behavior: 'instant' });
     }"""
     page.evaluate(put_under_bar, "2026-12-16")
@@ -1356,7 +1415,7 @@ def test_row_click_before_scrolling_stops_saves_the_top_row(mobile_context):
     page = mobile_context.new_page()
     _open_list(page, "calendar/list/2026-12-15")
     page.evaluate("""() => {
-        const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
+        const bar = (document.getElementById('sticky-group').getBoundingClientRect().bottom + (document.querySelector('.cal-week')?.getBoundingClientRect().height ?? 0));
         window.scrollBy({ top: document.querySelector('li[data-date="2026-12-30"]').getBoundingClientRect().top - bar, behavior: 'instant' });
         document.querySelector('li[data-date="2027-01-02"] a').click();
     }""")
@@ -1375,7 +1434,7 @@ def test_leaving_before_scrolling_stops_saves_the_top_row(mobile_context, event)
     page = mobile_context.new_page()
     _open_list(page, "calendar/list/2026-12-15")
     path = page.evaluate("""event => {
-        const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
+        const bar = (document.getElementById('sticky-group').getBoundingClientRect().bottom + (document.querySelector('.cal-week')?.getBoundingClientRect().height ?? 0));
         window.scrollBy({ top: document.querySelector('li[data-date="2026-12-30"]').getBoundingClientRect().top - bar, behavior: 'instant' });
         (0, eval)(event);
         return location.pathname;
@@ -1414,7 +1473,7 @@ def test_tab_does_not_reuse_the_scroll_value_of_the_list(mobile_context):
             window.scrollTo({ top: 0, behavior: 'instant' });
             await new Promise(requestAnimationFrame);
         }
-        const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
+        const bar = (document.getElementById('sticky-group').getBoundingClientRect().bottom + (document.querySelector('.cal-week')?.getBoundingClientRect().height ?? 0));
         window.scrollBy({ top: document.querySelector('li[data-date="2026-12-15"]').getBoundingClientRect().top - bar, behavior: 'instant' });
     }""")
     page.wait_for_url(f"{BASE}/calendar/list/2026-12-15")
@@ -1452,7 +1511,7 @@ def test_redraw_before_scrolling_stops_keeps_the_top_row(mobile_context):
     page = mobile_context.new_page()
     _open_list(page, "calendar/list/2026-12-15")
     page.evaluate("""() => {
-        const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
+        const bar = (document.getElementById('sticky-group').getBoundingClientRect().bottom + (document.querySelector('.cal-week')?.getBoundingClientRect().height ?? 0));
         window.scrollBy({ top: document.querySelector('li[data-date="2026-12-30"]').getBoundingClientRect().top - bar, behavior: 'instant' });
         localStorage.setItem('bible-lectionary-alt-show', '1');
         return window.redrawIfSyncedSettingsChanged();
