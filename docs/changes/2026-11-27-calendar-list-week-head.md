@@ -1,7 +1,8 @@
 ---
 date: 2026-11-27
 branch: feat/calendar-list-week-head
-title: "feat: 캘린더 목록에 주 머리와 감사성찬례 장절"
+title: "feat: 캘린더 목록에 고정되는 주 머리와 감사성찬례 장절"
+pr: 671
 ---
 
 ## 요약
