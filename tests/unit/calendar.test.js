@@ -451,7 +451,7 @@ test("listRowOf: 평범한 평일도 줄이 있고 보통 굵기다 — 평일 �
   assert.strictEqual(r.href, "/lectionary/2026-10-15");
   assert.strictEqual(r.isToday, false);
   assert.strictEqual(r.level, "");
-  assert.strictEqual(r.title, "");   // 「연중 28주」는 주 머리에 있다
+  assert.strictEqual(r.title, "");   // 「연중 28주」는 주간 라벨에 있다
   assert.strictEqual(r.week, "연중 28주");
   assert.strictEqual(r.isSunday, false);
   same(r.colors, [{ code: "green", name: "녹색", or: false }]);
@@ -486,13 +486,13 @@ test("listRowOf: 트랙이 있는 주일은 「감사성찬례」 아래에 트�
   const coord = SUNDAY(28);
   const resolved = resolvedOf("2026-10-11", [grid("ordinary-28", "연중 28주일")], { coord });
   const r = ctx.listRowOf(headModel("2026-10-11", resolved, { dayName: "연중 28주일", slots: [{ label: "열왕하 5:14-17" }], track: 2 }), "2026-01-01", "연중 28주");
-  assert.strictEqual(r.title, "연중 28주일");   // 주일 이름은 주 머리와 달라 그대로다
+  assert.strictEqual(r.title, "연중 28주일");   // 주일 이름은 주간 라벨과 달라 그대로다
   assert.strictEqual(r.isSunday, true);
   same(r.readings, [{ name: "감사성찬례", note: "복음 주제", refs: ["열왕하 5:14-17"] }]);
   assert.ok(r.label.includes("감사성찬례 복음 주제 열왕하 5:14-17"), r.label);
 });
 
-test("rowTitleOf: 주 머리와 같은 평일 이름 대신 첫 축일, 기념일 줄을 올리고 괄호 설명을 아래로 내린다(ADR-060 §2)", () => {
+test("rowTitleOf: 주간 라벨과 같은 평일 이름 대신 첫 축일, 기념일 줄을 올리고 괄호 설명을 아래로 내린다(ADR-060 §2)", () => {
   same(ctx.rowTitleOf("연중 34주", ["클레멘트(로마의 주교, 순교자, 100년경) 축일"], "연중 34주"),
     { title: "클레멘트 축일", lines: ["로마의 주교, 순교자, 100년경"], raised: true });
   same(ctx.rowTitleOf("연중 34주", ["알렉산드리아의 카타리나(순교자, 4세기) 축일", "원주성당 축성일"], "연중 34주"),
@@ -503,7 +503,7 @@ test("rowTitleOf: 주 머리와 같은 평일 이름 대신 첫 축일, 기념�
   same(ctx.rowTitleOf("연중 31주", ["삼흥리성당 축성일", "레오나드(은수자, 6세기) 축일"], "연중 31주"),
     { title: "레오나드 축일", lines: ["은수자, 6세기", "삼흥리성당 축성일"], raised: true });
   same(ctx.rowTitleOf("연중 34주", ["성 니콜라 축일을 12월 7일로 옮김"], "연중 34주"), { title: "", lines: ["성 니콜라 축일을 12월 7일로 옮김"], raised: false });
-  // 주 머리와 다른 제목(주일, 축일, 「성탄 8일 전」)은 그대로다
+  // 주간 라벨과 다른 제목(주일, 축일, 「성탄 8일 전」)은 그대로다
   same(ctx.rowTitleOf("성탄 8일 전", ["누구 축일"], "대림 3주"), { title: "성탄 8일 전", lines: ["누구 축일"], raised: false });
 });
 
@@ -517,7 +517,7 @@ test("rowTextOf: 절기와 주 번호로 만든 평일 이름에서만 요일을
 });
 
 test("listRowOf: 굵기 — 주일과 대축일, 주요축일은 major, 축일은 minor", () => {
-  const level = (candidate, coord = WEEKDAY) => ctx.listRowOf(headModel("2026-10-15", resolvedOf("2026-10-15", [candidate], { coord })), "2026-01-01").level;
+  const level = (candidate, coord = WEEKDAY) => ctx.listRowOf(headModel("2026-10-15", resolvedOf("2026-10-15", [candidate], { coord })), "2026-01-01", "연중 28주").level;
   assert.strictEqual(level(grid("ordinary-28", "연중 28주일"), SUNDAY(28)), "major");
   assert.strictEqual(level(cand(obs("a", "가", { rank: "principal" }))), "major");
   assert.strictEqual(level(cand(obs("b", "나", { rank: "major_feast" }))), "major");
@@ -528,7 +528,7 @@ test("listRowOf: 굵기 — 주일과 대축일, 주요축일은 major, 축일�
   const weekday = cand(obs("grid:ordinary-28-weekday-thu", "연중 28주 목요일", { rank: "feria" }));
   const mine = cand(obs("my-dedication", "용인성당 축성일", { rank: "major_feast" }));
   const r = resolvedOf("2026-10-15", [weekday], { coord: WEEKDAY });
-  assert.strictEqual(ctx.listRowOf(headModel("2026-10-15", r, { selected: mine, initial: mine, dayName: "용인성당 축성일" }), "2026-01-01").level, "");
+  assert.strictEqual(ctx.listRowOf(headModel("2026-10-15", r, { selected: mine, initial: mine, dayName: "용인성당 축성일" }), "2026-01-01", "연중 28주").level, "");
 });
 
 test("listRowOf: 전례년 첫날에도 해를 적지 않는다(ADR-060 §2)", () => {
@@ -540,10 +540,10 @@ test("listRowOf: 전례년 첫날에도 해를 적지 않는다(ADR-060 §2)", (
 });
 
 test("listRowOf: 색이 둘이면 함께 적고, 성인의 색이 다르면 「또는」이다 — 선택 대체색은 싣지 않는다", () => {
-  const both = ctx.listRowOf(headModel("2026-10-15", plainDay("2026-10-15"), { colors: ["violet", "white"], colorAlt: ["blue"] }), "2026-01-01");
+  const both = ctx.listRowOf(headModel("2026-10-15", plainDay("2026-10-15"), { colors: ["violet", "white"], colorAlt: ["blue"] }), "2026-01-01", "연중 28주");
   same(both.colors.map((c) => [c.code, c.or]), [["violet", false], ["white", false]]);
   assert.ok(both.label.includes("자색 · 백색"), both.label);
-  const either = ctx.listRowOf(headModel("2026-10-15", plainDay("2026-10-15"), { colors: ["red", "white"], colorsOr: true }), "2026-01-01");
+  const either = ctx.listRowOf(headModel("2026-10-15", plainDay("2026-10-15"), { colors: ["red", "white"], colorsOr: true }), "2026-01-01", "연중 28주");
   same(either.colors.map((c) => [c.code, c.or]), [["red", false], ["white", true]]);
   assert.ok(either.label.includes("적색 또는 백색"), either.label);
 });
