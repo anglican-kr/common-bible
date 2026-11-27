@@ -474,12 +474,12 @@ test("listRowOf: 글의 차례는 제목 영역과 같다 — 안내, 이름 줄
     slots: [{ label: "이사 61:1-3" }, { label: "시편 96" }, { label: "마태 9:35-38" }], track: null,
   }), "2026-12-07", "대림 2주");
   same(r.meta, ["소재일"]);
-  same(r.lines, ["12월 6일에서 옮겨 옴", "누군가 축일을 12월 8일로 옮김", "암브로스(밀라노의 주교) 축일", "서울산성당 축성일", "대림 2주"]);
+  same(r.lines, ["12월 6일에서 옮겨 옴", "누군가 축일을 12월 8일로 옮김", "암브로스(밀라노의 주교) 축일", "서울산성당 축성일"]);   // 다른 전례일의 평일 이름은 주간 라벨과 같아 적지 않는다
   assert.strictEqual(r.level, "major");
   assert.strictEqual(r.isToday, true);
   assert.ok(r.label.startsWith("오늘, 12월 7일 월요일, 성 니콜라(대한성공회 수호성인), 백색, 소재일, 12월 6일에서 옮겨 옴"), r.label);
   same(r.readings, [{ name: "감사성찬례", note: null, refs: ["이사 61:1-3", "시편 96", "마태 9:35-38"] }]);
-  assert.ok(r.label.endsWith("서울산성당 축성일, 대림 2주, 감사성찬례 이사 61:1-3, 시편 96, 마태 9:35-38"), r.label);
+  assert.ok(r.label.endsWith("서울산성당 축성일, 감사성찬례 이사 61:1-3, 시편 96, 마태 9:35-38"), r.label);
 });
 
 test("listRowOf: 트랙이 있는 주일은 「감사성찬례」 아래에 트랙 이름을 적는다", () => {
@@ -501,6 +501,8 @@ test("rowTitleOf: 주간 라벨과 같은 평일 이름 대신 첫 축일, 기�
   for (const name of ["바실(주교, 379년)과 나지안조의 그레고리(주교, 389년) 축일", "대한성공회 최초의 의료선교사 남득시(랜더스), 와일스(1890년) 기념일"]) {
     same(ctx.rowTitleOf("연중 1주", [name], "연중 1주"), { title: name, lines: [], raised: true });
   }
+  // 제목이 다른 날도 주간 라벨과 같은 줄(다른 전례일로 내려간 평일)은 적지 않는다(사용자 결정 2026-11-27)
+  same(ctx.rowTitleOf("용인성당 축성일", ["연중 3주"], "연중 3주"), { title: "용인성당 축성일", lines: [], raised: false });
   same(ctx.rowTitleOf("연중 34주", ["성프란시스수녀회 설립 기념일"], "연중 34주"), { title: "성프란시스수녀회 설립 기념일", lines: [], raised: true });
   // 축성일과 옮김 안내는 올리지 않는다. 축일 줄이 뒤에 있으면 그것을 올린다(세례명의 성인 줄은 다른 전례일의 줄에 있다)
   same(ctx.rowTitleOf("연중 34주", ["평택성당 축성일"], "연중 34주"), { title: "", lines: ["평택성당 축성일"], raised: false });

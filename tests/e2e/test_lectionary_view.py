@@ -2355,7 +2355,7 @@ def test_calendar_list_row_follows_my_dedication(desktop_context):
     page.wait_for_selector(".cal-rows", timeout=20_000)
     row = page.locator("li[data-date='2025-01-31'] a.cal-row")
     assert row.locator(".cal-row-title").inner_text() == "용인성당 축성일"
-    assert row.locator(".cal-row-line").all_inner_texts() == ["연중 3주"]   # 다른 전례일도 요일을 뺀다(ADR-058 §2)
+    assert row.locator(".cal-row-line").count() == 0   # 다른 전례일로 내려간 평일 「연중 3주」는 주간 라벨과 같아 적지 않는다(사용자 결정 2026-11-27)
     assert "용인성당" not in page.title()
 
 

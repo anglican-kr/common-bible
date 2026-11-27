@@ -451,13 +451,15 @@ function weekLabelOf(resolved, sundayOf, mondayOf) {
 /**
  * 줄의 제목과 그 아래 줄(ADR-060 §2). 주간 라벨과 같은 평일 이름(「연중 34주」)은 적지 않고, 그 자리에 그날 기리는 성인이나 기념일을 올린다.
  * 올린 이름의 괄호 설명은 제목 아래 한 줄로 내린다(「클레멘트(로마의 주교, 순교자, 100년경) 축일」은 「클레멘트 축일」과 「로마의 주교, 순교자,
- * 100년경」). 괄호가 둘 이상인 이름은 나누지 않는다. 대표가 아닌 이름 줄(교회 축성일, 옮겨 온 축일의 안내)은 그대로다.
+ * 100년경」). 괄호가 둘 이상인 이름은 나누지 않는다. 대표가 아닌 이름 줄(교회 축성일, 옮겨 온 축일의 안내)은 그대로다. 다른 전례일로 내려간
+ * 평일 이름이 주간 라벨과 같으면(축성일이 제목인 날의 「연중 3주」) 그 줄도 적지 않는다(사용자 결정 2026-11-27).
  * @param {string} title  요일을 뺀 제목
- * @param {string[]} lines  제목 아래의 줄
+ * @param {string[]} all  제목 아래의 줄
  * @param {string} week  주간 라벨
  * @returns {{ title: string, lines: string[], raised: boolean }}
  */
-function rowTitleOf(title, lines, week) {
+function rowTitleOf(title, all, week) {
+  const lines = all.filter((line) => line !== week);
   if (title !== week) return { title, lines, raised: false };
   // 세례명의 성인은 이름 줄이 아니라 다른 전례일의 줄에 있으므로(ADR-041 §5) 차례와 상관없이 첫 축일, 기념일 줄을 올린다
   const at = lines.findIndex((line) => / (?:축일|기념일)$/.test(line));

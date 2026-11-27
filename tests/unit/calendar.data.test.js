@@ -314,7 +314,8 @@ test("목록 줄 — 2025-2030의 모든 날에 줄이 있고 글이 제목 영�
     const r = ctx.listRowOf(m, "2026-11-07", week);
     weeks.add(week.replace(/\d+/, "N"));
     const base = ctx.rowTextOf(head.title);
-    const all = [...head.notes, ...head.names, ...head.others.map(ctx.rowTextOf)];
+    const all = [...head.notes, ...head.names, ...head.others.map(ctx.rowTextOf)].filter((l) => l !== week);   // 주간 라벨과 같은 줄은 적지 않는다
+    assert.ok(!r.lines.includes(week), `${d}: ${r.lines}`);
     if (r.title === base && base !== week) same(r.lines, all, d);
     else {
       assert.strictEqual(base, week, d);   // 적지 않거나 바꾼 제목은 주간 라벨과 같은 평일 이름뿐이다
