@@ -144,7 +144,7 @@ test("buildMonthGrid: 2026년 10월 — 1일(목)이 있는 주의 일요일 9.2
   same(cells.filter((c) => c.isToday).map((c) => c.date), ["2026-10-15"]);
   for (let i = 0; i < 42; i++) assert.strictEqual(cells[i].weekday, i % 7, cells[i].date);   // 일요일 시작
   assert.strictEqual(calls.length, 42);   // 칸마다 한 번 — 앞뒤 달 칸도 엔진에 묻는다
-  same(m.hrefs, { prev: "/calendar/2026-09", next: "/calendar/2026-11", today: "/calendar", view: "/calendar/list" });   // 이번 달은 오늘 줄로
+  same(m.hrefs, { prev: "/calendar/2026-09", next: "/calendar/2026-11", today: "/lectionary", view: "/calendar/list" });   // 이번 달은 오늘 줄로. 「오늘」은 오늘의 전례독서(사용자 결정 2026-11-27)
   assert.strictEqual(cells[0].href, "/calendar/list/2026-09-27");   // 칸은 목록의 그날 줄로 간다(ADR-058 §1)
   assert.strictEqual(cells.find((c) => c.isToday).href, "/calendar/list");   // 오늘 줄의 주소에는 날짜를 적지 않는다
 });
@@ -167,7 +167,7 @@ test("buildMonthGrid: 윤년 2월(2028)은 29일까지 · 12월은 다음 해 1�
   assert.strictEqual(cells[0].date, "2026-11-29");
   assert.strictEqual(cells[41].date, "2027-01-09");
   assert.ok(cells.some((c) => c.date === "2027-01-01" && !c.inMonth));
-  same(dec.hrefs, { prev: "/calendar/2026-11", next: "/calendar/2027-01", today: "/calendar", view: "/calendar/list/2026-12-01" });   // 다른 달은 1일의 줄로
+  same(dec.hrefs, { prev: "/calendar/2026-11", next: "/calendar/2027-01", today: "/lectionary", view: "/calendar/list/2026-12-01" });   // 다른 달은 1일의 줄로
   assert.strictEqual(ctx.buildMonthGrid(2026, 12, "2026-11-17", plainDay).hrefs.prev, "/calendar");   // 이번 달로 가는 ‹는 날짜 없이
 });
 
@@ -567,7 +567,7 @@ test("listMonthOf: 앞뒤 달은 1일의 줄, 오른쪽 단추는 그 달", () =
   const m = ctx.listMonthOf(2028, 2, "2026-10-15");
   assert.strictEqual(m.title, "2028년 2월");
   assert.strictEqual(m.shortTitle, "2028.02");
-  same(m.hrefs, { prev: "/calendar/list/2028-01-01", next: "/calendar/list/2028-03-01", today: "/calendar/list", view: "/calendar/2028-02" });
+  same(m.hrefs, { prev: "/calendar/list/2028-01-01", next: "/calendar/list/2028-03-01", today: "/lectionary", view: "/calendar/2028-02" });
   assert.strictEqual(ctx.listMonthOf(2026, 10, "2026-10-15").hrefs.view, "/calendar");   // 이번 달
   assert.strictEqual(ctx.listMonthOf(9999, 12, "2026-10-15").hrefs.next, null);   // 계산 범위 끝
   assert.strictEqual(ctx.listMonthOf(1583, 1, "2026-10-15").hrefs.prev, null);

@@ -93,8 +93,8 @@ def test_bible_tab_returns_to_reading_then_to_the_book_list(desktop_context):
     page = desktop_context.new_page()
     _open_chapter(page, "john/3")
     assert page.locator("#page-title .title-home-btn").count() == 0
-    page.locator("#header-calendar").click()
-    page.wait_for_selector(".cal-grid", timeout=20_000)
+    page.locator("#header-calendar").click()   # 캘린더 탭은 오늘 줄의 목록이다(사용자 결정 2026-11-27)
+    page.wait_for_selector(".cal-rows", timeout=20_000)
     assert page.locator("#page-title .title-home-btn").count() == 0
     page.locator("#header-home").click()
     page.wait_for_url("**/john/3")
@@ -220,7 +220,7 @@ def test_bookmark_tab_does_not_offer_the_chapter_left_behind(desktop_context):
     page = desktop_context.new_page()
     _open_chapter(page, "john/3")
     page.locator("#header-calendar").click()
-    page.wait_for_selector(".cal-grid", timeout=20_000)
+    page.wait_for_selector(".cal-rows", timeout=20_000)
     page.locator("#header-bookmarks").click()
     page.wait_for_selector("#bookmark-drawer", state="visible")
     assert _panel_buttons(page) == {"save": True, "select": True}

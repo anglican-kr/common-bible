@@ -58,7 +58,7 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
   // 세례명(ADR-041 §5, §8). 값은 데이터 성인 표의 성인 식별자(`sanctoral.json`의 `saints[].id`, 무작위 6자)이고 빈 문자열은
   // 선택 안 함이다. 해제를 빈 문자열로 저장하는 까닭은 소속교회와 같다.
   const BAPTISMAL_SAINT_KEY = "bible-baptismal-saint";
-  // ADR-038 §1 — 캘린더 탭이 돌아갈 마지막 캘린더 보기의 주소. 앱을 다시 열어도 이어진다(사용자 결정 2026-11-07). 로컬 전용.
+  // ADR-038 §1 — 마지막 캘린더 보기의 주소. 전례독서 머리의 오른쪽 단추가 쓴다(캘린더 탭은 2026-11-27부터 쓰지 않는다). 앱을 다시 열어도 이어진다(사용자 결정 2026-11-07). 로컬 전용.
   const CALENDAR_LAST_VIEW_KEY = "bible-calendar-last-view";
   const SEARCH_HISTORY_MAX = 30; // storage cap (LRU)
 

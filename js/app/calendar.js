@@ -310,7 +310,8 @@ function buildMonthGrid(y, m, today, resolve) {
   return {
     year: y, month: m, title: `${y}년 ${m}월`, shortTitle: `${y}.${String(m).padStart(2, "0")}`, weeks,
     hrefs: {
-      prev: monthStepPath(y, m, -1, today), next: monthStepPath(y, m, 1, today), today: "/calendar",
+      // 「오늘」은 오늘의 전례독서로 간다(사용자 결정 2026-11-27). 오늘 줄은 탭 바의 캘린더를 다시 누르면 간다
+      prev: monthStepPath(y, m, -1, today), next: monthStepPath(y, m, 1, today), today: "/lectionary",
       // 보던 달을 유지한다. 이번 달은 오늘 줄이고 다른 달은 그 달 1일의 줄이다(ADR-038 §2).
       view: today.slice(0, 7) === key ? "/calendar/list" : `/calendar/list/${key}-01`,
     },
@@ -581,7 +582,8 @@ function listDatesAfter(date, n) {
 function listMonthOf(y, m, today) {
   return {
     year: y, month: m, title: `${y}년 ${m}월`, shortTitle: `${y}.${String(m).padStart(2, "0")}`,
-    hrefs: { prev: listStepPath(y, m, -1, today), next: listStepPath(y, m, 1, today), today: "/calendar/list", view: monthPathOf(y, m, today) },
+    // 「오늘」은 오늘의 전례독서로 간다(사용자 결정 2026-11-27)
+    hrefs: { prev: listStepPath(y, m, -1, today), next: listStepPath(y, m, 1, today), today: "/lectionary", view: monthPathOf(y, m, today) },
   };
 }
 
@@ -969,9 +971,14 @@ function placePicker() {
   const p = picker;
   if (!s || !p) return;
   if (!window.matchMedia(LARGE_LAYOUT_QUERY).matches) {
-    const top = Math.max(Math.round(barBottom()), 0);
+    // 판은 내림으로 잰다. 반올림하면 상단 바의 아래 끝(예: 60.6px)과 판 사이에 1px이 안 되는 틈이 생기거나(올림일 때), 뒤 가림이 상단 바의
+    // 아래 끝을 덮어(내림일 때) 판이 내려오는 동안 어두운 색이 선처럼 보였다(사용자 보고 2026-11-27). 판이 상단 바를 1px 안쪽으로 덮는 것은
+    // 보이지 않는다. 뒤 가림은 잰 값 그대로 둔다. 올림하면 판이 좁은 때(가로 화면, 판은 --max-width) 판 양옆에 어둡게 하지 않은 틈이 밝은 선으로 남는다
+    const bottom = barBottom();
+    const top = Math.max(Math.floor(bottom), 0);
     p.panel.style.left = "";
-    p.panel.style.top = p.scrim.style.top = `${top}px`;
+    p.panel.style.top = `${top}px`;
+    p.scrim.style.top = `${Math.max(bottom, 0)}px`;
     // 화면이 낮으면 판이 화면 아래까지 온다. 홈 표시줄의 자리는 비운다
     p.panel.style.maxHeight = `calc(${Math.max(window.innerHeight - top - PICKER_POPOVER_GAP, 0)}px - env(safe-area-inset-bottom, 0px))`;
     return;
