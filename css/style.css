@@ -374,6 +374,8 @@ body {
      자동으로 무거운 alpha 로 치환되므로 별도 다크 규칙 불필요. */
   box-shadow: var(--shadow-3);
 }
+/* 캘린더 화면은 스크롤해도 상단 바 아래에 그림자를 두지 않는다. 목록은 고정된 주간 라벨이 상단 바에 붙어 경계가 따로 있다(사용자 결정 2026-11-27). */
+body:has(#app .calendar) #sticky-group.scrolled { box-shadow: none; }
 
 /* Book-list page (ADR-025 개정 2026-06-09): a pinned bottom gap below the
    division-tab strip. The gap lives in the sticky region (not in .book-list /
@@ -1080,6 +1082,9 @@ body.cites-shown .lect-bracket--chips-off { display: none; }
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
 #app:has(.calendar) { padding-top: var(--space-4); }
+/* 목록은 좌우 여백 없이 화면 끝까지 줄을 그린다. 날짜 칸이 화면 왼쪽 끝에 붙고, 글은 제 안쪽 여백(--space-4)만큼 들어간다(사용자 결정
+   2026-11-27). 북마크 탭과 같다. */
+#app:has(.cal-list) { padding-left: 0; padding-right: 0; }
 /* 머리가 가장 긴 달(「2027년 12월」)과 양옆 칸을 담지 못하면 모든 달을 「2027.12」로 줄인다(사용자 결정 2026-11-05). 달마다 따로 재면
    달을 넘길 때 표기가 바뀐다. 15.9rem은 머리 폭의 기준이다. 기본 글자(18px)면 286px이라 폭 320px 화면(머리 288px)까지 전체 이름이고,
    글자 크기와 함께 커진다. 전체 이름은 .sr-only처럼 숨겨 스크린 리더가 읽는다. 글자 칸은 전례독서의 날짜(「26.12.28」)가 들어가는 폭까지 줄인다. */
@@ -1202,7 +1207,7 @@ a.cal-cell:focus-visible { background: var(--bg-card); }
 html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week-h) + 8px); }
 .cal-list-month {
   margin: 0;
-  padding: var(--space-6) 0 var(--space-2);
+  padding: var(--space-6) var(--space-4) var(--space-2);
   font-size: var(--font-sm);
   font-weight: 600;
   line-height: var(--leading-snug);
@@ -1283,6 +1288,10 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
   line-height: var(--leading-snug);
   color: var(--text-secondary);
 }
+/* 목록의 대재일, 소재일, 기도 주간, 교회 축성일은 한 줄에 가운뎃점으로 잇는다(사용자 결정 2026-11-27). 가운뎃점은 앞 항목에 붙여
+   줄이 바뀌어도 줄 머리에 오지 않는다(장절의 가운뎃점과 같다). */
+.cal-list .cal-row-meta { column-gap: var(--space-1); }
+.cal-list .cal-row-meta > span:not(:last-child)::after { content: "·"; margin-left: var(--space-1); }
 .cal-row-color {
   display: inline-flex;
   align-items: center;
@@ -1308,7 +1317,20 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
    (calendar.js weekHeadHeight). 날짜 칸은 줄 높이를 채우는 다른 바탕이고, 날짜, 전례색 막대, 요일을 위에서부터 적는다. */
 :root { --cal-week-h: calc(var(--font-sm) * var(--leading-snug) + 2 * var(--space-2) + 1px); }
 .cal-week-group { padding-top: var(--space-3); }
-.cal-list .cal-rows > li:first-child { border-top: 0; }
+/* 날과 날 사이의 선은 상단 바 아래의 선처럼 양 끝으로 갈수록 투명해진다(#app-header::after, 사용자 결정 2026-11-27).
+   No z-index: a positioned box with z-index auto already paints above the row's date-cell and hover backgrounds, and
+   z-index 1 would tie with the sticky .cal-week and paint over it (later in the DOM) as rows scroll under the label. */
+.cal-list .cal-rows > li { position: relative; border-top: 0; }
+.cal-list .cal-rows > li + li::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--border) 20%, var(--border) 80%, transparent);
+  pointer-events: none;
+}
 .cal-week {
   position: sticky;
   top: var(--top-bar-h, 0px);
@@ -1316,7 +1338,7 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
   box-sizing: border-box;
   height: var(--cal-week-h);
   margin: 0;
-  padding: var(--space-2) 0;
+  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-6);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1377,7 +1399,7 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
 /* 오늘 칸은 진한 바탕이라 라이트 모드에서도 날짜 글자색의 가는 테두리를 두른다. */
 .cal-list .cal-row--today .cal-row-bar { box-shadow: 0 0 0 1px var(--cal-today-text); }
 .cal-list .cal-row-body {
-  padding: var(--space-3) 0 var(--space-3) var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
   container-type: inline-size;
 }
 /* 장절: 이름 열과 장절 열. 장절 하나는 줄을 바꾸지 않는다(한 줄보다 길 때만 바꾼다). 글자를 키워 칸이 좁아지면 이름을 장절 위 한 줄에 둔다(ADR-060 §2). */

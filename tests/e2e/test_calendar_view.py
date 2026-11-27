@@ -860,22 +860,39 @@ def test_list_shows_every_day_with_the_lectionary_head_text(mobile_context):
     assert first[0] in ("2026-10-29", "2026-10-22") and first[1] == first[2] and first[3] == 0, first
     # 평일 이름 대신 그날 기리는 성인이 제목이고, 괄호 설명은 그 아래 줄이다
     leonard = _row(page, "2026-11-06")
-    assert leonard.locator(".cal-row-title").inner_text() == "레오나드 축일"
-    assert leonard.locator(".cal-row-line").all_inner_texts() == ["은수자, 6세기", "삼흥리성당 축성일"]
+    assert leonard.locator(".cal-row-title").inner_text() == "레오나드"   # 성인 이름 뒤의 「축일」은 뗀다(사용자 결정 2026-11-27)
+    assert leonard.locator(".cal-row-subtitle").inner_text() == "은수자, 6세기"
+    assert leonard.locator(".cal-row-line:not(.cal-row-subtitle)").count() == 0
+    # 성인의 설명은 제목 바로 아래, 소재일과 축성일 줄보다 먼저다(사용자 결정 2026-11-27)
+    assert leonard.locator(".cal-row-body > *").evaluate_all("els => els.map((e) => e.className.split(' ').pop())")[:3] == \
+        ["cal-row-title", "cal-row-subtitle", "cal-row-meta"]
+    # 소재일과 교회 축성일은 한 줄에 가운뎃점으로 잇는다(사용자 결정 2026-11-27). 가운뎃점은 앞 항목에 붙어 줄 머리에 오지 않는다
+    assert leonard.locator(".cal-row-meta > span").all_inner_texts() == ["소재일", "삼흥리성당 축성"]   # 「축성일」은 「축성」으로 줄인다
+    assert leonard.locator(".cal-row-meta").evaluate("m => getComputedStyle(m.children[0], '::after').content") == '"·"'
     for date in ("2026-12-07", "2026-12-24"):
         _open_list(page, f"calendar/list/{date}")
         row = _row(page, date)
         title = row.locator(".cal-row-title").inner_text()
-        lines = row.locator(".cal-row-line").all_inner_texts()
+        if row.locator(".cal-row-subtitle").count():   # 제목의 괄호 설명은 제목 아래 줄이다(성 니콜라)
+            title = f"{title}({row.locator('.cal-row-subtitle').inner_text()})"
+        lines = row.locator(".cal-row-line:not(.cal-row-subtitle)").all_inner_texts()
+        meta = row.locator(".cal-row-meta > span").all_inner_texts()
+        week = row.evaluate("a => a.closest('li').dataset.week")
         row.click()
         page.wait_for_url(f"**/lectionary/{date}")
         page.wait_for_selector(".lect-day", timeout=20_000)
         drop = lambda t: re.sub(r"^(.+ \d+주) [월화수목금토]요일(?=$| ·)", r"\1", t)   # 줄은 절기와 주 번호로 만든 이름의 요일을 뺀다
         assert drop(page.inner_text(".lect-day")) == title, date
-        shown = (page.locator(".lect-day-note").all_inner_texts()
-                 + page.locator(".lect-day-saint").all_inner_texts()
+        # 옮김 안내(.lect-day-note)는 목록에 적지 않고, 축성일은 소재일과 같은 줄(meta)이다(사용자 결정 2026-11-27)
+        notes = page.locator(".lect-day-note").all_inner_texts()
+        assert not any(n in lines or n in meta for n in notes), date
+        short = lambda t: re.sub(r" (축성|축복)일$", r" \1", t)   # 목록은 「축성일」, 「축복일」을 줄인다(사용자 결정 2026-11-27)
+        shown = ([t for t in page.locator(".lect-day-saint").all_inner_texts() if short(t) not in meta]
                  + [drop(t.replace(chr(10), "")) for t in page.locator(".lect-choice-text").all_inner_texts()])
-        assert shown == lines, date
+        bare = lambda t: re.sub(r" (?:축일|기념일)$", "", t)   # 목록은 이름 뒤의 「축일」, 「기념일」을 뗀다(사용자 결정 2026-11-27)
+        assert [bare(t) for t in shown if t != week] == lines, date
+        if date == "2026-12-07":
+            assert notes == ["12월 6일에서 옮겨 옴"], notes   # 전례독서 화면에는 그대로 있다
 
 
 def test_week_head_stays_under_the_bar_until_the_next_week_pushes_it_away(mobile_context):

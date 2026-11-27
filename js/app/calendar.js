@@ -76,7 +76,7 @@ const PAGE_TITLE = LITURGICAL_VIEWS.calendar.title;
  * 목록 줄 하나 — 순수 함수 `listRowOf` 의 반환.
  * @typedef {{
  *   date: string, day: number, weekday: string, isSunday: boolean, week: string, href: string, isToday: boolean, level: "major" | "minor" | "",
- *   title: string, colors: { code: string, name: string, or: boolean }[], meta: string[], lines: string[], readings: ListReading[], label: string,
+ *   title: string, subtitle: string | null, colors: { code: string, name: string, or: boolean }[], meta: string[], lines: string[], readings: ListReading[], label: string,
  * }} ListRow
  */
 /**
@@ -450,26 +450,32 @@ function weekLabelOf(resolved, sundayOf, mondayOf) {
 
 /**
  * 줄의 제목과 그 아래 줄(ADR-060 §2). 주간 라벨과 같은 평일 이름(「연중 34주」)은 적지 않고, 그 자리에 그날 기리는 성인이나 기념일을 올린다.
- * 올린 이름의 괄호 설명은 제목 아래 한 줄로 내린다(「클레멘트(로마의 주교, 순교자, 100년경) 축일」은 「클레멘트 축일」과 「로마의 주교, 순교자,
- * 100년경」). 괄호가 둘 이상인 이름은 나누지 않는다. 대표가 아닌 이름 줄(교회 축성일, 옮겨 온 축일의 안내)은 그대로다. 다른 전례일로 내려간
+ * 올린 이름의 괄호 설명은 제목 아래 한 줄로 내린다(「클레멘트(로마의 주교, 순교자, 100년경) 축일」은 「클레멘트」와 「로마의 주교, 순교자,
+ * 100년경」). 괄호가 둘 이상인 이름은 나누지 않는다. 대표가 아닌 줄은 순서를 그대로 두고 이름 뒤의 「축일」, 「기념일」만 뗀다. 다른 전례일로 내려간
  * 평일 이름이 주간 라벨과 같으면(축성일이 제목인 날의 「연중 3주」) 그 줄도 적지 않는다(사용자 결정 2026-11-27).
  * @param {string} title  요일을 뺀 제목
  * @param {string[]} all  제목 아래의 줄
  * @param {string} week  주간 라벨
- * @returns {{ title: string, lines: string[], raised: boolean }}
+ * @returns {{ title: string, subtitle: string | null, lines: string[], raised: boolean }}
  */
 function rowTitleOf(title, all, week) {
+  // 이름 뒤의 「축일」, 「기념일」은 제목에도 아래 줄에도 적지 않는다(사용자 결정 2026-11-27). 어느 줄을 올릴지는 이 꼬리말로 고르므로 고른 뒤에 뗀다
+  const bare = (/** @type {string} */ line) => line.replace(/ (?:축일|기념일)$/, "");
   const lines = all.filter((line) => line !== week);
-  if (title !== week) return { title, lines, raised: false };
+  if (title !== week) {
+    // 제목의 괄호 설명도 제목 아래 첫 줄로 내린다(「성 니콜라(대한성공회 수호성인, 미라의 주교, 326년)」, 사용자 결정 2026-11-27)
+    const own = title.match(/^([^()]+)\(([^()]+)\)$/);
+    return { title: own ? own[1] : title, subtitle: own ? own[2] : null, lines: lines.map(bare), raised: false };
+  }
   // 세례명의 성인은 이름 줄이 아니라 다른 전례일의 줄에 있으므로(ADR-041 §5) 차례와 상관없이 첫 축일, 기념일 줄을 올린다
   const at = lines.findIndex((line) => / (?:축일|기념일)$/.test(line));
-  if (at < 0) return { title: "", lines, raised: false };
-  const rest = lines.filter((_, i) => i !== at);
+  if (at < 0) return { title: "", subtitle: null, lines: lines.map(bare), raised: false };
+  const rest = lines.filter((_, i) => i !== at).map(bare);
   // 괄호가 하나일 때만 나눈다. 둘이면(「바실(주교, 379년)과 나지안조의 그레고리(주교, 389년) 축일」) 이름 전체가 제목이다
-  const paren = lines[at].match(/^([^()]+)\(([^()]+)\) (축일|기념일)$/);
+  const paren = lines[at].match(/^([^()]+)\(([^()]+)\) (?:축일|기념일)$/);
   return paren
-    ? { title: `${paren[1]} ${paren[3]}`, lines: [paren[2], ...rest], raised: true }
-    : { title: lines[at], lines: rest, raised: true };
+    ? { title: paren[1], subtitle: paren[2], lines: rest, raised: true }
+    : { title: bare(lines[at]), subtitle: null, lines: rest, raised: true };
 }
 
 /**
@@ -486,9 +492,20 @@ function listRowOf(m, today, week) {
   const head = headLinesOf(m);
   const p = /** @type {{ y: number, m: number, d: number }} */ (parseDate(date));
   const weekday = dayOfWeek(date);
-  const meta = head.meta.filter((item) => item.kind !== "cycle").map((item) => item.text);
-  const shown = rowTitleOf(rowTextOf(head.title), [...head.notes, ...head.names, ...head.others.map(rowTextOf)], week);
-  const { title, lines } = shown;
+  // 대재일, 소재일, 기도 주간과 교회 축성일은 한 줄에 가운뎃점으로 잇는다. 옮긴 축일의 안내(「12월 6일에서 옮겨 옴」)는 목록에 적지 않는다.
+  // 전례독서 화면에는 그대로 있다(사용자 결정 2026-11-27, 줄을 짧게 하려고)
+  const dedications = new Set(m.dedicationLines);
+  // 교회 축성일과 축복일은 목록에서 「축성」, 「축복」으로 줄인다(「강릉성당 축성」, 사용자 결정 2026-11-27). 제목이 소속교회의 축성일이어도 같다
+  const short = (/** @type {string} */ text) => text.replace(/ (축성|축복)일$/, " $1");
+  const meta = [...head.meta.filter((item) => item.kind !== "cycle").map((item) => item.text), ...m.dedicationLines.map(short)];
+  const names = head.names.filter((line) => !dedications.has(line));
+  // 주일로 옮겨 지킬 수 있다는 안내(「1월 4일로 옮겨 지킬 수 있음」)는 실제로 옮긴 것이 아니라 고를 수 있다는 뜻이라 남긴다(사용자 결정 2026-11-27)
+  // 설과 겹쳐 옮겨 온 해(2049-02-03)는 안내가 「2월 2일에서 옮겨 옴 · 1월 31일로 옮겨 지킬 수 있음」으로 이어져 있어 항목마다 고른다
+  const optional = head.notes.flatMap((note) => note.split(" · ").filter((part) => / 옮겨 지킬 수 있음$/.test(part)));
+  // 다른 전례일로 내려간 소속교회의 축성일(주일, 축일과 겹친 날)도 「축성」으로 줄인다
+  const shown = rowTitleOf(rowTextOf(head.title), [...optional, ...names, ...head.others.map((o) => short(rowTextOf(o)))], week);
+  const { subtitle, lines } = shown;
+  const title = short(shown.title);
   const isToday = date === today;
   const colorNamesText = m.colors.map((c) => COLOR_LABEL[c] || c).join(m.colorsOr ? " 또는 " : " · ");
   const slots = m.slots || [];
@@ -500,12 +517,12 @@ function listRowOf(m, today, week) {
   return {
     date, day: p.d, weekday: WEEKDAY_KO[weekday], isSunday: weekday === 0, week, href: `/lectionary/${date}`, isToday,
     level,
-    title,
+    title, subtitle,
     colors: m.colors.map((c, i) => ({ code: c, name: COLOR_LABEL[c] || c, or: m.colorsOr && i > 0 })),
     meta, lines, readings,
     // 보이는 글을 모두 싣는다(WCAG 2.5.3). 색은 막대뿐이라 이름으로 싣는다.
     label: [
-      isToday ? "오늘" : null, `${p.m}월 ${p.d}일 ${CAL_WEEKDAY_FULL[weekday]}`, title, colorNamesText, ...meta, ...lines,
+      isToday ? "오늘" : null, `${p.m}월 ${p.d}일 ${CAL_WEEKDAY_FULL[weekday]}`, title, subtitle, colorNamesText, ...meta, ...lines,
       ...readings.map((r) => [r.name, r.note, r.refs.join(", ")].filter(Boolean).join(" ")),
     ].filter(Boolean).join(", "),
   };
@@ -1245,6 +1262,8 @@ function buildRow(row) {
   a.appendChild(date);
   const body = el("span", { className: "cal-row-body" });
   if (row.title) body.appendChild(el("span", { className: "cal-row-title" }, row.title));
+  // 성인의 설명은 제목 바로 아래, 소재일과 축성일 줄보다 먼저다(사용자 결정 2026-11-27)
+  if (row.subtitle) body.appendChild(el("span", { className: "cal-row-line cal-row-subtitle" }, row.subtitle));
   const meta = buildRowMeta(row);
   if (meta) body.appendChild(meta);
   for (const line of row.lines) body.appendChild(el("span", { className: "cal-row-line" }, line));
