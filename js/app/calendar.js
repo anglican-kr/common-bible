@@ -76,7 +76,7 @@ const PAGE_TITLE = LITURGICAL_VIEWS.calendar.title;
  * 목록 줄 하나 — 순수 함수 `listRowOf` 의 반환.
  * @typedef {{
  *   date: string, day: number, weekday: string, isSunday: boolean, week: string, href: string, isToday: boolean, level: "major" | "minor" | "",
- *   title: string, subtitle: string | null, colors: { code: string, name: string, or: boolean }[], meta: string[], lines: string[], readings: ListReading[], label: string,
+ *   title: string, subtitle: string | null, feasts: string[], colors: { code: string, name: string, or: boolean }[], meta: string[], lines: string[], readings: ListReading[], label: string,
  * }} ListRow
  */
 /**
@@ -456,26 +456,32 @@ function weekLabelOf(resolved, sundayOf, mondayOf) {
  * @param {string} title  요일을 뺀 제목
  * @param {string[]} all  제목 아래의 줄
  * @param {string} week  주간 라벨
- * @returns {{ title: string, subtitle: string | null, lines: string[], raised: boolean }}
+ * @returns {{ title: string, subtitle: string | null, feasts: string[], lines: string[], raised: boolean }}
  */
 function rowTitleOf(title, all, week) {
   // 이름 뒤의 「축일」, 「기념일」은 제목에도 아래 줄에도 적지 않는다(사용자 결정 2026-11-27). 어느 줄을 올릴지는 이 꼬리말로 고르므로 고른 뒤에 뗀다
   const bare = (/** @type {string} */ line) => line.replace(/ (?:축일|기념일)$/, "");
+  // 그날 기리는 다른 성인의 축일은 축성일, 기념일 줄보다 위에 둔다(사용자 결정 2026-11-27)
+  const isFeast = (/** @type {string} */ line) => / 축일$/.test(line);
+  /** @param {string[]} from */
+  const split = (from) => ({ feasts: from.filter(isFeast).map(bare), lines: from.filter((line) => !isFeast(line)).map(bare) });
   const lines = all.filter((line) => line !== week);
   if (title !== week) {
     // 제목의 괄호 설명도 제목 아래 첫 줄로 내린다(「성 니콜라(대한성공회 수호성인, 미라의 주교, 326년)」, 사용자 결정 2026-11-27)
     const own = title.match(/^([^()]+)\(([^()]+)\)$/);
-    return { title: own ? own[1] : title, subtitle: own ? own[2] : null, lines: lines.map(bare), raised: false };
+    return { title: own ? own[1] : title, subtitle: own ? own[2] : null, ...split(lines), raised: false };
   }
-  // 세례명의 성인은 이름 줄이 아니라 다른 전례일의 줄에 있으므로(ADR-041 §5) 차례와 상관없이 첫 축일, 기념일 줄을 올린다
-  const at = lines.findIndex((line) => / (?:축일|기념일)$/.test(line));
-  if (at < 0) return { title: "", subtitle: null, lines: lines.map(bare), raised: false };
-  const rest = lines.filter((_, i) => i !== at).map(bare);
+  // 세례명의 성인은 이름 줄이 아니라 다른 전례일의 줄에 있으므로(ADR-041 §5) 차례와 상관없이 첫 축일 줄을 올린다. 축일이 없을 때만
+  // 기념일 줄을 올린다. 기념일 줄이 앞에 있어도 축일이 먼저다(사용자 결정 2026-11-27)
+  const feastAt = lines.findIndex(isFeast);
+  const at = feastAt >= 0 ? feastAt : lines.findIndex((line) => / 기념일$/.test(line));
+  if (at < 0) return { title: "", subtitle: null, ...split(lines), raised: false };
+  const rest = split(lines.filter((_, i) => i !== at));
   // 괄호가 하나일 때만 나눈다. 둘이면(「바실(주교, 379년)과 나지안조의 그레고리(주교, 389년) 축일」) 이름 전체가 제목이다
   const paren = lines[at].match(/^([^()]+)\(([^()]+)\) (?:축일|기념일)$/);
   return paren
-    ? { title: paren[1], subtitle: paren[2], lines: rest, raised: true }
-    : { title: bare(lines[at]), subtitle: null, lines: rest, raised: true };
+    ? { title: paren[1], subtitle: paren[2], ...rest, raised: true }
+    : { title: bare(lines[at]), subtitle: null, ...rest, raised: true };
 }
 
 /**
@@ -504,7 +510,7 @@ function listRowOf(m, today, week) {
   const optional = head.notes.flatMap((note) => note.split(" · ").filter((part) => / 옮겨 지킬 수 있음$/.test(part)));
   // 다른 전례일로 내려간 소속교회의 축성일(주일, 축일과 겹친 날)도 「축성」으로 줄인다
   const shown = rowTitleOf(rowTextOf(head.title), [...optional, ...names, ...head.others.map((o) => short(rowTextOf(o)))], week);
-  const { subtitle, lines } = shown;
+  const { subtitle, feasts, lines } = shown;
   const title = short(shown.title);
   const isToday = date === today;
   const colorNamesText = m.colors.map((c) => COLOR_LABEL[c] || c).join(m.colorsOr ? " 또는 " : " · ");
@@ -517,12 +523,12 @@ function listRowOf(m, today, week) {
   return {
     date, day: p.d, weekday: WEEKDAY_KO[weekday], isSunday: weekday === 0, week, href: `/lectionary/${date}`, isToday,
     level,
-    title, subtitle,
+    title, subtitle, feasts,
     colors: m.colors.map((c, i) => ({ code: c, name: COLOR_LABEL[c] || c, or: m.colorsOr && i > 0 })),
     meta, lines, readings,
     // 보이는 글을 모두 싣는다(WCAG 2.5.3). 색은 막대뿐이라 이름으로 싣는다.
     label: [
-      isToday ? "오늘" : null, `${p.m}월 ${p.d}일 ${CAL_WEEKDAY_FULL[weekday]}`, title, subtitle, colorNamesText, ...meta, ...lines,
+      isToday ? "오늘" : null, `${p.m}월 ${p.d}일 ${CAL_WEEKDAY_FULL[weekday]}`, title, subtitle, colorNamesText, ...feasts, ...meta, ...lines,
       ...readings.map((r) => [r.name, r.note, r.refs.join(", ")].filter(Boolean).join(" ")),
     ].filter(Boolean).join(", "),
   };
@@ -1264,6 +1270,7 @@ function buildRow(row) {
   if (row.title) body.appendChild(el("span", { className: "cal-row-title" }, row.title));
   // 성인의 설명은 제목 바로 아래, 소재일과 축성일 줄보다 먼저다(사용자 결정 2026-11-27)
   if (row.subtitle) body.appendChild(el("span", { className: "cal-row-line cal-row-subtitle" }, row.subtitle));
+  for (const feast of row.feasts) body.appendChild(el("span", { className: "cal-row-line" }, feast));
   const meta = buildRowMeta(row);
   if (meta) body.appendChild(meta);
   for (const line of row.lines) body.appendChild(el("span", { className: "cal-row-line" }, line));
@@ -1465,6 +1472,38 @@ function listTitleOf(model) {
   return `${model.title} ${PAGE_TITLE} 목록`;
 }
 
+/**
+ * 상단 바 아래에 고정된 주간 라벨에만 그림자를 둔다(`.is-stuck`). 캘린더 화면은 상단 바의 그림자를 없애고, 그 경계를 고정된 라벨 아래로
+ * 옮긴다(사용자 결정 2026-11-27). CSS로는 고정된 상태를 알 수 없어(scroll-state 질의는 Safari에 없다) 스크롤, 화면 크기, 상단 바 높이가 바뀔
+ * 때마다 잰다. 다음 주의 라벨에 밀려 올라가는 동안도 고정된 것으로 본다.
+ * @param {Element} root
+ */
+function markStuckWeek(root) {
+  const heads = [...root.querySelectorAll(".cal-week")];
+  if (!heads.length) return;
+  // Compare with the labels' own sticky offset (--top-bar-h), not barBottom(): a ResizeObserver updates that variable a frame
+  // after the bar changes height, and the label sits wherever the variable says.
+  const top = parseFloat(getComputedStyle(heads[0]).top) || 0;
+  // A label is pinned while its week group straddles the line: the group started above it and has not ended yet. That also
+  // covers the label being pushed off by the next week's, so the shadow does not blink out between two weeks.
+  // Measure every label first, then toggle: a class change between reads would force a style recalc per label.
+  // The group has top padding, so a group that started just above the line still shows its label below it, unpinned: also
+  // require the label itself to be at (or pushed above) the line.
+  // Groups are in document order, so once one starts below the line every later one does too: skip measuring those.
+  let below = false;
+  const states = heads.map((head) => {
+    if (below) return { head, stuck: false };
+    const box = /** @type {HTMLElement} */ (head.parentElement).getBoundingClientRect();
+    if (box.top >= top - 0.5) {
+      below = true;
+      return { head, stuck: false };
+    }
+    const at = head.getBoundingClientRect().top;
+    return { head, stuck: box.bottom > top + 0.5 && at <= top + 0.5 };
+  });
+  for (const { head, stuck } of states) if (head.classList.contains("is-stuck") !== stuck) head.classList.toggle("is-stuck", stuck);
+}
+
 /** 상단 바의 달과 문서 제목을 맨 위 줄의 달로 맞춘다(ADR-038 §2). @param {ListView} list */
 function followTopMonth(list) {
   const ym = sectionUnderBar(list.root)?.dataset.month;
@@ -1528,6 +1567,10 @@ function startListScroll(list) {
   let lastScrollAt = 0;
   let timer = 0;
   let frame = 0;
+  /** 라벨 그림자를 다음 프레임에 한 번만 잰다. */
+  let markFrame = 0;
+  /** @type {ResizeObserver | null} */
+  let barObserver = null;
 
   /** 콜백은 한 번 나온 뒤 경계가 계속 가까워도 다시 나오지 않으므로, 다시 관찰해 다음 프레임의 콜백을 받는다. @param {HTMLElement} edge */
   const observeAgain = (edge) => {
@@ -1557,6 +1600,8 @@ function startListScroll(list) {
     observer.disconnect();
     clearTimeout(timer);
     cancelAnimationFrame(frame);
+    cancelAnimationFrame(markFrame);
+    barObserver?.disconnect();
     if (stopList === stop) stopList = null;
   };
   // 낡은 라우트가 남기면 새 화면의 주소를 덮어쓴다. 다른 화면으로 가는 동안에는 이 목록이 아직 문서에 남아 있을 수 있다.
@@ -1628,9 +1673,28 @@ function startListScroll(list) {
     armSettle();
     frame ||= requestAnimationFrame(() => {
       frame = 0;
-      if (root.isConnected) followTopMonth(list);
+      if (root.isConnected) {
+        followTopMonth(list);
+        markStuckWeek(root);
+      }
     });
   }, { passive: true, signal });
+  // 스크롤하지 않아도 라벨의 고정 상태가 바뀌는 때(같은 자리로 다시 그리기, 화면 크기나 상단 바 높이의 변화)에도 잰다.
+  // 다시 그린 목록은 scrollUnderBar가 다음 프레임에 한 번 더 자리를 잡으므로, 그 뒤의 프레임에서 잰다.
+  const markNextFrame = () => {
+    markFrame ||= requestAnimationFrame(() => {
+      markFrame = 0;
+      if (root.isConnected) markStuckWeek(root);
+    });
+  };
+  markNextFrame();
+  window.addEventListener("resize", markNextFrame, { passive: true, signal });
+  // 창 크기는 그대로이고 상단 바만 높아지거나 낮아지는 때(데스크톱에서 접히는 윗줄, 이어 읽기 배너, 글자 크기)
+  const sticky = document.getElementById("sticky-group");
+  if (sticky && typeof ResizeObserver === "function") {
+    barObserver = new ResizeObserver(markNextFrame);
+    barObserver.observe(sticky);
+  }
   window.addEventListener("scrollend", () => {
     moving = false;
     armSettle();
