@@ -2295,5 +2295,5 @@ function nextReadingHref(found) {
 export {
   renderLectionaryView, buildLectionaryModel,
   shortName, statusSuffix, isGrid, todayKey, commitDateBar, headLinesOf, lectionaryModelOf,
-  CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO,
+  CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO, TRACK_NAME,
 };

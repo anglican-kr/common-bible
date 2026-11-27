@@ -1018,7 +1018,7 @@ export interface AppHelpers {
    * 그 요소의 위쪽이 상단 바 바로 아래에 오게 스크롤한다. 데스크톱은 윗줄이 접힌 뒤 한 번 더 맞추고, 그사이 독자가 스크롤을 시작하면 맞추지 않는다.
    * 캘린더 목록의 주소 줄과 이어 읽기의 절이 쓴다.
    */
-  scrollUnderBar: (target: Element) => void;
+  scrollUnderBar: (target: Element, below?: number) => void;
   // The large-layout condition (ADR-050 §2) — the app's area at least 700px wide and 600px tall. The small layout is
   // its exact complement. One string for every module that asks.
   LARGE_LAYOUT_QUERY: string;

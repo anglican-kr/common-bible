@@ -36,7 +36,7 @@ import {
 } from "./views.js";
 import {
   shortName, statusSuffix, isGrid, todayKey, commitDateBar, headLinesOf, lectionaryModelOf,
-  CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO,
+  CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO, TRACK_NAME,
 } from "./lectionary.js";
 
 // barBottom: 상단 바의 아래쪽(화면 위에서 잰 값).
@@ -71,11 +71,12 @@ const PAGE_TITLE = LITURGICAL_VIEWS.calendar.title;
  *   hrefs: { prev: string | null, next: string | null, today: string, view: string },
  * }} CalendarMonth
  */
+/** 목록 줄의 장절 한 줄 — 「감사성찬례」와 트랙 이름, 장절들(ADR-060 §2). @typedef {{ name: string, note: string | null, refs: string[] }} ListReading */
 /**
  * 목록 줄 하나 — 순수 함수 `listRowOf` 의 반환.
  * @typedef {{
- *   date: string, day: number, weekday: string, href: string, isToday: boolean, level: "major" | "minor" | "",
- *   title: string, colors: { code: string, name: string, or: boolean }[], meta: string[], mark: string | null, lines: string[], label: string,
+ *   date: string, day: number, weekday: string, isSunday: boolean, week: string, href: string, isToday: boolean, level: "major" | "minor" | "",
+ *   title: string, colors: { code: string, name: string, or: boolean }[], meta: string[], lines: string[], readings: ListReading[], label: string,
  * }} ListRow
  */
 /**
@@ -391,32 +392,117 @@ function rowTextOf(text) {
 }
 
 /**
- * 목록 줄 하나(ADR-038 §2 「목록 보기」, 사용자 결정 2026-11-07). 글은 전례독서 제목 영역과 같고(`headLinesOf`), 다른 전례일은 줄 전체가
- * 링크라 누를 수 없는 글이다. 선택 대체색은 싣지 않는다(DESIGN.md §2). 전례년 첫날은 해 대신 「나해 시작」을 단다.
+ * 주 번호가 없고 주일과 절기가 다른 날의 주 머리(ADR-060 §2). 주 중간에 바뀐 절기다. 성탄일부터 다음 주일 전까지는 「성탄 후 주간」, 재의 수요일부터
+ * 토요일까지는 「사순 시작」이다(사용자 결정 2026-11-27). 나머지 셋은 계산 범위 끝에서 주일을 풀지 못할 때만 쓴다.
+ */
+const SEASON_HEAD = { advent: "대림", christmas: "성탄 후 주간", lent: "사순 시작", easter: "부활", ordinary: "연중" };
+/**
+ * 주 번호가 없고 그 주 평일에도 주 번호가 없는 주일의 주 머리. 성지주일은 「성주간」, 성탄일이 주일이면 「성탄 후 주간」이다(ADR-060 §2, 사용자 결정 2026-11-27).
+ */
+const UNNUMBERED_SUNDAY_HEAD = { lent: "성주간", christmas: "성탄 후 주간" };
+
+/**
+ * 그날 격자의 이름에서 읽는 주 이름 — 「연중 34주일」과 「연중 34주 화요일」은 「연중 34주」다. 주 번호가 없으면(「성령강림대축일」,
+ * 「성탄 8일 전」, 「재의 수요일 후 목요일」, 「성주간 월요일」) null이다.
+ * @param {ResolvedDate | null} resolved
+ * @returns {string | null}
+ */
+function ownWeekOf(resolved) {
+  const grid = resolved?.candidates.find(isGrid);
+  const name = grid ? String(grid.observance.name || "") : "";
+  const numbered = name.match(/^(.+ \d+주)(?:일| [월화수목금토]요일)$/);
+  return numbered ? numbered[1] : null;
+}
+
+/**
+ * 주일의 주 머리. 주일이 주 번호 없는 대축일이면 그 주 평일 독서가 속한 주를 따른다(사용자 결정 2026-11-27). 성령강림대축일의 평일은
+ * 연중 주간이라(기도서 연중 주일 구간표) 「연중 7주」 같은 이름이다. 평일에도 주 번호가 없으면 `UNNUMBERED_SUNDAY_HEAD`다.
+ * @param {ResolvedDate} sunday
+ * @param {ResolvedDate | null} monday  그다음 월요일. 계산 범위 밖이면 null
+ * @returns {string | null}
+ */
+function sundayWeekOf(sunday, monday) {
+  const season = sunday.coord.season || "";
+  return ownWeekOf(sunday) ?? ownWeekOf(monday) ?? /** @type {Record<string, string>} */ (UNNUMBERED_SUNDAY_HEAD)[season] ?? null;
+}
+
+/**
+ * 그날이 속한 주의 이름 — 목록의 주 머리(ADR-060 §2). 주 번호가 있으면 그것이고, 주일은 `sundayWeekOf`, 주 번호가 없는 평일은 그 주
+ * 주일의 머리를 잇는다. 주 중간에 절기가 바뀌어 주일과 절기가 다르면 `SEASON_HEAD`다(대림 4주 안의 성탄일은 「성탄 후 주간」, 재의
+ * 수요일은 「사순 시작」).
+ * @param {ResolvedDate} resolved
+ * @param {ResolvedDate | null} sunday  그 주의 주일(그날이 주일이면 그날). 계산 범위 밖이면 null
+ * @param {ResolvedDate | null} monday  그 주의 월요일. 계산 범위 밖이면 null
+ * @returns {string}
+ */
+function weekLabelOf(resolved, sunday, monday) {
+  const own = ownWeekOf(resolved);
+  if (own) return own;
+  const season = resolved.coord.season || "";
+  if (sunday && (sunday === resolved || sunday.coord.season === season)) {
+    const head = sundayWeekOf(sunday, monday);
+    if (head) return head;
+  }
+  return /** @type {Record<string, string>} */ (SEASON_HEAD)[season] ?? "";
+}
+
+/**
+ * 줄의 제목과 그 아래 줄(ADR-060 §2). 주 머리와 같은 평일 이름(「연중 34주」)은 적지 않고, 그 자리에 그날 기리는 성인이나 기념일을 올린다.
+ * 올린 이름의 괄호 설명은 제목 아래 한 줄로 내린다(「클레멘트(로마의 주교, 순교자, 100년경) 축일」은 「클레멘트 축일」과 「로마의 주교, 순교자,
+ * 100년경」). 대표가 아닌 이름 줄(교회 축성일, 옮겨 온 축일의 안내)은 그대로다.
+ * @param {string} title  요일을 뺀 제목
+ * @param {string[]} lines  제목 아래의 줄
+ * @param {string} week  주 머리
+ * @returns {{ title: string, lines: string[], raised: boolean }}
+ */
+function rowTitleOf(title, lines, week) {
+  if (title !== week) return { title, lines, raised: false };
+  // 세례명의 성인은 이름 줄이 아니라 다른 전례일의 줄에 있으므로(ADR-041 §5) 차례와 상관없이 첫 축일, 기념일 줄을 올린다
+  const at = lines.findIndex((line) => / (?:축일|기념일)$/.test(line));
+  if (at < 0) return { title: "", lines, raised: false };
+  const rest = lines.filter((_, i) => i !== at);
+  const paren = lines[at].match(/^(.+?)\((.+)\) (축일|기념일)$/);
+  return paren
+    ? { title: `${paren[1]} ${paren[3]}`, lines: [paren[2], ...rest], raised: true }
+    : { title: lines[at], lines: rest, raised: true };
+}
+
+/**
+ * 목록 줄 하나(ADR-060 §2, ADR-038 §2 「목록 보기」). 글은 전례독서 제목 영역과 같고(`headLinesOf`), 주 머리와 같은 평일 이름은 적지 않는다(`rowTitleOf`).
+ * 해(「짝수해」, 「나해 시작」)와 색 이름은 줄에 적지 않는다. 색은 날짜 칸의 막대이고, 색 이름은 링크 이름에 싣는다. 선택 대체색은 싣지 않는다
+ * (DESIGN.md §2). 장절은 전례독서 화면이 처음 보이는 독서(기본 전례일, 첫째 세트, 기억한 트랙)다.
  * @param {LectionaryModel} m
  * @param {string} today  "YYYY-MM-DD"
+ * @param {string} week  그날이 속한 주의 이름(`weekLabelOf`)
  * @returns {ListRow}
  */
-function listRowOf(m, today) {
+function listRowOf(m, today, week) {
   const { date } = m;
   const head = headLinesOf(m);
   const p = /** @type {{ y: number, m: number, d: number }} */ (parseDate(date));
   const weekday = dayOfWeek(date);
-  const mark = calendarDay(date, m.resolved).yearStart;
-  const meta = head.meta.filter((item) => !(mark && item.kind === "cycle")).map((item) => item.text);
-  const title = rowTextOf(head.title);
-  const lines = [...head.notes, ...head.names, ...head.others.map(rowTextOf)];
+  const meta = head.meta.filter((item) => item.kind !== "cycle").map((item) => item.text);
+  const shown = rowTitleOf(rowTextOf(head.title), [...head.notes, ...head.names, ...head.others.map(rowTextOf)], week);
+  const { title, lines } = shown;
   const isToday = date === today;
   const colorNamesText = m.colors.map((c) => COLOR_LABEL[c] || c).join(m.colorsOr ? " 또는 " : " · ");
+  const slots = m.slots || [];
+  /** @type {ListReading[]} */
+  const readings = slots.length
+    ? [{ name: "감사성찬례", note: m.track ? TRACK_NAME[m.track] : null, refs: slots.map((s) => s.label).filter(Boolean) }]
+    : [];
+  const level = rowLevelOf(m) || (shown.raised ? "minor" : "");
   return {
-    date, day: p.d, weekday: WEEKDAY_KO[weekday], href: `/lectionary/${date}`, isToday,
-    level: rowLevelOf(m),
+    date, day: p.d, weekday: WEEKDAY_KO[weekday], isSunday: weekday === 0, week, href: `/lectionary/${date}`, isToday,
+    level,
     title,
     colors: m.colors.map((c, i) => ({ code: c, name: COLOR_LABEL[c] || c, or: m.colorsOr && i > 0 })),
-    meta, mark, lines,
-    // 보이는 글을 모두 싣는다(WCAG 2.5.3). 색은 점뿐이 아니라 이름으로도 읽힌다.
-    label: [isToday ? "오늘" : null, `${p.m}월 ${p.d}일 ${CAL_WEEKDAY_FULL[weekday]}`, title, colorNamesText, ...meta, mark, ...lines]
-      .filter(Boolean).join(", "),
+    meta, lines, readings,
+    // 보이는 글을 모두 싣는다(WCAG 2.5.3). 색은 막대뿐이라 이름으로 싣는다.
+    label: [
+      isToday ? "오늘" : null, `${p.m}월 ${p.d}일 ${CAL_WEEKDAY_FULL[weekday]}`, title, colorNamesText, ...meta, ...lines,
+      ...readings.map((r) => [r.name, r.note, r.refs.join(", ")].filter(Boolean).join(" ")),
+    ].filter(Boolean).join(", "),
   };
 }
 
@@ -1106,22 +1192,39 @@ function commitMonth(model) {
   announceMonth(model);
 }
 
-/** 색 점과 이름. @param {ListRow} row */
+/** 대재일, 소재일, 기도 주간. 없으면 null. @param {ListRow} row */
 function buildRowMeta(row) {
+  if (!row.meta.length) return null;
   const meta = el("span", { className: "cal-row-meta" });
-  for (const color of row.colors) {
-    if (color.or) meta.appendChild(el("span", {}, "또는"));
-    const item = el("span", { className: "cal-row-color" });
-    item.appendChild(el("span", { className: `cal-row-dot lit-swatch lit-swatch--${color.code}`, "aria-hidden": "true" }));
-    item.appendChild(document.createTextNode(color.name));
-    meta.appendChild(item);
-  }
   for (const text of row.meta) meta.appendChild(el("span", {}, text));
-  if (row.mark) meta.appendChild(el("span", { className: "cal-mark" }, row.mark));
   return meta;
 }
 
-/** 줄 전체가 그날 전례독서로 가는 링크다. @param {ListRow} row */
+/**
+ * 장절(ADR-060 §2) — 「감사성찬례」를 왼쪽에, 장절을 오른쪽에 둔다. 장절 하나는 중간에서 줄을 바꾸지 않는다. 링크 안이라 목록 요소(`dl`)를
+ * 쓰지 않고 글자로 둔다. 읽는 차례는 링크 이름(`row.label`)이 맡는다.
+ * @param {ListReading[]} readings
+ */
+function buildRowReadings(readings) {
+  const box = el("span", { className: "cal-row-readings" });
+  for (const r of readings) {
+    const name = el("span", { className: "cal-row-office" }, r.name);
+    if (r.note) name.appendChild(el("span", { className: "cal-row-track" }, r.note));
+    const refs = el("span", { className: "cal-row-refs" });
+    // 가운뎃점은 앞 장절에 붙여 줄 머리에 오지 않게 하고, 그 뒤의 빈칸에서 줄을 바꾼다
+    r.refs.forEach((ref, i) => {
+      const item = el("span", { className: "cal-row-ref" }, ref);
+      if (i < r.refs.length - 1) {
+        item.appendChild(el("span", { className: "cal-row-sep", "aria-hidden": "true" }, " ·"));
+        refs.append(item, " ");
+      } else refs.appendChild(item);
+    });
+    box.append(name, refs);
+  }
+  return box;
+}
+
+/** 줄 전체가 그날 전례독서로 가는 링크다(ADR-060 §2). @param {ListRow} row */
 function buildRow(row) {
   const cls = ["cal-row"];
   if (row.level) cls.push(`cal-row--${row.level}`);
@@ -1130,39 +1233,69 @@ function buildRow(row) {
   if (row.isToday) a.setAttribute("aria-current", "date");
   const date = el("span", { className: "cal-row-date" });
   date.appendChild(el("span", { className: "cal-row-day" }, String(row.day)));
+  const colors = el("span", { className: "cal-row-colors", "aria-hidden": "true" });
+  for (const color of row.colors) colors.appendChild(el("span", { className: `cal-row-bar lit-swatch lit-swatch--${color.code}` }));
+  date.appendChild(colors);
   date.appendChild(el("span", { className: "cal-row-weekday" }, row.weekday));
   a.appendChild(date);
   const body = el("span", { className: "cal-row-body" });
-  body.appendChild(el("span", { className: "cal-row-title" }, row.title));
-  body.appendChild(buildRowMeta(row));
+  if (row.title) body.appendChild(el("span", { className: "cal-row-title" }, row.title));
+  const meta = buildRowMeta(row);
+  if (meta) body.appendChild(meta);
   for (const line of row.lines) body.appendChild(el("span", { className: "cal-row-line" }, line));
+  if (row.readings.length) body.appendChild(buildRowReadings(row.readings));
   a.appendChild(body);
-  const li = el("li", { "data-date": row.date });
+  const li = el("li", { "data-date": row.date, "data-week": row.week });
+  if (row.isSunday) li.dataset.sunday = "";
   li.appendChild(a);
   return li;
 }
 
 /**
- * 그 날짜의 줄이 상단 바 바로 아래에 오게 스크롤한다. 달의 첫 줄이면 달 이름이 함께 보이게 달 이름부터 둔다. 데스크톱은 스크롤하면 상단 바가 접히므로
- * 접힌 뒤에 다시 맞추고, 그사이 독자가 스크롤을 시작하면 맞추지 않는다(helpers.js `scrollUnderBar`, 이어 읽기와 같다).
+ * 주 하나의 묶음 — 주 머리와 그 주의 줄 목록(ADR-060 §2). 머리는 스크롤하면 상단 바 아래에 고정되고(CSS `position: sticky`), 묶음의
+ * 마지막 줄이 지나가면 다음 묶음의 머리에 밀려 사라진다. 고정은 묶음 안에서만 되므로 주마다 묶음을 따로 둔다.
+ * @param {string} week
+ */
+function buildWeekGroup(week) {
+  const group = el("div", { className: "cal-week-group", "data-week": week });
+  group.appendChild(el("h3", { className: "cal-week" }, week));
+  group.appendChild(el("ul", { className: "cal-rows", role: "list" }));
+  return group;
+}
+
+/**
+ * 그 줄이 이 묶음에 이어지는가. 새 묶음(새 머리)은 주일, 주 이름이 바뀐 줄, 달 묶음의 첫 줄에서 시작한다(ADR-060 §2).
+ * @param {HTMLElement | null} group
+ * @param {HTMLElement} li  더할 줄
+ * @param {HTMLElement | null} after  그 묶음에서 더할 줄 바로 뒤에 오는 줄. 맨 뒤에 더하면 null
+ */
+function joinsGroup(group, li, after) {
+  if (!group || group.dataset.week !== li.dataset.week) return false;
+  return after ? !("sunday" in after.dataset) : !("sunday" in li.dataset);
+}
+
+/**
+ * 그 날짜의 줄이 고정된 주 머리 바로 아래에 오게 스크롤한다. 달의 첫 줄이면 달 이름이 함께 보이게 달 이름부터 둔다. 데스크톱은 스크롤하면 상단 바가
+ * 접히므로 접힌 뒤에 다시 맞추고, 그사이 독자가 스크롤을 시작하면 맞추지 않는다(helpers.js `scrollUnderBar`, 이어 읽기와 같다).
  * @param {string} date
  */
 function scrollToRow(date) {
   const row = $app.querySelector(`li[data-date="${date}"]`);
   if (!row) return;
-  scrollUnderBar(row.previousElementSibling ? row : row.closest("section") ?? row);
+  const section = row.closest("section");
+  if (section && section.querySelector("li[data-date]") === row) scrollUnderBar(section);
+  else scrollUnderBar(row, weekHeadHeight(row.closest(".cal-list") ?? $app));
 }
 
-/** 달 하나의 묶음 — 달 이름과 줄 목록. @param {string} ym  "YYYY-MM" @param {string} title */
+/** 달 하나의 묶음 — 달 이름과 주 묶음들. @param {string} ym  "YYYY-MM" @param {string} title */
 function buildListSection(ym, title) {
   const section = el("section", { "aria-label": title, "data-month": ym });
   section.appendChild(el("h2", { className: "cal-list-month" }, title));
-  section.appendChild(el("ul", { className: "cal-rows", role: "list" }));
   return section;
 }
 
 /**
- * 줄을 맨 앞이나 맨 뒤에 더한다. 달이 바뀌면 달 묶음을 새로 만든다.
+ * 줄을 맨 앞이나 맨 뒤에 더한다. 달이 바뀌면 달 묶음을, 주가 바뀌면 주 묶음을 새로 만든다.
  * @param {ListView} list
  * @param {string[]} dates  날짜 차례
  * @param {boolean} atStart
@@ -1179,13 +1312,32 @@ function addListRows(list, dates, atStart) {
       if (atStart) list.above.after(section);
       else list.below.before(section);
     }
-    const rows = /** @type {HTMLElement} */ (section.querySelector("ul"));
-    if (atStart) rows.prepend(buildRow(row));
-    else rows.append(buildRow(row));
+    const li = buildRow(row);
+    const groups = section.querySelectorAll(":scope > .cal-week-group");
+    let group = /** @type {HTMLElement | null} */ (atStart ? groups[0] ?? null : groups[groups.length - 1] ?? null);
+    const after = atStart ? /** @type {HTMLElement | null} */ (group?.querySelector("li[data-date]") ?? null) : null;
+    if (!joinsGroup(group, li, after)) {
+      group = buildWeekGroup(row.week);
+      const title = section.querySelector(":scope > .cal-list-month");
+      if (atStart && title) title.after(group);
+      else if (atStart) section.prepend(group);
+      else section.append(group);
+    }
+    const rows = /** @type {HTMLElement} */ (/** @type {HTMLElement} */ (group).querySelector("ul"));
+    if (atStart) rows.prepend(li);
+    else rows.append(li);
   }
   if (!dates.length) return;
   if (atStart) list.first = dates[0];
   else list.last = dates[dates.length - 1];
+}
+
+/**
+ * 고정된 주 머리의 높이. 머리가 고정된 동안 그 아래가 보이는 자리의 시작이다(ADR-060 §2). 머리는 모두 높이가 같다(CSS `--cal-week-h`).
+ * @param {Element} root
+ */
+function weekHeadHeight(root) {
+  return root.querySelector(".cal-week")?.getBoundingClientRect().height ?? 0;
 }
 
 /**
@@ -1194,19 +1346,19 @@ function addListRows(list, dates, atStart) {
  */
 const ROW_PEEK_PX = 8;
 
-/** 상단 바 바로 아래의 달 묶음. @param {HTMLElement} root */
+/** 상단 바와 고정된 주 머리 바로 아래의 달 묶음. @param {HTMLElement} root */
 function sectionUnderBar(root) {
-  const bottom = barBottom() + ROW_PEEK_PX;
+  const bottom = barBottom() + weekHeadHeight(root) + ROW_PEEK_PX;
   for (const section of root.querySelectorAll("section")) {
     if (section.getBoundingClientRect().bottom > bottom) return section;
   }
   return null;
 }
 
-/** 상단 바 바로 아래의 줄. @param {HTMLElement} root */
+/** 상단 바와 고정된 주 머리 바로 아래의 줄 — 「맨 위 줄」(ADR-038 §2, ADR-060 §2). @param {HTMLElement} root */
 function rowUnderBar(root) {
-  const bottom = barBottom() + ROW_PEEK_PX;
-  for (const li of sectionUnderBar(root)?.querySelectorAll("li") ?? []) {
+  const bottom = barBottom() + weekHeadHeight(root) + ROW_PEEK_PX;
+  for (const li of /** @type {NodeListOf<HTMLElement>} */ (sectionUnderBar(root)?.querySelectorAll("li[data-date]") ?? [])) {
     if (li.getBoundingClientRect().bottom > bottom) return li;
   }
   return null;
@@ -1245,9 +1397,9 @@ function trimList(list) {
   keepRowInPlace(list.root, () => {
     for (const li of rows.slice(0, above)) li.remove();
     for (const li of rows.slice(rows.length - below)) li.remove();
-    for (const section of list.root.querySelectorAll("section")) {
-      if (!section.querySelector("li")) section.remove();
-    }
+    // 줄이 빈 주 묶음과 달 묶음을 지운다. 남은 묶음은 머리를 지킨다. 위쪽을 내리면 남은 첫 줄의 묶음이 달 묶음의 첫 줄이 된다
+    for (const group of list.root.querySelectorAll(".cal-week-group")) if (!group.querySelector("li[data-date]")) group.remove();
+    for (const section of list.root.querySelectorAll("section")) if (!section.querySelector("li[data-date]")) section.remove();
   });
   list.first = rows[above].dataset.date ?? list.first;
   list.last = rows[rows.length - 1 - below].dataset.date ?? list.last;
@@ -1538,7 +1690,12 @@ async function renderListView(param, today, isStale) {
   commitList(month, anchor, today, (date) => {
     const resolved = resolveDate(date);
     const m = resolved && lectionaryModelOf(resolved, { obs: null, track: null, set: null, collect: null });
-    return m ? listRowOf(m, today) : null;
+    if (!m) return null;
+    const sundayDate = addDays(date, -dayOfWeek(date));
+    const resolveIn = (/** @type {string | null} */ d) => (d === date ? resolved : (d !== null && isComputableDate(d) ? resolveDate(d) : null));
+    const sunday = resolveIn(sundayDate);
+    const monday = resolveIn(sundayDate !== null ? addDays(sundayDate, 1) : null);
+    return listRowOf(m, today, weekLabelOf(resolved, sunday, monday));
   }, isStale);
   window.tabHistory?.rememberCalendarView();
   return listTitleOf(month);

@@ -443,20 +443,22 @@ const headModel = (date, resolved, extra = {}) => ({
   textlessDays: [], dedicationLines: [], choices: [], ...extra,
 });
 
-test("listRowOf: 평범한 평일도 줄이 있고 보통 굵기다 — 날짜, 요일, 제목, 색, 해", () => {
-  const r = ctx.listRowOf(headModel("2026-10-15", plainDay("2026-10-15")), "2026-10-14");
+test("listRowOf: 평범한 평일도 줄이 있고 보통 굵기다 — 평일 이름과 해는 적지 않고 색은 링크 이름에 싣는다(ADR-060 §2)", () => {
+  const r = ctx.listRowOf(headModel("2026-10-15", plainDay("2026-10-15")), "2026-10-14", "연중 28주");
   assert.strictEqual(r.date, "2026-10-15");
   assert.strictEqual(r.day, 15);
   assert.strictEqual(r.weekday, "목");
   assert.strictEqual(r.href, "/lectionary/2026-10-15");
   assert.strictEqual(r.isToday, false);
   assert.strictEqual(r.level, "");
-  assert.strictEqual(r.title, "연중 28주");   // 요일은 왼쪽 날짜 칸이 보인다(ADR-058 §2)
+  assert.strictEqual(r.title, "");   // 「연중 28주」는 주 머리에 있다
+  assert.strictEqual(r.week, "연중 28주");
+  assert.strictEqual(r.isSunday, false);
   same(r.colors, [{ code: "green", name: "녹색", or: false }]);
-  same(r.meta, ["짝수해"]);
-  assert.strictEqual(r.mark, null);
+  same(r.meta, []);
   same(r.lines, []);
-  assert.strictEqual(r.label, "10월 15일 목요일, 연중 28주, 녹색, 짝수해");
+  same(r.readings, []);   // 모델에 독서가 없으면 장절도 없다
+  assert.strictEqual(r.label, "10월 15일 목요일, 녹색");
 });
 
 test("listRowOf: 글의 차례는 제목 영역과 같다 — 안내, 이름 줄, 다른 전례일", () => {
@@ -469,12 +471,40 @@ test("listRowOf: 글의 차례는 제목 영역과 같다 — 안내, 이름 줄
     dedicationLines: ["서울산성당 축성일"],
     choices: [{ name: "대림 2주 월요일", suffix: "", active: false }, { name: "성 니콜라", suffix: "", active: true }],
     colors: ["white"], fast: "minor",
-  }), "2026-12-07");
-  same(r.meta, ["짝수해", "소재일"]);
+    slots: [{ label: "이사 61:1-3" }, { label: "시편 96" }, { label: "마태 9:35-38" }], track: null,
+  }), "2026-12-07", "대림 2주");
+  same(r.meta, ["소재일"]);
   same(r.lines, ["12월 6일에서 옮겨 옴", "누군가 축일을 12월 8일로 옮김", "암브로스(밀라노의 주교) 축일", "서울산성당 축성일", "대림 2주"]);
   assert.strictEqual(r.level, "major");
   assert.strictEqual(r.isToday, true);
-  assert.ok(r.label.startsWith("오늘, 12월 7일 월요일, 성 니콜라(대한성공회 수호성인), 백색, 짝수해, 소재일, 12월 6일에서 옮겨 옴"), r.label);
+  assert.ok(r.label.startsWith("오늘, 12월 7일 월요일, 성 니콜라(대한성공회 수호성인), 백색, 소재일, 12월 6일에서 옮겨 옴"), r.label);
+  same(r.readings, [{ name: "감사성찬례", note: null, refs: ["이사 61:1-3", "시편 96", "마태 9:35-38"] }]);
+  assert.ok(r.label.endsWith("서울산성당 축성일, 대림 2주, 감사성찬례 이사 61:1-3, 시편 96, 마태 9:35-38"), r.label);
+});
+
+test("listRowOf: 트랙이 있는 주일은 「감사성찬례」 아래에 트랙 이름을 적는다", () => {
+  const coord = SUNDAY(28);
+  const resolved = resolvedOf("2026-10-11", [grid("ordinary-28", "연중 28주일")], { coord });
+  const r = ctx.listRowOf(headModel("2026-10-11", resolved, { dayName: "연중 28주일", slots: [{ label: "열왕하 5:14-17" }], track: 2 }), "2026-01-01", "연중 28주");
+  assert.strictEqual(r.title, "연중 28주일");   // 주일 이름은 주 머리와 달라 그대로다
+  assert.strictEqual(r.isSunday, true);
+  same(r.readings, [{ name: "감사성찬례", note: "복음 주제", refs: ["열왕하 5:14-17"] }]);
+  assert.ok(r.label.includes("감사성찬례 복음 주제 열왕하 5:14-17"), r.label);
+});
+
+test("rowTitleOf: 주 머리와 같은 평일 이름 대신 첫 축일, 기념일 줄을 올리고 괄호 설명을 아래로 내린다(ADR-060 §2)", () => {
+  same(ctx.rowTitleOf("연중 34주", ["클레멘트(로마의 주교, 순교자, 100년경) 축일"], "연중 34주"),
+    { title: "클레멘트 축일", lines: ["로마의 주교, 순교자, 100년경"], raised: true });
+  same(ctx.rowTitleOf("연중 34주", ["알렉산드리아의 카타리나(순교자, 4세기) 축일", "원주성당 축성일"], "연중 34주"),
+    { title: "알렉산드리아의 카타리나 축일", lines: ["순교자, 4세기", "원주성당 축성일"], raised: true });
+  same(ctx.rowTitleOf("연중 34주", ["성프란시스수녀회 설립 기념일"], "연중 34주"), { title: "성프란시스수녀회 설립 기념일", lines: [], raised: true });
+  // 축성일과 옮김 안내는 올리지 않는다. 축일 줄이 뒤에 있으면 그것을 올린다(세례명의 성인 줄은 다른 전례일의 줄에 있다)
+  same(ctx.rowTitleOf("연중 34주", ["평택성당 축성일"], "연중 34주"), { title: "", lines: ["평택성당 축성일"], raised: false });
+  same(ctx.rowTitleOf("연중 31주", ["삼흥리성당 축성일", "레오나드(은수자, 6세기) 축일"], "연중 31주"),
+    { title: "레오나드 축일", lines: ["은수자, 6세기", "삼흥리성당 축성일"], raised: true });
+  same(ctx.rowTitleOf("연중 34주", ["성 니콜라 축일을 12월 7일로 옮김"], "연중 34주"), { title: "", lines: ["성 니콜라 축일을 12월 7일로 옮김"], raised: false });
+  // 주 머리와 다른 제목(주일, 축일, 「성탄 8일 전」)은 그대로다
+  same(ctx.rowTitleOf("성탄 8일 전", ["누구 축일"], "대림 3주"), { title: "성탄 8일 전", lines: ["누구 축일"], raised: false });
 });
 
 test("rowTextOf: 절기와 주 번호로 만든 평일 이름에서만 요일을 뺀다(ADR-058 §2)", () => {
@@ -501,13 +531,12 @@ test("listRowOf: 굵기 — 주일과 대축일, 주요축일은 major, 축일�
   assert.strictEqual(ctx.listRowOf(headModel("2026-10-15", r, { selected: mine, initial: mine, dayName: "용인성당 축성일" }), "2026-01-01").level, "");
 });
 
-test("listRowOf: 전례년 첫날은 해 대신 「나해 시작」을 단다", () => {
+test("listRowOf: 전례년 첫날에도 해를 적지 않는다(ADR-060 §2)", () => {
   const coord = SUNDAY(1, "B", "advent");
   const resolved = resolvedOf("2026-11-29", [grid("advent-1", "대림1주일")], { coord });
-  const r = ctx.listRowOf(headModel("2026-11-29", resolved, { cycle: "나해" }), "2026-11-07");
-  assert.strictEqual(r.mark, "나해 시작");
+  const r = ctx.listRowOf(headModel("2026-11-29", resolved, { cycle: "나해", dayName: "대림1주일" }), "2026-11-07", "대림 1주");
   same(r.meta, []);
-  assert.ok(r.label.includes("나해 시작"), r.label);
+  assert.ok(!r.label.includes("나해"), r.label);
 });
 
 test("listRowOf: 색이 둘이면 함께 적고, 성인의 색이 다르면 「또는」이다 — 선택 대체색은 싣지 않는다", () => {

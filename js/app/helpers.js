@@ -593,11 +593,12 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
    * frame, once the layout of the new view has settled — unless the reader has started to scroll by then (wheel,
    * touch, pointer, key): placing again would take their scroll back.
    * @param {Element} target
+   * @param {number} [below]  px to leave between the bar and the target — the calendar list's pinned week head
    */
-  function scrollUnderBar(target) {
+  function scrollUnderBar(target, below = 0) {
     const place = () => {
       if (!target.isConnected) return;
-      window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top - barBottom(), behavior: "instant" });
+      window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top - barBottom() - below, behavior: "instant" });
     };
     place();
     const waiting = new AbortController();
