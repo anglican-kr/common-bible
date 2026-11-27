@@ -3260,20 +3260,20 @@ a.scope-pill-main:active,
   padding: var(--space-4) 0;
 }
 
-/* 구분 탭 줄(ADR-033 「책 선택 시트의 구분 탭」). 라벨 아래에 늘 있고, 아래의 선이 스크롤되는 칩과 나눈다. 모양은 성서 목록의
+/* 구분 탭 줄(ADR-033 「책 선택 시트의 구분 탭」). 머리 아래에 늘 있고, 아래의 선이 스크롤되는 칩과 나눈다. 모양은 성서 목록의
    구분 탭(.division-tabs, .division-tab, .division-tab-indicator)을 그대로 쓰고, 여기서는 자리와 단추의 기본 모양만 고친다. */
 .book-filter-tabbar {
   padding: 0 var(--space-4) var(--space-3);
   border-bottom: 1px solid var(--border);
 }
 
-/* 책 목록을 받지 못해 탭 줄을 숨기면 그 아래의 선도 없어진다. 그때는 라벨 아래에 선을 둔다 */
+/* 책 목록을 받지 못해 탭 줄을 숨기면 그 아래의 선도 없어진다. 그때는 머리 아래에 선을 둔다 */
 .book-filter-head:has(+ .book-filter-tabbar[hidden]) {
   padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--border);
 }
 
-/* 두 클래스로 쓴다: 뒤에 오는 .division-tabs의 위 여백(성서 목록 라벨 아래의 간격)을 이겨야 한다 */
+/* 두 클래스로 쓴다: 뒤에 오는 .division-tabs의 위 여백(성서 목록 머리 아래의 간격)을 이겨야 한다 */
 .division-tabs.book-filter-tabs {
   margin: 0;
 }

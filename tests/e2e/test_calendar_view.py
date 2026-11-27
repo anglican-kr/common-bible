@@ -474,7 +474,7 @@ def _focused(page):
 
 
 def test_month_nav_keeps_keyboard_focus_on_the_pressed_control(desktop_context):
-    """키보드로 「다음 달」 · 「이전 달」 · 「오늘」을 눌러 표를 다시 그려도 포커스가 새 라벨 줄의 같은 컨트롤에 있다 —
+    """키보드로 「다음 달」 · 「이전 달」 · 「오늘」을 눌러 표를 다시 그려도 포커스가 새 머리 줄의 같은 컨트롤에 있다 —
     Enter 만 거듭 눌러 달을 넘긴다(WCAG 2.4.3 · PR #348 리뷰: 그전엔 누른 링크가 사라져 포커스가 body 로 빠졌다).
     계산 범위 끝(9999년 12월)에서 「다음 달」이 사라지면 「오늘」로."""
     page = desktop_context.new_page()
