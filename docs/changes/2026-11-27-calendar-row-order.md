@@ -2,6 +2,7 @@
 date: 2026-11-27
 branch: style/calendar-row-order
 title: "style: 캘린더 목록의 줄 차례와 날짜 높이, 고정된 주간 라벨의 그림자"
+pr: 673
 ---
 
 ## 요약
