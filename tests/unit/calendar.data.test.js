@@ -256,7 +256,9 @@ const churchIdOf = (name) => read("local-observances.json").parishes.find((p) =>
 
 test("목록 줄. 소속교회를 고르면 전례독서 화면처럼 축성일이 제목이고, 교구 설립일 줄이 생긴다(ADR-041 §6)", { skip: SKIP }, () => {
   const yongin = churchIdOf("용인성당");   // 서울교구, 축성일 01.31
-  same([rowOf("2025-01-31").title, rowOf("2025-01-31", yongin).title], ["", "용인성당 축성"]);   // 목록은 「축성일」을 「축성」으로 줄인다(사용자 결정 2026-11-27). 평일 이름은 주간 라벨에만 있다(ADR-060 §2)
+  same([rowOf("2025-01-31").title, rowOf("2025-01-31", yongin).title], ["", "용인성당 축성"]);
+  // 주일과 겹쳐 다른 전례일로 내려간 해(2027-01-31 연중 4주일)도 「축성」으로 줄인다
+  assert.ok(rowOf("2027-01-31", yongin).lines.includes("용인성당 축성"), rowOf("2027-01-31", yongin).lines.join(" | "));   // 목록은 「축성일」을 「축성」으로 줄인다(사용자 결정 2026-11-27). 평일 이름은 주간 라벨에만 있다(ADR-060 §2)
   assert.strictEqual(rowOf("2025-01-31", yongin).level, "");   // 굵기는 그날의 기본 독서(평일)를 따른다
   const founding = rowOf("2026-05-27", yongin);
   assert.ok(founding.lines.includes("1965년 5월 27일 서울교구설립일"), founding.lines.join(" | "));
@@ -303,6 +305,9 @@ test("목록 줄 — 주일, 전례년 첫날, 옮겨 온 축일, 저녁 전례,
   for (const r of [moved, rowOf("2026-12-06")]) assert.ok(!r.lines.some((l) => /옮겨 옴|옮김/.test(l)) && !r.label.includes("옮"), r.label);
   // 주일로 옮겨 지킬 수 있다는 안내는 남긴다 — 2026-01-06 공현대축일(사용자 결정 2026-11-27)
   assert.ok(rowOf("2026-01-06").lines.includes("1월 4일로 옮겨 지킬 수 있음"), rowOf("2026-01-06").lines.join(" | "));
+  // 설과 겹쳐 옮겨 온 해는 안내가 이어져 있다(「2월 2일에서 옮겨 옴 · 1월 31일로 옮겨 지킬 수 있음」). 옮겨 옴만 뺀다
+  const lunar = rowOf("2049-02-03");
+  assert.ok(lunar.lines.includes("1월 31일로 옮겨 지킬 수 있음") && !lunar.label.includes("옮겨 옴"), lunar.label);
   assert.ok(rowOf("2026-12-24").lines.includes("성탄 밤 · 저녁"));
   same(rowOf("2026-12-13").colors.map((c) => c.code), ["violet"]);   // 대림 3주일의 장미, 청은 전례독서 머리에만
   assert.ok(headModel("2026-12-13").colorAlt.length > 0);

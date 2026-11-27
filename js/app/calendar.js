@@ -451,7 +451,7 @@ function weekLabelOf(resolved, sundayOf, mondayOf) {
 /**
  * 줄의 제목과 그 아래 줄(ADR-060 §2). 주간 라벨과 같은 평일 이름(「연중 34주」)은 적지 않고, 그 자리에 그날 기리는 성인이나 기념일을 올린다.
  * 올린 이름의 괄호 설명은 제목 아래 한 줄로 내린다(「클레멘트(로마의 주교, 순교자, 100년경) 축일」은 「클레멘트」와 「로마의 주교, 순교자,
- * 100년경」). 괄호가 둘 이상인 이름은 나누지 않는다. 대표가 아닌 이름 줄(교회 축성일, 옮겨 온 축일의 안내)은 그대로다. 다른 전례일로 내려간
+ * 100년경」). 괄호가 둘 이상인 이름은 나누지 않는다. 대표가 아닌 줄은 순서를 그대로 두고 이름 뒤의 「축일」, 「기념일」만 뗀다. 다른 전례일로 내려간
  * 평일 이름이 주간 라벨과 같으면(축성일이 제목인 날의 「연중 3주」) 그 줄도 적지 않는다(사용자 결정 2026-11-27).
  * @param {string} title  요일을 뺀 제목
  * @param {string[]} all  제목 아래의 줄
@@ -500,8 +500,10 @@ function listRowOf(m, today, week) {
   const meta = [...head.meta.filter((item) => item.kind !== "cycle").map((item) => item.text), ...m.dedicationLines.map(short)];
   const names = head.names.filter((line) => !dedications.has(line));
   // 주일로 옮겨 지킬 수 있다는 안내(「1월 4일로 옮겨 지킬 수 있음」)는 실제로 옮긴 것이 아니라 고를 수 있다는 뜻이라 남긴다(사용자 결정 2026-11-27)
-  const optional = head.notes.filter((note) => / 옮겨 지킬 수 있음$/.test(note));
-  const shown = rowTitleOf(rowTextOf(head.title), [...optional, ...names, ...head.others.map(rowTextOf)], week);
+  // 설과 겹쳐 옮겨 온 해(2049-02-03)는 안내가 「2월 2일에서 옮겨 옴 · 1월 31일로 옮겨 지킬 수 있음」으로 이어져 있어 항목마다 고른다
+  const optional = head.notes.flatMap((note) => note.split(" · ").filter((part) => / 옮겨 지킬 수 있음$/.test(part)));
+  // 다른 전례일로 내려간 소속교회의 축성일(주일, 축일과 겹친 날)도 「축성」으로 줄인다
+  const shown = rowTitleOf(rowTextOf(head.title), [...optional, ...names, ...head.others.map((o) => short(rowTextOf(o)))], week);
   const { subtitle, lines } = shown;
   const title = short(shown.title);
   const isToday = date === today;

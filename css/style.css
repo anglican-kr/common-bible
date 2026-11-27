@@ -1317,8 +1317,9 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
    (calendar.js weekHeadHeight). 날짜 칸은 줄 높이를 채우는 다른 바탕이고, 날짜, 전례색 막대, 요일을 위에서부터 적는다. */
 :root { --cal-week-h: calc(var(--font-sm) * var(--leading-snug) + 2 * var(--space-2) + 1px); }
 .cal-week-group { padding-top: var(--space-3); }
-.cal-list .cal-rows > li:first-child { border-top: 0; }
-/* 날과 날 사이의 선은 상단 바 아래의 선처럼 양 끝으로 갈수록 투명해진다(#app-header::after, 사용자 결정 2026-11-27). */
+/* 날과 날 사이의 선은 상단 바 아래의 선처럼 양 끝으로 갈수록 투명해진다(#app-header::after, 사용자 결정 2026-11-27).
+   No z-index: a positioned box with z-index auto already paints above the row's date-cell and hover backgrounds, and
+   z-index 1 would tie with the sticky .cal-week and paint over it (later in the DOM) as rows scroll under the label. */
 .cal-list .cal-rows > li { position: relative; border-top: 0; }
 .cal-list .cal-rows > li + li::before {
   content: "";
@@ -1327,7 +1328,6 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
   left: 0;
   right: 0;
   height: 1px;
-  z-index: 1;
   background: linear-gradient(to right, transparent, var(--border) 20%, var(--border) 80%, transparent);
   pointer-events: none;
 }
