@@ -2,8 +2,8 @@
 
   ① 모든 화면에서 제목은 왼쪽에서 시작하고 단추는 오른쪽 끝이다. 맨 오른쪽 그림은 제목과 같은 여백에서 끝난다(§1)
   ② 캘린더와 전례독서: 왼쪽에 달이나 날짜, 오른쪽에 ‹ › 「오늘」 월간 달력 단추. 두 화면에서 단추의 자리가 같다(§2)
-  ③ 달과 날짜의 표기 — 폭에 따라 「2027년 1월 2일」, 「27년 1월 2일」, 「1월 2일」. 가장 긴 날짜로 정해 날을 옮겨도 같다. 가장 큰 글자에서는
-     제목 글씨를 줄인다(§4)
+  ③ 달과 날짜의 표기 — 폭에 따라 「2027년 1월 2일」, 「27년 1월 2일」, 「1월 2일」. 가장 긴 날짜로 정해 날을 옮겨도 같다. 가장 큰 글자에
+     320px보다 좁은 화면에서는 제목 글씨를 줄인다(§4)
   ④ 달력을 내리면 달력의 머리가 상단 바의 글자와 ‹ › 자리에 들어가고, ‹ ›는 달력만 옮기며, 닫으면 돌아온다(§3)
   ⑤ 「오늘」은 오늘의 날을 적은 캘린더 아이콘이고 월간 달력 단추와 크기가 같다(§5). 큰 화면의 ‹ ›는 캘린더와 전례독서에서 같은 자리다
 
@@ -11,7 +11,7 @@
 """
 import pytest
 
-from .conftest import CLEAR_APP_STORAGE, IPHONE_UA
+from .conftest import CLEAR_APP_STORAGE, IPHONE_UA, press_center
 
 BASE = "http://localhost:8080"
 
@@ -180,14 +180,16 @@ def test_date_length_is_chosen_by_the_longest_date(browser):
     ctx.close()
 
 
-def test_date_shrinks_its_font_when_even_the_shortest_length_does_not_fit(browser):
-    """③ 폭 320px, 글자 24px에서는 「12월 28일」도 들어가지 않아 장 제목처럼 제목 글씨를 줄인다. 잘리지 않는다."""
-    ctx = _context(browser, width=320, height=568, font=24)
+# 2026-11-28에 잰 폭이다. 글자 24px의 「12월 28일」은 폭 320px에는 들어가고, 318-305px에서 한 단계, 300px에서 두 단계를 줄인다
+@pytest.mark.parametrize("width, step", [(310, "title-shrink-1"), (300, "title-shrink-2")])
+def test_date_shrinks_its_font_when_even_the_shortest_length_does_not_fit(browser, width, step):
+    """③ 글자 24px에서 폭 320px보다 좁으면 「12월 28일」도 들어가지 않아 장 제목처럼 제목 글씨를 한 단계씩 줄인다. 잘리지 않는다."""
+    ctx = _context(browser, width=width, height=568, font=24)
     page = ctx.new_page()
     _open(page, "/lectionary/2027-12-28", ".lect-day")
     assert page.evaluate(SHOWN_DATE) == "12월 28일"
     classes = page.evaluate("() => [...document.getElementById('page-title').classList]")
-    assert "title-shrink-1" in classes or "title-shrink-2" in classes
+    assert step in classes, classes
     date = page.evaluate(
         """() => { const e = [...document.querySelectorAll('#page-title .fit-len')].find((x) => x.getClientRects().length);
             const cell = e.closest('.lect-date'); return { right: e.getBoundingClientRect().right, cell: cell.getBoundingClientRect().right,
@@ -208,7 +210,8 @@ def test_open_calendar_puts_its_head_in_the_bar(browser, path, ready, title):
     page = ctx.new_page()
     _open(page, path, ready)
     before = _bar_controls(page)
-    page.locator("#page-title .cal-picker-trigger").click()
+    # 좌표로 누른다. Playwright의 click은 상단 바 안의 단추에서도 목록을 스크롤해 맨 위 줄과 주소를 바꾼다(conftest.py `press_center`)
+    press_center(page, "#page-title .cal-picker-trigger")
     page.wait_for_selector(".cal-picker:not([hidden]) .cal-picker-day")
     page.wait_for_timeout(400)
     head = page.locator("#page-title > .lect-bar-title > button.cal-picker-title")
@@ -232,18 +235,18 @@ def test_open_calendar_puts_its_head_in_the_bar(browser, path, ready, title):
 
     # ‹ ›는 달력만 옮긴다 — 아래 화면과 주소는 그대로다
     url = page.url
-    steps.nth(1).click()
+    press_center(page, "#page-title > .lect-bar-end > .cal-picker-step >> nth=1")
     page.wait_for_timeout(200)
     assert page.evaluate(SHOWN_DATE) == "2027년 2월"
     assert page.url == url
     # 제목을 누르면 달 판
-    head.click()
+    press_center(page, "#page-title > .lect-bar-title > button.cal-picker-title")
     page.wait_for_selector(".cal-picker .cal-picker-grid")
     assert head.inner_text().strip().startswith("2027년")
     assert head.get_attribute("aria-label") == "2027년, 해 고르기"
 
     # 닫으면 상단 바가 돌아오고 머리는 판으로 돌아간다
-    page.locator("#page-title .cal-picker-trigger").click()
+    press_center(page, "#page-title .cal-picker-trigger")
     page.wait_for_timeout(500)
     assert page.evaluate(SHOWN_DATE) == title
     assert page.locator("#page-title .lect-date").is_visible()

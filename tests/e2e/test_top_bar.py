@@ -6,12 +6,13 @@
   ② 스크롤해도 탭, 검색창, 설정이 그대로 보이고 상단 바의 높이가 같다
   ③ 지금 있는 목적지의 탭에 aria-current
   ④ 「성서」 탭 — 캘린더에서 누르면 읽던 화면, 성서 화면에서 누르면 성서 목록(제목 줄의 집 단추는 없다)
-  ⑤ 「오늘」은 데스크톱에서 › 오른쪽, 모바일은 ‹ 왼쪽 — 화면의 차례와 포커스의 차례가 같다
+  ⑤ 「오늘」은 두 레이아웃 모두 › 오른쪽이다. 데스크톱은 ‹ 글자 › 오늘, 모바일은 오른쪽 칸의 ‹ › 오늘 다음이 월간 달력 단추다(ADR-061 §2) — 화면의
+     차례와 포커스의 차례가 같다
   ⑥ 좁은 데스크톱 폭 — 긴 제목은 짧은 제목으로, 탭은 아이콘만(이름은 남는다), 가로 넘침 없음
   ⑦ 모바일 — 탭과 검색창, 설정 단추는 숨고 탭 바가 맡는다
   ⑧ 「북마크」 탭 — 어느 화면에서나 패널을 열고, 장 밖에서는 「이 장 저장」과 「절 선택」이 꺼져 있다
-  ⑨ 창 폭이 바뀔 때 — 넓히면 전체 제목으로 돌아오고, 「오늘」은 배치를 따라 칸을 옮긴다. 제목 줄의 단추는 글자를 덮지 않는다
-  ⑩ 가운데 칸이 들어가지 않을 때 — 탭을 아이콘으로, 달 이름을 짧게, 긴 제목은 말줄임표로. 검색창은 누르면 제목 위로 넓어진다
+  ⑨ 창 폭이 바뀔 때 — 넓히면 전체 제목으로 돌아오고, 「오늘」은 그 레이아웃의 줄로 옮겨 간다. 제목 줄의 단추는 글자를 덮지 않는다
+  ⑩ 가운데 칸이 들어가지 않을 때 — 탭을 아이콘으로, 달 이름을 짧은 표기로(ADR-061 §4), 긴 제목은 말줄임표로. 검색창은 누르면 제목 위로 넓어진다
 
 실데이터(data/ 서브모듈)가 필요하다 — 로컬 전용(CLAUDE.md 「테스트」).
 """
@@ -125,14 +126,20 @@ def test_today_follows_the_next_step_on_desktop(desktop_context, path, ready):
     assert abs((title["left"] + title["right"]) / 2 - page.evaluate("() => window.innerWidth") / 2) <= 1
 
 
-def test_today_stays_before_the_previous_step_on_mobile(mobile_context):
-    """⑤ 모바일 — 「오늘」은 왼쪽 칸 그대로다(ADR-038 §1)."""
+def test_today_follows_the_next_step_on_mobile(mobile_context):
+    """⑤ 모바일 — 오른쪽 칸에 ‹ › 「오늘」 월간 달력 단추의 차례다(ADR-061 §2). 포커스도 그 차례로 옮겨 간다."""
     page = mobile_context.new_page()
     page.goto(f"{BASE}/calendar/2026-12")
     page.wait_for_selector(".cal-rows", timeout=20_000)
-    today = _box(page, "#page-title .lect-today")
     prev = _box(page, "#page-title a.lect-datenav-btn[data-focus-key='prev']")
-    assert today["right"] <= prev["left"] + 8
+    nxt = _box(page, "#page-title a.lect-datenav-btn[data-focus-key='next']")
+    today = _box(page, "#page-title .lect-today")
+    drop = _box(page, "#page-title .cal-picker-trigger")
+    assert prev["right"] <= nxt["left"] + 0.5 and nxt["right"] <= today["left"] + 0.5 and today["right"] <= drop["left"] + 0.5
+    order = page.evaluate(
+        "() => [...document.querySelectorAll('#page-title a, #page-title button')].map((a) => a.dataset.focusKey)"
+    )
+    assert order == ["prev", "next", "today", "date-picker-title"]
 
 
 def test_narrow_desktop_keeps_one_row(browser):
@@ -245,21 +252,28 @@ def test_widening_the_window_brings_the_full_title_back(browser):
         ctx.close()
 
 
+# 레이아웃마다의 「오늘」 자리 — 큰 화면은 ‹ 글자 › 다음 오른쪽 칸의 맨 앞, 작은 화면은 오른쪽 칸의 ‹ › 다음이다(ADR-061 §2)
+TODAY_IN_LARGE_ROW = "#page-title > .lect-bar-mid + .lect-bar-end > .lect-today:first-child"
+TODAY_IN_SMALL_ROW = "#page-title > .lect-bar-title + .lect-bar-end > a.lect-datenav-btn[data-focus-key='next'] + .lect-today"
+
+
 def test_today_moves_with_the_layout_when_the_window_crosses_the_breakpoint(desktop_context):
-    """⑨ 그린 뒤 창 크기가 작은 화면과 큰 화면의 경계(ADR-050 §2)를 넘으면 「오늘」이 그 레이아웃의 칸으로 옮겨 간다 — 다시 그리지
-    않아도."""
+    """⑨ 그린 뒤 창 크기가 작은 화면과 큰 화면의 경계(ADR-050 §2)를 넘으면 「오늘」이 그 레이아웃의 줄로 옮겨 간다. 큰 화면은 가운데 덩어리의
+    › 오른쪽, 작은 화면은 오른쪽 칸의 › 오른쪽이고 월간 달력 단추가 그 뒤다(ADR-061 §2). 「오늘」은 하나다."""
     page = desktop_context.new_page()
     page.goto(f"{BASE}/calendar/2026-12")
     page.wait_for_selector(".cal-grid", timeout=20_000)
     left = lambda sel: _box(page, "#page-title " + sel)["left"]   # noqa: E731
+    assert page.locator(TODAY_IN_LARGE_ROW).count() == 1
     assert left(".lect-today") > left("a.lect-datenav-btn[data-focus-key='next']")
     page.set_viewport_size({"width": 600, "height": 700})
-    page.wait_for_function("() => document.querySelector('#page-title .lect-bar-start .lect-today')")
-    assert left(".lect-today") < left("a.lect-datenav-btn[data-focus-key='prev']")
+    page.wait_for_selector(TODAY_IN_SMALL_ROW)
+    assert left("a.lect-datenav-btn[data-focus-key='next']") < left(".lect-today") < left(".cal-picker-trigger")
     assert page.locator("#page-title .lect-today").count() == 1
     page.set_viewport_size({"width": 1280, "height": 700})
-    page.wait_for_function("() => document.querySelector('#page-title .lect-bar-end .lect-today')")
+    page.wait_for_selector(TODAY_IN_LARGE_ROW)
     assert left(".lect-today") > left("a.lect-datenav-btn[data-focus-key='next']")
+    assert page.locator("#page-title .lect-today").count() == 1
 
 
 def test_title_row_buttons_do_not_cover_the_title(desktop_context):
@@ -319,7 +333,7 @@ def _cells(page):
 ])
 def test_date_row_stays_between_the_tabs_and_the_search_field(browser, width, font, path, ready):
     """⑩ 캘린더와 전례독서의 날짜 이동 줄이 탭과 검색창을 덮지 않고 창의 가운데에 있다. 들어가지 않으면 탭이 아이콘만 남고
-    검색창이 좁아지며, 그래도 모자라면 달 이름이 「2027.12」가 된다."""
+    검색창이 좁아지며, 그래도 모자라면 달과 날짜가 짧은 표기(「27년 12월」, 「12월」)가 된다(ADR-061 §4)."""
     ctx = _sized(browser, width, font)
     try:
         page = ctx.new_page()
@@ -334,10 +348,17 @@ def test_date_row_stays_between_the_tabs_and_the_search_field(browser, width, fo
         ctx.close()
 
 
+# 날짜 이동 줄에 보이는 달이나 날짜 — 표기 셋(「2027년 12월」, 「27년 12월」, 「12월」, ADR-061 §4) 가운데 보이는 것
+SHOWN_DATE = """() => {
+  const len = [...document.querySelectorAll('#page-title .fit-len')].find((e) => e.getClientRects().length);
+  return len ? len.textContent : null;
+}"""
+
+
 def test_month_name_shortens_only_when_the_tighter_bar_is_not_enough(browser):
-    """⑩ 폭 900px의 기본 글자에서는 탭을 아이콘으로 바꾸는 것으로 충분해 달 이름이 그대로다. 글자 24px에서는 「2027.12」가 된다."""
-    month = "() => getComputedStyle(document.querySelector('#page-title .cal-month-short')).display"
-    for font, short in ((18, "none"), (24, "inline")):
+    """⑩ 폭 900px의 기본 글자에서는 탭을 아이콘으로 바꾸는 것으로 충분해 달 이름이 그대로다. 글자 24px에서는 짧은 표기가 된다. 날짜 칸은
+    전례독서의 가장 긴 날짜의 폭이라(views.js `setDateRowLength`) 「27년 12월 28일」이 들어가지 않는 폭에서는 달도 연도를 뺀 「12월」이다(ADR-061 §4)."""
+    for font, shown in ((18, "2027년 12월"), (24, "12월")):
         ctx = _sized(browser, 900, font)
         try:
             page = ctx.new_page()
@@ -345,7 +366,7 @@ def test_month_name_shortens_only_when_the_tighter_bar_is_not_enough(browser):
             page.wait_for_selector(".cal-grid", timeout=20_000)
             page.wait_for_timeout(600)
             assert page.evaluate("() => document.getElementById('app-header').classList.contains('tight')"), font
-            assert page.evaluate(month) == short, font
+            assert page.evaluate(SHOWN_DATE) == shown, font
         finally:
             ctx.close()
 
@@ -410,14 +431,14 @@ def test_bookmark_view_actions_stand_beside_the_title_after_widening(browser):
 
 
 def test_today_keeps_the_focus_when_it_moves(desktop_context):
-    """⑩ 「오늘」에 포커스가 있을 때 창 폭이 경계를 넘어 칸을 옮겨도 포커스가 남는다."""
+    """⑩ 「오늘」에 포커스가 있을 때 창 폭이 경계를 넘어 그 레이아웃의 줄로 옮겨 가도 포커스가 남는다."""
     page = desktop_context.new_page()
     page.goto(f"{BASE}/calendar/2026-12")
     page.wait_for_selector(".cal-grid", timeout=20_000)
     page.locator("#page-title .lect-today").focus()
-    for width, cell in ((600, ".lect-bar-start"), (1280, ".lect-bar-end")):
+    for width, row in ((600, TODAY_IN_SMALL_ROW), (1280, TODAY_IN_LARGE_ROW)):
         page.set_viewport_size({"width": width, "height": 700})
-        page.wait_for_function(f"() => document.querySelector('#page-title {cell} .lect-today')")
+        page.wait_for_selector(row)
         # 월간은 작은 화면에서 목록으로 다시 그려진다(ADR-058 §1). 다 그린 뒤에도 포커스가 남는다
         page.wait_for_selector(".cal-rows", timeout=20_000)
         page.wait_for_timeout(200)
@@ -445,14 +466,16 @@ def _title_fit(page):
     }""")
 
 
-@pytest.mark.parametrize("font, path, step", [
-    (24, "2macc/15", "title-shrink-2"), (24, "cant/4", "title-shrink-2"), (22, "2macc/15", "title-shrink-1"),
-    (24, "1thess/5", "title-shrink-2"),
+# 제목이 왼쪽에서 시작하고 들어갈 자리를 왼쪽 단추와 오른쪽 단추 사이로 재면서(ADR-061 §1) 너비 320px에서는 글자 크기 24에서도 줄지 않는다.
+# 줄이는 폭은 2026-11-28에 잰 것이다. 글자 크기 24에서 「마카베오하 15장」은 284-260px에서 한 단계, 256-244px에서 두 단계, 240px부터 말줄임표다
+@pytest.mark.parametrize("font, width, path, step", [
+    (24, 272, "2macc/15", "title-shrink-1"), (22, 250, "2macc/15", "title-shrink-1"), (24, 250, "2macc/15", "title-shrink-2"),
+    (24, 252, "cant/4", "title-shrink-2"), (24, 250, "1thess/5", "title-shrink-2"),
 ])
-def test_long_chapter_title_shrinks_to_fit_a_narrow_phone(browser, font, path, step):
-    """⑪ 너비 320px에서 짧은 명칭으로도 들어가지 않거나 짧은 명칭이 없는 장 제목은 글씨만 줄여, 꺾쇠까지 한 줄로 북마크
+def test_long_chapter_title_shrinks_to_fit_a_narrow_phone(browser, font, width, path, step):
+    """⑪ 너비 320px보다 좁은 화면에서 짧은 명칭으로도 들어가지 않거나 짧은 명칭이 없는 장 제목은 글씨만 줄여, 꺾쇠까지 한 줄로 북마크
     단추 앞에 있다. 처음 연 화면에서도 그렇다(웹 글꼴이 늦게 와도 다시 잰다)."""
-    ctx = _phone(browser, 320, font)
+    ctx = _phone(browser, width, font)
     try:
         page = ctx.new_page()
         page.goto(f"{BASE}/{path}")
@@ -497,9 +520,9 @@ def test_chapter_picker_stays_on_a_narrow_phone_screen(browser, path):
         ctx.close()
 
 
-@pytest.mark.parametrize("width, path", [(280, "2macc/15"), (300, "cant/4")])
+@pytest.mark.parametrize("width, path", [(230, "2macc/15"), (236, "cant/4")])
 def test_chapter_title_is_cut_with_an_ellipsis_when_two_steps_are_not_enough(browser, width, path):
-    """⑪ 두 단계를 줄여도 들어가지 않으면(320px보다 좁은 화면) 제목 끝을 말줄임표로 자르고 꺾쇠는 북마크 단추 앞에 남긴다
+    """⑪ 두 단계를 줄여도 들어가지 않으면(글자 크기 24에서 240px보다 좁은 화면) 제목 끝을 말줄임표로 자르고 꺾쇠는 북마크 단추 앞에 남긴다
     (사용자 결정 2026-11-19)."""
     ctx = _phone(browser, width, 24)
     try:
@@ -521,15 +544,22 @@ def test_chapter_title_is_cut_with_an_ellipsis_when_two_steps_are_not_enough(bro
 
 @pytest.mark.parametrize("path, ready", [("lectionary/2026-12-24", ".lect-day"), ("calendar/2027-12", ".cal-rows")])
 def test_date_row_title_is_not_fitted_like_a_chapter_title(browser, path, ready):
-    """⑪ 캘린더와 전례독서의 날짜 단추는 장 제목 단추와 같은 클래스(`title-picker-btn`)를 쓰지만, ‹ ›와 「오늘」이 함께 있는
-    다른 배치라 장 제목의 줄인 글씨나 말줄임을 받지 않는다(코드 리뷰 2026-11-19)."""
+    """⑪ 캘린더와 전례독서의 날짜는 장 제목의 재기(코드 리뷰 2026-11-19)를 받지 않고 제 규칙을 따른다(ADR-061 §4). 먼저 짧은 표기로
+    바꾸고, 가장 짧은 표기도 들어가지 않을 때만 글씨를 줄인다. 말줄임표로 자르지 않고, 보이는 날짜는 한 줄로 글자 칸 안에 있다."""
     ctx = _phone(browser, 320, 24)
     try:
         page = ctx.new_page()
         page.goto(f"{BASE}/{path}")
         page.wait_for_selector(ready, timeout=20_000)
         page.wait_for_timeout(600)
-        classes = page.evaluate("() => [...document.getElementById('page-title').classList]")
-        assert not any(c.startswith("title-shrink") or c == "title-clip" for c in classes), classes
+        state = page.evaluate("""() => { const t = document.getElementById('page-title');
+            const len = [...t.querySelectorAll('.fit-len')].find((e) => e.getClientRects().length);
+            const cell = t.querySelector('.lect-date').getBoundingClientRect();
+            return { classes: [...t.classList], len: len.parentElement.dataset.len, rects: len.getClientRects().length,
+                     right: len.getBoundingClientRect().right, cell: cell.right }; }""")
+        assert "title-clip" not in state["classes"], state
+        if any(c.startswith("title-shrink") for c in state["classes"]):
+            assert state["len"] == "2", state   # 가장 짧은 표기도 들어가지 않을 때만 글씨를 줄인다
+        assert state["rects"] == 1 and state["right"] <= state["cell"] + 0.5, state
     finally:
         ctx.close()

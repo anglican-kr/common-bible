@@ -111,7 +111,8 @@ def test_calendar_tab_loads_the_three_modules_once(browser):
         _calendar_tab(page).click()
         page.wait_for_selector(".cal-rows", timeout=20_000)   # 작은 화면의 캘린더는 목록이다(ADR-058 §1)
         assert sorted(seen) == sorted(LAZY), seen
-        month = page.inner_text(".cal-month")
+        # 견주는 쪽과 같은 textContent로 읽는다. inner_text는 보이는 표기와 숨긴 글(ADR-061 §4)만 읽어 늘 달라, 기다리지 않고 바로 참이 된다
+        month = page.evaluate("() => document.querySelector('.cal-month').textContent")
         page.locator("#page-title a.lect-datenav-btn[data-focus-key='next']").click()
         # 새 달 이름이 그려질 때까지 — 누르자마자 「불러오는 중…」이 .cal-month를 지워 「다르다」만으로는 바로 참이다
         page.wait_for_function(
@@ -135,7 +136,7 @@ def test_redraw_does_not_paint_loading_frame(browser):
         page.wait_for_selector(".cal-grid", timeout=20_000)
         page.evaluate(WATCH_LOADING_FRAMES)
         for _ in range(5):
-            month = page.inner_text(".cal-month")
+            month = page.evaluate("() => document.querySelector('.cal-month').textContent")   # 견주는 쪽과 같은 textContent
             page.locator("#page-title a.lect-datenav-btn[data-focus-key='next']").click()
             page.wait_for_function(
                 "m => { const t = document.querySelector('.cal-month')?.textContent; return !!t && t !== m; }", arg=month)
