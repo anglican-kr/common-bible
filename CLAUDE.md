@@ -137,9 +137,9 @@ git branch -D <topic-branch>   # squash 커밋은 브랜치 커밋과 이어지�
 3. 앱 저장소의 `sync-data.yml`이 서브모듈 포인터와 `sitemap.xml`을 올리는 자동 PR을 dev로 연다(버전은 올리지 않는다).
 4. 운영에는 사용자가 정한 때 낸다(ADR-051 §3). 버전을 올리지 않고 데이터만 낼 때는 아래 1의 버전 올리기, 2의 pre-release, 5의 태그를 건너뛴다.
    1. 작업 폴더에서 `python scripts/release.py <patch|minor|major>`로 버전을 올린다. 스크립트는 `version.json`과 `sw-version.js`를 고쳐 커밋까지만 한다. 그 커밋을 릴리스 PR로 dev에 머지한다.
-   2. 그 커밋(`origin/dev`)을 체크아웃하고 데이터 서브모듈을 받은 작업 폴더를 `APP_ROOT`로 주어 `deploy.sh dev`를 실행하고(`APP_ROOT=~/projects/worktrees/<이름> deploy.sh dev`. 주지 않으면 원래 폴더를 빌드하는데, 그 폴더의 dev는 뒤처져 있을 수 있다), 사용자에게 dev.anglican.kr을 실제 기기에서 확인해 달라고 한다. 출력 끝의 빌드 식별자(`X.Y.Z-<앱 커밋>`)로 그 커밋에 태그와 pre-release를 만든다(ADR-052 §4, `docs/workflow.md` "릴리스").
+   2. 그 커밋(`origin/dev`)을 체크아웃하고 데이터 서브모듈을 받은 작업 폴더를 `APP_ROOT`로 주어 서버 저장소의 `prerelease.sh <릴리스 노트 초안>`을 실행한다(`APP_ROOT=~/projects/worktrees/<이름> prerelease.sh …`. 주지 않으면 원래 폴더를 보는데, 그 폴더의 dev는 뒤처져 있을 수 있다). 빌드 식별자(`X.Y.Z-<앱 커밋>`)로 태그와 pre-release를 만들고, pre-release가 나오면 CI `deploy-dev.yml`이 dev.anglican.kr에 올린다(ADR-052 §4, `docs/workflow.md` "릴리스"). CI가 끝나면 사용자에게 실제 기기에서 확인해 달라고 한다. 정식 태그가 이미 있거나 데이터만 바뀌어 pre-release를 만들지 않을 때는 같은 방식으로 `deploy.sh dev`를 실행한다.
    3. dev에서 main으로 PR을 REST로 연다(`gh api -X POST repos/anglican-kr/common-bible/pulls -f title="X.Y.Z 운영 반영" -f head=dev -f base=main -f body=…`). 원장은 쓰지 않는다. 그 커밋의 원장이 이미 dev에 있다.
    4. 검사가 통과하고 사용자가 확인하면 `git push origin <그 커밋>:main`으로 main을 앞당긴다. GitHub가 그 PR을 머지된 것으로 닫는다.
-   5. 그 커밋에 정식 태그(`X.Y.Z`)와 GitHub Release를 만들고 `deploy.sh promote`를 실행한다(태그와 릴리스 노트의 규칙은 `docs/workflow.md` 「릴리스」).
+   5. 그 커밋에 정식 태그(`X.Y.Z`)와 GitHub Release를 만들고, 그 커밋을 체크아웃하고 데이터 서브모듈을 받은 작업 폴더를 `APP_ROOT`로 주어 `deploy.sh promote`를 실행한다. promote는 그 폴더에서 빌드한 파일과 dev 빌드 폴더의 파일이 같은지 견준 뒤에만 운영을 바꾼다(ADR-052 §4). 태그와 릴리스 노트의 규칙은 `docs/workflow.md` 「릴리스」.
 
    `deploy.sh`는 dev 배포에 dev에 있는 커밋만, 운영 배포에 main과 같은 커밋만 받는다(ADR-051 §4).

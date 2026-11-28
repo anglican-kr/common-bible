@@ -43,12 +43,12 @@
 ### 빌드 식별자와 pre-release (ADR-052)
 
 - **배포한 빌드의 `version.json`에는 커밋이 둘 더 있다.** 서버 저장소의 `build-deploy.sh`가 zip에 넣는 사본에 `app_commit`과 `data_commit`을 적는다. 저장소의 `version.json`은 버전만 담는다.
-  - `app_commit`: 배포 목록(`deploy-manifest.txt`)에서 `data/`를 뺀 경로를 마지막으로 바꾼 커밋의 짧은 해시(7자리 이상). 앱 경로 가운데 `sitemap.xml`만 바꾸고 데이터 포인터를 바꾸거나 제목이 `data:` 형식인 커밋(데이터 자동 PR)은 건너뛴다(`build-deploy.sh`의 `last_app_commit`).
+  - `app_commit`: 배포 목록(`deploy-manifest.txt`)에서 `data/`를 뺀 경로를 마지막으로 바꾼 커밋의 짧은 해시(7자리 이상). 앱 경로 가운데 `sitemap.xml`만 바꾸고 데이터 포인터를 바꾸거나 제목이 `data:` 형식인 커밋(데이터 자동 PR)은 건너뛴다(서버 저장소 `lib/build-ids.sh`의 `last_app_commit`).
   - `data_commit`: 데이터 서브모듈이 체크아웃한 커밋의 짧은 해시. 서브모듈을 받지 않은 폴더(`data/`를 심볼릭 링크로 채운 작업 폴더)에서는 빌드가 멈춘다.
 - **`deploy.sh`의 배포 뒤 검증이 두 커밋도 비교한다.** dev와 운영 배포는 zip에 넣은 값과, promote와 되돌리기는 대상 빌드의 `version.json`에 적힌 값과 비교한다. 식별자가 없는 옛 빌드는 버전만 본다. dev 배포는 끝에 `Build id: 2.2.4-9985216 (data 1de377e, app HEAD 9985216)`처럼 빌드 식별자를 출력한다.
 - **설정 맨 아래의 버전 줄**은 `versionFooter`(`js/app/helpers.js`)가 만든다. `loadVersion()`(`js/app/data-fetch.js`)이 두 커밋을 `window.appBuild`에 옮겨 두고, dev 호스트에서 앱 커밋이 있으면 "공동번역성서 2.2.4-9985216 · 데이터 1de377e"와 앱 커밋 링크를, 아니면 "공동번역성서 2.2.4"와 그 버전의 Release 링크를 보인다. dev 호스트는 `sw.js`의 `IS_DEV`와 같은 셋(dev.anglican.kr, localhost, 127.0.0.1)이고, `helpers.test.js`가 두 목록을 비교한다. 로컬 서버는 저장소의 `version.json`을 내주므로 해시가 보이지 않는다.
 - **설정 화면을 버전보다 먼저 그리면 버전이 도착한 뒤 줄을 채운다.** 설정 화면에서 앱을 열거나 새로 고치면 `loadVersion()`이 끝나기 전에 그려진다. 전에는 이때 버전 없이 "공동번역성서"만 남았다(2026-11-23 e2e에서 발견).
-- pre-release 태그와 Release를 만드는 순서는 `docs/workflow.md` "릴리스"에 있다.
+- **pre-release를 내면 CI가 dev.anglican.kr에 올린다.** 서버 저장소의 `prerelease.sh`가 빌드 식별자로 태그를 달고 pre-release를 만들면, `deploy-dev.yml`이 `deploy.sh dev-ci`로 그 태그를 올린다. 식별자가 태그 이름과 다르면 빌드하기 전에 멈춘다(2026-11-28). 순서는 `docs/workflow.md` "릴리스"에 있다.
 
 ## 결정
 

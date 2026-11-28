@@ -39,7 +39,10 @@
 ## 릴리스
 
 - 태그는 annotated로 만들고(`git tag -a 1.0.x -m "..."`), 이름에 `v`를 붙이지 않는다(1.0.5부터). 메시지에 그 버전의 주요 변경을 적고 `git push origin <태그>`로 올린다. 태그 1.6.4와 1.5.12는 lightweight로 만들어져 이 규칙과 어긋난다.
-- **pre-release**(ADR-052 §4): 정식 태그가 아직 없는 버전을 dev.anglican.kr에 올리면(`git ls-remote --tags origin refs/tags/X.Y.Z`가 비어 있으면), `deploy.sh dev`가 끝에 출력하는 빌드 식별자(`Build id: X.Y.Z-<app_commit>`)를 이름으로 배포한 커밋에 annotated 태그를 단다. 태그 메시지에 데이터 커밋을 함께 적는다. 그다음 `gh release create <태그> --prerelease --verify-tag --title <태그> --notes-file <초안>`으로 pre-release를 만든다. 노트는 릴리스 PR의 릴리스 노트 초안이다.
+- **pre-release**(ADR-052 §4): 정식 태그가 아직 없는 버전을 dev.anglican.kr에 올릴 때는 서버 저장소의 `prerelease.sh <초안>`을 실행한다. 빌드 식별자(`X.Y.Z-<app_commit>`)를 이름으로 HEAD에 annotated 태그를 달고(메시지에 데이터 커밋과 HEAD), push한 뒤 `gh release create --prerelease`로 pre-release를 만든다. 노트는 릴리스 PR의 릴리스 노트 초안이다. pre-release가 나오면 CI `deploy-dev.yml`이 그 태그를 dev.anglican.kr에 올린다. 진행은 `gh run list --workflow deploy-dev.yml`로 본다.
+  - `prerelease.sh`는 HEAD가 `origin/dev`에 없거나, 정식 태그(`X.Y.Z`)가 이미 있거나, 같은 이름의 pre-release가 이미 있으면(데이터만 바뀐 경우) 멈춘다. 뒤의 둘은 `deploy.sh dev`로 손으로 올린다.
+  - `deploy.sh promote`는 `APP_ROOT`(origin/main을 체크아웃하고 데이터 서브모듈을 받은 폴더)에서 빌드한 파일과 dev 빌드 폴더의 파일을 견주어, 다르면 운영을 바꾸지 않는다. 빌드 폴더 이름은 CI 키로도 만들 수 있어 증명이 되지 않는다(2026-11-28).
+  - CI가 검증에서 실패하면 새 빌드가 올라간 채다. 로그의 안내대로 `deploy.sh rollback dev`를 실행한다. 같은 태그를 다시 올리려면 그 실행을 Re-run 한다.
   - 같은 버전에 앱 수정을 더해 다시 올려 빌드 식별자가 바뀌면 새로 만든다. 그 수정 PR이 버전을 올리지 않았어도 만든다. 데이터만 바뀌어 식별자가 같으면 만들지 않는다. 정식 태그가 이미 있는 버전을 올리는 시험 배포에는 만들지 않는다.
   - 정식 태그와 Release는 운영에 낼 때 main을 앞당긴 커밋에 새로 만든다. pre-release 태그는 옮기거나 고치지 않는다.
   - `changelog.py`의 이전 태그와 노트 끝의 비교 링크는 직전 정식 태그다. pre-release 태그가 아니다.
@@ -64,6 +67,7 @@
 - CI(`.github/workflows/`)
   - `test.yml`: 필수 검사 「Unit tests」. Node 24로 `node --test tests/unit/*.test.js`와 `npm run typecheck`를 돌린다(ADR-012, 013). `pull_request` 이벤트로 실행되고, dev에 머지된 커밋에서 한 번 더 실행된다.
   - `prose.yml`: 문장 검사. PR이 고친 줄만 보고 경고만 낸다. 필수 검사가 아니다(`tools/prose/README.md`).
+  - `deploy-dev.yml`: pre-release를 내면 그 태그를 dev.anglican.kr에 올린다(ADR-052 §4). 서버 저장소의 `deploy.sh dev-ci`를 실행하고, 빌드 식별자가 태그 이름과 다르면 멈춘다. 키와 서버 주소는 GitHub 환경 `dev`에 있고, 서버 키는 dev 말고는 바꾸지 못한다.
   - `ledger.yml`: 필수 검사 「Change ledger」. dev나 main으로 가는 PR에 새 원장이 있는지 보고, 머지된 원장의 변경을 막는다. `sync/` 자동 PR은 면제한다. dev에서 main으로 가는 PR(운영 반영)은 새 원장을 요구하지 않고 머지된 원장을 고쳤는지만 본다. 원장은 작업 PR이 dev에 이미 넣었고, 데이터 자동 PR만 모아 운영에 낼 때는 새 원장이 없다.
 - Claude Code 훅(`.claude/hooks/`)
   - `typecheck-js.sh`: JS를 고친 뒤 tsc를 돌린다. 여러 파일을 고치는 도중의 오류 보고는 정상이니, 끝에서 `npm run typecheck`를 다시 본다.
