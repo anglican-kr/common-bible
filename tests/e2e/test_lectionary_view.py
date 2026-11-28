@@ -2637,6 +2637,34 @@ def test_title_icon_drops_the_month_calendar_and_a_day_opens_its_lectionary(mobi
     assert page.locator(".cal-picker a[href='/lectionary']").get_attribute("aria-label").startswith("오늘, 11월 17일")
 
 
+def test_today_always_opens_todays_lectionary_from_the_top(mobile_context):
+    """「오늘」을 누르면 오늘의 전례독서를 보고 있었든, 캘린더 목록에서 왔든 늘 오늘 전례독서의 맨 위부터 보인다(ADR-038 §3, 사용자 결정 2026-11-28).
+    자료가 이미 있는 기기에서는 새 화면이 뼈대보다 먼저 들어와, 뼈대가 스크롤을 맨 위로 눌러 주지 않는다. 문서 높이를 고정해 그 경우를 만든다."""
+    page = mobile_context.new_page()
+    page.clock.set_fixed_time(datetime.datetime(2026, 11, 28, 12))
+    pin = "() => { document.documentElement.style.minHeight = '30000px'; }"
+    _open(page, "lectionary")
+    page.mouse.move(195, 500)
+    page.mouse.wheel(0, 1500)
+    page.wait_for_timeout(400)
+    assert page.evaluate("scrollY") > 1000
+    page.evaluate(pin)
+    press_center(page, "#page-title a[data-focus-key='today']")   # 오늘을 보다가
+    page.wait_for_timeout(800)
+    assert page.evaluate("[location.pathname, scrollY]") == ["/lectionary", 0]
+    page.mouse.wheel(0, 1500)
+    page.wait_for_timeout(400)
+    press_center(page, "#tab-bar a[data-tab='calendar']")
+    page.wait_for_selector(".cal-list li[data-date]")
+    page.wait_for_timeout(600)
+    assert page.evaluate("scrollY") > 1000
+    page.evaluate(pin)
+    press_center(page, "#page-title a[data-focus-key='today']")   # 캘린더 목록에서
+    page.wait_for_selector(".lectionary")
+    page.wait_for_timeout(800)
+    assert page.evaluate("[location.pathname, scrollY]") == ["/lectionary", 0]
+
+
 def test_title_date_opens_the_picker_as_a_popover_on_desktop(desktop_context):
     """마우스를 쓰는 넓은 화면에서는 날짜 아래 팝오버다. 키보드로도 열고, Esc로 닫으면 포커스가 날짜 단추로 돌아온다."""
     page = desktop_context.new_page()

@@ -59,6 +59,8 @@ const $app = _$("app");
 const $title = _$("page-title");
 /** 마지막으로 그린 날짜 — 날짜가 바뀐 다시 그리기만 맨 위에서 시작한다(commit). @type {string | null} */
 let committedDate = null;
+/** 「오늘」을 눌러 가는 주소. 그 주소의 다음 그리기는 같은 날이어도 맨 위에서 시작한다(commit, 사용자 결정 2026-11-28). @type {string | null} */
+let topOnNextDraw = null;
 // 이름은 views.js에 있다 — 이 모듈을 받지 못했을 때 라우터가 같은 제목으로 실패 화면을 그린다.
 const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
 // 이 화면의 링크(날짜 이동 · 전례독서 목록 · 독서 카드)는 #app을 통째로 다시 그린다 — 그 링크들은 `data-focus-key`만 달고, 라우터가
@@ -1327,6 +1329,10 @@ function buildDateStep(dir, href, label) {
 function commitDateBar(o) {
   const start = el("span", { className: "lect-bar-start" });
   const today = el("a", { className: "lect-today", href: o.todayHref, "data-focus-key": "today" }, "오늘");
+  // 「오늘」로 가는 전례독서는 맨 위부터 그린다(commit). 새 탭으로 여는 클릭은 이 화면을 바꾸지 않으므로 남기지 않는다
+  today.addEventListener("click", (e) => {
+    if (!isModifiedClick(e)) topOnNextDraw = new URL(o.todayHref, location.origin).pathname;
+  });
   const mid = el("span", { className: "lect-bar-mid" });
   mid.appendChild(buildDateStep("prev", o.prev.href, o.prev.label));
   mid.appendChild(el("span", { className: "lect-date" }, o.title));
@@ -2119,15 +2125,17 @@ function commit(m, chapters) {
   clearNode($app);
   // 날짜가 바뀌면 새 날은 맨 위부터 — 날짜 이동은 스크롤해도 보이는 머리에 있어 읽던 자리에서 누른다. 자료가 이미 있으면
   // 스켈레톤이 그려지기 전에 이 화면이 들어와 스크롤이 그대로 남았다. 같은 날의 전례독서 목록 · 독서 카드는 누른 자리로 돌아오고(라우터),
-  // 뒤로 가기는 이 뒤에 떠날 때의 스크롤을 되살린다(tab-history.js onRouteEnd).
-  const newDay = m.date !== committedDate;
+  // 뒤로 가기는 이 뒤에 떠날 때의 스크롤을 되살린다(tab-history.js onRouteEnd). 「오늘」은 오늘을 보고 있었어도, 같은 날을 전에 그렸어도
+  // 늘 맨 위부터다(사용자 결정 2026-11-28, ADR-038 §3). 같은 날이면 위의 규칙으로는 스크롤이 남는다
+  const fromTop = m.date !== committedDate || topOnNextDraw === location.pathname;
   committedDate = m.date;
+  topOnNextDraw = null;
 
   const root = el("div", { className: "lectionary" });
   // 붙이기 · 알리기 — 빈 전례일 화면도 같은 끝이다. 누른 컨트롤로 포커스를 돌려주는 것은 그 뒤 라우터의 몫이다(routing.js).
   const finish = () => {
     $app.appendChild(root);
-    if (newDay && window.scrollY !== 0) window.scrollTo({ top: 0, behavior: "instant" });
+    if (fromTop && window.scrollY !== 0) window.scrollTo({ top: 0, behavior: "instant" });
     announceDay(m);
   };
   root.appendChild(buildHeader(m));
