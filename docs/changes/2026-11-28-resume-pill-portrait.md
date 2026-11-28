@@ -1,4 +1,5 @@
 ---
+pr: 685
 date: 2026-11-28
 branch: feat/resume-pill-portrait
 title: "feat: 세로 화면의 이어 읽기를 탭 바 위 알약으로"
