@@ -105,6 +105,24 @@ def test_cite_chip_shows_in_lectionary_and_opens_sheet(desktop_context):
     }""")
 
 
+def test_a_sheet_opened_under_the_dropped_calendar_closes_the_calendar(mobile_context):
+    """작은 화면에서 달력을 연 채 밀려난 전례독서의 인용 칩을 누르면 달력이 닫히고 인용 시트가 열린다. 달력은 다른 시트보다 위 층이라, 두면 시트가
+    그 아래에 열리고 Esc가 달력부터 닫는다(코드 리뷰 2026-11-28, ADR-058 §3, overlay.js `open`)."""
+    page = mobile_context.new_page()
+    _open(page, "lectionary/2026-11-29")
+    page.evaluate("() => document.querySelector('#page-title button.title-view-btn').click()")
+    page.wait_for_selector(".cal-picker:not([hidden])")
+    page.wait_for_timeout(400)
+    page.evaluate("() => document.querySelector(\".lect-reading[data-slot='gospel'] .cite-chip\").click()")
+    page.wait_for_selector("#cite-sheet:not([hidden])", timeout=8_000)
+    page.wait_for_timeout(400)
+    assert page.evaluate("""() => { const p = document.querySelector('.cal-picker'); return [p.hidden || p.classList.contains('cal-picker-closing'),
+        document.querySelector('.cal-picker-trigger').getAttribute('aria-expanded')]; }""") == [True, "false"]
+    page.keyboard.press("Escape")
+    page.wait_for_function("() => document.getElementById('cite-sheet').hidden")
+    assert page.evaluate("getComputedStyle(document.getElementById('app')).transform") == "none"
+
+
 def test_note_anchor_survives_half_verse_cut_and_opens_tooltip(desktop_context):
     """창세 28:10-19상: 19절을 「그 곳을 베델이라 불렀다.」까지 자르고도 어절 「베델」의 주석 자리가 남아, 누르면 툴팁이 열린다.
     주석은 반절 자르기 앞에 감싼다(lectionary.js buildReading)."""

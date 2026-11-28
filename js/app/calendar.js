@@ -1075,7 +1075,8 @@ function selectPickerDay(date) {
   const s = pickerState;
   const p = picker;
   const d = parseDate(date);
-  if (!s || !p?.overlay.isOpen || s.view !== "list" || s.current === date || !d) return;
+  // 큰 화면의 팝오버는 뒤를 막으므로, 그 뒤에서 목록이 스크롤돼도 보던 판을 바꾸지 않는다
+  if (!s || !p?.overlay.isOpen || s.view !== "list" || s.current === date || !d || !isSmallLayout()) return;
   s.current = date;
   s.currentMonth = { y: d.y, m: d.m };
   if (s.mode !== "day") return;
@@ -1125,8 +1126,6 @@ function ensurePicker() {
   let closeTimer;
   /** 시트가 닫히는 움직임이 끝나면 숨기는 처리. 움직임 중에 다시 열면 지운다. @type {(() => void) | null} */
   let closeDone = null;
-  /** 판의 링크를 눌러 다른 화면으로 가며 닫는 중이다. @type {boolean} */
-  let leaving = false;
   const cancelClosing = () => {
     clearTimeout(closeTimer);
     if (closeDone) panel.removeEventListener("animationend", closeDone);
@@ -1160,19 +1159,19 @@ function ensurePicker() {
       if ((!active || active === document.body || panel.contains(active)) && trigger?.isConnected) focusInPicker(trigger);
     },
     // 작은 화면의 달력은 위로 미끄러져 닫힌다. 팝오버, 움직임을 줄인 설정, 작은 화면과 큰 화면의 경계를 넘을 때는 바로 닫는다
-    // 다른 화면으로 가도 판을 바로 숨기지 않고 새 화면 위에서 접혀 올라가게 한다(아래 `closeTransition`)
-    exitOverNavigation: true,
-    closeTransition: (p, finalizeHide, { navigating }) => {
+    // 다른 화면으로 가면(라우터가 닫으면) 판을 바로 숨기지 않고 새 화면 위에서 접혀 올라가게 한다. 새 화면은 밀려나지 않은 제자리에 바로 그린다
+    // (사용자 결정 2026-11-28). 판이 열려 있었든 접히는 중이었든 라우터가 이것을 부른다. 화면이 올라가는 움직임을 끝으로 보내지 않으면 새 화면이
+    // 아래에서 올라온다. 판의 링크를 눌러 떠날 때는 판의 처리기가 먼저 닫고(아래) 같은 누름에서 라우터가 이것을 부른다
+    onNavigateAway: settlePush,
+    closeTransition: (p, finalizeHide) => {
       if (layoutSwitching || large.matches || reduceMotion.matches) {
         finalizeHide();
         clearPickerPlace(p);
         return;
       }
       p.classList.add("cal-picker-closing");
-      // 밀려난 화면도 함께 올라간다. 판이 숨으면 `settlePush`가 정리한다. 다른 화면으로 가며 닫으면 새 화면은 밀려나지 않은 제자리에 바로 그리고,
-      // 달력만 그 위에서 접혀 올라간다(사용자 결정 2026-11-28). 새 화면이 아래에서 올라오지 않는다
-      if (navigating || leaving) settlePush();
-      else pushScreen(false);
+      // 밀려난 화면도 함께 올라간다. 판이 숨거나 다른 화면으로 가면 `settlePush`가 정리한다
+      pushScreen(false);
       /** @param {Event} [e] */
       const done = (e) => {
         // 안의 머리와 칸이 올라가는 움직임(cal-picker-slide-out)의 끝도 판으로 올라온다. 판 자신의 움직임이 끝날 때 숨긴다
@@ -1251,13 +1250,7 @@ function ensurePicker() {
       announce(`${d.m}월 ${d.d}일 ${CAL_WEEKDAY_FULL[dayOfWeek(date) ?? 0]} 목록`);
       return;
     }
-    // 바로 뒤에 라우터가 다른 화면으로 가므로, 라우터가 닫을 때처럼 화면은 제자리에 두고 달력만 접는다
-    leaving = true;
-    try {
-      overlay.close();
-    } finally {
-      leaving = false;
-    }
+    overlay.close();
   });
   // 큰 화면에서 창 크기가 바뀌면 자리를 다시 잡는다. 레이아웃의 경계를 넘으면 아래의 change 처리가 판을 닫는다
   window.addEventListener("resize", () => {

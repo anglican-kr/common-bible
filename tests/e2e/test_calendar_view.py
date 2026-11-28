@@ -1919,6 +1919,42 @@ def test_the_dropped_calendar_follows_the_list_scrolled_below_it(mobile_context)
     assert page.evaluate("[getComputedStyle(document.getElementById('app')).transform, document.documentElement.classList.contains('cal-drop')]") == ["none", False]
 
 
+def test_leaving_while_the_calendar_folds_up_draws_the_new_screen_in_place(mobile_context):
+    """달력을 닫아 접히는 동안(목록이 올라오는 중) 줄을 눌러 다른 화면으로 가도, 새 화면은 처음부터 제자리이고 달력만 마저 접힌다(ADR-058 §3,
+    코드 리뷰 2026-11-28). 라우터가 접히는 중인 판을 만나도 밀어 낸 화면을 제자리에 둔다(overlay.js `onNavigateAway`)."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2026-12-15")
+    _open_picker(page)
+    href = page.evaluate("""() => { const p = document.querySelector('.cal-picker').getBoundingClientRect().bottom + 120;
+        return [...document.querySelectorAll('.cal-list a.cal-row')].find((r) => r.getBoundingClientRect().top > p).getAttribute('href'); }""")
+    page.evaluate(RECORD_FRAMES)
+    page.evaluate("""h => { document.querySelector('.cal-picker-trigger').click();
+        requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector(`.cal-list a.cal-row[href="${h}"]`).click())); }""", href)
+    page.wait_for_url(f"{BASE}{href}")
+    page.wait_for_selector(".lect-head")
+    assert_calendar_folds_over_the_new_screen(page, href)
+
+
+def test_the_popover_does_not_follow_the_list_scrolled_behind_it(desktop_context):
+    """큰 화면의 팝오버는 뒤를 막으므로, 그 뒤에서 목록이 스크롤돼도 보던 판을 바꾸지 않는다(코드 리뷰 2026-11-28). 달력이 맨 위 줄을 따라가는 것은
+    작은 화면의 내려오는 달력뿐이다(ADR-058 §3)."""
+    page = desktop_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2026-12-15")
+    _open_picker(page)
+    _press(page, ".cal-picker .cal-picker-step >> nth=1")
+    page.wait_for_timeout(150)
+    assert _picker(page)["title"] == "2027년 1월"
+    page.evaluate("() => window.scrollBy(0, 900)")
+    page.wait_for_timeout(700)   # 스크롤이 멈추면 맨 위 줄을 주소에 남긴다
+    assert page.evaluate("location.pathname") != "/calendar/list/2026-12-15"
+    assert _picker(page)["title"] == "2027년 1월"   # 보던 달이 그대로다
+    _press(page, ".cal-picker .cal-picker-step >> nth=0")
+    page.wait_for_timeout(150)
+    assert _picker(page)["current"] == "/calendar/list/2026-12-15"   # 지금 보는 날도 연 때의 날이다
+
+
 def test_dropped_calendar_starts_under_the_status_bar_and_fits_320px(browser):
     """상태 표시줄 높이가 있어도 달력은 상단 바의 아래 끝에서 시작하고, 320px에서 큰 글자로도 가로로 넘치지 않으며 날마다 누를 자리가 있다."""
     ctx = browser.new_context(viewport={"width": 320, "height": 640}, user_agent=IPHONE_UA, is_mobile=True, has_touch=True)

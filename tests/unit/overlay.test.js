@@ -534,33 +534,51 @@ test("closeAllOverlays: force-hides an animated panel mid-dismiss (isOpen alread
   assert.equal(panel.hidden, true); // force-hidden so it doesn't linger over the next view
 });
 
-test("closeTransition: tells whether a route change closed it (closeAllOverlays) or a plain close()", () => {
-  const env = makeEnv();
-  const panel = new env.StubEl();
-  /** @type {boolean[]} */
-  const seen = [];
-  const ov = env.createOverlay({ panel, closeTransition: (_p, done, how) => { seen.push(how.navigating); done(); } });
-  ov.open();
-  ov.close();
-  ov.open();
-  env.closeAllOverlays();
-  ov.open();
-  ov.close();   // the flag does not outlive closeAllOverlays
-  assert.deepEqual(seen, [false, true, false]);
-});
-
-test("closeAllOverlays: exitOverNavigation lets the exit animation finish over the incoming view (ADR-058 §3)", () => {
+test("closeAllOverlays: onNavigateAway runs instead of the force-hide, open or mid-dismiss, and the exit finishes over the new view (ADR-058 §3)", () => {
   const env = makeEnv();
   const panel = new env.StubEl();
   /** @type {(() => void) | null} */
   let finalize = null;
-  const ov = env.createOverlay({ panel, exitOverNavigation: true, closeTransition: (_p, done) => { finalize = done; } });
+  let away = 0;
+  const ov = env.createOverlay({ panel, onNavigateAway: () => { away++; }, closeTransition: (_p, done) => { finalize = done; } });
   ov.open();
-  env.closeAllOverlays();
+  env.closeAllOverlays();   // open: close() runs, then the hook
   assert.equal(ov.isOpen, false);
   assert.equal(panel.hidden, false);   // still folding away
+  assert.equal(away, 1);
+  env.closeAllOverlays();   // mid-dismiss (a normal close the reader made just before leaving): the hook again, no force-hide
+  assert.equal(away, 2);
+  assert.equal(panel.hidden, false);
   /** @type {() => void} */ (/** @type {unknown} */ (finalize))();
   assert.equal(panel.hidden, true);
+  env.closeAllOverlays();   // hidden: nothing to settle
+  assert.equal(away, 2);
+});
+
+test("open: a blocking overlay closes an open non-blocking one first, which hands focus back before the capture (ADR-058 §3)", () => {
+  const env = makeEnv();
+  const drop = new env.StubEl();
+  const sheet = new env.StubEl();
+  const chip = new env.StubEl();
+  const icon = new env.StubEl();
+  const order = [];
+  const dropOv = env.createOverlay({ panel: drop, modal: false, onClose: () => { order.push("drop closed"); env.setActive(icon); } });
+  const sheetOv = env.createOverlay({ panel: sheet, inertSelectors: "main" });
+  const otherDrop = env.createOverlay({ panel: new env.StubEl(), modal: false });
+  dropOv.open();
+  otherDrop.open();   // two non-blocking ones stay open together
+  assert.equal(dropOv.isOpen && otherDrop.isOpen, true);
+  env.setActive(chip);
+  sheetOv.open();
+  assert.equal(dropOv.isOpen, false);
+  assert.equal(otherDrop.isOpen, false);
+  assert.deepEqual(order, ["drop closed"]);
+  sheetOv.close();
+  assert.equal(env.getActive(), icon);   // the sheet returns focus to where the closing drop left it
+  // A non-blocking open leaves a blocking one alone
+  sheetOv.open();
+  dropOv.open();
+  assert.equal(sheetOv.isOpen, true);
 });
 
 test("closeAllOverlays: leaves an already-hidden, never-opened overlay untouched", () => {

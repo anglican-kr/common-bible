@@ -1488,8 +1488,12 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
     transform: translateY(var(--cal-drop-h, 0px));
     transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }
-  /* 키보드로 옮긴 포커스가 화면 아래로 밀려난 자리에 가지 않게 한다 */
-  html.cal-drop { scroll-padding-bottom: var(--cal-drop-h, 0px); }
+  /* 키보드로 옮긴 포커스가 화면 아래로 밀려난 자리나 달력에 가려진 자리에 가지 않게 한다. 밀려난 화면의 줄은 화면에서 달력의 높이만큼 아래에 있다 */
+  html.cal-drop {
+    scroll-padding-top: calc(var(--top-bar-h, 0px) + var(--cal-drop-h, 0px));
+    scroll-padding-bottom: var(--cal-drop-h, 0px);
+  }
+  html.cal-drop:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week-h) + 8px + var(--cal-drop-h, 0px)); }
 }
 .cal-picker[hidden],
 .cal-picker-title[hidden] { display: none; }
