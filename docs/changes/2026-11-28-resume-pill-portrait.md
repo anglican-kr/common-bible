@@ -44,3 +44,13 @@ title: "feat: 세로 화면의 이어 읽기를 탭 바 위 알약으로"
 - `docs/decisions/055-rem-widths.md`: 하단 막대 목록 두 곳에서 「가로의」를 뺐다.
 - `docs/decisions/024-book-list-tabs-and-header-nav.md`: 구분 탭이 배너 아래에 붙는 것은 큰 화면이라고 적었다.
 - `tests/README.md`: `test_features.py`와 `test_book_name_swap.py`의 설명과 건수.
+
+## 리뷰 반영
+
+1회차(자체 리뷰 `/code-review medium --fix`, 2026-11-28)
+
+- **글자 크기가 바뀌어도 이름을 다시 재지 않았다(고침).** 짧은 이름으로 바꾸기(`applyResumeBannerCompactness`)는 크기 감시가 알약을 볼 때만 다시 잰다. 세로의 띠는 글자를 따라 높이가 바뀌어 감시가 알아챘지만, 알약은 높이와 양 끝이 정해져 있어 크기가 바뀌지 않는다. 마우스를 쓰는 작은 화면 창에서 목록을 연 채 글자 크기가 바뀌면(설정, 다른 기기에서 받은 설정) 옛 이름이 남았다. 이 변경이 만든 후퇴라 같은 PR에서 고쳤다. 글자 크기를 따라 높이가 바뀌는 상단 바의 제목 줄(`#page-title`)도 함께 감시한다. e2e 1건(`test_book_name_swap.py`, 24px에서 짧은 이름이던 「이어읽기: 요한의 첫째 편지 3장」이 14px에서 전체 이름으로, 다시 24px에서 짧은 이름으로)을 더했고, 감시를 빼면 실패한다.
+- **이어 읽기 링크와 ×의 hover 규칙(고침).** 터치 화면에서 누른 뒤 흐린 상태가 남지 않게 `@media (hover: hover)` 안으로 옮겼다(전역 지침, known-issues §72의 같은 종류).
+- **새 시험의 컨텍스트 닫기(고침).** `test_book_name_swap.py`의 반복마다 try/finally로 닫는다.
+- **세로 320px의 큰 글자에서 말줄임표가 장 번호를 가린다(사용자 결정 대기).** 구현하며 정한 것이라 사용자에게 묻는다.
+- 고친 뒤 `test_features.py`, `test_book_name_swap.py`, `test_safe_area_sides.py` 64건 통과, 유닛 2009건 통과.

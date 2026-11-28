@@ -4254,8 +4254,10 @@ mark.search-highlight--cut-start {
   text-align: center;
 }
 
-.resume-banner-link:hover {
-  opacity: 0.85;
+@media (hover: hover) {
+  .resume-banner-link:hover {
+    opacity: 0.85;
+  }
 }
 
 /* Resume-banner name swap — same swap pattern as book-list / page-title. */
@@ -4285,8 +4287,10 @@ mark.search-highlight--cut-start {
   flex-shrink: 0;
 }
 
-.resume-banner-close:hover {
-  background: color-mix(in srgb, var(--bg) 15%, transparent);
+@media (hover: hover) {
+  .resume-banner-close:hover {
+    background: color-mix(in srgb, var(--bg) 15%, transparent);
+  }
 }
 
 /* ── ADR-030 「적용 확장」: 작은 화면의 이어 읽기 배너 → 하단 알약 ──────────────────

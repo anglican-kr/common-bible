@@ -854,7 +854,10 @@ function _observeResumeBanner(wrapper) {
     const debounce = new Map();
     _resumeBannerObs = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        const target = entry.target;
+        // The title row stands in for the font size: the pill of the small layout keeps its size when the text size changes (fixed
+        // height, ends fixed to the dock), so it is not seen to resize — the title row's height follows the root font size.
+        const target = entry.target.classList.contains("resume-banner") ? entry.target : $resumeBannerSlot.querySelector(".resume-banner");
+        if (!target) continue;
         const prev = debounce.get(target);
         if (prev) clearTimeout(prev);
         debounce.set(target, setTimeout(() => {
@@ -865,6 +868,7 @@ function _observeResumeBanner(wrapper) {
     });
   }
   _resumeBannerObs.observe(wrapper);
+  if ($title) _resumeBannerObs.observe($title);
 }
 
 /**
