@@ -1749,9 +1749,9 @@ def _picker(page):
     }""")
 
 
-def test_picker_marks_whole_day_squares_and_fading_week_lines(mobile_context):
-    """월간 달력은 날을 원이 아니라 칸 전체의 사각형으로 표시한다. 지금 보는 날은 채우고 오늘은 테두리다. 주와 주 사이에는 양 끝이 투명해지는
-    선이 있다. 판의 위 끝은 상단 바의 아래 끝보다 아래로 떨어지지 않는다(틈이 선처럼 보였다, 사용자 결정 2026-11-27). 뒤를 어둡게 가리지 않는다
+def test_picker_marks_whole_day_squares_and_one_fading_line_under_the_weekdays(mobile_context):
+    """월간 달력은 날을 원이 아니라 칸 전체의 사각형으로 표시한다. 지금 보는 날은 채우고 오늘은 테두리다. 선은 요일 머리와 날짜 사이에 하나만
+    있고 양 끝이 투명해진다. 주와 주 사이에는 선이 없다(사용자 결정 2026-11-28). 판의 위 끝은 상단 바의 아래 끝보다 아래로 떨어지지 않는다(틈이 선처럼 보였다, 사용자 결정 2026-11-27). 뒤를 어둡게 가리지 않는다
     (사용자 결정 2026-11-28)."""
     page = mobile_context.new_page()
     _freeze_today(page)
@@ -1765,11 +1765,12 @@ def test_picker_marks_whole_day_squares_and_fading_week_lines(mobile_context):
         const day = (sel) => document.querySelector(`.cal-picker-day${sel}`);
         const cs = (el) => getComputedStyle(el);
         const sel = day('.is-selected'), today = day('.is-today:not(.is-selected)');
-        const second = document.querySelector('.cal-picker-days tbody tr + tr td');
+        const head = document.querySelector('.cal-picker-days thead th');
         const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
         return {
             selected: cs(sel).backgroundColor, selectedNum: cs(sel.querySelector('.cal-picker-num')).backgroundColor,
-            today: cs(today).boxShadow, line: cs(second).backgroundImage, firstRow: cs(document.querySelector('.cal-picker-days tbody td')).backgroundImage,
+            today: cs(today).boxShadow, line: cs(head).backgroundImage, linePlace: cs(head).backgroundPositionY,
+            weeks: [...document.querySelectorAll('.cal-picker-days tbody td')].map((td) => cs(td).backgroundImage).filter((b) => b !== 'none').length,
             gap: document.querySelector('.cal-picker').getBoundingClientRect().top - bar,
             scrim: document.querySelectorAll('.cal-picker-scrim').length,
         }; }""")
@@ -1777,7 +1778,8 @@ def test_picker_marks_whole_day_squares_and_fading_week_lines(mobile_context):
     assert state["selectedNum"] in ("rgba(0, 0, 0, 0)", "transparent"), state    # 숫자의 원은 없다
     assert "inset" in state["today"], state
     assert state["line"].startswith("linear-gradient") and "rgba(0, 0, 0, 0)" in state["line"], state   # 양 끝이 투명하다
-    assert state["firstRow"] == "none", state   # 첫 주 위에는 선이 없다
+    assert state["linePlace"] == "100%", state   # 요일 머리의 아래 끝
+    assert state["weeks"] == 0, state   # 주와 주 사이에는 선이 없다
     assert state["gap"] <= 0, state
     assert state["scrim"] == 0, state
 

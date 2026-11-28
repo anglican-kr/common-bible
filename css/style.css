@@ -1651,20 +1651,23 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   text-align: center;
 }
 .cal-picker-days td { padding: 1px 0; text-align: center; }
-/* 주와 주 사이의 선은 목록의 선처럼 양 끝으로 갈수록 투명해진다(사용자 결정 2026-11-27). 표의 줄(tr)에는 바탕을 그리지 못하는 브라우저가 있어,
-   칸마다 일곱 칸 너비의 그라디언트를 깔고 칸의 자리만큼 옮겨 한 줄로 잇는다 */
-.cal-picker-days tbody tr + tr td {
+/* 선은 요일 머리와 날짜 사이에 하나만 둔다. 주와 주 사이에는 두지 않는다(사용자 결정 2026-11-28. 2026-11-27부터는 주 사이에 있었다). 목록의 선처럼
+   양 끝으로 갈수록 투명해진다. 표의 줄(tr)에는 바탕을 그리지 못하는 브라우저가 있어, 요일 칸마다 일곱 칸 너비의 그라디언트를 아래 끝에 깔고 칸의
+   자리만큼 옮겨 한 줄로 잇는다 */
+.cal-picker-days thead th {
   background-image: linear-gradient(to right, transparent, var(--border) 20%, var(--border) 80%, transparent);
   background-size: 700% 1px;
   background-repeat: no-repeat;
 }
-.cal-picker-days tbody tr + tr td:nth-child(1) { background-position: 0 0; }
-.cal-picker-days tbody tr + tr td:nth-child(2) { background-position: calc(100% / 6) 0; }
-.cal-picker-days tbody tr + tr td:nth-child(3) { background-position: calc(200% / 6) 0; }
-.cal-picker-days tbody tr + tr td:nth-child(4) { background-position: 50% 0; }
-.cal-picker-days tbody tr + tr td:nth-child(5) { background-position: calc(400% / 6) 0; }
-.cal-picker-days tbody tr + tr td:nth-child(6) { background-position: calc(500% / 6) 0; }
-.cal-picker-days tbody tr + tr td:nth-child(7) { background-position: 100% 0; }
+.cal-picker-days thead th:nth-child(1) { background-position: 0 100%; }
+.cal-picker-days thead th:nth-child(2) { background-position: calc(100% / 6) 100%; }
+.cal-picker-days thead th:nth-child(3) { background-position: calc(200% / 6) 100%; }
+.cal-picker-days thead th:nth-child(4) { background-position: 50% 100%; }
+.cal-picker-days thead th:nth-child(5) { background-position: calc(400% / 6) 100%; }
+.cal-picker-days thead th:nth-child(6) { background-position: calc(500% / 6) 100%; }
+.cal-picker-days thead th:nth-child(7) { background-position: 100% 100%; }
+/* 선 아래의 첫 주가 선에 붙지 않게 한다 */
+.cal-picker-days tbody tr:first-child td { padding-top: var(--space-1); }
 .cal-picker-day {
   display: flex;
   flex-direction: column;
