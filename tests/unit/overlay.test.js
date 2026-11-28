@@ -176,6 +176,7 @@ function makeEnv() {
     createOverlay: ctx.appOverlay.createOverlay,
     closeAllOverlays: ctx.appOverlay.closeAllOverlays,
     whenNoOverlayOpen: ctx.appOverlay.whenNoOverlayOpen,
+    anyOverlayOpen: ctx.appOverlay.anyOverlayOpen,
     attachSheetDrag: ctx.appOverlay.attachSheetDrag,
     attachSheetResize: ctx.appOverlay.attachSheetResize,
     document,
@@ -553,6 +554,47 @@ test("closeAllOverlays: onNavigateAway runs instead of the force-hide, open or m
   assert.equal(panel.hidden, true);
   env.closeAllOverlays();   // hidden: nothing to settle
   assert.equal(away, 2);
+});
+
+test("closeAllOverlays({ keepNonBlocking }): a same-address redraw leaves an open non-blocking overlay open and closes the rest (ADR-058 §3)", () => {
+  const env = makeEnv();
+  const drop = new env.StubEl();
+  const sheet = new env.StubEl();
+  let away = 0;
+  const dropOv = env.createOverlay({ panel: drop, modal: false, onNavigateAway: () => { away++; } });
+  const sheetOv = env.createOverlay({ panel: sheet, modal: false });
+  const blocking = env.createOverlay({ panel: new env.StubEl() });
+  dropOv.open();
+  sheetOv.open();
+  env.closeAllOverlays({ keepNonBlocking: true });
+  assert.equal(dropOv.isOpen && sheetOv.isOpen, true);
+  assert.equal(drop.hidden, false);
+  assert.equal(away, 0);
+  blocking.open();   // closes the non-blocking ones (one layer at a time)
+  env.closeAllOverlays({ keepNonBlocking: true });
+  assert.equal(blocking.isOpen, false);
+  dropOv.open();
+  env.closeAllOverlays();   // a real navigation still closes it (no exit animation here, so no hook either)
+  assert.equal(dropOv.isOpen, false);
+  assert.equal(drop.hidden, true);
+});
+
+test("whenNoOverlayOpen: an open non-blocking overlay does not hold the work back (ADR-058 §3)", async () => {
+  const env = makeEnv();
+  const dropOv = env.createOverlay({ panel: new env.StubEl(), modal: false });
+  const modalOv = env.createOverlay({ panel: new env.StubEl(), modal: () => true });
+  const ran = [];
+  dropOv.open();
+  assert.equal(env.anyOverlayOpen(), false);
+  env.whenNoOverlayOpen(() => ran.push("now"));
+  assert.deepStrictEqual(ran, ["now"]);
+  modalOv.open();
+  assert.equal(env.anyOverlayOpen(), true);
+  env.whenNoOverlayOpen(() => ran.push("later"));
+  assert.deepStrictEqual(ran, ["now"]);
+  modalOv.close();
+  await Promise.resolve();
+  assert.deepStrictEqual(ran, ["now", "later"]);
 });
 
 test("open: a blocking overlay closes an open non-blocking one first, which hands focus back before the capture (ADR-058 §3)", () => {

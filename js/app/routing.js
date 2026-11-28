@@ -438,13 +438,15 @@ function redrawIfSyncedSettingsChanged() {
   if (!changed) return undefined;
   // 캘린더 목록은 맨 위 줄을 스크롤이 멈출 때 주소에 남긴다. route()가 순번을 올리면 낡은 화면이라 남기지 못하므로 그 전에 알린다(ADR-038 §2).
   window.dispatchEvent(new Event("route:before-redraw"));
-  return route();
+  // 같은 주소를 다시 그리므로 작은 화면의 달력처럼 뒤를 막지 않는 판은 열어 둔다(ADR-058 §3, 코드 리뷰 2026-11-28)
+  return route({ keepNonBlocking: true });
 }
 
 /**
  * 주소의 화면을 그린다.
- * @param {{ pageView?: boolean }} [opts]  `pageView: false`면 방문(page_view)을 보내지 않는다. 읽는 분이 화면을 연 것이 아니라 창 크기가 바뀌어
- *   다시 그릴 때 쓴다(calendar.js `redrawForLayout`). 주소를 바꿔도 방문이 늘지 않는 것과 같은 원칙이다(ADR-038 §2, 사용자 결정 2026-11-23).
+ * @param {{ pageView?: boolean, keepNonBlocking?: boolean }} [opts]  `pageView: false`면 방문(page_view)을 보내지 않는다. 읽는 분이 화면을 연 것이
+ *   아니라 창 크기가 바뀌어 다시 그릴 때 쓴다(calendar.js `redrawForLayout`). 주소를 바꿔도 방문이 늘지 않는 것과 같은 원칙이다(ADR-038 §2, 사용자 결정
+ *   2026-11-23). `keepNonBlocking: true`면 뒤를 막지 않고 열린 판(작은 화면의 달력)을 닫지 않는다. 같은 주소를 다시 그릴 때 쓴다(overlay.js `closeAllOverlays`).
  */
 async function route(opts) {
   const pageView = opts?.pageView !== false;
@@ -491,7 +493,7 @@ async function route(opts) {
   // hardcodes each overlay's id + close fn (was 12 closeIfOpen calls + the
   // settings / chapter popovers). Closing the chapter picker / settings popover
   // on nav also makes the /settings desktop fallback's gear.click() always OPEN.
-  window.appOverlay.closeAllOverlays();
+  window.appOverlay.closeAllOverlays({ keepNonBlocking: opts?.keepNonBlocking === true });
   // The note tooltip is not an overlay (no scrim, focus trap or focus restore), so it closes here on its own. Without
   // this a route its outside-click close did not see — back · forward, a redraw of the same address, a tab bar icon
   // (an SVG target, which that close skips) — left it open over the new screen, its anchor gone, under the header, and

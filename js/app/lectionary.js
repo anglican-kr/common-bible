@@ -1424,6 +1424,8 @@ function commitTitleDateNav(m) {
       next: { href: m.hrefs.next, label: "다음날" },
       view: { trigger: drop },
     });
+    // 달력이 열린 채 같은 화면을 다시 그리면(다른 기기에서 받은 설정) 새 단추가 판의 단추다(calendar.js `adoptPickerTrigger`)
+    window.adoptCalendarPickerTrigger?.(drop, "lectionary");
     return;
   }
   // 캘린더의 달 제목과 같은 단추다(helpers.js `datePickerTrigger`). 판에서 날을 고르면 새 화면의 이 단추로 포커스가 돌아온다. 단추의 이름은

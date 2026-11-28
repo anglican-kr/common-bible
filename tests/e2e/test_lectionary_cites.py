@@ -121,6 +121,8 @@ def test_a_sheet_opened_under_the_dropped_calendar_closes_the_calendar(mobile_co
     page.keyboard.press("Escape")
     page.wait_for_function("() => document.getElementById('cite-sheet').hidden")
     assert page.evaluate("getComputedStyle(document.getElementById('app')).transform") == "none"
+    # 칩을 눌러도 포커스가 옮겨 가지 않는 아이폰처럼(스크립트의 click) 포커스가 달력 안에 있었어도, 시트는 달력 아이콘이 아니라 칩으로 돌려준다
+    assert page.evaluate("() => document.activeElement === document.querySelector(\".lect-reading[data-slot='gospel'] .cite-chip\")")
 
 
 def test_one_escape_closes_the_note_tooltip_before_the_dropped_calendar(mobile_context):

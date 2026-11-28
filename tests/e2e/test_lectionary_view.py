@@ -2591,6 +2591,30 @@ def _picker_state(page):
     }""")
 
 
+def test_settings_from_another_device_redraw_the_lectionary_under_the_open_calendar(mobile_context):
+    """작은 화면의 전례독서에서 달력을 연 채 다른 기기에서 받은 설정이 독서를 바꾸면, 전례독서는 다시 그리고 달력은 열린 채로 둔다. 다시 그린 상단 바의
+    아이콘이 달력의 단추라 펼쳐져 있다고 알리고, 누르면 달력이 닫힌다(ADR-058 §3, 코드 리뷰 2026-11-28)."""
+    page = mobile_context.new_page()
+    page.clock.set_fixed_time(datetime.datetime(2026, 11, 17, 12))
+    _open(page, "lectionary/2026-11-29")
+    btn = "#page-title button.title-view-btn"
+    press_center(page, btn)
+    page.wait_for_selector(".cal-picker:not([hidden])")
+    page.wait_for_timeout(400)
+    page.evaluate("() => { window.__mark = document.querySelector(\"#page-title button.title-view-btn\"); }")
+    page.evaluate("() => { localStorage.setItem('bible-lectionary-alt-show', '1'); window.redrawIfSyncedSettingsChanged(); }")
+    page.wait_for_function("() => !window.__mark.isConnected && document.querySelector('#page-title button.title-view-btn')")
+    page.wait_for_timeout(400)
+    assert page.evaluate("""() => { const p = document.querySelector('.cal-picker'); return !p.hidden && !p.classList.contains('cal-picker-closing'); }""")
+    assert page.evaluate("document.documentElement.classList.contains('cal-drop')")
+    assert page.get_attribute(btn, "aria-expanded") == "true"
+    press_center(page, btn)
+    page.wait_for_timeout(500)
+    assert page.evaluate("() => document.querySelector('.cal-picker').hidden")
+    assert page.get_attribute(btn, "aria-expanded") == "false"
+    assert page.evaluate("getComputedStyle(document.getElementById('app')).transform") == "none"
+
+
 def test_title_icon_drops_the_month_calendar_and_a_day_opens_its_lectionary(mobile_context):
     """작은 화면의 전례독서에서 오른쪽 아이콘은 캘린더와 같은 월간 달력을 내린다(ADR-058 §3). 그달의 날 판이 상단 바 아래로 내려오고 지금 보는 날이
     골라져 있다. 뒤를 가리지 않고 전례독서를 달력의 높이만큼 밀어 낸다(사용자 결정 2026-11-28). 날을 고르면 그날의 전례독서가 열리고(고른

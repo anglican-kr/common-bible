@@ -1971,6 +1971,30 @@ def test_a_day_in_the_dropped_calendar_moves_the_list_below_and_keeps_it_open(mo
     assert page.url == f"{BASE}/calendar/list/2027-03-20"
 
 
+def test_settings_from_another_device_redraw_the_list_under_the_open_calendar(mobile_context):
+    """작은 화면에서 달력을 연 채 다른 기기에서 받은 설정이 목록의 내용을 바꾸면, 목록은 다시 그리고 달력은 열린 채로 둔다. 맨 위 줄은 그대로
+    달력 바로 아래다(ADR-058 §3, 코드 리뷰 2026-11-28. 전에는 같은 주소를 다시 그리는 라우터가 달력을 접었다)."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2027-02-10")
+    _open_picker(page)
+    page.evaluate("() => { window.__mark = document.querySelector('.cal-list'); }")
+    # 동기화가 대체 독서 표시를 바꿔 저장한 뒤 부르는 것과 같다(sync/state-machine.js)
+    page.evaluate("() => { localStorage.setItem('bible-lectionary-alt-show', '1'); window.redrawIfSyncedSettingsChanged(); }")
+    page.wait_for_function("() => !window.__mark.isConnected && document.querySelector('li[data-date=\"2027-02-10\"]')")
+    page.wait_for_timeout(400)
+    state = _picker(page)
+    assert state is not None and state["current"] == "/calendar/list/2027-02-10" and state["expanded"] == "true", state
+    assert page.evaluate("document.documentElement.classList.contains('cal-drop')")
+    assert abs(_under_calendar(page, "2027-02-10")) <= 2
+    assert page.url == f"{BASE}/calendar/list/2027-02-10"
+    _press(page, ".cal-picker-trigger")   # 새로 그린 아이콘으로 닫는다
+    page.wait_for_timeout(500)
+    assert _picker(page) is None
+    assert page.evaluate("getComputedStyle(document.getElementById('app')).transform") == "none"
+    assert page.evaluate("document.activeElement.classList.contains('cal-picker-trigger')")
+
+
 def test_a_day_near_the_end_of_the_drawn_list_still_comes_to_the_top(mobile_context):
     """달력에서 고른 날이 그려 둔 목록의 아래 끝 가까이에 있으면 스크롤이 끝에 막혀 그 줄이 맨 위에 오지 못한다. 그때는 목록을 그날부터 다시 그려,
     맨 위 줄과 주소와 달력의 지금 보는 날이 모두 고른 날이다(코드 리뷰 2026-11-28. 전에는 몇 줄 위의 날이 맨 위에 남아 주소가 그날로 바뀌었다)."""

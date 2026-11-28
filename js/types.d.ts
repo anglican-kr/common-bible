@@ -1095,10 +1095,11 @@ export interface AppOverlay {
   createOverlay: (opts: OverlayOptions) => OverlayController;
   // Dismiss every currently-open overlay (route() calls this on navigation).
   // ADR-034 PR5b — replaces the router's hardcoded per-overlay teardown list.
-  closeAllOverlays: () => void;
-  // 열린 창이 하나도 없으면 바로, 있으면 마지막 창이 닫힌 뒤에 실행한다(route()가 열린 창을 모두 닫으므로 다시 그리기를 미룬다).
+  // `keepNonBlocking`: 같은 주소를 다시 그리므로 뒤를 막지 않는 판(작은 화면의 달력)은 열어 둔다(ADR-058 §3).
+  closeAllOverlays: (opts?: { keepNonBlocking?: boolean }) => void;
+  // 뒤를 막는 창이 하나도 없으면 바로, 있으면 마지막 창이 닫힌 뒤에 실행한다(route()가 그 창들을 닫으므로 다시 그리기를 미룬다).
   whenNoOverlayOpen: (fn: () => void) => void;
-  // 지금 열린 창이 있는가. 날짜 고르기 판을 늦게 불러온 사이 다른 창이 열렸으면 판을 열지 않는다(lectionary.js `openDatePicker`).
+  // 지금 뒤를 막는 창이 열려 있는가. 날짜 고르기 판을 늦게 불러온 사이 다른 창이 열렸으면 판을 열지 않는다(lectionary.js `openDatePicker`).
   anyOverlayOpen: () => boolean;
   // Bottom-sheet drag plumbing (ADR-032 §2), shared by the bookmark drawer +
   // cite sheet. Lifecycle stays with the overlay/caller; these only wire the
@@ -1489,6 +1490,8 @@ declare global {
     closeChapterPopover?: () => void;
     /** 캘린더의 날짜 고르기 판을 닫는다(calendar.js, ADR-038 §2). 캘린더 모듈을 받기 전에는 없다. */
     closeCalendarPicker?: () => boolean;
+    /** 판이 열린 채 다시 그린 상단 바의 새 단추를 판의 단추로 삼는다(calendar.js `adoptPickerTrigger`). 캘린더 모듈을 받기 전에는 없다. */
+    adoptCalendarPickerTrigger?: (trigger: HTMLElement, view: "month" | "list" | "lectionary") => boolean;
     closeBookmarkDrawer?: () => void;
     closeSaveModal?: () => void;
     closeNewFolderModal?: () => void;
@@ -1617,7 +1620,7 @@ declare global {
   function clearAllCaches(): Promise<void>;
   // routing.js — the view-discriminated route descriptor (`Route` above).
   function parsePath(): Route;
-  function route(opts?: { pageView?: boolean }): Promise<void>;
+  function route(opts?: { pageView?: boolean, keepNonBlocking?: boolean }): Promise<void>;
   function navigate(path: string): void;
   function setTitle(text: string): void;
   function hideAudioBar(): void;

@@ -733,12 +733,7 @@ function commitMonthBar(model, view) {
   trigger.addEventListener("click", (e) => {
     if (!closeCalendarPicker()) openCalendarPicker(trigger, view, e.detail > 0);
   });
-  // 판이 열린 채 바를 다시 그리면(데스크톱 목록에서 팝오버 아래로 스크롤해 계산 범위 끝에 이른 때) 새 제목 단추를 판의 제목 단추로 삼는다.
-  // 그러지 않으면 닫을 때 포커스를 돌려줄 곳과 팝오버의 자리를 잴 곳이 문서에서 빠진 단추다
-  if (pickerState && picker?.overlay.isOpen && pickerState.view === view) {
-    pickerState.trigger = trigger;
-    trigger.setAttribute("aria-expanded", "true");
-  }
+  adoptPickerTrigger(trigger, view);
   // 이전 · 다음 달은 계산 범위 밖이면 자리만 지킨다
   commitDateBar({
     title: small ? month : trigger,
@@ -1318,6 +1313,22 @@ function closeCalendarPicker() {
   return true;
 }
 window.closeCalendarPicker = closeCalendarPicker;
+
+/**
+ * 판이 열린 채 상단 바를 다시 그리면 새 단추를 판의 단추로 삼는다. 데스크톱 목록에서 팝오버 아래로 스크롤해 계산 범위 끝에 이른 때와, 다른 기기에서
+ * 받은 설정으로 같은 화면을 다시 그릴 때(작은 화면의 달력은 열린 채로 있다. routing.js `redrawIfSyncedSettingsChanged`)다. 그러지 않으면 닫을 때
+ * 포커스를 돌려줄 곳과 팝오버의 자리를 잴 곳이 문서에서 빠진 단추이고, 새 단추는 판이 닫혀 있다고 알린다(`aria-expanded`).
+ * @param {HTMLElement} trigger
+ * @param {PickerView} view
+ * @returns {boolean} 삼았으면 true
+ */
+function adoptPickerTrigger(trigger, view) {
+  if (!pickerState || !picker?.overlay.isOpen || pickerState.view !== view) return false;
+  pickerState.trigger = trigger;
+  trigger.setAttribute("aria-expanded", "true");
+  return true;
+}
+window.adoptCalendarPickerTrigger = adoptPickerTrigger;
 
 /** 색 점 줄 — 장식(aria-hidden). 색 이름은 링크 이름이 싣는다. @param {string[]} colors */
 function buildDots(colors) {

@@ -79,10 +79,15 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
   // whether the route found it open or already mid-dismiss. Detached panels
   // (per-open-rebuilt overlays whose element was replaced, e.g. chapter picker) are
   // pruned so the list stays bounded.
-  function closeAllOverlays() {
+  // `keepNonBlocking`: the same address is being redrawn (synced settings changed what the screen shows), so an open
+  // overlay that does not block the app (the small layout's drop-down calendar) stays open over the redrawn screen.
+  // 다른 기기에서 받은 설정으로 다시 그릴 때 열어 둔 달력이 접혔다(코드 리뷰 2026-11-28, ADR-058 §3).
+  /** @param {{ keepNonBlocking?: boolean }} [opts] */
+  function closeAllOverlays({ keepNonBlocking = false } = {}) {
     for (let i = _overlayRegistry.length - 1; i >= 0; i--) {
-      const { panel, controller, onNavigateAway } = _overlayRegistry[i];
+      const { panel, controller, onNavigateAway, blocking } = _overlayRegistry[i];
       if (!panel.isConnected) { _overlayRegistry.splice(i, 1); continue; }
+      if (keepNonBlocking && controller.isOpen && !blocking()) continue;
       if (controller.isOpen) controller.close();
       if (panel.hidden) continue;
       if (onNavigateAway) onNavigateAway();
@@ -94,8 +99,10 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
   /** @type {Array<() => void>} */
   const _whenClear = [];
 
+  // 뒤를 막는 창만 센다. 뒤를 막지 않는 판(작은 화면의 달력)은 같은 주소를 다시 그려도 열린 채로 있으므로(`closeAllOverlays`의
+  // `keepNonBlocking`) 다시 그리기를 미룰 까닭이 없다. 미루면 달력을 닫을 때까지 아래 화면이 옛 내용이다(코드 리뷰 2026-11-28)
   function anyOverlayOpen() {
-    return _overlayRegistry.some(({ panel, controller }) => panel.isConnected && controller.isOpen);
+    return _overlayRegistry.some(({ panel, controller, blocking }) => panel.isConnected && controller.isOpen && blocking());
   }
 
   function flushWhenClear() {
@@ -104,7 +111,7 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
   }
 
   /**
-   * 열린 창이 하나도 없으면 `fn`을 바로 실행하고, 있으면 마지막 창이 닫힌 뒤에 실행한다. 설정 팝오버를 닫으면서 다른 창(앱 설치 안내,
+   * 뒤를 막는 창이 하나도 없으면 `fn`을 바로 실행하고, 있으면 마지막 창이 닫힌 뒤에 실행한다. 설정 팝오버를 닫으면서 다른 창(앱 설치 안내,
    * 동기화 해제 확인)을 연 경우에 그 창을 닫지 않고 다시 그리려는 것이다(ADR-041 §6, PR #542 리뷰).
    * @param {() => void} fn
    */
