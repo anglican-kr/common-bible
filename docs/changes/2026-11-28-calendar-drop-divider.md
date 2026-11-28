@@ -23,6 +23,7 @@ title: "fix: 내려오는 달력 아래의 틈 없애고 구분선 긋기"
 - 재현과 확인(Chromium, 390×844, 상태 표시줄 59px): 상단 바의 아래 끝을 119.06, 119.36, 119.56, 119.72, 120.0px로 두고 달력 아래의 기기 픽셀 줄을 셌다. 고치기 전에는 119.72px에서 0.83px 틈에 글자가 보였고, 고친 뒤에는 1, 2, 3배율 모두에서 구분선(1px)만 바탕과 다르고 그 위아래는 바탕이다.
 - 유닛 `node --test tests/unit/*.test.js` 2009건 통과, `npm run typecheck` 통과.
 - e2e: 날짜 고르기를 다루는 `test_calendar_view.py` 17건을 먼저 돌려 통과했다. 새 시험 `test_the_stuck_week_label_tucks_under_the_divider_without_a_gap`은 상단 바에 0.66px 여백을 주고, 주간 라벨의 위 끝이 구분선의 위 끝과 같은지(0.01px 안), 달력이 줄어 화면이 따라가는 중에도 바탕의 아래 끝이 화면의 위 끝과 같은지 본다. 밀어 낸 길이를 달력의 높이와 견주던 시험은 화면의 위 끝과 구분선의 위 끝을 견주게 고쳤다(`conftest.py`의 `SCREEN_UNDER_DIVIDER`). 펼치는 동안 바탕과 화면의 위 끝을 견주는 허용 오차는 1px에서 0.01px로 줄였다. 그 1px이 이번 틈을 놓쳤다.
+- e2e `test_calendar_view.py`와 `test_lectionary_view.py` 전체(249건): 247건 통과, 2건 실패. `test_list_and_lectionary_share_the_head_row`는 폭 320px에서 ‹ 자리가 3.4px 다른 실패로, 이전 원장(`2026-11-28-calendar-picker-gap.md`, `2026-11-28-calendar-drop-push.md`)이 dev 코드에서도 같은 값으로 실패한다고 적은 것이다. `test_view_button_switches_between_month_and_list_keeping_the_month`는 페이지 열기가 30초 안에 끝나지 않은 실패였고, 따로 돌리면 통과한다.
 
 ## 갱신한 문서
 
