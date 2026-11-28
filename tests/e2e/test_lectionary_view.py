@@ -25,8 +25,8 @@ from pathlib import Path
 import pytest
 
 from .conftest import (
-    CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, RECORD_FRAMES, SHOW_ALT_READINGS, assert_calendar_folds_over_the_new_screen, emulate_status_bar,
-    open_settings, press_center, pseudo_session, style_in_state,
+    CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, RECORD_FRAMES, SCREEN_UNDER_DIVIDER, SHOW_ALT_READINGS, assert_calendar_folds_over_the_new_screen,
+    emulate_status_bar, open_settings, press_center, pseudo_session, style_in_state,
 )
 
 BASE = "http://localhost:8080"
@@ -2633,9 +2633,10 @@ def test_title_icon_drops_the_month_calendar_and_a_day_opens_its_lectionary(mobi
     assert _picker_state(page) == {"name": "날짜 고르기", "title": "2027년 5월", "current": "/lectionary/2027-05-02",
                                    "focus": "/lectionary/2027-05-02"}, _picker_state(page)
     assert page.get_attribute(btn, "aria-expanded") == "true"
-    pushed = page.evaluate("""() => ({ scrim: document.querySelectorAll('.cal-picker-scrim').length, inert: document.getElementById('app').inert,
-        push: new DOMMatrixReadOnly(getComputedStyle(document.getElementById('app')).transform).m42 - document.querySelector('.cal-picker').offsetHeight })""")
-    assert pushed["scrim"] == 0 and pushed["inert"] is False and abs(pushed["push"]) < 0.5, pushed
+    pushed = page.evaluate("""() => ({ scrim: document.querySelectorAll('.cal-picker-scrim').length, inert: document.getElementById('app').inert })""")
+    assert pushed["scrim"] == 0 and pushed["inert"] is False, pushed
+    under = page.evaluate(SCREEN_UNDER_DIVIDER)
+    assert abs(under) < 0.01, under   # 화면의 위 끝이 달력 맨 아래 구분선 밑에 들어간다
     page.evaluate(RECORD_FRAMES)
     press_center(page, ".cal-picker a[href='/lectionary/2027-05-10']")
     page.wait_for_url(f"{BASE}/lectionary/2027-05-10")

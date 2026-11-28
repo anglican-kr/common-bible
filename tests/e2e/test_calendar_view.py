@@ -31,6 +31,7 @@ from .conftest import (
     press_center,
     RECORD_ANNOUNCEMENTS,
     RECORD_FRAMES,
+    SCREEN_UNDER_DIVIDER,
     assert_calendar_folds_over_the_new_screen,
 )
 
@@ -1884,15 +1885,19 @@ def _freeze_today(page):
 
 
 def _under_calendar(page, date):
-    """그 날짜의 줄 위쪽과, 내려온 달력의 아래 끝에 고정된 주간 라벨의 높이를 더한 자리의 거리. 달력이 목록을 밀어 내면 맨 위 줄은 달력 바로 아래다."""
-    return page.evaluate("""d => document.querySelector(`li[data-date="${d}"]`).getBoundingClientRect().top
-        - (document.querySelector('.cal-picker').getBoundingClientRect().bottom + (document.querySelector('.cal-week')?.getBoundingClientRect().height ?? 0))""", date)
+    """그 날짜의 줄 위쪽과, 내려온 달력 맨 아래 구분선의 위 끝에 고정된 주간 라벨의 높이를 더한 자리의 거리. 달력이 목록을 밀어 내면 맨 위 줄은 달력
+    바로 아래다. 목록의 위 끝은 구분선 밑에 들어간다(calendar.js `dropLength`)."""
+    return page.evaluate("""d => { const p = document.querySelector('.cal-picker');
+        return document.querySelector(`li[data-date="${d}"]`).getBoundingClientRect().top
+            - (p.getBoundingClientRect().bottom - (parseFloat(getComputedStyle(p, '::after').height) || 0)
+               + (document.querySelector('.cal-week')?.getBoundingClientRect().height ?? 0)); }""", date)
 
 
 def test_list_icon_drops_the_month_calendar_and_pushes_the_list_below_it(mobile_context):
     """작은 화면 목록의 오른쪽 아이콘을 누르면 그달의 날 판이 상단 바 아래로 내려오고 지금 보는 날(맨 위 줄)이 골라져 있다(ADR-058 §3). 달 제목은
     누르는 단추가 아니다. 날마다 월간 칸과 같은 색 점이 있다. 뒤를 어둡게 가리지 않고, 목록은 달력의 높이만큼 밀려나 맨 위 줄이 달력 바로 아래에
-    보인다(사용자 결정 2026-11-28). 스크롤 값과 주소는 그대로다. 밀려난 목록은 막지 않는다. 달력의 아래 모서리는 둥글리지 않고 그림자도 없다."""
+    보인다(사용자 결정 2026-11-28). 스크롤 값과 주소는 그대로다. 밀려난 목록은 막지 않는다. 달력의 아래 모서리는 둥글리지 않고 그림자도 없으며,
+    양 끝으로 갈수록 투명해지는 구분선이 있다."""
     page = mobile_context.new_page()
     _freeze_today(page)
     _open_list(page, "calendar/list/2027-02-01")
@@ -1909,15 +1914,19 @@ def test_list_icon_drops_the_month_calendar_and_pushes_the_list_below_it(mobile_
     place = page.evaluate("""() => { const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
         const p = document.querySelector('.cal-picker').getBoundingClientRect();
         return { panel: p.top - bar, left: p.left, right: innerWidth - p.right, scrim: document.querySelectorAll('.cal-picker-scrim').length,
-                 push: new DOMMatrixReadOnly(getComputedStyle(document.getElementById('app')).transform).m42 - p.height,
                  inert: document.getElementById('app').inert || document.getElementById('sticky-group').inert,
                  modal: document.querySelector('.cal-picker').getAttribute('aria-modal'),
                  radius: getComputedStyle(document.querySelector('.cal-picker')).borderBottomLeftRadius,
-                 shadow: getComputedStyle(document.querySelector('.cal-picker')).boxShadow }; }""")
+                 shadow: getComputedStyle(document.querySelector('.cal-picker')).boxShadow,
+                 line: getComputedStyle(document.querySelector('.cal-picker'), '::after').height,
+                 lineImage: getComputedStyle(document.querySelector('.cal-picker'), '::after').backgroundImage }; }""")
     assert abs(place["panel"]) <= 1 and abs(place["left"]) <= 1 and abs(place["right"]) <= 1, place   # 상단 바를 덮지 않는다
-    assert place["scrim"] == 0 and abs(place["push"]) < 0.5, place   # 달력의 높이만큼 밀려난다
+    assert place["scrim"] == 0, place
+    assert abs(page.evaluate(SCREEN_UNDER_DIVIDER)) < 0.01   # 목록의 위 끝이 달력 맨 아래 구분선 밑에 들어간다
     assert place["inert"] is False and place["modal"] == "false", place
     assert place["radius"] == "0px" and place["shadow"] == "none", place   # 상단 바와 한 층이라 둥글리지 않고 그림자도 없다(사용자 결정 2026-11-28)
+    # 그림자가 아니라 양 끝으로 갈수록 투명해지는 구분선이다(사용자 결정 2026-11-28)
+    assert place["line"] == "1px" and place["lineImage"].startswith("linear-gradient(to right, rgba(0, 0, 0, 0)"), place
     assert abs(_under_calendar(page, "2027-02-01") - under_bar) <= 1
     ash = page.locator(".cal-picker a[href='/calendar/list/2027-02-10']")
     assert ash.locator(".cal-picker-bar.lit-swatch--violet").count() == 1
@@ -1929,6 +1938,36 @@ def test_list_icon_drops_the_month_calendar_and_pushes_the_list_below_it(mobile_
     assert page.evaluate("""() => { const p = document.querySelector('.cal-picker');
         return p.previousElementSibling.matches('.cal-picker-backing') && p.nextElementSibling.matches('main#app')
             && document.getElementById('sticky-group').nextElementSibling.matches('.cal-picker-backing'); }""")
+
+
+def test_the_stuck_week_label_tucks_under_the_divider_without_a_gap(mobile_context):
+    """상단 바의 아래 끝이 소수 자리여도, 밀려난 목록의 고정된 주간 라벨은 달력 맨 아래의 구분선 밑에 틈 없이 들어간다(ADR-058 §3). 전에는 달력의
+    높이를 반올림한 만큼 밀어 라벨과 달력 사이에 1px이 안 되는 틈이 생기고, 그 틈으로 상단 바에 가려져 있던 줄의 글자가 비쳤다(사용자 보고
+    2026-11-28). 달력이 줄어 목록이 따라 올라가는 동안에도 화면 위를 덮는 바탕의 아래 끝이 목록의 위 끝에 있다."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2027-03-08")
+    # 아이폰의 상단 바는 글꼴과 상태 표시줄 때문에 아래 끝이 소수 자리다
+    page.evaluate("() => document.getElementById('sticky-group').style.setProperty('padding-bottom', '0.66px', 'important')")
+    page.wait_for_timeout(100)
+    _open_picker(page)
+    state = page.evaluate("""() => { const p = document.querySelector('.cal-picker'); const line = parseFloat(getComputedStyle(p, '::after').height);
+        const head = document.querySelector('li[data-date="2027-03-08"]').closest('.cal-week-group').querySelector('.cal-week').getBoundingClientRect();
+        return { frac: document.getElementById('sticky-group').getBoundingClientRect().bottom % 1,
+                 head: head.top - (p.getBoundingClientRect().bottom - line),
+                 backing: document.querySelector('.cal-picker-backing').getBoundingClientRect().bottom - head.top }; }""")
+    assert 0.1 < state["frac"] < 0.9, state
+    assert abs(state["head"]) < 0.01 and abs(state["backing"]) < 0.01, state
+    _press(page, ".cal-picker button.cal-picker-title")   # 날 판(다섯 주)에서 달 판(세 줄)으로 줄어든다
+    page.wait_for_timeout(60)
+    gap = page.evaluate("""() => { const app = document.getElementById('app'); const back = document.querySelector('.cal-picker-backing');
+        const push = [...app.getAnimations(), ...back.getAnimations()]; push.forEach(a => a.pause());
+        const out = { pushes: push.length, gap: back.getBoundingClientRect().bottom - (document.getElementById('sticky-group').getBoundingClientRect().bottom
+            + new DOMMatrixReadOnly(getComputedStyle(app).transform).m42) };
+        push.forEach(a => a.play()); return out; }""")
+    assert gap["pushes"] == 2 and abs(gap["gap"]) < 0.01, gap
+    page.wait_for_timeout(400)
+    assert abs(page.evaluate(SCREEN_UNDER_DIVIDER)) < 0.01
 
 
 def test_a_day_in_the_dropped_calendar_moves_the_list_below_and_keeps_it_open(mobile_context):
@@ -1981,7 +2020,8 @@ def test_a_day_tapped_while_the_calendar_still_unfolds_comes_to_the_top(mobile_c
     page.evaluate("() => document.querySelector('.cal-picker-trigger').click()")
     page.wait_for_selector(".cal-picker:not([hidden])")
     page.wait_for_timeout(60)   # 펼치는 움직임(250ms)의 앞부분
-    moving = page.evaluate("() => new DOMMatrixReadOnly(getComputedStyle(document.getElementById('app')).transform).m42 < document.querySelector('.cal-picker').offsetHeight - 1")
+    moving = page.evaluate("""() => new DOMMatrixReadOnly(getComputedStyle(document.getElementById('app')).transform).m42
+        < parseFloat(document.documentElement.style.getPropertyValue('--cal-drop-h')) - 1""")
     page.evaluate("() => document.querySelector(\".cal-picker a[href='/calendar/list/2027-02-17']\").click()")
     page.wait_for_timeout(700)
     assert moving   # 누른 때 화면은 아직 밀려나는 중이었다
@@ -2174,6 +2214,8 @@ def test_month_title_opens_the_month_picker_as_a_popover_and_goes_to_the_month(d
     # 팝오버는 뒤를 막고 화면을 밀어 내지 않는다
     assert page.evaluate("""() => [getComputedStyle(document.getElementById('app')).transform, getComputedStyle(document.querySelector('.cal-picker-backing')).display,
         document.getElementById('app').inert, document.querySelector('.cal-picker').getAttribute('aria-modal')]""") == ["none", "none", True, "true"]
+    # 팝오버는 테두리가 있어 작은 화면 달력의 구분선을 긋지 않는다
+    assert page.evaluate("getComputedStyle(document.querySelector('.cal-picker'), '::after').content") == "none"
     assert page.locator(".cal-picker-close").count() == 0   # 「닫기」 단추는 없다(사용자 결정 2026-11-28)
     _press(page, ".cal-picker .cal-picker-step >> nth=1")
     page.wait_for_timeout(150)
@@ -2296,9 +2338,9 @@ def test_the_list_moves_with_the_unfolding_calendar_and_never_shows_what_was_und
     for t in (0.25, 0.5, 0.75):
         r = page.evaluate(at, [t, 0])
         assert r["pushes"] == 2 and 0 < r["moved"], (t, r)
-        assert r["panelBottom"] >= -1 and abs(r["backing"]) <= 1, (t, r)   # 달력이 목록의 위 끝까지 덮는다
+        assert r["panelBottom"] >= -1 and abs(r["backing"]) < 0.01, (t, r)   # 달력이 목록의 위 끝까지 덮는다
         r = page.evaluate(at, [t, 0.15])   # 목록이 달력보다 앞서도 바탕이 덮는다
-        assert abs(r["backing"]) <= 1, (t, r)
+        assert abs(r["backing"]) < 0.01, (t, r)
     page.wait_for_timeout(500)
     page.keyboard.press("Escape")
     assert page.evaluate("document.getElementById('app').getAnimations().length") == 1   # 목록도 함께 올라온다
@@ -2310,9 +2352,9 @@ def test_the_list_moves_with_the_unfolding_calendar_and_never_shows_what_was_und
     _press(page, ".cal-picker-trigger")
     page.wait_for_selector(".cal-picker:not([hidden])")
     state = page.evaluate("""() => ({ anims: document.getElementById('app').getAnimations().length,
-        moved: new DOMMatrixReadOnly(getComputedStyle(document.getElementById('app')).transform).m42,
-        h: document.querySelector('.cal-picker').getBoundingClientRect().height })""")
-    assert state["anims"] == 0 and abs(state["moved"] - state["h"]) < 0.5, state
+        moved: new DOMMatrixReadOnly(getComputedStyle(document.getElementById('app')).transform).m42 })""")
+    assert state["anims"] == 0 and state["moved"] > 0, state
+    assert abs(page.evaluate(SCREEN_UNDER_DIVIDER)) < 0.01
     page.keyboard.press("Escape")
     assert page.evaluate("getComputedStyle(document.getElementById('app')).transform") == "none"
 

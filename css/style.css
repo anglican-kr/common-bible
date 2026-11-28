@@ -1526,6 +1526,21 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
   display: flex;
   flex-direction: column;
 }
+/* 작은 화면의 달력과 밀려난 화면 사이의 구분선. 상단 바 아래의 선(#app-header::after)처럼 양 끝으로 갈수록 투명해진다(ADR-058 §3, 사용자 결정
+   2026-11-28). 그림자가 아니라 달력의 맨 아래 1px 안에 그린 선이고, 밀려난 화면의 위 끝은 이 선 밑에 들어간다(calendar.js `dropLength`, pitfalls
+   §45). 판의 자르기 안에 있어 다 펼쳐질 때 나타나고 접히기 시작하면 사라진다. 큰 화면의 팝오버는 테두리가 있어 긋지 않는다 */
+@media not all and (min-width: 700px) and (min-height: 600px) {
+  .cal-picker::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--border) 20%, var(--border) 80%, transparent);
+    pointer-events: none;
+  }
+}
 .cal-picker-head { flex-shrink: 0; }
 /* 칸의 포커스 테두리가 스크롤 상자에 잘리지 않게 안쪽 여백을 두고, 같은 크기의 바깥 여백을 음수로 두어 자리는 그대로 둔다 */
 .cal-picker-body {
