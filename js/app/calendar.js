@@ -1310,6 +1310,7 @@ function openCalendarPicker(trigger, view, pointer) {
   const y = cp ? cp.y : ty;
   const m = cp ? cp.m : tm;
   if (!y || !m) return;
+  pickerRedrawPending = false;
   pickerState = {
     view, mode: view === "month" ? "month" : "day", y, m, yearStart: pickerYearStart(y),
     current, currentMonth: { y, m }, today: todayKey(new Date()), trigger, pointer,
@@ -1343,9 +1344,32 @@ function adoptPickerTrigger(trigger, view) {
   if (!pickerState || !picker?.overlay.isOpen || pickerState.view !== view) return false;
   pickerState.trigger = trigger;
   trigger.setAttribute("aria-expanded", "true");
+  // 받은 설정(교구, 본당)이 그날의 색을 바꿨을 수 있다. 아래 화면만 새로 그리면 열어 둔 달력의 막대가 옛 색이다
+  if (pickerRedrawPending) {
+    pickerRedrawPending = false;
+    rerenderPickerKeepingFocus();
+  }
   return true;
 }
 window.adoptCalendarPickerTrigger = adoptPickerTrigger;
+
+/** 받은 설정으로 같은 화면을 다시 그리는 중이고 판이 열려 있다(routing.js `redrawIfSyncedSettingsChanged`). 새 단추를 삼을 때 판도 다시 그린다. */
+let pickerRedrawPending = false;
+window.addEventListener("route:before-redraw", () => {
+  if (picker?.overlay.isOpen) pickerRedrawPending = true;
+});
+
+/** 판을 같은 단계로 다시 그린다. 판 안의 포커스와 칸의 스크롤은 같은 자리에 둔다. */
+function rerenderPickerKeepingFocus() {
+  const p = picker;
+  if (!p) return;
+  const focusables = () => [...p.body.querySelectorAll("a[href], button")];
+  const i = focusables().indexOf(/** @type {Element} */ (document.activeElement));
+  const scroll = p.body.scrollTop;
+  renderPicker();
+  p.body.scrollTop = scroll;
+  if (i >= 0) focusInPicker(/** @type {HTMLElement | undefined} */ (focusables()[i]) ?? pickerFocusTarget());
+}
 
 /** 색 점 줄 — 장식(aria-hidden). 색 이름은 링크 이름이 싣는다. @param {string[]} colors */
 function buildDots(colors) {

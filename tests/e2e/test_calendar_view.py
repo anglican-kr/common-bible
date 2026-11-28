@@ -1997,7 +1997,8 @@ def test_settings_from_another_device_redraw_the_list_under_the_open_calendar(mo
     _freeze_today(page)
     _open_list(page, "calendar/list/2027-02-10")
     _open_picker(page)
-    page.evaluate("() => { window.__mark = document.querySelector('.cal-list'); }")
+    page.evaluate("() => { window.__mark = document.querySelector('.cal-list'); window.__day = document.querySelector('.cal-picker a[data-date=\"2027-02-10\"]'); }")
+    assert page.evaluate("() => document.activeElement === window.__day")
     # 동기화가 대체 독서 표시를 바꿔 저장한 뒤 부르는 것과 같다(sync/state-machine.js)
     page.evaluate("() => { localStorage.setItem('bible-lectionary-alt-show', '1'); window.redrawIfSyncedSettingsChanged(); }")
     page.wait_for_function("() => !window.__mark.isConnected && document.querySelector('li[data-date=\"2027-02-10\"]')")
@@ -2007,6 +2008,8 @@ def test_settings_from_another_device_redraw_the_list_under_the_open_calendar(mo
     assert page.evaluate("document.documentElement.classList.contains('cal-drop')")
     assert abs(_under_calendar(page, "2027-02-10")) <= 2
     assert page.url == f"{BASE}/calendar/list/2027-02-10"
+    # 받은 설정이 그날의 색을 바꿨을 수 있어 열린 달력도 다시 그리고, 포커스는 같은 날에 둔다(코드 리뷰 2026-11-28)
+    assert page.evaluate("() => !window.__day.isConnected && document.activeElement.dataset.date === '2027-02-10'")
     _press(page, ".cal-picker-trigger")   # 새로 그린 아이콘으로 닫는다
     page.wait_for_timeout(500)
     assert _picker(page) is None
