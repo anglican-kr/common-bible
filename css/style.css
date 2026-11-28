@@ -1501,22 +1501,38 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
   padding: 4px;
   margin: -4px;
 }
-/* 상단 바 아래에서 미끄러져 내려오고 위로 올라간다. 상단 바 위로 나가는 부분은 잘라(clip-path) 바를 덮지 않는다. 그림자가 잘리지 않게 아래와 옆은 여유를 둔다.
-   clip-path는 transform과 함께 옮겨지므로, 위로 옮긴 만큼(16px) 위쪽을 더 잘라 보이는 위 끝이 늘 상단 바의 아래 끝에 있게 한다 */
+/* 상단 바 아래에서 펼쳐져 내려오고 위로 접혀 올라간다. 판(.cal-picker)은 옮기지 않고 자르기(clip-path)의 아래 끝만 움직이며, 안의 머리와 칸이 16px 위에서
+   미끄러져 내려온다. 판의 위 끝은 움직이지 않아 늘 상단 바의 아래 끝에 있고, 판 위로 나간 내용은 판의 자르기가 가린다. 그림자가 잘리지 않게 아래와 옆은
+   여유를 둔다. 펼치기 시작의 아래쪽을 판 높이보다 16px 더 잘라, 펼쳐지는 아래 끝이 판째로 옮기던 때와 같은 자리에 있다.
+   판째로 옮기면서(transform) 위쪽을 같은 만큼 잘라 위 끝을 맞추던 때는, 아이폰 Safari가 옮기기는 합성 스레드에서, 자르기는 메인 스레드에서 움직여 한두
+   프레임 어긋났다. 어긋난 만큼 판과 상단 바 사이에 뒤 가림이 비쳐, 열 때 어두운 선이 생겼다가 얇아지며 사라졌다(사용자 보고 2026-11-28). 이제 위 끝을
+   정하는 값은 움직이지 않으므로 두 움직임이 어긋나도 틈이 생기지 않는다 */
 @keyframes cal-picker-in-down {
-  from { clip-path: inset(16px -32px 100% -32px); transform: translateY(-16px); }
-  to { clip-path: inset(0 -32px -32px -32px); transform: none; }
+  from { clip-path: inset(0 -32px calc(100% + 16px) -32px); }
+  to { clip-path: inset(0 -32px -32px -32px); }
 }
 @keyframes cal-picker-out-up {
-  from { clip-path: inset(0 -32px -32px -32px); transform: none; }
-  to { clip-path: inset(16px -32px 100% -32px); transform: translateY(-16px); }
+  from { clip-path: inset(0 -32px -32px -32px); }
+  to { clip-path: inset(0 -32px calc(100% + 16px) -32px); }
+}
+@keyframes cal-picker-slide-in {
+  from { transform: translateY(-16px); }
+}
+@keyframes cal-picker-slide-out {
+  to { transform: translateY(-16px); }
 }
 .cal-picker:not([hidden]):not(.cal-picker-closing) {
   animation: cal-picker-in-down var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94) backwards;
 }
+.cal-picker:not([hidden]):not(.cal-picker-closing) > * {
+  animation: cal-picker-slide-in var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94) backwards;
+}
 .cal-picker.cal-picker-closing {
   animation: cal-picker-out-up var(--duration-base) ease-in both;
   pointer-events: none;
+}
+.cal-picker.cal-picker-closing > * {
+  animation: cal-picker-slide-out var(--duration-base) ease-in both;
 }
 /* 「닫기」는 화면에 보이지 않다가 포커스를 받으면 나타난다(calendar.js `ensurePicker`) */
 .cal-picker-close:not(:focus) {
@@ -1737,13 +1753,16 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-2);
   }
-  .cal-picker:not([hidden]):not(.cal-picker-closing) { animation: none; }
+  .cal-picker:not([hidden]):not(.cal-picker-closing),
+  .cal-picker:not([hidden]):not(.cal-picker-closing) > * { animation: none; }
   .cal-picker-close { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .cal-picker:not([hidden]):not(.cal-picker-closing),
-  .cal-picker.cal-picker-closing { animation: none; }
+  .cal-picker:not([hidden]):not(.cal-picker-closing) > *,
+  .cal-picker.cal-picker-closing,
+  .cal-picker.cal-picker-closing > * { animation: none; }
 }
 
 /* In-page search input (mirrors the header #search-bar, used in #app). */

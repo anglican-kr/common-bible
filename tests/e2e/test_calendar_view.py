@@ -1938,31 +1938,51 @@ def test_picker_closes_without_moving_the_list_and_returns_focus(mobile_context)
 
 
 def test_dropped_calendar_slides_down_and_up_unless_motion_is_reduced(mobile_context):
-    """달력은 상단 바 아래에서 미끄러져 내려오고 위로 올라간다. 상단 바 위로 나가지 않게 자른다. 움직임을 줄인 설정에서는 바로 나타나고 사라진다."""
+    """달력은 상단 바 아래에서 펼쳐져 내려오고 위로 접혀 올라간다. 판은 옮기지 않고 아래 끝만 잘라 펼치며, 안의 머리와 칸이 미끄러진다. 움직임을 줄인
+    설정에서는 바로 나타나고 사라진다."""
     page = mobile_context.new_page()
     _freeze_today(page)
     _open_list(page, "calendar/list/2026-12-15")
     _press(page, ".cal-picker-trigger")
     page.wait_for_selector(".cal-picker:not([hidden])")
-    names = lambda: page.evaluate("document.querySelector('.cal-picker').getAnimations().map(a => a.animationName)")
-    assert names() == ["cal-picker-in-down"]
-    # 움직이는 동안 보이는 위 끝(옮긴 자리 + 위쪽 자르기)이 상단 바의 아래 끝에 있어 바를 덮지 않는다(코드 리뷰 2026-11-26)
-    visible_top = """(t) => { const p = document.querySelector('.cal-picker'); const a = p.getAnimations()[0]; a.pause();
-        a.currentTime = a.effect.getTiming().duration * t; const m = getComputedStyle(p).clipPath.match(/^inset\\((-?[\\d.]+)px/);
+    names = lambda: page.evaluate("""() => { const p = document.querySelector('.cal-picker');
+        return [p.getAnimations().map(a => a.animationName), [...p.children].map(c => c.getAnimations().map(a => a.animationName).join())]; }""")
+    assert names() == [["cal-picker-in-down"], ["cal-picker-slide-in"] * 3]
+    # 움직이는 동안 보이는 위 끝이 상단 바의 아래 끝에 있다. 바를 덮지 않고(코드 리뷰 2026-11-26), 바와 판 사이에 뒤 가림이 비치는 틈도 없다.
+    # 판은 옮기지 않아(transform 없음) 위 끝이 판의 움직임에 기대지 않는다. 아이폰 Safari는 옮기기를 자르기보다 앞서 움직여, 판째로 옮기던 때는
+    # 그 틈이 어두운 선으로 보였다(사용자 보고 2026-11-28). 그래서 안의 내용이 판보다 앞서 움직여도 위 끝이 같은지 본다
+    visible_top = """(t) => { const p = document.querySelector('.cal-picker'); const own = p.getAnimations();
+        const kids = p.getAnimations({ subtree: true }).filter(a => !own.includes(a)); const all = [...own, ...kids];
+        all.forEach(a => a.pause()); const d = own[0].effect.getTiming().duration;
+        own[0].currentTime = d * t; kids.forEach(a => { a.currentTime = d * Math.min(t + 0.1, 1); });
+        const s = getComputedStyle(p); const m = s.clipPath.match(/^inset\\((-?[\\d.]+)px/);
         const top = p.getBoundingClientRect().top + (m ? Number(m[1]) : 0);
-        const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom; a.play(); return top - bar; }"""
+        const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom; all.forEach(a => a.play());
+        return { gap: top - bar, moved: s.transform !== 'none' }; }"""
+    # 판의 위 끝은 상단 바 아래 끝을 내림한 자리라(`placePicker`) 1px 안에서 바와 겹칠 수 있다
     for t in (0, 0.25, 0.5, 0.75):
-        assert page.evaluate(visible_top, t) >= -0.5, t
+        r = page.evaluate(visible_top, t)
+        assert -1 < r["gap"] <= 0.5 and not r["moved"], (t, r)
     page.wait_for_timeout(500)
     page.keyboard.press("Escape")
-    assert names() == ["cal-picker-out-up"]
+    assert names() == [["cal-picker-out-up"], ["cal-picker-slide-out"] * 3]
     for t in (0.25, 0.5, 0.75, 1):
-        assert page.evaluate(visible_top, t) >= -0.5, t
+        r = page.evaluate(visible_top, t)
+        assert -1 < r["gap"] <= 0.5 and not r["moved"], (t, r)
+    page.wait_for_selector(".cal-picker", state="hidden")
+    # 안의 머리와 칸이 먼저 다 올라가도(그 animationend도 판으로 올라온다) 판 자신의 움직임이 끝날 때까지 숨기지 않는다
+    _open_picker(page)
+    page.keyboard.press("Escape")
+    page.evaluate("""() => { const p = document.querySelector('.cal-picker'); const own = p.getAnimations(); own.forEach(a => a.pause());
+        p.getAnimations({ subtree: true }).filter(a => !own.includes(a)).forEach(a => a.finish()); }""")
+    page.wait_for_timeout(100)
+    assert page.evaluate("document.querySelector('.cal-picker').hidden") is False
+    page.evaluate("document.querySelector('.cal-picker').getAnimations().forEach(a => a.finish())")
     page.wait_for_selector(".cal-picker", state="hidden")
     page.emulate_media(reduced_motion="reduce")
     _press(page, ".cal-picker-trigger")
     page.wait_for_selector(".cal-picker:not([hidden])")
-    assert names() == []
+    assert names() == [[], [""] * 3]
     page.keyboard.press("Escape")
     assert page.evaluate("document.querySelector('.cal-picker').hidden") is True
 
