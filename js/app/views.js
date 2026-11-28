@@ -816,6 +816,8 @@ function renderResumeBanner(books) {
 // inner width, swap to the mobile-shortened label.
 /** @type {ResizeObserver | null} */
 let _resumeBannerObs = null;
+/** @type {HTMLElement | null} */
+let _observedResumeBanner = null;
 
 /** @param {HTMLElement} wrapper */
 function applyResumeBannerCompactness(wrapper) {
@@ -867,6 +869,10 @@ function _observeResumeBanner(wrapper) {
       }
     });
   }
+  // Each render builds a new banner and route() drops the old one; stop watching it so the observer does not keep
+  // every detached banner alive.
+  if (_observedResumeBanner && _observedResumeBanner !== wrapper) _resumeBannerObs.unobserve(_observedResumeBanner);
+  _observedResumeBanner = wrapper;
   _resumeBannerObs.observe(wrapper);
   if ($title) _resumeBannerObs.observe($title);
 }

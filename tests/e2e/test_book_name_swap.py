@@ -296,7 +296,7 @@ def test_resume_pill_swaps_to_the_short_name_on_a_small_layout(browser):
 def test_resume_pill_measures_the_name_again_when_the_text_size_changes(browser):
     """The pill keeps its size when the text size changes (fixed height, ends fixed to the dock), so the strip's way of
     noticing — its height followed the text — is gone. The title row's height still follows the root font size, and a
-    change there measures the name again: a mouse window that showed the short name at 24px shows the full one at 14px
+    change there measures the name again: a mouse window that showed the short name at 24px shows the full one at 16px
     and the short one again at 24px."""
     ctx = browser.new_context(viewport={"width": 390, "height": 844})
     ctx.add_init_script(
@@ -310,7 +310,7 @@ def test_resume_pill_measures_the_name_again_when_the_text_size_changes(browser)
         page.wait_for_selector(".resume-banner")
         page.wait_for_timeout(150)
         assert _resume_pill_state(page)["compact"] is True
-        page.evaluate("() => window.applyFontSize(14)")
+        page.evaluate("() => window.applyFontSize(16)")
         page.wait_for_function("() => !document.querySelector('.resume-banner').classList.contains('compact')", timeout=2_000)
         assert _resume_pill_state(page)["visible"] == "이어읽기: 요한의 첫째 편지 3장"
         page.evaluate("() => window.applyFontSize(24)")
