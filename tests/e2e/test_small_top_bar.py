@@ -326,3 +326,24 @@ def test_closing_the_calendar_fits_the_date_again_after_the_width_changed(browse
     page.wait_for_timeout(500)
     assert page.evaluate(SHOWN_DATE) == "1월 2일"
     ctx.close()
+
+
+@pytest.mark.parametrize("path, ready", BARS)
+def test_redrawing_the_bar_keeps_the_focus_on_the_calendar_head(browser, path, ready):
+    """④ 달력이 열린 채 다른 기기에서 받은 설정으로 같은 화면을 다시 그려도, 상단 바에 올라온 달력의 ›에 있던 포커스는 새 줄의 ›에 남는다.
+    머리는 상단 바와 함께 문서에서 빠졌다가 다시 들어온다(코드 리뷰 2026-11-29)."""
+    ctx = _context(browser)
+    page = ctx.new_page()
+    _open(page, path, ready)
+    page.locator("#page-title .cal-picker-trigger").click()
+    page.wait_for_selector(".cal-picker:not([hidden]) .cal-picker-day")
+    page.wait_for_timeout(400)
+    step = "#page-title > .lect-bar-end > .cal-picker-step:nth-of-type(2)"
+    page.locator(step).focus()
+    page.evaluate("() => { window.__end = document.querySelector('#page-title > .lect-bar-end'); }")
+    page.evaluate("() => { localStorage.setItem('bible-lectionary-alt-show', '1'); window.redrawIfSyncedSettingsChanged(); }")
+    page.wait_for_function("() => !window.__end.isConnected && document.querySelector('#page-title > .lect-bar-end > .cal-picker-step')")
+    page.wait_for_timeout(300)
+    assert page.evaluate("""() => { const a = document.activeElement;
+        return a.matches('#page-title > .lect-bar-end > .cal-picker-step') && a.getAttribute('aria-label') === '다음 달'; }""")
+    ctx.close()

@@ -795,6 +795,11 @@ let pickerState = null;
  * } | null}
  */
 let picker = null;
+/**
+ * 포커스가 있던 판의 머리 단추(제목, ‹ ›). 작은 화면에서 머리는 상단 바 안에 있어, 상단 바를 다시 그리면(받은 설정, 목록의 범위 끝) 문서에서 빠지며
+ * 포커스를 잃는다. 새 줄에 다시 넣을 때 돌려준다(`mountPickerHead`). @type {HTMLElement | null}
+ */
+let pickerHeadFocus = null;
 /** 작은 화면과 큰 화면의 경계를 넘어 판을 닫는 중이다. 달력과 팝오버는 자리가 다르므로 움직임 없이 닫는다. */
 let layoutSwitching = false;
 
@@ -1279,6 +1284,13 @@ function ensurePicker() {
   });
   prev.addEventListener("click", () => stepPicker(-1));
   next.addEventListener("click", () => stepPicker(1));
+  // 머리의 포커스를 기억한다. 문서에서 빠지며 잃은 포커스(blur가 오더라도 그 뒤 연결이 끊겨 있다)는 지우지 않는다
+  for (const b of [title, prev, next]) {
+    b.addEventListener("focus", () => { pickerHeadFocus = b; });
+    b.addEventListener("blur", () => {
+      queueMicrotask(() => { if (pickerHeadFocus === b && b.isConnected) pickerHeadFocus = null; });
+    });
+  }
   // 해를 고르면 그해의 달 판, 목록에서 달을 고르면 그달의 날 판으로 내려간다
   body.addEventListener("click", (e) => {
     const s = pickerState;
@@ -1335,11 +1347,16 @@ function mountPickerHead() {
   const cell = bar?.querySelector(":scope > .lect-bar-title");
   const end = bar?.querySelector(":scope > .lect-bar-end");
   if (p.overlay.isOpen && !window.matchMedia(LARGE_LAYOUT_QUERY).matches && cell && end) {
+    // 옛 줄과 함께 문서에서 빠진 머리 단추에 포커스가 있었으면 새 줄에 넣은 뒤 돌려준다
+    const lost = pickerHeadFocus && !pickerHeadFocus.isConnected ? pickerHeadFocus : null;
     if (p.title.parentElement !== cell) cell.append(p.title, p.heading);
     if (p.prev.parentElement !== end) end.prepend(p.prev, p.next);
     applyTitleCompactness();
+    const active = document.activeElement;
+    if (lost && lost.isConnected && !lost.hidden && (!active || active === document.body)) focusInPicker(lost);
     return;
   }
+  pickerHeadFocus = null;
   const wasInBar = p.title.parentElement !== p.head;
   if (wasInBar) p.head.prepend(p.title, p.heading);
   if (p.prev.parentElement !== p.steps) p.steps.append(p.prev, p.next);
