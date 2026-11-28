@@ -51,7 +51,7 @@ pr: 681
 ## 갱신한 문서
 
 - `docs/decisions/058-calendar-list-only.md` §3: 두 층과 밀려나는 화면, 칸의 전례색 막대, 다른 화면으로 갈 때 접혀 올라가는 달력, 둥글리지 않는 아래 모서리와 없앤 그림자, 날을 눌러도 열린 채인 달력, 닫는 방법. 「검토한 대안」 2건
-- `docs/topics/liturgical.md` 「캘린더 날짜 고르기」: 밀려난 화면, 덮는 바탕, 목록에서 날 고르기, 포커스, 요일 아래의 선 하나, 전례색 막대
+- `docs/topics/liturgical.md` 「캘린더 날짜 고르기」: 밀려난 화면, 덮는 바탕, 목록에서 날 고르기, 포커스, 요일 아래의 선 하나, 전례색 막대, 포커스가 밀려난 화면 안일 때만 늘리는 스크롤 여백, 툴팁과 달력의 Esc
 - `docs/topics/routing.md` 「컴포넌트와 뷰 층 모듈화」: 오버레이 제어기의 `modal`, `onNavigateAway`, 한 번에 한 층
 - `docs/topics/design-system.md` pitfalls §44: 자르기와 옮기기가 맞물리는 가장자리를 바탕으로 덮는 사례와 규칙
 - `docs/decisions/038-calendar-lectionary-ui.md` §3 「날짜 이동 줄」: 「오늘」은 늘 맨 위부터
