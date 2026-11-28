@@ -1467,8 +1467,8 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
    밀려난 화면이 그 아래 층이다. 밀어 낸 길이(--cal-drop-h)는 calendar.js `pushScreen`이 달력을 재어 준다. 옮기기(transform)라 문서의 배치와 스크롤
    값은 그대로이고, 움직임은 달력이 펼쳐지고 접히는 것과 같은 시간과 속도다. 화면을 옮기면 상단 바에 가려져 있던 줄이 상단 바 아래로 나오는데, 달력과
    그 뒤의 바탕(.cal-picker-backing)이 덮는다. 바탕은 화면과 같은 옮기기로 움직여, 쉴 때는 상단 바 뒤에 있고 아래 끝이 늘 밀려난 화면의 위 끝에 있다.
-   달력의 둥근 아래 모서리, 좁은 판의 양옆(가로 화면), 판의 자르기보다 화면의 옮기기가 앞서는 프레임(아이폰 Safari, pitfalls §44)에 그 줄이 비치지
-   않는다. */
+   좁은 판의 양옆(가로 화면)과 판의 자르기보다 화면의 옮기기가 앞서는 프레임(아이폰 Safari, pitfalls §44)에 그 줄이 비치지 않는다. 달력의 아래
+   모서리는 둥글리지 않는다. 상단 바와 달력이 한 층이고 그 아래에 밀려난 화면이 맞닿기 때문이다(사용자 결정 2026-11-28). */
 .cal-picker-backing {
   position: fixed;
   left: 0;
@@ -1506,7 +1506,7 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
   line-height: var(--leading-snug);
   color: var(--text);
   background: var(--bg);
-  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  border-radius: 0;
   box-shadow: var(--shadow-2);
   /* 화면이 낮으면(휴대폰을 가로로 든 때) 판을 화면 안에 두고 판의 칸만 스크롤한다 */
   display: flex;

@@ -1098,8 +1098,8 @@ function selectPickerDay(date) {
 /** 판의 요소와 오버레이 제어기를 처음 쓸 때 만든다. */
 function ensurePicker() {
   if (picker) return picker;
-  // 밀려난 화면을 덮는 바탕. 화면이 밀려나면 상단 바에 가려져 있던 줄이 상단 바 아래로 나온다. 달력이 그 자리를 덮지만, 둥근 아래 모서리와 좁은 판의
-  // 양옆(가로 화면), 펼치는 동안 판의 자르기보다 화면의 옮기기가 앞서는 프레임(아이폰 Safari는 옮기기를 합성 스레드에서 움직인다, design-system.md
+  // 밀려난 화면을 덮는 바탕. 화면이 밀려나면 상단 바에 가려져 있던 줄이 상단 바 아래로 나온다. 달력이 그 자리를 덮지만, 좁은 판의 양옆(가로 화면),
+  // 펼치는 동안 판의 자르기보다 화면의 옮기기가 앞서는 프레임(아이폰 Safari는 옮기기를 합성 스레드에서 움직인다, design-system.md
   // pitfalls §44)에는 그 줄이 비친다. 바탕은 화면과 같은 옮기기로 움직여 아래 끝이 늘 밀려난 화면의 위 끝에 있다. 쉴 때는 높이가 0이다(CSS)
   const backing = el("div", { className: "cal-picker-backing", "aria-hidden": "true" });
   const panel = el("div", { className: "cal-picker", role: "dialog", "aria-label": "날짜 고르기" });

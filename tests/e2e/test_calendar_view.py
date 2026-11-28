@@ -1801,7 +1801,7 @@ def _under_calendar(page, date):
 def test_list_icon_drops_the_month_calendar_and_pushes_the_list_below_it(mobile_context):
     """작은 화면 목록의 오른쪽 아이콘을 누르면 그달의 날 판이 상단 바 아래로 내려오고 지금 보는 날(맨 위 줄)이 골라져 있다(ADR-058 §3). 달 제목은
     누르는 단추가 아니다. 날마다 월간 칸과 같은 색 점이 있다. 뒤를 어둡게 가리지 않고, 목록은 달력의 높이만큼 밀려나 맨 위 줄이 달력 바로 아래에
-    보인다(사용자 결정 2026-11-28). 스크롤 값과 주소는 그대로다. 밀려난 목록은 막지 않는다."""
+    보인다(사용자 결정 2026-11-28). 스크롤 값과 주소는 그대로다. 밀려난 목록은 막지 않는다. 달력의 아래 모서리는 둥글리지 않는다."""
     page = mobile_context.new_page()
     _freeze_today(page)
     _open_list(page, "calendar/list/2027-02-01")
@@ -1819,10 +1819,12 @@ def test_list_icon_drops_the_month_calendar_and_pushes_the_list_below_it(mobile_
         return { panel: p.top - bar, left: p.left, right: innerWidth - p.right, scrim: document.querySelectorAll('.cal-picker-scrim').length,
                  push: new DOMMatrixReadOnly(getComputedStyle(document.getElementById('app')).transform).m42 - p.height,
                  inert: document.getElementById('app').inert || document.getElementById('sticky-group').inert,
-                 modal: document.querySelector('.cal-picker').getAttribute('aria-modal') }; }""")
+                 modal: document.querySelector('.cal-picker').getAttribute('aria-modal'),
+                 radius: getComputedStyle(document.querySelector('.cal-picker')).borderBottomLeftRadius }; }""")
     assert abs(place["panel"]) <= 1 and abs(place["left"]) <= 1 and abs(place["right"]) <= 1, place   # 상단 바를 덮지 않는다
     assert place["scrim"] == 0 and abs(place["push"]) < 0.5, place   # 달력의 높이만큼 밀려난다
     assert place["inert"] is False and place["modal"] == "false", place
+    assert place["radius"] == "0px", place   # 상단 바와 한 층이라 아래 모서리를 둥글리지 않는다(사용자 결정 2026-11-28)
     assert abs(_under_calendar(page, "2027-02-01") - under_bar) <= 1
     ash = page.locator(".cal-picker a[href='/calendar/list/2027-02-10']")
     assert ash.locator(".cal-picker-dot.lit-swatch--violet").count() == 1
