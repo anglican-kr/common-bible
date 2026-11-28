@@ -1,4 +1,5 @@
 ---
+pr: 682
 date: 2026-11-28
 branch: chore/pre-release-commit-type
 title: "chore: 버전을 올리는 커밋의 타입을 pre-release로"
