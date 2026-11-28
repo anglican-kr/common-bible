@@ -102,9 +102,10 @@
   --lit-rose: #e39bb9;
   --lit-blue: #3b6fb6;
   --lit-swatch-border: rgba(0, 0, 0, 0.25);
-  /* 캘린더 목록의 날짜 칸(ADR-060 §2). 바탕은 줄과 다른 옅은 색이고, 오늘은 짙은 남색으로 채운다. 흰 전례색 막대는 가는 선으로 두른다. */
+  /* 캘린더 목록의 날짜 칸(ADR-060 §2). 바탕은 줄과 다른 옅은 색이고, 오늘은 중립 차콜(--accent, 월간 달력에서 고른 날과 같은 색)로 채운다
+     (사용자 결정 2026-11-28. 그전에는 네이비 #22244a). 흰 전례색 막대는 가는 선으로 두른다. */
   --cal-date-bg: #f1eee9;
-  --cal-today-bg: #22244a;
+  --cal-today-bg: var(--accent);
   --cal-today-text: #ffffff;
   --cal-white-bar-edge: 0 0 0 1px #d9d3c8;
   --cal-bar-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
@@ -256,7 +257,7 @@
   --danger-border: #884444;
   --lit-swatch-border: rgba(255, 255, 255, 0.35);
   --cal-date-bg: #2a2a48;
-  --cal-today-bg: #8ab4d8;
+  --cal-today-bg: var(--accent);
   --cal-today-text: #1f1f36;
   --cal-white-bar-edge: inset 0 0 0 1px #ffffff;
   --cal-bar-shadow: 0 0 0 1px var(--text);
