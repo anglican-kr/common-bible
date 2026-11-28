@@ -28,6 +28,9 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
    * @typedef {Object} OverlayOptions
    * @property {HTMLElement} panel  Dialog root; shown/hidden via `.hidden`.
    * @property {HTMLElement | null} [scrim]  Optional backdrop, toggled with the panel.
+   * @property {boolean | (() => boolean)} [modal]  Whether the open panel blocks the rest of the app. Default true. When false
+   *   (read at each open), the background stays usable: no `inert`, no focus trap, no outside-click close. The small layout's
+   *   drop-down calendar is non-modal: the list it pushes down can be scrolled and tapped (ADR-058 §3).
    * @property {string | null} [inertSelectors]  Background `inert` targets (delegated to `setInert`).
    * @property {string | null} [rootClass]  Class added to `<html>` while open (e.g. cite sheet).
    * @property {boolean} [closeOnEsc]  Escape (document keydown) closes. Default false — see migration note.
@@ -107,6 +110,7 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
     const {
       panel,
       scrim = null,
+      modal = true,
       inertSelectors = null,
       rootClass = null,
       closeOnEsc = false,
@@ -122,6 +126,8 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
     } = opts;
 
     let _open = false;
+    // Read at open so one overlay can be modal in one layout and not in the other; close() undoes what open() did.
+    let _modal = true;
     // Monotonic guard bumped on every open + close. A deferred (animated) hide
     // captures the seq at close time and only fires if it's still current —
     // a re-open (which bumps the seq) cancels a pending hide.
@@ -169,13 +175,14 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
               ? returnFocus
               : null;
 
+      _modal = typeof modal === "function" ? modal() : modal;
       if (scrim) scrim.hidden = false;
       panel.hidden = false;
       if (rootClass) document.documentElement.classList.add(rootClass);
-      if (inertSelectors) setInert(true, inertSelectors);
+      if (inertSelectors && _modal) setInert(true, inertSelectors);
       setAriaExpanded("true");
 
-      _trapCleanup = trapFocus(trapContainer || panel);
+      if (_modal) _trapCleanup = trapFocus(trapContainer || panel);
 
       if (closeOnEsc) {
         _escHandler = (e) => {
@@ -187,7 +194,7 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
         document.addEventListener("keydown", _escHandler);
       }
 
-      if (closeOnOutside) {
+      if (closeOnOutside && _modal) {
         // Attach next frame so the very click that opened the overlay doesn't
         // bubble straight into this handler and close it immediately.
         requestAnimationFrame(() => {
@@ -222,7 +229,7 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
       // so the app is interactive even while an exit animation plays.
       if (scrim) scrim.hidden = true;
       if (rootClass) document.documentElement.classList.remove(rootClass);
-      if (inertSelectors) setInert(false, inertSelectors);
+      if (inertSelectors && _modal) setInert(false, inertSelectors);
       setAriaExpanded("false");
 
       if (_trapCleanup) { _trapCleanup(); _trapCleanup = null; }

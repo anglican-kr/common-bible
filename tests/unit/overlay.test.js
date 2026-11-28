@@ -346,6 +346,52 @@ test("outside click: a node the click re-rendered out of the panel still counts 
   assert.equal(ov.isOpen, true);
 });
 
+test("modal: false leaves the background usable — no inert, no focus trap, no outside-click close (ADR-058 §3)", () => {
+  const env = makeEnv();
+  const panel = new env.StubEl();
+  const outside = new env.StubEl();
+  const trigger = new env.StubEl();
+  trigger.setAttribute("id", "drop");
+  const ov = env.createOverlay({ panel, modal: false, inertSelectors: "main", closeOnOutside: true, ariaExpanded: "#drop" });
+
+  ov.open();
+  env.flushRaf();
+  assert.equal(panel.hidden, false);
+  assert.equal(trigger.getAttribute("aria-expanded"), "true");
+  assert.deepEqual(env.inertCalls, []);
+  assert.deepEqual(env.trapCalls, []);
+  assert.equal(env.document._listenerCount("click"), 0);
+  env.document._dispatch("click", clickOn(outside, [outside]));
+  assert.equal(ov.isOpen, true);
+
+  ov.close();
+  assert.equal(panel.hidden, true);
+  assert.deepEqual(env.inertCalls, []);   // nothing to undo
+  assert.equal(env.getTrapCleanupCount(), 0);
+  assert.equal(trigger.getAttribute("aria-expanded"), "false");
+});
+
+test("modal: a function is read at each open, and close undoes only what that open did", () => {
+  const env = makeEnv();
+  const panel = new env.StubEl();
+  let large = false;
+  const ov = env.createOverlay({ panel, modal: () => large, inertSelectors: "main" });
+
+  ov.open();
+  large = true;   // the layout changes while open: close must not lift an inert that open never set
+  ov.close();
+  assert.deepEqual(env.inertCalls, []);
+  assert.equal(env.getTrapCleanupCount(), 0);
+
+  ov.open();
+  assert.deepEqual(env.inertCalls, [[true, "main"]]);
+  assert.equal(env.trapCalls.length, 1);
+  large = false;
+  ov.close();
+  assert.deepEqual(env.inertCalls, [[true, "main"], [false, "main"]]);
+  assert.equal(env.getTrapCleanupCount(), 1);
+});
+
 // ── misc ─────────────────────────────────────────────────────────────────────
 
 test("idempotency: re-open / re-close are no-ops", () => {

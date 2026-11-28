@@ -1063,6 +1063,9 @@ export interface FocusSpot {
 export interface OverlayOptions {
   panel: HTMLElement;
   scrim?: HTMLElement | null;
+  // Whether the open panel blocks the rest of the app (default true). False, read at each open: no inert, no focus trap,
+  // no outside-click close — the small layout's drop-down calendar (ADR-058 §3).
+  modal?: boolean | (() => boolean);
   inertSelectors?: string | null;
   rootClass?: string | null;
   closeOnEsc?: boolean;

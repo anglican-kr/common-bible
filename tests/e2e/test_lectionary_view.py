@@ -2593,8 +2593,9 @@ def _picker_state(page):
 
 def test_title_icon_drops_the_month_calendar_and_a_day_opens_its_lectionary(mobile_context):
     """작은 화면의 전례독서에서 오른쪽 아이콘은 캘린더와 같은 월간 달력을 내린다(ADR-058 §3). 그달의 날 판이 상단 바 아래로 내려오고 지금 보는 날이
-    골라져 있다. 날을 고르면 그날의 전례독서가 열리고(고른 전례일과 독서 세트는 남기지 않는다), 포커스는 새 화면의 아이콘으로 돌아온다. 오늘은
-    날짜 없이 /lectionary다."""
+    골라져 있다. 뒤를 가리지 않고 전례독서를 달력의 높이만큼 밀어 낸다(사용자 결정 2026-11-28). 날을 고르면 달력이 올라가고 그날의 전례독서가
+    열리며(고른 전례일과 독서 세트는 남기지 않는다), 새 화면은 밀려나 있지 않고 포커스는 새 화면의 아이콘으로 돌아온다. 오늘은 날짜 없이
+    /lectionary다. 달력이 열린 동안 아이콘을 다시 누르면 닫힌다."""
     page = mobile_context.new_page()
     page.clock.set_fixed_time(datetime.datetime(2026, 11, 17, 12))
     _open(page, "lectionary/2027-05-02")
@@ -2608,6 +2609,9 @@ def test_title_icon_drops_the_month_calendar_and_a_day_opens_its_lectionary(mobi
     assert _picker_state(page) == {"name": "날짜 고르기", "title": "2027년 5월", "current": "/lectionary/2027-05-02",
                                    "focus": "/lectionary/2027-05-02"}, _picker_state(page)
     assert page.get_attribute(btn, "aria-expanded") == "true"
+    pushed = page.evaluate("""() => ({ scrim: document.querySelectorAll('.cal-picker-scrim').length, inert: document.getElementById('app').inert,
+        push: new DOMMatrixReadOnly(getComputedStyle(document.getElementById('app')).transform).m42 - document.querySelector('.cal-picker').offsetHeight })""")
+    assert pushed["scrim"] == 0 and pushed["inert"] is False and abs(pushed["push"]) < 0.5, pushed
     press_center(page, ".cal-picker a[href='/lectionary/2027-05-10']")
     page.wait_for_url(f"{BASE}/lectionary/2027-05-10")
     page.wait_for_selector("#page-title .lect-date time[datetime='2027-05-10']")
@@ -2615,6 +2619,15 @@ def test_title_icon_drops_the_month_calendar_and_a_day_opens_its_lectionary(mobi
     assert _picker_state(page) is None
     assert page.evaluate("s => document.activeElement === document.querySelector(s)", btn)
     assert page.get_attribute(btn, "aria-expanded") == "false"
+    assert page.evaluate("getComputedStyle(document.getElementById('app')).transform") == "none"
+    press_center(page, btn)
+    page.wait_for_selector(".cal-picker:not([hidden])")
+    page.wait_for_timeout(400)
+    press_center(page, btn)   # 다시 누르면 닫힌다
+    page.wait_for_timeout(400)
+    assert _picker_state(page) is None
+    assert page.get_attribute(btn, "aria-expanded") == "false"
+    assert page.evaluate("getComputedStyle(document.getElementById('app')).transform") == "none"
     # 오늘은 날짜 없는 주소다
     _open(page, "lectionary/2026-11-20")
     press_center(page, btn)
@@ -2644,7 +2657,9 @@ def test_title_date_opens_the_picker_as_a_popover_on_desktop(desktop_context):
         const t = document.querySelector(s).getBoundingClientRect();
         return { gap: p.top - t.bottom, mid: (p.left + p.right) / 2 - (t.left + t.right) / 2 }; }""", btn)
     assert 0 < box["gap"] <= 12 and abs(box["mid"]) <= 1, box
-    assert page.locator(".cal-picker-scrim").is_hidden()
+    # 팝오버는 뒤를 막고 화면을 밀어 내지 않는다
+    assert page.evaluate("""() => [getComputedStyle(document.getElementById('app')).transform, getComputedStyle(document.querySelector('.cal-picker-backing')).display,
+        document.getElementById('app').inert, document.querySelector('.cal-picker').getAttribute('aria-modal')]""") == ["none", "none", True, "true"]
     page.keyboard.press("Escape")
     page.wait_for_timeout(200)
     assert _picker_state(page) is None

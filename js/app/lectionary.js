@@ -1439,12 +1439,19 @@ function commitTitleDateNav(m) {
   });
 }
 
+/** 날짜 고르기 판의 모듈을 불러오는 중이다(`openDatePicker`). */
+let datePickerLoading = false;
+
 /**
  * 날짜 고르기 판을 연다. 판은 캘린더 모듈(calendar.js)에 있어 날짜를 누를 때 불러온다. 전례독서 화면을 여는 데는 그 모듈이 필요 없어 부팅과
  * 첫 화면은 그대로이고, 서비스 워커가 설치 때 미리 받아 두므로 오프라인에서도 열린다.
  * @param {HTMLElement} trigger @param {boolean} pointer  손가락이나 마우스로 눌렀다
  */
 async function openDatePicker(trigger, pointer) {
+  // 작은 화면의 달력은 뒤를 막지 않아 열린 동안에도 아이콘을 누를 수 있다. 다시 누르면 닫는다(ADR-058 §3). 판을 불러오는 동안 다시 누른 것은 지나친다.
+  // 불러온 뒤에 차례로 열고 닫으면 판이 열리자마자 닫힌다
+  if (datePickerLoading || window.closeCalendarPicker?.()) return;
+  datePickerLoading = true;
   try {
     const mod = await import("./calendar.js");
     // 불러오는 사이에 다른 화면으로 갔거나 다른 창(설정 등)을 열었으면 열지 않는다. 판이 그 위에 겹치면 막는 범위와 Esc의 차례가 꼬인다(코드 리뷰 2026-11-18)
@@ -1456,6 +1463,8 @@ async function openDatePicker(trigger, pointer) {
     const msg = "날짜 고르기를 열지 못했습니다. 네트워크 연결을 확인한 뒤 앱을 다시 열어 주세요.";
     if (window._showSyncSnackbar) window._showSyncSnackbar(msg);
     else window.announce?.(msg);
+  } finally {
+    datePickerLoading = false;
   }
 }
 

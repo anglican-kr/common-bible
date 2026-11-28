@@ -1463,14 +1463,34 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
 .lect-date > .cal-title-btn::after { content: none; }
 
 /* 내려오는 달력: 상단 바의 아래 끝에서 시작해 높이는 내용만큼이다. 자리(top)와 높이 제한(max-height)은 calendar.js `placePicker`가 상단 바를 재어
-   준다. 뒤 가림도 상단 바 아래부터라, 달력을 연 아이콘이 있는 상단 바는 가리지 않는다. */
-.cal-picker-scrim {
+   준다. 뒤를 어둡게 가리지 않고, 그 아래의 화면(#app)을 달력의 높이만큼 밀어 낸다(ADR-058 §3, 사용자 결정 2026-11-28). 상단 바와 달력이 맨 위 층이고
+   밀려난 화면이 그 아래 층이다. 밀어 낸 길이(--cal-drop-h)는 calendar.js `pushScreen`이 달력을 재어 준다. 옮기기(transform)라 문서의 배치와 스크롤
+   값은 그대로이고, 움직임은 달력이 펼쳐지고 접히는 것과 같은 시간과 속도다. 화면을 옮기면 상단 바에 가려져 있던 줄이 상단 바 아래로 나오는데, 달력과
+   그 뒤의 바탕(.cal-picker-backing)이 덮는다. 바탕은 화면과 같은 옮기기로 움직여, 쉴 때는 상단 바 뒤에 있고 아래 끝이 늘 밀려난 화면의 위 끝에 있다.
+   달력의 둥근 아래 모서리, 좁은 판의 양옆(가로 화면), 판의 자르기보다 화면의 옮기기가 앞서는 프레임(아이폰 Safari, pitfalls §44)에 그 줄이 비치지
+   않는다. */
+.cal-picker-backing {
   position: fixed;
-  inset: 0;
-  z-index: 70;
-  background: rgba(0, 0, 0, 0.4);
+  left: 0;
+  right: 0;
+  /* 화면(#app) 위, 상단 바(#sticky-group, 20) 아래 */
+  z-index: 19;
+  height: var(--cal-drop-h, 0px);
+  margin-top: calc(-1 * var(--cal-drop-h, 0px));
+  background: var(--bg);
+  pointer-events: none;
 }
-.cal-picker-scrim[hidden],
+@media not all and (min-width: 700px) and (min-height: 600px) {
+  main#app,
+  .cal-picker-backing { transition: transform var(--duration-base) ease-in; }
+  html.cal-drop main#app,
+  html.cal-drop .cal-picker-backing {
+    transform: translateY(var(--cal-drop-h, 0px));
+    transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+  /* 키보드로 옮긴 포커스가 화면 아래로 밀려난 자리에 가지 않게 한다 */
+  html.cal-drop { scroll-padding-bottom: var(--cal-drop-h, 0px); }
+}
 .cal-picker[hidden],
 .cal-picker-title[hidden] { display: none; }
 .cal-picker {
@@ -1503,17 +1523,17 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
 }
 /* 상단 바 아래에서 펼쳐져 내려오고 위로 접혀 올라간다. 판(.cal-picker)은 옮기지 않고 자르기(clip-path)의 아래 끝만 움직이며, 안의 머리와 칸이 16px 위에서
    미끄러져 내려온다. 판의 위 끝은 움직이지 않아 늘 상단 바의 아래 끝에 있고, 판 위로 나간 내용은 판의 자르기가 가린다. 그림자가 잘리지 않게 아래와 옆은
-   여유를 둔다. 펼치기 시작의 아래쪽을 판 높이보다 16px 더 잘라, 펼쳐지는 아래 끝이 판째로 옮기던 때와 같은 자리에 있다.
+   여유를 둔다. 보이는 아래 끝은 상단 바의 아래 끝에서 시작해, 같은 속도로 밀려나는 화면의 위 끝보다 늘 아래에 있다(위의 바탕).
    판째로 옮기면서(transform) 위쪽을 같은 만큼 잘라 위 끝을 맞추던 때는, 아이폰 Safari가 옮기기는 합성 스레드에서, 자르기는 메인 스레드에서 움직여 한두
    프레임 어긋났다. 어긋난 만큼 판과 상단 바 사이에 뒤 가림이 비쳐, 열 때 어두운 선이 생겼다가 얇아지며 사라졌다(사용자 보고 2026-11-28). 이제 위 끝을
    정하는 값은 움직이지 않으므로 두 움직임이 어긋나도 틈이 생기지 않는다 */
 @keyframes cal-picker-in-down {
-  from { clip-path: inset(0 -32px calc(100% + 16px) -32px); }
+  from { clip-path: inset(0 -32px 100% -32px); }
   to { clip-path: inset(0 -32px -32px -32px); }
 }
 @keyframes cal-picker-out-up {
   from { clip-path: inset(0 -32px -32px -32px); }
-  to { clip-path: inset(0 -32px calc(100% + 16px) -32px); }
+  to { clip-path: inset(0 -32px 100% -32px); }
 }
 @keyframes cal-picker-slide-in {
   from { transform: translateY(-16px); }
@@ -1534,7 +1554,7 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
 .cal-picker.cal-picker-closing > * {
   animation: cal-picker-slide-out var(--duration-base) ease-in both;
 }
-/* 「닫기」는 화면에 보이지 않다가 포커스를 받으면 나타난다(calendar.js `ensurePicker`) */
+/* 「닫기」는 화면에 보이지 않다가 포커스를 받으면 나타나, 키보드로 달력을 지나가다 닫을 수 있다(calendar.js `ensurePicker`) */
 .cal-picker-close:not(:focus) {
   position: absolute;
   width: 1px;
@@ -1740,7 +1760,7 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
 /* 마우스를 쓰는 넓은 화면: 제목 아래 팝오버(장 고르기 팝오버 .chapter-popover와 같은 반경, 그림자, 테두리). 다른 시트는 이 조건에서 오른쪽
    패널로 바뀌지만, 이 판은 작아서 팝오버로 둔다(DESIGN.md §6). 자리(top, left)는 calendar.js placePicker가 제목 단추로 잰다. */
 @media (min-width: 700px) and (min-height: 600px) {
-  .cal-picker-scrim { display: none; }
+  .cal-picker-backing { display: none; }
   .cal-picker {
     right: auto;
     bottom: auto;
@@ -1763,6 +1783,8 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   .cal-picker:not([hidden]):not(.cal-picker-closing) > *,
   .cal-picker.cal-picker-closing,
   .cal-picker.cal-picker-closing > * { animation: none; }
+  main#app,
+  .cal-picker-backing { transition: none; }
 }
 
 /* In-page search input (mirrors the header #search-bar, used in #app). */

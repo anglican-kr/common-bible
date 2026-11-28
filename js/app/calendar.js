@@ -729,7 +729,10 @@ function commitMonthBar(model, view) {
   const small = isSmallLayout();
   const trigger = small ? calendarDropTrigger("") : datePickerTrigger(month);
   setPickerTrigger(trigger, model, view);
-  trigger.addEventListener("click", (e) => openCalendarPicker(trigger, view, e.detail > 0));
+  // 작은 화면의 달력은 뒤를 막지 않아 열린 동안에도 아이콘을 누를 수 있다. 다시 누르면 닫는다(ADR-058 §3)
+  trigger.addEventListener("click", (e) => {
+    if (!closeCalendarPicker()) openCalendarPicker(trigger, view, e.detail > 0);
+  });
   // 판이 열린 채 바를 다시 그리면(데스크톱 목록에서 팝오버 아래로 스크롤해 계산 범위 끝에 이른 때) 새 제목 단추를 판의 제목 단추로 삼는다.
   // 그러지 않으면 닫을 때 포커스를 돌려줄 곳과 팝오버의 자리를 잴 곳이 문서에서 빠진 단추다
   if (pickerState && picker?.overlay.isOpen && pickerState.view === view) {
@@ -751,10 +754,13 @@ function commitMonthBar(model, view) {
 
 // ── 날짜 고르기(ADR-038 §2 「날짜 고르기」, ADR-058 §3, DESIGN.md §6) ──
 // 큰 화면에서는 상단 바의 달 제목이 여는 팝오버이고, 작은 화면에서는 오른쪽 단추가 상단 바 아래로 내리는 월간 달력이다. 같은 요소를 CSS가 바꾼다.
-// 전례독서 화면도 같은 판을 연다(lectionary.js `openDatePicker`가 이 모듈의 `openCalendarPicker`를 부른다, 2026-11-18). 판은 한 번에 한 단계만
-// 보인다. 날과 월간의 달은 링크라 고르면 라우터가 그 화면을 그리고(route()가 열린 판을 닫는다), 해와 목록, 전례독서의 달은 단추라 판 안에서 한 단계
-// 아래로 내려간다. 판은 body 끝에 한 번 만들어 두고 다시 쓴다. 제목 칸(#page-title)은 `container-type`이 있어, 그 안에 두면 고정 위치(position: fixed)가
-// 화면이 아니라 그 칸을 기준으로 잡힌다.
+// 팝오버는 뒤를 막는다. 작은 화면의 달력은 뒤를 막지 않고, 그 아래의 화면(#app)을 달력의 높이만큼 밀어 낸다. 밀려난 화면은 그대로 스크롤하고 누를 수
+// 있다(사용자 결정 2026-11-28, `pushScreen`). 전례독서 화면도 같은 판을 연다(lectionary.js `openDatePicker`가 이 모듈의 `openCalendarPicker`를 부른다,
+// 2026-11-18). 판은 한 번에 한 단계만 보인다. 날과 월간의 달은 링크라 고르면 라우터가 그 화면을 그리고(route()가 열린 판을 닫는다), 해와 목록,
+// 전례독서의 달은 단추라 판 안에서 한 단계 아래로 내려간다. 다만 작은 화면의 캘린더 목록에서 날을 고르면 판을 닫지 않고 그 아래 목록을 그날로
+// 옮긴다(`showDateInList`). 판은 상단 바(#sticky-group) 바로 뒤에 한 번 만들어 두고 다시 쓴다. 작은 화면의 달력은 Tab을 가두지 않아 문서의 차례대로
+// 가므로 상단 바, 달력, 화면의 차례여야 한다. 제목 칸(#page-title)은 `container-type`이 있어, 그 안에 두면 고정 위치(position: fixed)가 화면이 아니라
+// 그 칸을 기준으로 잡힌다.
 
 /** 팝오버와 제목 사이, 팝오버와 화면 가장자리 사이(px). */
 const PICKER_POPOVER_GAP = 8;
@@ -776,7 +782,7 @@ let pickerState = null;
 /**
  * 한 번 만들어 두는 판의 요소와 오버레이 제어기(ADR-032).
  * @type {{
- *   panel: HTMLElement, scrim: HTMLElement, title: HTMLButtonElement, heading: HTMLElement, prev: HTMLButtonElement, next: HTMLButtonElement, body: HTMLElement,
+ *   panel: HTMLElement, backing: HTMLElement, title: HTMLButtonElement, heading: HTMLElement, prev: HTMLButtonElement, next: HTMLButtonElement, body: HTMLElement,
  *   overlay: { open: (returnFocusEl?: HTMLElement | null) => void, close: () => void, readonly isOpen: boolean },
  * } | null}
  */
@@ -846,7 +852,10 @@ function buildPickerDay(c, m, today, view) {
   if (c.isToday) cls.push("is-today");
   const label = [c.isToday ? "오늘" : null, `${m}월 ${c.day}일 ${CAL_WEEKDAY_FULL[c.weekday]}`, c.colors.length ? colorNames(c.colors) : null]
     .filter(Boolean).join(", ");
-  const a = el("a", { className: cls.join(" "), href: view === "lectionary" ? lectionaryPathOf(c.date, today) : listPathOf(c.date, today), "aria-label": label, "data-focus-key": DATE_PICKER_FOCUS_KEY });
+  const a = el("a", {
+    className: cls.join(" "), href: view === "lectionary" ? lectionaryPathOf(c.date, today) : listPathOf(c.date, today), "aria-label": label,
+    "data-date": c.date, "data-focus-key": DATE_PICKER_FOCUS_KEY,
+  });
   if (c.isCurrent) a.setAttribute("aria-current", "true");
   a.appendChild(el("span", { className: "cal-picker-num" }, String(c.day)));
   const dots = el("span", { className: "cal-picker-dots", "aria-hidden": "true" });
@@ -963,27 +972,24 @@ function stepPicker(dir) {
 }
 
 /**
- * 판의 자리. 큰 화면의 팝오버는 제목 아래 가운데에 두고 화면 밖으로 나가지 않게 당긴다. 작은 화면의 달력과 그 뒤 가림은 상단 바의 아래 끝에서
- * 시작한다. 화면이 낮으면 판을 화면 안에 두고 판의 칸만 스크롤한다(CSS `.cal-picker-body`).
+ * 판의 자리. 큰 화면의 팝오버는 제목 아래 가운데에 두고 화면 밖으로 나가지 않게 당긴다. 작은 화면의 달력과 밀려난 화면을 덮는 바탕은 상단 바의 아래
+ * 끝에서 시작한다. 화면이 낮으면 판을 화면 안에 두고 판의 칸만 스크롤한다(CSS `.cal-picker-body`).
  */
 function placePicker() {
   const s = pickerState;
   const p = picker;
   if (!s || !p) return;
   if (!window.matchMedia(LARGE_LAYOUT_QUERY).matches) {
-    // 판은 내림으로 잰다. 반올림하면 상단 바의 아래 끝(예: 60.6px)과 판 사이에 1px이 안 되는 틈이 생기거나(올림일 때), 뒤 가림이 상단 바의
-    // 아래 끝을 덮어(내림일 때) 판이 내려오는 동안 어두운 색이 선처럼 보였다(사용자 보고 2026-11-27). 판이 상단 바를 1px 안쪽으로 덮는 것은
-    // 보이지 않는다. 뒤 가림은 잰 값 그대로 둔다. 올림하면 판이 좁은 때(가로 화면, 판은 --max-width) 판 양옆에 어둡게 하지 않은 틈이 밝은 선으로 남는다
-    const bottom = barBottom();
-    const top = Math.max(Math.floor(bottom), 0);
+    // 판은 내림으로 잰다. 올림하면 상단 바의 아래 끝(예: 60.6px)과 판 사이에 1px이 안 되는 틈이 생겨 판이 내려오는 동안 선처럼 보였다(사용자
+    // 보고 2026-11-27). 판이 상단 바를 1px 안쪽으로 덮는 것은 보이지 않는다
+    const top = Math.max(Math.floor(barBottom()), 0);
     p.panel.style.left = "";
     p.panel.style.top = `${top}px`;
-    p.scrim.style.top = `${Math.max(bottom, 0)}px`;
+    p.backing.style.top = `${top}px`;
     // 화면이 낮으면 판이 화면 아래까지 온다. 홈 표시줄의 자리는 비운다
     p.panel.style.maxHeight = `calc(${Math.max(window.innerHeight - top - PICKER_POPOVER_GAP, 0)}px - env(safe-area-inset-bottom, 0px))`;
     return;
   }
-  p.scrim.style.top = "";
   const r = s.trigger.getBoundingClientRect();
   const half = p.panel.offsetWidth / 2;
   const center = Math.min(Math.max(r.left + r.width / 2, half + PICKER_POPOVER_GAP), window.innerWidth - half - PICKER_POPOVER_GAP);
@@ -1000,15 +1006,105 @@ function clearPickerPlace(panel) {
   panel.style.maxHeight = "";
 }
 
+// ── 작은 화면의 달력이 밀어 낸 화면(ADR-058 §3, 사용자 결정 2026-11-28) ──
+// 상단 바와 달력이 맨 위 층이고, 그 아래 층인 화면(#app)은 달력이 내려오면 달력의 높이만큼 아래로 밀려난다. 옮기기(transform)라 문서의 배치, 스크롤 값,
+// 스크롤 고정은 그대로다. 그래서 맨 위 줄은 여전히 배치에서 상단 바 바로 아래에 있는 줄이고, 화면에서는 그 줄이 달력 바로 아래에 보인다. 줄의 자리를
+// 화면에서 잴 때(getBoundingClientRect)는 밀어 낸 길이가 더해져 있으므로 `pushedBy`를 더해 견준다. 움직임은 CSS의 전환(transition)이 달력이 펼쳐지고
+// 접히는 것과 같은 시간과 속도로 맡는다(CSS `html.cal-drop`).
+
+/** 달력이 화면을 밀어 낸 길이를 CSS에 알리는 변수. 달력의 높이다. */
+const DROP_HEIGHT_VAR = "--cal-drop-h";
+
+/** 작은 화면의 달력이 지금 화면을 밀어 낸 길이(px). 움직이는 중에는 그 순간의 값이다. */
+function pushedBy() {
+  const t = getComputedStyle($app).transform;
+  return t && t !== "none" ? new DOMMatrixReadOnly(t).m42 : 0;
+}
+
+/** 화면과 그 위를 덮는 바탕이 움직이는 중이면 끝으로 보낸다. 달력의 높이가 바뀌거나 판이 숨을 때 화면이 움직이지 않고 따라가게 한다. */
+function finishPushMotion() {
+  for (const node of [$app, picker?.backing]) {
+    for (const a of node?.getAnimations?.() ?? []) if ("transitionProperty" in a) a.finish();
+  }
+}
+
+/**
+ * 작은 화면의 달력이 화면을 밀어 내거나(`on`) 제자리로 올린다. 올리는 움직임이 끝나거나 판이 숨으면 `settlePush`가 정리한다.
+ * @param {boolean} on
+ */
+function pushScreen(on) {
+  const root = document.documentElement;
+  if (on && picker) root.style.setProperty(DROP_HEIGHT_VAR, `${picker.panel.offsetHeight}px`);
+  root.classList.toggle("cal-drop", on);
+}
+
+/** 판이 숨었다(접힌 뒤, 움직임 없이 닫을 때, 라우터가 다른 화면으로 가며 판을 바로 숨길 때). 화면을 움직임 없이 제자리에 두어, 새 화면이 올라가는 움직임을 이어받지 않는다. */
+function settlePush() {
+  const root = document.documentElement;
+  root.classList.remove("cal-drop");
+  finishPushMotion();
+  root.style.removeProperty(DROP_HEIGHT_VAR);
+}
+
+/**
+ * 작은 화면의 달력에서 고른 날의 줄을 달력 바로 아래(밀려난 목록의 맨 위)에 둔다. 달력은 열어 둔다(ADR-058 §3, 사용자 결정 2026-11-28). 그려 둔 줄이면
+ * 스크롤만 하고, 아니면 그날의 줄을 맨 위에 두고 목록을 다시 그린다. 상단 바의 달과 주소는 스크롤로 맨 위 줄이 바뀔 때처럼 맞추고 방문 기록은 늘리지 않는다.
+ * 목록이 없거나 낡았으면 아무것도 하지 않고 false다. 그때는 링크대로 라우터가 그 목록을 그린다.
+ * @param {string} date
+ * @returns {boolean}
+ */
+function showDateInList(date) {
+  let list = activeList;
+  if (!list?.root.isConnected || list.isStale()) return false;
+  if (list.root.querySelector(`li[data-date="${date}"]`)) scrollToRow(date);
+  else list = drawList(date, list.today, list.rowOf, list.isStale);
+  // 다시 그린 목록은 그날의 달과 날을 이미 적어 두었으므로, 비우고 다시 잰다
+  list.month = "";
+  list.top = "";
+  followTopMonth(list);
+  saveTopRow(list);
+  return true;
+}
+
+/**
+ * 작은 화면의 달력이 열린 동안 목록의 맨 위 줄이 바뀌거나 날을 고르면 달력의 지금 보는 날도 그날로 바꾼다(ADR-058 §3). 날 판이 다른 달이면 그 달을
+ * 보인다. 달 판과 해 판을 보는 중이면 판은 그대로 두고 지금 보는 날만 바꿔 둔다. 같은 달이면 칸의 표시만 옮겨, 누른 칸의 포커스를 잃지 않는다.
+ * @param {string} date
+ */
+function selectPickerDay(date) {
+  const s = pickerState;
+  const p = picker;
+  const d = parseDate(date);
+  if (!s || !p?.overlay.isOpen || s.view !== "list" || s.current === date || !d) return;
+  s.current = date;
+  s.currentMonth = { y: d.y, m: d.m };
+  if (s.mode !== "day") return;
+  if (s.y === d.y && s.m === d.m) {
+    for (const a of /** @type {NodeListOf<HTMLElement>} */ (p.body.querySelectorAll(".cal-picker-day"))) {
+      const on = a.dataset.date === date;
+      a.classList.toggle("is-selected", on);
+      if (on) a.setAttribute("aria-current", "true");
+      else a.removeAttribute("aria-current");
+    }
+    return;
+  }
+  const focused = p.body.contains(document.activeElement);
+  s.y = d.y;
+  s.m = d.m;
+  renderPicker();
+  if (focused) focusInPicker(pickerFocusTarget());
+}
+
 /** 판의 요소와 오버레이 제어기를 처음 쓸 때 만든다. */
 function ensurePicker() {
   if (picker) return picker;
-  const scrim = el("div", { className: "cal-picker-scrim", "aria-hidden": "true" });
-  scrim.hidden = true;
-  const panel = el("div", { className: "cal-picker", role: "dialog", "aria-modal": "true", "aria-label": "날짜 고르기" });
+  // 밀려난 화면을 덮는 바탕. 화면이 밀려나면 상단 바에 가려져 있던 줄이 상단 바 아래로 나온다. 달력이 그 자리를 덮지만, 둥근 아래 모서리와 좁은 판의
+  // 양옆(가로 화면), 펼치는 동안 판의 자르기보다 화면의 옮기기가 앞서는 프레임(아이폰 Safari는 옮기기를 합성 스레드에서 움직인다, design-system.md
+  // pitfalls §44)에는 그 줄이 비친다. 바탕은 화면과 같은 옮기기로 움직여 아래 끝이 늘 밀려난 화면의 위 끝에 있다. 쉴 때는 높이가 0이다(CSS)
+  const backing = el("div", { className: "cal-picker-backing", "aria-hidden": "true" });
+  const panel = el("div", { className: "cal-picker", role: "dialog", "aria-label": "날짜 고르기" });
   panel.hidden = true;
-  // 「닫기」는 화면에 보이지 않고 포커스를 받으면 나타난다. 달력 아이콘은 판이 열린 동안 막혀 있어(inert) 스크린 리더로는 다시 누를 수 없다.
-  // 팝오버에서는 CSS가 숨긴다
+  // 「닫기」는 화면에 보이지 않고 포커스를 받으면 나타나, 키보드로 달력을 지나가다 닫을 수 있다. 팝오버에서는 CSS가 숨긴다
   const close = el("button", { type: "button", className: "cal-picker-close sheet-close" }, "닫기");
   const title = /** @type {HTMLButtonElement} */ (el("button", { type: "button", className: "cal-picker-title" }));
   const heading = el("span", { className: "cal-picker-title" });
@@ -1018,7 +1114,9 @@ function ensurePicker() {
   const head = el("div", { className: "cal-picker-head" }, title, heading, el("span", { className: "cal-picker-steps" }, prev, next));
   const body = el("div", { className: "cal-picker-body" });
   panel.append(head, body, close);
-  document.body.append(scrim, panel);
+  const bar = document.getElementById("sticky-group");
+  if (bar) bar.after(backing, panel);
+  else document.body.append(backing, panel);
 
   // 큰 화면 레이아웃이면 팝오버다. 다른 시트가 오른쪽 패널로 바뀌는 조건과 같다(helpers.js, ADR-050 §2, DESIGN.md §6)
   const large = window.matchMedia(LARGE_LAYOUT_QUERY);
@@ -1035,23 +1133,29 @@ function ensurePicker() {
   };
   const overlay = window.appOverlay.createOverlay({
     panel,
-    scrim,
-    // 판이 열린 동안 상단 바도 막혀(inert) 제목 단추를 다시 누를 수 없다. 그 자리를 누르면 시트는 뒤 가림이, 팝오버는 바깥 누르기 처리가 판을 닫는다
+    // 큰 화면의 팝오버만 뒤를 막는다. 작은 화면의 달력은 밀려난 화면을 그대로 쓰게 두어, 막지 않고 Tab을 가두지 않으며 바깥을 눌러도 닫지 않는다
+    // (ADR-058 §3). 아이콘을 다시 누르거나 Esc로 닫는다
+    modal: () => large.matches,
+    // 팝오버가 열린 동안 상단 바도 막혀(inert) 제목 단추를 다시 누를 수 없다. 그 자리를 누르면 바깥 누르기 처리가 판을 닫는다
     closeOnOutside: true,
-    // 판이 열린 동안 막아 두는 뒤 화면. 책 고르기 시트와 같은 범위다(helpers.js `SHEET_INERT_SELECTORS`)
+    // 팝오버가 열린 동안 막아 두는 뒤 화면. 책 고르기 시트와 같은 범위다(helpers.js `SHEET_INERT_SELECTORS`)
     inertSelectors: SHEET_INERT_SELECTORS,
     ariaExpanded: ".cal-picker-trigger",
     // 처음 포커스와 닫은 뒤의 포커스는 여기서 옮긴다. 제어기의 기본(`focus()`)은 스크롤하고 탭한 뒤에도 테두리를 그린다(`focusInPicker`)
     onOpen: () => {
       cancelClosing();
+      panel.setAttribute("aria-modal", String(large.matches));
       placePicker();
+      if (!large.matches) pushScreen(true);
       requestAnimationFrame(() => {
         if (overlay.isOpen) focusInPicker(pickerFocusTarget());
       });
     },
+    // 포커스가 판 안에 있었으면 판을 연 단추로 돌려준다. 작은 화면의 달력은 뒤를 막지 않으므로, 밀려난 화면에 있던 포커스는 그 자리에 둔다
     onClose: () => {
+      const active = document.activeElement;
       const trigger = pickerState?.trigger;
-      if (trigger?.isConnected) focusInPicker(trigger);
+      if ((!active || active === document.body || panel.contains(active)) && trigger?.isConnected) focusInPicker(trigger);
     },
     // 작은 화면의 달력은 위로 미끄러져 닫힌다. 팝오버, 움직임을 줄인 설정, 작은 화면과 큰 화면의 경계를 넘을 때는 바로 닫는다
     closeTransition: (p, finalizeHide) => {
@@ -1061,6 +1165,8 @@ function ensurePicker() {
         return;
       }
       p.classList.add("cal-picker-closing");
+      // 밀려난 화면도 함께 올라간다. 판이 숨으면 `settlePush`가 정리한다
+      pushScreen(false);
       /** @param {Event} [e] */
       const done = (e) => {
         // 안의 머리와 칸이 올라가는 움직임(cal-picker-slide-out)의 끝도 판으로 올라온다. 판 자신의 움직임이 끝날 때 숨긴다
@@ -1075,6 +1181,20 @@ function ensurePicker() {
   });
 
   close.addEventListener("click", () => overlay.close());
+  new MutationObserver(() => {
+    if (panel.hidden) settlePush();
+  }).observe(panel, { attributes: true, attributeFilter: ["hidden"] });
+  // 판을 바꾸거나 달을 옮겨 달력의 높이가 바뀌면 밀려난 화면도 움직임 없이 따라간다. 달력의 높이는 움직이지 않고 바로 바뀌기 때문이다
+  if (typeof ResizeObserver === "function") {
+    new ResizeObserver(() => {
+      const root = document.documentElement;
+      if (!overlay.isOpen || !root.classList.contains("cal-drop")) return;
+      const h = panel.offsetHeight;
+      if (Math.abs(h - (parseFloat(root.style.getPropertyValue(DROP_HEIGHT_VAR)) || 0)) < 1) return;
+      root.style.setProperty(DROP_HEIGHT_VAR, `${h}px`);
+      finishPushMotion();
+    }).observe(panel);
+  }
   // 마지막 입력을 적어 둔다. 닫은 뒤 제목 단추의 포커스 테두리는 연 입력이 아니라 이것으로 정한다(`focusInPicker`)
   document.addEventListener("pointerdown", () => { if (overlay.isOpen && pickerState) pickerState.pointer = true; }, true);
   document.addEventListener("keydown", () => { if (overlay.isOpen && pickerState) pickerState.pointer = false; }, true);
@@ -1113,13 +1233,25 @@ function ensurePicker() {
   // 라우터가 이 화면을 바꾸지 않으므로 판을 그대로 둔다(라우터와 같은 조건, helpers.js `isModifiedClick`)
   panel.addEventListener("click", (e) => {
     if (isModifiedClick(e)) return;
-    if (e.target instanceof Element && e.target.closest("a[href]")) overlay.close();
+    const a = e.target instanceof Element ? e.target.closest("a[href]") : null;
+    if (!(a instanceof HTMLElement)) return;
+    // 작은 화면의 캘린더 목록에서 날을 고르면 판을 닫지 않고 그 아래 목록을 그날로 옮긴다(ADR-058 §3, 사용자 결정 2026-11-28). 라우터는 막은
+    // 클릭을 지나친다(routing.js). 포커스는 누른 칸에 있으므로 무엇이 바뀌었는지 알린다
+    const date = a.dataset.date;
+    if (date && !large.matches && pickerState?.view === "list" && showDateInList(date)) {
+      e.preventDefault();
+      selectPickerDay(date);
+      const d = /** @type {{ y: number, m: number, d: number }} */ (parseDate(date));
+      announce(`${d.m}월 ${d.d}일 ${CAL_WEEKDAY_FULL[dayOfWeek(date) ?? 0]} 목록`);
+      return;
+    }
+    overlay.close();
   });
   // 큰 화면에서 창 크기가 바뀌면 자리를 다시 잡는다. 레이아웃의 경계를 넘으면 아래의 change 처리가 판을 닫는다
   window.addEventListener("resize", () => {
     if (overlay.isOpen) placePicker();
   });
-  picker = { panel, scrim, title, heading, prev, next, body, overlay };
+  picker = { panel, backing, title, heading, prev, next, body, overlay };
   return picker;
 }
 
@@ -1153,12 +1285,16 @@ function openCalendarPicker(trigger, view, pointer) {
   p.overlay.open(null);
 }
 
-// 앱 전체의 Esc 처리(app.js)가 열린 판을 먼저 닫는다. 닫았으면 true다. 판이 없거나 닫히는 움직임 중이면 이미 닫혔으므로 false라 Esc가 다음 단계로 간다
-window.closeCalendarPicker = () => {
+/**
+ * 열린 판을 닫는다. 닫았으면 true다. 판이 없거나 닫히는 움직임 중이면 이미 닫혔으므로 false다. 앱 전체의 Esc 처리(app.js)가 판부터 닫고, false면
+ * Esc가 다음 단계로 간다. 작은 화면의 달력 아이콘과 전례독서의 아이콘(lectionary.js `openDatePicker`)도 열린 판을 이것으로 닫는다.
+ */
+function closeCalendarPicker() {
   if (!picker?.overlay.isOpen) return false;
   picker.overlay.close();
   return true;
-};
+}
+window.closeCalendarPicker = closeCalendarPicker;
 
 /** 색 점 줄 — 장식(aria-hidden). 색 이름은 링크 이름이 싣는다. @param {string[]} colors */
 function buildDots(colors) {
@@ -1317,15 +1453,18 @@ function joinsGroup(group, li, after) {
 
 /**
  * 그 날짜의 줄이 고정된 주간 라벨 바로 아래에 오게 스크롤한다. 달의 첫 줄이면 달 이름이 함께 보이게 달 이름부터 둔다. 데스크톱은 스크롤하면 상단 바가
- * 접히므로 접힌 뒤에 다시 맞추고, 그사이 독자가 스크롤을 시작하면 맞추지 않는다(helpers.js `scrollUnderBar`, 이어 읽기와 같다).
+ * 접히므로 접힌 뒤에 다시 맞추고, 그사이 독자가 스크롤을 시작하면 맞추지 않는다(helpers.js `scrollUnderBar`, 이어 읽기와 같다). 작은 화면의 달력이
+ * 목록을 밀어 냈으면 줄은 화면에서 그만큼 아래에 있으므로, 배치에서 상단 바 바로 아래에 오게 그만큼 더 스크롤한다(`pushedBy`). 그러면 화면에서는 달력
+ * 바로 아래다.
  * @param {string} date
  */
 function scrollToRow(date) {
   const row = $app.querySelector(`li[data-date="${date}"]`);
   if (!row) return;
+  const push = pushedBy();
   const section = row.closest("section");
-  if (section && section.querySelector("li[data-date]") === row) scrollUnderBar(section);
-  else scrollUnderBar(row, weekHeadHeight(row.closest(".cal-list") ?? $app));
+  if (section && section.querySelector("li[data-date]") === row) scrollUnderBar(section, push);
+  else scrollUnderBar(row, weekHeadHeight(row.closest(".cal-list") ?? $app) + push);
 }
 
 /** 달 하나의 묶음 — 달 이름과 주 묶음들. @param {string} ym  "YYYY-MM" @param {string} title */
@@ -1387,9 +1526,18 @@ function weekHeadHeight(root) {
  */
 const ROW_PEEK_PX = 8;
 
+/**
+ * 맨 위 줄을 찾는 선: 상단 바와 고정된 주간 라벨의 아래 끝에 앞줄의 자투리를 더한 자리다. 작은 화면의 달력이 목록을 밀어 냈으면 화면에서 그만큼
+ * 아래다(`pushedBy`). 줄의 자리도 그만큼 아래라, 맨 위 줄은 달력이 열려도 같다.
+ * @param {HTMLElement} root
+ */
+function topRowLine(root) {
+  return barBottom() + pushedBy() + weekHeadHeight(root) + ROW_PEEK_PX;
+}
+
 /** 상단 바와 고정된 주간 라벨 바로 아래의 달 묶음. @param {HTMLElement} root */
 function sectionUnderBar(root) {
-  const bottom = barBottom() + weekHeadHeight(root) + ROW_PEEK_PX;
+  const bottom = topRowLine(root);
   for (const section of root.querySelectorAll("section")) {
     if (section.getBoundingClientRect().bottom > bottom) return section;
   }
@@ -1398,7 +1546,7 @@ function sectionUnderBar(root) {
 
 /** 상단 바와 고정된 주간 라벨 바로 아래의 줄 — 「맨 위 줄」(ADR-038 §2, ADR-060 §2). @param {HTMLElement} root */
 function rowUnderBar(root) {
-  const bottom = barBottom() + weekHeadHeight(root) + ROW_PEEK_PX;
+  const bottom = topRowLine(root);
   for (const li of /** @type {NodeListOf<HTMLElement>} */ (sectionUnderBar(root)?.querySelectorAll("li[data-date]") ?? [])) {
     if (li.getBoundingClientRect().bottom > bottom) return li;
   }
@@ -1492,8 +1640,9 @@ function markStuckWeek(root) {
   const heads = [...root.querySelectorAll(".cal-week")];
   if (!heads.length) return;
   // Compare with the labels' own sticky offset (--top-bar-h), not barBottom(): a ResizeObserver updates that variable a frame
-  // after the bar changes height, and the label sits wherever the variable says.
-  const top = parseFloat(getComputedStyle(heads[0]).top) || 0;
+  // after the bar changes height, and the label sits wherever the variable says. The small layout's drop-down calendar moves the
+  // whole list down on screen (a transform), the pinned labels with it (pushedBy).
+  const top = (parseFloat(getComputedStyle(heads[0]).top) || 0) + pushedBy();
   // A label is pinned while its week group straddles the line: the group started above it and has not ended yet. That also
   // covers the label being pushed off by the next week's, so the shadow does not blink out between two weeks.
   // Measure every label first, then toggle: a class change between reads would force a style recalc per label.
@@ -1547,6 +1696,8 @@ function saveTopRow(list) {
   if (!date || date === list.top) return;
   list.top = date;
   replaceListAddress(listPathOf(date, todayKey(new Date())));
+  // 작은 화면의 달력이 열려 있으면 지금 보는 날이 맨 위 줄을 따라간다(ADR-058 §3)
+  selectPickerDay(date);
 }
 
 /** 경계가 화면에서 이만큼(줄 25개쯤) 가까워지면 줄을 더한다. */
@@ -1739,6 +1890,23 @@ function commitList(month, anchor, today, rowOf, isStale) {
   stopList?.();
   commitLiturgicalTitle("calendar");   // 문서 제목(views.js)
   commitMonthBar(month, "list");
+  drawList(anchor, today, rowOf, isStale);
+  announce(listTitleOf(month));
+  // 전례독서의 오른쪽 단추나 공유한 주소로 오늘 날짜의 줄을 열어도 오늘 줄의 주소로 맞춘다(ADR-038 §2)
+  const path = listPathOf(anchor, today);
+  if (location.pathname !== path) replaceListAddress(path);
+}
+
+/**
+ * 목록을 그 날짜의 줄이 맨 위에 오게 새로 그리고 이어 붙이기를 시작한다. 상단 바와 주소는 부르는 쪽이 맞춘다(`commitList`, `showDateInList`).
+ * @param {string} anchor  "YYYY-MM-DD" — 상단 바 바로 아래에 둘 줄
+ * @param {string} today  "YYYY-MM-DD"
+ * @param {(date: string) => ListRow | null} rowOf
+ * @param {() => boolean} isStale
+ * @returns {ListView}
+ */
+function drawList(anchor, today, rowOf, isStale) {
+  stopList?.();
   clearNode($app);
   const root = el("div", { className: "calendar cal-list" });
   const above = el("div", { "aria-hidden": "true" });
@@ -1753,10 +1921,7 @@ function commitList(month, anchor, today, rowOf, isStale) {
   committedMonth = null;   // 월간으로 돌아가면 맨 위부터다
   scrollToRow(anchor);
   startListScroll(list);
-  announce(listTitleOf(month));
-  // 전례독서의 오른쪽 단추나 공유한 주소로 오늘 날짜의 줄을 열어도 오늘 줄의 주소로 맞춘다(ADR-038 §2)
-  const path = listPathOf(anchor, today);
-  if (location.pathname !== path) replaceListAddress(path);
+  return list;
 }
 
 /**
