@@ -2,6 +2,7 @@
 date: 2026-11-28
 branch: claude/ecstatic-tesla-8mgm2j
 title: "fix: 내려오는 달력 아래의 틈 없애고 구분선 긋기"
+pr: 684
 ---
 
 ## 요약
