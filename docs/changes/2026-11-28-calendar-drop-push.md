@@ -115,3 +115,8 @@ pr: 681
 - 흐린 날의 숫자는 누를 수 있는 글이라 바탕과 4.5:1을 넘어야 해 `--text-tertiary`(라이트 4.57:1, 다크 4.9:1)를 쓴다. 이름은 그날의 달로 읽고(「1월 31일 일요일, 녹색」), 오늘이나 지금 보는 날로 표시하지 않는다.
 - e2e `test_the_dropped_calendar_fills_the_first_and_last_weeks_with_faded_neighbouring_days`를 더했고, 움직임 없이 따라가는지 보던 시험을 `test_the_list_follows_the_calendar_height_with_the_same_motion`으로 고쳤다. 둘 다 고치기 전 코드에서 실패하고 고친 코드에서 통과한다. 판의 칸 수를 세던 두 시험은 흐린 날을 더한 수로 고쳤다. 유닛 `pickerDays(adjacent)` 1건을 더했다.
 - 6회차 커밋의 세 파일 전체 실행(263건)은 261건 통과, 2건 실패였다. 위의 3.4px 시험과 `test_view_button_switches_between_month_and_list_keeping_the_month`(월간 주소의 페이지 열기가 30초 안에 끝나지 않은 실패, 1회차에도 같았고 따로 돌리면 통과한다)다.
+
+8회차 — `/code-review medium --fix`(2026-11-28). 고칠 버그는 없었고 사소한 것 하나를 리뷰가 고쳤다. 사용자가 정한 대로 메이저 버그가 나오지 않아 반복을 멈췄다.
+
+- 다른 기기에서 받은 설정으로 같은 화면을 다시 그릴 때 열어 둔 달력은 그대로 두는데(5회차), 받은 설정(소속교회 등)이 그날의 색을 바꾸면 아래 화면만 새 색이고 달력의 막대는 옛 색이었다. 다시 그리기 직전 알림(`route:before-redraw`)에 판이 열려 있었으면 적어 두었다가, 새 단추를 판의 단추로 삼을 때 판도 같은 단계로 다시 그린다. 판 안의 포커스와 칸의 스크롤은 같은 자리에 둔다(calendar.js `rerenderPickerKeepingFocus`, 리뷰가 고침). `test_settings_from_another_device_redraw_the_list_under_the_open_calendar`에 판의 칸이 새로 그려지고 포커스가 같은 날에 있는지 보는 확인을 더했다(고치기 전 코드에서 실패).
+- 7회차 커밋의 세 파일 전체 실행(264건)에서 263건 통과, 1건 실패(위의 3.4px 시험, 같은 값). 8회차 수정 뒤 다시 그리기 e2e 2건, 유닛 2009건, 타입 검사 통과.
