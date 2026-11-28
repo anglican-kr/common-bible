@@ -8,6 +8,7 @@ title: "feat: 앱과 데이터를 따로 배포하기 위한 준비"
 ## 요약
 
 - ADR-061을 새로 썼다. 데이터를 앱 빌드와 따로 서버의 데이터 폴더에 올리고, 데이터의 형식 번호(`data-version.json`)와 앱이 읽을 수 있는 번호(`version.json`의 `data_formats`)를 견줘 둘이 맞을 때만 배포한다. 데이터는 CI가 dev.anglican.kr에 올리고 사람이 `deploy-data.sh promote`로 운영에 낸다. ADR-052 §5 「다음 단계」를 대체하고, ADR-051 §3과 ADR-021 §4에 대체한 곳을 적었다.
+- 함께 가는 PR: 데이터 저장소 anglican-kr/common-bible-data#98(형식 번호, 사이트맵, 호환 검사와 dev 배포 CI), 서버 저장소 anglican-kr/common-bible-server#10(`deploy-data.sh`, 데이터 없는 앱 빌드, nginx 예시, 전환 순서). 서버 PR은 전환할 때 머지한다.
 - 이 PR은 앱 쪽 준비(ADR-061 §6, §8의 1)만 담는다. 서버에 아무것도 바꾸지 않으므로, 이 PR을 운영에 내도 배포 순서와 사용자가 받는 파일은 지금과 같다.
   - `version.json`에 `data_formats: [1]`을 더했다. `release.py`는 버전만 바꾸고 다른 칸을 남긴다.
   - 서비스 워커가 운영에서 `books.json`과 `search-meta.json`을 캐시의 사본으로 먼저 내고 뒤에서 새로 받아 사본을 바꾼다. 데이터만 낸 배포 뒤에도 다음 실행부터 새 책 목록과 검색 별칭을 쓴다.
