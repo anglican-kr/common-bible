@@ -41,6 +41,7 @@
 - 태그는 annotated로 만들고(`git tag -a 1.0.x -m "..."`), 이름에 `v`를 붙이지 않는다(1.0.5부터). 메시지에 그 버전의 주요 변경을 적고 `git push origin <태그>`로 올린다. 태그 1.6.4와 1.5.12는 lightweight로 만들어져 이 규칙과 어긋난다.
 - **pre-release**(ADR-052 §4): 정식 태그가 아직 없는 버전을 dev.anglican.kr에 올릴 때는 서버 저장소의 `prerelease.sh <초안>`을 실행한다. 빌드 식별자(`X.Y.Z-<app_commit>`)를 이름으로 HEAD에 annotated 태그를 달고(메시지에 데이터 커밋과 HEAD), push한 뒤 `gh release create --prerelease`로 pre-release를 만든다. 노트는 릴리스 PR의 릴리스 노트 초안이다. pre-release가 나오면 CI `deploy-dev.yml`이 그 태그를 dev.anglican.kr에 올린다. 진행은 `gh run list --workflow deploy-dev.yml`로 본다.
   - `prerelease.sh`는 HEAD가 `origin/dev`에 없거나, 정식 태그(`X.Y.Z`)가 이미 있거나, 같은 이름의 pre-release가 이미 있으면(데이터만 바뀐 경우) 멈춘다. 뒤의 둘은 `deploy.sh dev`로 손으로 올린다.
+  - `deploy.sh promote`는 `APP_ROOT`(origin/main을 체크아웃하고 데이터 서브모듈을 받은 폴더)에서 빌드한 파일과 dev 빌드 폴더의 파일을 견주어, 다르면 운영을 바꾸지 않는다. 빌드 폴더 이름은 CI 키로도 만들 수 있어 증명이 되지 않는다(2026-11-28).
   - CI가 검증에서 실패하면 새 빌드가 올라간 채다. 로그의 안내대로 `deploy.sh rollback dev`를 실행한다. 같은 태그를 다시 올리려면 그 실행을 Re-run 한다.
   - 같은 버전에 앱 수정을 더해 다시 올려 빌드 식별자가 바뀌면 새로 만든다. 그 수정 PR이 버전을 올리지 않았어도 만든다. 데이터만 바뀌어 식별자가 같으면 만들지 않는다. 정식 태그가 이미 있는 버전을 올리는 시험 배포에는 만들지 않는다.
   - 정식 태그와 Release는 운영에 낼 때 main을 앞당긴 커밋에 새로 만든다. pre-release 태그는 옮기거나 고치지 않는다.
