@@ -77,9 +77,9 @@
 | `data`     | 데이터 서브모듈 포인터 갱신        |
 | `style`    | CSS, UI 스타일만 변경              |
 | `refactor` | 기능 변경 없이 코드 구조 개선      |
-| `release`  | 버전을 올리는 릴리스 커밋과 PR     |
+| `pre-release` | 버전을 올리는 릴리스 커밋과 PR |
 
-릴리스 커밋과 릴리스 PR의 제목은 `release: X.Y.Z 릴리스`다(사용자 결정 2026-11-24, 2.2.5부터. 그전에는 `chore`였다). `scripts/release.py`가 이 메시지로 커밋한다.
+릴리스 커밋과 릴리스 PR의 제목은 `pre-release: X.Y.Z`다(사용자 결정 2026-11-28). 이 커밋은 dev에 머지되어 pre-release(`X.Y.Z-<앱 커밋>`)로 먼저 나가고, 운영에는 그 뒤 main을 앞당겨 낸다. 같은 버전에 수정을 더해도 버전을 다시 올리지 않고 pre-release 이름의 앱 커밋만 바뀐다. 2.2.5부터 2.2.9까지는 `release: X.Y.Z 릴리스`, 그전에는 `chore`였다. `scripts/release.py`가 이 메시지로 커밋한다.
 
 본문 데이터 변경 자체는 `common-bible-data` 저장소에서 `data:` 커밋으로 남긴다. 앱 저장소에서는 서브모듈 포인터 갱신을 `data:` 또는 `chore:`로 기록한다.
 

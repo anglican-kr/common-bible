@@ -51,6 +51,12 @@ class NoiseFilterTest(unittest.TestCase):
         self.assertTrue(changelog.is_app_noise("release: 2.2.5 릴리스"))
         self.assertTrue(changelog.is_app_noise("release: 2.2.5 릴리스 (#654)"))
 
+    def test_pre_release_type_commit_is_app_noise(self):
+        self.assertTrue(changelog.is_app_noise("pre-release: 2.2.10"))
+        self.assertTrue(changelog.is_app_noise("pre-release: 2.2.10 (#700)"))
+        # A pre-release fix with words after the version is a real change, not the bump
+        self.assertFalse(changelog.is_app_noise("pre-release: 2.2.10 배포 스크립트 고침"))
+
     def test_release_commit_with_suffix_is_app_noise(self):
         self.assertTrue(
             changelog.is_app_noise("chore: 1.4.12 릴리스 — version.json bump")
