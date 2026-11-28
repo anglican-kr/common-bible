@@ -101,6 +101,8 @@ const SHELL_FILES = [
 // Route /data/* paths to the appropriate cache.
 // Returns SHELL_CACHE for non-data paths and for shell-precached data files
 // (books.json, search-meta.json, *-manifest.json) that ship with the app shell.
+// The first two are refreshed in the background (SHELL_DATA_REFRESH below), the
+// manifests are network-first (handleManifest).
 //
 // 여기 빠진 데이터 경로는 SHELL_CACHE 로 떨어지는데, 그러면 **콘텐츠 해시
 // 무효화를 못 받는다** — `manifest-sync.js` 는 낡은 항목을 DATA_CACHE 에서만
@@ -157,6 +159,34 @@ function handleManifest(event, pathname, cacheName = SHELL_CACHE) {
     }
   })());
 }
+
+// ── BEGIN SHELL_DATA_REFRESH ──
+// 데이터는 앱과 따로 배포한다(ADR-061 §6). 셸과 함께 설치 때 받는 데이터 파일 가운데 이 둘은 데이터만 낸
+// 배포에서도 바뀌어야 하는데, 서비스 워커가 새로 설치되지 않으면 셸 캐시의 사본이 그대로 남는다. 앱이 열릴
+// 때 기다리는 파일이라 네트워크를 기다리지 않는다. 캐시의 사본을 먼저 내고 뒤에서 새로 받아 그 사본을
+// 바꾸므로, 데이터만 낸 배포 뒤 다음 실행부터 새 파일을 쓴다. dev 호스트는 다른 셸 파일처럼 네트워크 우선이다.
+const SHELL_DATA_REFRESH_PATHS = new Set([
+  "/data/books.json",
+  "/data/search-meta.json",
+]);
+
+// Stale-while-revalidate into SHELL_CACHE. The refresh revalidates with the
+// server (`no-cache`: an unchanged file costs a 304) and only a 2xx replaces
+// the copy. Without a cached copy (install failed to store it, or the shell
+// was cleared) the page waits for the network like any cache miss.
+function handleShellDataRefresh(event) {
+  const refresh = fetch(new Request(event.request, { cache: "no-cache" })).then(async (res) => {
+    if (res.ok) {
+      const cache = await caches.open(SHELL_CACHE);
+      await cache.put(event.request, res.clone());
+    }
+    return res;
+  });
+  // Keep the worker alive until the copy is stored; a failed refresh keeps the old copy.
+  event.waitUntil(refresh.catch(() => {}));
+  event.respondWith(caches.match(event.request).then((cached) => cached || refresh));
+}
+// ── END SHELL_DATA_REFRESH ──
 
 // Cache app shell on install — do NOT skipWaiting() automatically.
 // The client will send a SKIP_WAITING message after user confirms the update.
@@ -388,6 +418,11 @@ self.addEventListener("fetch", (event) => {
           }).catch(() => caches.match(shellPath))
         : caches.match(shellPath).then((cached) => cached || fetch(shellPath))
     );
+    return;
+  }
+
+  if (!IS_DEV && SHELL_DATA_REFRESH_PATHS.has(pathname)) {
+    handleShellDataRefresh(event);
     return;
   }
 

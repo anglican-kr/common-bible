@@ -16,6 +16,9 @@ sitemap.xml is intentionally NOT touched here. The webhook workflow
 data sync — bumping the user-facing version for a sitemap-only change
 would push a meaningless SW update toast (sitemap is not in SHELL_CACHE).
 
+version.json keeps its other keys (`data_formats`, ADR-061 §2): only
+`version` changes.
+
 Usage:
     python scripts/release.py patch        # 1.4.12 -> 1.4.13
     python scripts/release.py minor        # 1.4.12 -> 1.5.0
@@ -55,6 +58,15 @@ def write_sw_version(text: str, new_version: str) -> str:
     if not SW_VERSION_RE.search(text):
         raise ValueError("self.APP_VERSION assignment not found in sw-version.js")
     return SW_VERSION_RE.sub(rf'\g<1>{new_version}\g<2>', text)
+
+
+def write_version_json(text: str, new_version: str) -> str:
+    """version.json with only `version` replaced. Other keys stay as they are:
+    `data_formats` lists the data format numbers this app reads, and the
+    deploy scripts compare it with each site's data (ADR-061 §2)."""
+    info = json.loads(text)
+    info["version"] = new_version
+    return json.dumps(info, ensure_ascii=False) + "\n"
 
 
 def release_commit_message(new_version: str) -> str:
@@ -103,7 +115,7 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
-    VERSION_PATH.write_text(json.dumps({"version": new_version}) + "\n")
+    VERSION_PATH.write_text(write_version_json(VERSION_PATH.read_text(), new_version))
     sw_text = SW_VERSION_PATH.read_text()
     SW_VERSION_PATH.write_text(write_sw_version(sw_text, new_version))
 

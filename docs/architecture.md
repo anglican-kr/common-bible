@@ -373,7 +373,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | GET이 아닌 요청 (POST `/oauth/token` 등) | 서비스 워커를 거치지 않는다 | Cache API는 GET만 받는다 |
 | OAuth/Drive 4개 호스트                                                  | **항상 네트워크 직행**, 서비스 워커 우회                          | 캐시하면 토큰과 동기화 데이터가 깨진다                             |
 | 페이지 이동 요청 (HTML)                                                 | `/index.html`로 대체(단, `/privacy.html`은 통과). 운영은 캐시 우선, 개발 도메인과 localhost는 네트워크 우선 | SPA 라우팅                                                      |
-| 셸(JS, CSS, HTML, 아이콘, `books.json`, `search-meta.json`, 매니페스트 2종) | 캐시 우선, `SHELL_CACHE`에 저장(개발 도메인과 localhost는 네트워크 우선이고 캐시는 오프라인 폴백) | 코드와 강하게 묶여 있어 릴리스마다 함께 갱신한다                              |
+| 셸(JS, CSS, HTML, 아이콘, `books.json`, `search-meta.json`, 매니페스트 2종) | 캐시 우선, `SHELL_CACHE`에 저장(개발 도메인과 localhost는 네트워크 우선이고 캐시는 오프라인 폴백). `books.json`과 `search-meta.json`은 운영에서 캐시의 사본을 먼저 내고 뒤에서 새로 받아 바꾼다([ADR-061](decisions/061-separate-app-and-data-deploys.md) §6) | 코드와 강하게 묶여 있어 릴리스마다 함께 갱신한다. 그 두 파일은 데이터만 낸 배포에서도 바뀌어야 한다 |
 | 본문, 검색, 교회력(`/data/bible/*`, `/data/search-{ot,nt,dc,lit}.json`, `/data/lectionary/*`) | 캐시 우선, `DATA_CACHE`에 저장(이름은 `"data"`로 고정)                     | 누적 캐시이고, 콘텐츠 해시 매니페스트를 비교해 항목 단위로 갱신한다        |
 | 오디오 (`/data/audio/*`)                                                | 캐시 우선, `AUDIO_CACHE`에 저장(이름은 `"audio"`로 고정). 넣을 때 용량 상한을 적용한다([ADR-016](decisions/016-audio-cache-lru.md)) | 필요할 때 내려받고, 콘텐츠 해시 매니페스트를 비교해 항목 단위로 갱신한다 |
 | 매니페스트 (`/data/{bible,audio}-manifest.json`)                        | **네트워크 우선**. 실패하면 `SHELL_CACHE`에 미리 받아 둔 사본으로 폴백 | 최신 상태가 핵심이다                                               |
@@ -599,6 +599,7 @@ Phase 1(성경 읽기 PWA)은 완성됐고, Phase 3(교회력)은 일부 구현�
 | [057](decisions/057-daily-office-readings-screen.md) | 성무일과 독서는 감사성찬례 독서와 따로 된 화면(`/office/YYYY-MM-DD`)에 아침기도(시편과 구약)와 저녁기도(시편과 서신과 복음) 두 구역을 싣는다. 들어가는 길은 캘린더 목록의 줄이다(구현 대기. §1, §2는 ADR-060이 대체) |
 | [058](decisions/058-calendar-list-only.md) | 캘린더 목록의 줄마다 그날의 감사성찬례와 성무일과의 장절을 적고 각각 그 독서 화면으로 간다. 작은 화면의 캘린더는 목록 하나이고 월간 달력은 상단 바에서 내려온다. 큰 화면은 월간과 목록을 그대로 두고 월간 칸을 누르면 목록의 그날 줄로 간다(ADR-038 §1, §2, §3, §3-1의 일부를 대체. 구현 중. §2는 ADR-060이 대체) |
 | [060](decisions/060-lectionary-tabs-week-list.md) | 전례독서 화면의 상단 바 둘째 줄에 감사성찬례, 아침기도, 저녁기도 탭을 두고 처음 여는 탭은 감사성찬례다. 캘린더 목록은 주일마다 주간 라벨을 두고 날마다 링크 하나인 줄에 전례색 막대와 세 독서의 장절을 적는다(ADR-057 §1, §2와 ADR-058 §2를 대체. 구현 중) |
+| [061](decisions/061-separate-app-and-data-deploys.md) | 데이터를 앱 빌드와 따로 서버의 데이터 폴더(`/var/www/data-<커밋>`)에 올리고 링크 `data-dev`와 `data-prod`로 두 사이트의 데이터를 정한다. 데이터는 `data-version.json`의 형식 번호를, 앱은 `version.json`의 `data_formats`를 밝히고, 배포 스크립트가 둘이 맞을 때만 올린다. 데이터는 CI가 dev에 올리고 사람이 `deploy-data.sh promote`로 운영에 낸다(ADR-052 §5를 대체. 구현 중) |
 
 026은 main에 없다. 1.6.0 노트와 캘린더 설계는 개발을 멈춘 `release/1.6.0` 브랜치에만 있다. 데이터 저장소의 ADR(002, 003, 006, 039 전례시편 DSL)은 그 저장소의 `docs/decisions/`에 있다.
 

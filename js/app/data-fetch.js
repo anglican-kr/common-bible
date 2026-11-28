@@ -62,13 +62,15 @@ async function loadVersion() {
 /** @returns {Promise<string>} */
 async function fetchVersion() {
   try {
-    const res = await fetch("/version.json");
+    const [res, dataCommit] = await Promise.all([fetch("/version.json"), fetchDataCommit()]);
     const data = await res.json();
     appVersion = data.version;
     // Build ids (ADR-052): only the copy zipped by the server repo's build-deploy.sh has them.
+    // 데이터는 앱과 따로 배포한다(ADR-061 §6). 데이터 커밋은 데이터 빌드의 data-version.json이 알려 주고,
+    // 그 파일이 없는 사이트(전환 전)에서는 앱 빌드의 version.json에 적힌 값을 쓴다.
     window.appBuild = {
       app: typeof data.app_commit === "string" ? data.app_commit : "",
-      data: typeof data.data_commit === "string" ? data.data_commit : "",
+      data: dataCommit ?? (typeof data.data_commit === "string" ? data.data_commit : ""),
     };
   } catch {
     appVersion = "";
@@ -77,6 +79,22 @@ async function fetchVersion() {
   // Mirror to window so settings-ui.js can read it for the version footer.
   window.appVersion = appVersion;
   return appVersion ?? "";
+}
+
+/**
+ * The data build's commit from /data/data-version.json (ADR-061 §2), or null when the site has no such file
+ * (before the split, or a local server: the repo's copy carries the format only) or it cannot be read.
+ * @returns {Promise<string | null>}
+ */
+async function fetchDataCommit() {
+  try {
+    const res = await fetch(`${DATA_DIR}/data-version.json`);
+    if (!res.ok) return null;
+    const info = await res.json();
+    return info && typeof info.commit === "string" ? info.commit : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

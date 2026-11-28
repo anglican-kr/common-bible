@@ -459,6 +459,31 @@ test("loadVersion: mirrors the build ids of a deployed version.json onto window.
   assert.deepEqual({ ...h.windowStub.appBuild }, { app: "9985216", data: "1de377e" });
 });
 
+test("loadVersion: the data build's data-version.json names the data commit (ADR-061 §6)", async () => {
+  const h = loadDataFetching();
+  h.setFetch(async (url) => (url === "/data/data-version.json"
+    ? { ok: true, json: async () => ({ format: 1, commit: "82c056b" }) }
+    : { ok: true, json: async () => ({ version: "2.3.0", data_formats: [1], app_commit: "9985216", data_commit: "1de377e" }) }));
+  assert.equal(await h.loadVersion(), "2.3.0");
+  assert.deepEqual({ ...h.windowStub.appBuild }, { app: "9985216", data: "82c056b" });
+  assert.ok(h.fetchCalls.includes("/data/data-version.json"));
+});
+
+test("loadVersion: without data-version.json (before the split, a local server) the version.json value stays", async () => {
+  for (const dataRes of [
+    { ok: false, json: async () => ({}) },
+    { ok: true, json: async () => ({ format: 1 }) },
+    { ok: true, json: async () => { throw new SyntaxError("not JSON"); } },
+  ]) {
+    const h = loadDataFetching();
+    h.setFetch(async (url) => (url === "/data/data-version.json"
+      ? dataRes
+      : { ok: true, json: async () => ({ version: "2.2.4", app_commit: "9985216", data_commit: "1de377e" }) }));
+    await h.loadVersion();
+    assert.deepEqual({ ...h.windowStub.appBuild }, { app: "9985216", data: "1de377e" });
+  }
+});
+
 test("loadVersion: calls made while the first fetch is in flight share it (one request, one result)", async () => {
   // The settings view drawn before boot's loadVersion() finished asks again (ADR-052 §3). A second request whose
   // failure lands last would overwrite the first one's version and build ids.
@@ -466,7 +491,8 @@ test("loadVersion: calls made while the first fetch is in flight share it (one r
   let calls = 0;
   /** @type {(v: any) => void} */
   let release = () => {};
-  h.setFetch(() => {
+  h.setFetch((url) => {
+    if (url !== "/version.json") return Promise.resolve({ ok: false, json: async () => ({}) });
     calls++;
     if (calls > 1) return Promise.reject(new Error("second request"));
     return new Promise((resolve) => { release = resolve; });
