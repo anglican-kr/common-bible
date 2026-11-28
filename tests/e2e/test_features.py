@@ -304,6 +304,22 @@ def test_landscape_resume_pill_stays_between_the_tab_bar_and_search(browser):
         ctx.close()
 
 
+@pytest.mark.only_browser("chromium")
+@pytest.mark.parametrize("viewport, font", [({"width": 568, "height": 320}, 18), ({"width": 667, "height": 375}, 24)],
+                         ids=["568px", "667px-24px"])
+def test_landscape_resume_pill_keeps_a_long_name_on_one_line(browser, viewport, font):
+    """좁은 가로 화면에서도 알약의 글은 한 줄이고 넘치면 말줄임표로 끊는다. 그전에는 두 줄이 되어 60px 알약의 위아래가 잘렸다
+    (568px은 모든 글자 크기, 667px은 22-24px)."""
+    ctx, page = _pill_page(browser, viewport, font=font, book="cant", chapter=4)
+    try:
+        _open_list(page)
+        assert abs(_rect(page, ".resume-banner")["height"] - 60) < 1
+        assert _label_lines(page) == 1
+        assert page.evaluate("() => getComputedStyle(document.querySelector('.resume-banner-link')).textOverflow") == "ellipsis"
+    finally:
+        ctx.close()
+
+
 def test_large_layout_resume_banner_stays_under_the_header(browser):
     """큰 화면은 탭 바가 없어 이어 읽기 배너가 전처럼 헤더 아래, 구분 탭 위의 띠다."""
     ctx, page = _pill_page(browser, {"width": 1280, "height": 800}, touch=False)

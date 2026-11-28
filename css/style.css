@@ -4318,6 +4318,18 @@ mark.search-highlight--cut-start {
     width: var(--dock-control);
     font-size: var(--font-2xl);
   }
+  /* One line, cut with an ellipsis, in both orientations. The pill is one --dock-control tall, so a label that
+     wrapped was clipped top and bottom: portrait 320px at 20-24px text (「이어읽기: 이사야 첫째 송가」, 「이어읽기:
+     2데살로니카 3장」 even after the short-name swap), and landscape 568px at every text size and 667px at 22-24px
+     (the pill between the tab bar and the search circle). The strip it replaced grew instead. min-width: 0 lets
+     the flex item shrink below its unwrapped text, which keeps the × in view and the compact measurement (link
+     width) meaningful. Screen readers still get the whole label (aria-label, or the text itself). */
+  .resume-banner-link {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   @media (orientation: portrait) {
     /* The dock row sits at --space-1 above the bottom (plus the home indicator, like #tab-dock) and is
        --dock-control tall; the pill keeps --space-2 above it. Nothing of #tab-dock reaches up here, so the
@@ -4326,17 +4338,6 @@ mark.search-highlight--cut-start {
       bottom: calc(var(--space-1) + var(--dock-control) + var(--space-2) + env(safe-area-inset-bottom) * 0.75);
       left: var(--dock-left);
       right: var(--dock-right);
-    }
-    /* One line, cut with an ellipsis. The pill is one --dock-control tall, so a label that wrapped (320px
-       at 20-24px text: 「이어읽기: 이사야 첫째 송가」, 「이어읽기: 2데살로니카 3장」 even after the short-name
-       swap) was clipped top and bottom; the strip it replaced grew instead. min-width: 0 lets the flex item
-       shrink below its unwrapped text, which keeps the × in view and the compact measurement (link width)
-       meaningful. Screen readers still get the whole label (aria-label, or the text itself). */
-    .resume-banner-link {
-      min-width: 0;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
     /* The pill adds a row above the dock, so the list keeps that much more room at its bottom: the last
        book cards (and chapter cells) scroll up clear of the pill as they clear the tab bar today. Beats
