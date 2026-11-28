@@ -1499,7 +1499,7 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
     transform: translateY(var(--cal-drop-h, 0px));
     transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }
-  /* 키보드로 옮긴 포커스가 화면 아래로 밀려난 자리나 달력에 가려진 자리에 가지 않게 한다. 밀려난 화면의 줄은 화면에서 달력의 높이만큼 아래에 있다.
+  /* 키보드로 옮긴 포커스가 화면 아래로 밀려난 자리나 달력에 가려진 자리에 가지 않게 한다. 밀려난 화면의 줄은 화면에서 밀어 낸 길이(--cal-drop-h)만큼 아래에 있다.
      위쪽 여백은 포커스가 밀려난 화면(#app) 안에 있을 때만 늘린다. 상단 바의 단추는 여백 안에 있어, 그 단추로 포커스가 가면 브라우저가 단추를
      가려진 것으로 보고 늘린 만큼 페이지를 스크롤했다(known-issues §56, 코드 리뷰 2026-11-28) */
   html.cal-drop { scroll-padding-bottom: var(--cal-drop-h, 0px); }
