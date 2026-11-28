@@ -151,6 +151,64 @@ def test_one_escape_closes_the_note_tooltip_before_the_dropped_calendar(mobile_c
     assert not page.evaluate(calendar_open)
 
 
+def test_note_tooltip_opens_below_the_dropped_calendar_not_under_it(mobile_context):
+    """작은 화면에서 달력을 연 채 달력 바로 아래의 주석 어절을 누르면, 툴팁은 어절 위(달력에 가려지는 자리)가 아니라
+    달력의 아래 끝 밑에 열려 보인다(코드 리뷰 2026-11-28). 달력은 툴팁보다 위 층이다(ADR-058 §3)."""
+    page = mobile_context.new_page()
+    _open(page, "lectionary/2026-07-19")
+    page.evaluate("() => document.querySelector('#page-title button.title-view-btn').click()")
+    page.wait_for_selector(".cal-picker:not([hidden])")
+    page.wait_for_timeout(400)
+    anchor = page.locator(".lect-reading[data-slot='first'] article.chapter-text .note-anchor")
+    # 어절이 달력 바로 아래(툴팁이 어절 위에 들어갈 만큼 떨어지지 않은 자리)에 보이게 직접 스크롤한다
+    anchor.evaluate("""e => window.scrollBy({ top: e.getBoundingClientRect().top - (document.querySelector('.cal-picker').getBoundingClientRect().bottom + 40),
+        behavior: 'instant' })""")
+    page.wait_for_timeout(200)
+    box = anchor.bounding_box()
+    page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    page.wait_for_function(NOTE_TOOLTIP_OPEN)
+    m = page.evaluate("""() => {
+        const tip = document.querySelector('#note-tooltip').getBoundingClientRect();
+        const cal = document.querySelector('.cal-picker').getBoundingClientRect();
+        const hit = document.elementFromPoint(tip.left + tip.width / 2, tip.top + Math.min(tip.height / 2, 12));
+        return { tipTop: tip.top, calBottom: cal.bottom, shown: !!hit && !!hit.closest('#note-tooltip') };
+    }""")
+    assert m["tipTop"] >= m["calBottom"], m
+    assert m["shown"], m
+
+
+def test_note_tooltip_closes_when_the_calendar_moves_the_screen(mobile_context):
+    """툴팁은 창에 고정된 자리라, 달력이 화면을 밀거나 올리면 어절에서 떨어져 남았다(열면 달력 밑에 가리고, 닫으면 엉뚱한 줄 위에 떴다.
+    코드 리뷰 2026-11-28). 아이콘의 그림을 누르면 바깥 누르기 처리가 닫지 않으므로, 달력이 화면을 옮길 때 툴팁을 닫는다(calendar.js `dropNoteTooltip`)."""
+    page = mobile_context.new_page()
+    _open(page, "lectionary/2026-07-19")
+    page.wait_for_selector("#launch-screen", state="detached")
+    anchor = page.locator(".lect-reading[data-slot='first'] article.chapter-text .note-anchor")
+    icon = page.locator("#page-title button.title-view-btn svg")
+
+    def tap(loc):   # 그 자리를 누른다. 아이콘이면 누른 요소(e.target)가 그림(SVG)이다
+        b = loc.bounding_box()
+        page.mouse.click(b["x"] + b["width"] / 2, b["y"] + b["height"] / 2)
+
+    anchor.evaluate("e => window.scrollBy({ top: e.getBoundingClientRect().top - 400, behavior: 'instant' })")
+    page.wait_for_timeout(200)
+    tap(anchor)
+    page.wait_for_function(NOTE_TOOLTIP_OPEN)
+    tap(icon)   # 달력을 연다. 화면이 밀려난다
+    page.wait_for_selector(".cal-picker:not([hidden])")
+    page.wait_for_timeout(500)
+    assert not page.evaluate(NOTE_TOOLTIP_OPEN)
+
+    anchor.evaluate("""e => window.scrollBy({ top: e.getBoundingClientRect().top - (document.querySelector('.cal-picker').getBoundingClientRect().bottom + 40),
+        behavior: 'instant' })""")
+    page.wait_for_timeout(200)
+    tap(anchor)
+    page.wait_for_function(NOTE_TOOLTIP_OPEN)
+    tap(icon)   # 달력을 닫는다. 화면이 올라간다
+    page.wait_for_selector(".cal-picker", state="hidden")
+    assert not page.evaluate(NOTE_TOOLTIP_OPEN)
+
+
 def test_note_anchor_survives_half_verse_cut_and_opens_tooltip(desktop_context):
     """창세 28:10-19상: 19절을 「그 곳을 베델이라 불렀다.」까지 자르고도 어절 「베델」의 주석 자리가 남아, 누르면 툴팁이 열린다.
     주석은 반절 자르기 앞에 감싼다(lectionary.js buildReading)."""

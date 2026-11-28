@@ -1037,14 +1037,27 @@ function pushScreen(on) {
   const root = document.documentElement;
   if (on && picker) root.style.setProperty(DROP_HEIGHT_VAR, `${picker.panel.offsetHeight}px`);
   root.classList.toggle("cal-drop", on);
+  dropNoteTooltip();
+}
+
+/**
+ * 밀려난 화면의 주석 툴팁을 닫는다. 툴팁은 창에 고정된 자리라 스크롤만 따라가고, 화면을 옮기기로 밀거나 올리면 어절에서 떨어져 남는다(달력을 열면
+ * 달력 밑에 가리고, 닫으면 엉뚱한 줄 위에 뜬다. 코드 리뷰 2026-11-28). 아이콘을 누르는 것은 툴팁 바깥을 누르는 것이기도 하다. 다만 아이콘의 그림(SVG)을
+ * 누르면 citations.js의 바깥 누르기 처리가 HTML 요소만 보아 닫지 않는다. 포커스는 옮기지 않는다(판이나 아이콘이 받는다).
+ */
+function dropNoteTooltip() {
+  window.appCitations?.hideNoteTooltip();
 }
 
 /** 판이 숨었다(접힌 뒤, 움직임 없이 닫을 때, 라우터가 다른 화면으로 가며 판을 바로 숨길 때). 화면을 움직임 없이 제자리에 두어, 새 화면이 올라가는 움직임을 이어받지 않는다. */
 function settlePush() {
   const root = document.documentElement;
+  // 움직임 없이 닫으면(움직임을 줄인 설정, 경계를 넘을 때) `pushScreen(false)`를 거치지 않고 여기서 화면이 올라간다
+  const pushed = root.classList.contains("cal-drop");
   root.classList.remove("cal-drop");
   finishPushMotion();
   root.style.removeProperty(DROP_HEIGHT_VAR);
+  if (pushed) dropNoteTooltip();
 }
 
 /**
@@ -1197,6 +1210,7 @@ function ensurePicker() {
       if (Math.abs(h - (parseFloat(root.style.getPropertyValue(DROP_HEIGHT_VAR)) || 0)) < 1) return;
       root.style.setProperty(DROP_HEIGHT_VAR, `${h}px`);
       finishPushMotion();
+      dropNoteTooltip();
     }).observe(panel);
   }
   // 마지막 입력을 적어 둔다. 닫은 뒤 제목 단추의 포커스 테두리는 연 입력이 아니라 이것으로 정한다(`focusInPicker`)

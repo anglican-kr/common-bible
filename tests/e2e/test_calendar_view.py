@@ -889,16 +889,18 @@ def test_date_cell_and_first_line_start_at_the_same_height(mobile_context):
     assert all(abs(g) <= 1 for g in gaps), gaps
 
 
-def test_two_colours_of_the_saints_are_two_bars_one_above_the_other(mobile_context):
-    """성인에 따라 「적색 또는 백색」인 날은 막대 둘을 위아래로 둔다. 색 이름은 링크 이름에 있다(ADR-060 §2, 사용자 결정 2026-11-27)."""
+def test_two_colours_of_the_saints_are_two_circles_in_one_row(mobile_context):
+    """성인에 따라 「적색 또는 백색」인 날은 막대 대신 작은 원 둘을 한 줄에 나란히 둔다. 색 이름은 링크 이름에 있다
+    (ADR-060 §2, 사용자 결정 2026-11-28. 그전에는 막대 둘을 위아래로 두었다)."""
     page = mobile_context.new_page()
     _open_list(page, "calendar/list/2026-02-14")
     row = _row(page, "2026-02-14")
     assert "적색 또는 백색" in row.get_attribute("aria-label")
-    bars = page.evaluate("""() => [...document.querySelectorAll('li[data-date="2026-02-14"] .cal-row-bar')].map((b) => {
-        const r = b.getBoundingClientRect(); return [b.className.split(' ').pop(), r.top, r.bottom, r.left]; })""")
-    assert [b[0] for b in bars] == ["lit-swatch--red", "lit-swatch--white"], bars
-    assert bars[1][1] >= bars[0][2] and abs(bars[1][3] - bars[0][3]) <= 0.5, bars   # 아래로 쌓고 왼쪽 끝이 같다
+    marks = page.evaluate("""() => [...document.querySelectorAll('li[data-date="2026-02-14"] .cal-row-bar')].map((b) => {
+        const r = b.getBoundingClientRect(); return [b.className.split(' ').pop(), r.top, r.left, r.right, r.width, r.height]; })""")
+    assert [m[0] for m in marks] == ["lit-swatch--red", "lit-swatch--white"], marks
+    assert abs(marks[1][1] - marks[0][1]) <= 0.5 and marks[1][2] >= marks[0][3], marks   # 같은 줄에 왼쪽부터 나란히
+    assert all(abs(m[4] - m[5]) <= 0.5 for m in marks), marks   # 너비와 높이가 같은 원
 
 
 def test_row_marks_sunday_weight_year_start_and_keeps_alternate_colours_out(mobile_context):

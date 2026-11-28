@@ -69,7 +69,7 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
       .join(";");
   }
 
-  const { el, clearNode, hangingQuoteClass, wrapQuoteRuns, headerIcon, HEADER_ICON_PATHS, barBottom } = window.appHelpers;
+  const { el, clearNode, hangingQuoteClass, wrapQuoteRuns, headerIcon, HEADER_ICON_PATHS, barBottom, isSmallLayout } = window.appHelpers;
   const { createOverlay, attachSheetDrag, attachSheetResize } = window.appOverlay;
 
   /**
@@ -448,6 +448,11 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
    * slides under with it (the z-index order is meant for that — css/style.css
    * #note-tooltip).
    *
+   * The small layout's drop-down calendar (calendar.js, ADR-058 §3) hangs from
+   * the header and paints over the tooltip too (z-index 71 > 15) while the
+   * screen it pushed down stays usable, so while it is open, room above ends at
+   * its bottom edge instead.
+   *
    * @param {HTMLElement} tt
    * @param {HTMLElement} anchorEl
    */
@@ -461,7 +466,9 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const GAP = 8;
-    const minTop = Math.max(0, barBottom()) + GAP;   // helpers.js — measured on every call
+    const drop = isSmallLayout() ? document.querySelector(".cal-picker:not([hidden]):not(.cal-picker-closing)") : null;
+    const dropBottom = drop ? drop.getBoundingClientRect().bottom : 0;
+    const minTop = Math.max(0, barBottom(), dropBottom) + GAP;   // helpers.js — measured on every call
     let top = aRect.top - ttRect.height - GAP;
     let placedAbove = true;
     if (top < minTop) {
