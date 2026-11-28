@@ -2,6 +2,7 @@
 date: 2026-11-28
 branch: claude/ecstatic-allen-6n25kk
 title: "feat: 내려오는 달력 아래로 목록 밀어 내기"
+pr: 681
 ---
 
 ## 요약
