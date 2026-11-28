@@ -7,7 +7,8 @@
 ## 지금 동작
 
 - **PWA 버전과 캐시 무효화를 다시 설계했다** (2026-05-13, ADR-021).
-  - SHELL_CACHE의 이름은 `version.json`에서 만든다. `sw.js`가 `sw-version.js`를 importScripts로 가져온다.
+  - SHELL_CACHE의 이름은 `sw-version.js`의 `APP_VERSION`에서 만든다. `sw.js`가 `sw-version.js`를 importScripts로 가져온다.
+  - 배포 빌드의 `sw-version.js`는 `APP_VERSION`이 빌드 식별자(`X.Y.Z-<앱 커밋>`)다(서버 저장소 `build-deploy.sh`, ADR-052 §1, 사용자 결정 2026-11-28). 그래서 같은 버전에 앱 수정을 더한 pre-release도 dev.anglican.kr의 기기가 업데이트로 알아보고 셸 캐시를 바꾼다. 데이터만 낸 배포는 앱 커밋이 그대로라 업데이트로 보지 않는다.
   - DATA_CACHE와 AUDIO_CACHE는 콘텐츠 해시 매니페스트(`bible-manifest.json`, `audio-manifest.json`)를 견줘, 바뀐 항목만 처음 쓸 때 무효화한다.
   - 데이터 저장소의 main에 변경이 머지되면, 그 저장소의 CI가 파이프라인과 매니페스트를 자동으로 빌드해 커밋한다. release.py는 git 커밋까지 자동으로 한다(M8 해소).
   - Phase 3(데이터 변경을 앱 저장소에 자동으로 반영하는 webhook, `sync-data.yml`)까지 끝났다. 남은 것은 Phase 4, 곧 dev 배포 뒤 DevTools로 캐시 동작을 확인하는 일이다(ADR-021 상태 줄).
@@ -69,7 +70,7 @@
 
 | 변경 대상 | 무효화 방식 | 호출/자동화 |
 |-----------|------------|-------------|
-| 셸 (JS/CSS/HTML/icons + `books.json`·`search-meta.json`·매니페스트 2종) | `SHELL_CACHE` 이름 bump (= `"shell-" + APP_VERSION`) | `release.py patch`가 `version.json`과 `sw-version.js`를 한 줄씩 갱신 |
+| 셸 (JS/CSS/HTML/icons + `books.json`·`search-meta.json`·매니페스트 2종) | `SHELL_CACHE` 이름 bump (= `"shell-" + APP_VERSION`) | `release.py patch`가 `version.json`과 `sw-version.js`를 한 줄씩 갱신. 배포 빌드에서는 앱 커밋이 바뀌어도 이름이 바뀐다(ADR-052 §1) |
 | 본문 (`/data/bible/*`) 또는 검색 인덱스 (`search-{ot,nt,dc,lit}.json`) | 항목마다 처음 쓸 때 무효화 (콘텐츠 해시 매니페스트 비교) | `common-bible-data` CI가 `bible-manifest.json`을 자동으로 갱신하고, 앱이 시작할 때 `js/manifest-sync.js`가 처리 |
 | 오디오 mp3 | 항목마다 처음 쓸 때 무효화 | 위와 같다 (`audio-manifest.json`) |
 

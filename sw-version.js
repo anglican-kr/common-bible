@@ -2,4 +2,7 @@
 // importScripts'd by sw.js to derive SHELL_CACHE from the app's semantic
 // version. Bumping APP_VERSION here changes sw.js's byte-diff (via the
 // imported script), which is what triggers Service Worker update detection.
+// The deploy build rewrites the value to the build id "X.Y.Z-<app commit>"
+// (server build-deploy.sh, ADR-052 §1), so a new app build of the same version
+// updates too; a data-only deploy keeps it. This repo keeps the bare version.
 self.APP_VERSION = "2.2.9";

@@ -1,6 +1,8 @@
 // SHELL_CACHE name is derived from /sw-version.js (release.py rewrites it
 // per release). Bumping APP_VERSION changes this importScripts target's
-// byte-diff, which is how the SW update algorithm detects new releases.
+// byte-diff, which is how the SW update algorithm detects new releases. In a
+// deploy build APP_VERSION is the build id "X.Y.Z-<app commit>" (ADR-052 §1),
+// so the shell cache is "shell-X.Y.Z-<app commit>" there.
 // DATA_CACHE / AUDIO_CACHE / FONT_CACHE names are fixed: content-hash
 // manifests (bible-manifest.json, audio-manifest.json) drive per-entry
 // invalidation through js/manifest-sync.js — see ADR-021.
@@ -10,8 +12,8 @@ const DATA_CACHE = "data";
 const AUDIO_CACHE = "audio"; // must equal js/audio-cache.js AUDIO_CACHE_NAME
 const FONT_CACHE = "fonts";
 
-// dev/로컬: version.json 이 고정이라 SHELL_CACHE 가 무효화되지 않아 cache-first 가
-// 옛 JS/CSS/HTML 을 계속 서빙한다(테스트 곤란). 이 호스트들에선 shell 파일을
+// dev/로컬: 로컬은 APP_VERSION 이 고정이고 dev 도 앱 커밋이 같은 배포 사이에는 SHELL_CACHE 가
+// 무효화되지 않아 cache-first 가 옛 JS/CSS/HTML 을 계속 서빙한다(테스트 곤란). 이 호스트들에선 shell 파일을
 // network-first 로 — SW·PWA·오프라인은 그대로 두되 온라인이면 항상 최신을 받고,
 // 캐시는 오프라인 폴백으로만 쓴다. 프로덕션(bible.anglican.kr)은 cache-first 유지.
 const IS_DEV =

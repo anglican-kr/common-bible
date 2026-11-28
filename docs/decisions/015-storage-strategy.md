@@ -204,7 +204,7 @@ sessionStorage를 쓰는 이유: 탭이 살아 있는 동안만 있으면 충분
 
 | 캐시 이름 | 내용 | 무효화 |
 | --- | --- | --- |
-| `shell-<앱 버전>` | `index.html`, `js/`, `css/`, 아이콘, 매니페스트 | 앱 버전이 바뀌면 이름이 바뀐다(`scripts/release.py`가 `version.json`과 `sw-version.js`를 올린다) |
+| `shell-<앱 버전>` | `index.html`, `js/`, `css/`, 아이콘, 매니페스트 | 앱 버전이 바뀌면 이름이 바뀐다(`scripts/release.py`가 `version.json`과 `sw-version.js`를 올린다). 배포 빌드에서는 앱 커밋이 바뀌어도 바뀐다(ADR-052 §1) |
 | `data` | `data/bible/*.json`, `data/search-*.json` | 이름은 고정. 콘텐츠 해시 매니페스트로 바뀐 항목만 지운다 |
 | `audio` | `data/audio/*.mp3` | 이름은 고정. 콘텐츠 해시 매니페스트로 바뀐 항목만 지운다 |
 | `fonts` | Google Font 콘텐츠 주소 파일 | 사실상 영구 (해시 주소) |
