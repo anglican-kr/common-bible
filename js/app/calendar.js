@@ -744,7 +744,6 @@ function commitMonthBar(model, view) {
   trigger.addEventListener("click", (e) => {
     if (!closeCalendarPicker()) openCalendarPicker(trigger, view, e.detail > 0);
   });
-  adoptPickerTrigger(trigger, view);
   // 이전 · 다음 달은 계산 범위 밖이면 자리만 지킨다
   commitDateBar({
     title: small ? month : trigger,
@@ -755,6 +754,8 @@ function commitMonthBar(model, view) {
       ? { href: model.hrefs.view, label: "목록으로 보기", icon: HEADER_ICON_PATHS.viewList }
       : { href: model.hrefs.view, label: "월간으로 보기", icon: HEADER_ICON_PATHS.viewMonth },
   });
+  // 새 줄을 그린 뒤에 삼는다. 작은 화면은 달력의 머리를 새 줄에 넣으므로(`mountPickerHead`), 먼저 삼으면 머리가 지울 옛 줄에 들어간다
+  adoptPickerTrigger(trigger, view);
   if (pickerState?.trigger === trigger) placePicker();
 }
 
@@ -765,8 +766,8 @@ function commitMonthBar(model, view) {
 // 2026-11-18). 판은 한 번에 한 단계만 보인다. 날과 월간의 달은 링크라 고르면 라우터가 그 화면을 그리고(route()가 열린 판을 닫는다), 해와 목록,
 // 전례독서의 달은 단추라 판 안에서 한 단계 아래로 내려간다. 다만 작은 화면의 캘린더 목록에서 날을 고르면 판을 닫지 않고 그 아래 목록을 그날로
 // 옮긴다(`showDateInList`). 판은 상단 바(#sticky-group) 바로 뒤에 한 번 만들어 두고 다시 쓴다. 작은 화면의 달력은 Tab을 가두지 않아 문서의 차례대로
-// 가므로 상단 바, 달력, 화면의 차례여야 한다. 제목 칸(#page-title)은 `container-type`이 있어, 그 안에 두면 고정 위치(position: fixed)가 화면이 아니라
-// 그 칸을 기준으로 잡힌다.
+// 가므로 상단 바, 달력, 화면의 차례여야 한다. 제목 칸(#page-title)에는 두지 않는다. 그 칸에 `container-type`이 있으면
+// 고정 위치(position: fixed)가 화면이 아니라 그 칸을 기준으로 잡힌다(2026-11-28까지 그랬다).
 
 /** 팝오버와 제목 사이, 팝오버와 화면 가장자리 사이(px). */
 const PICKER_POPOVER_GAP = 8;
@@ -1339,8 +1340,11 @@ function mountPickerHead() {
     applyTitleCompactness();
     return;
   }
-  if (p.title.parentElement !== p.head) p.head.prepend(p.title, p.heading);
+  const wasInBar = p.title.parentElement !== p.head;
+  if (wasInBar) p.head.prepend(p.title, p.heading);
   if (p.prev.parentElement !== p.steps) p.steps.append(p.prev, p.next);
+  // 상단 바의 글자는 달력이 열린 동안 숨어 있어 표기를 고르지 않았다(views.js `fitDateCell`). 그사이 폭이나 글자 크기가 바뀌었을 수 있다
+  if (wasInBar && bar?.querySelector(":scope > .lect-bar-title")) applyTitleCompactness();
 }
 
 /**

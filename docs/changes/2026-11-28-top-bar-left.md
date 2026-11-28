@@ -54,6 +54,15 @@ title: "feat: 작은 화면 상단 바의 제목을 왼쪽에, 단추를 오른�
 - `docs/topics/routing.md`: 작은 화면의 제목 왼쪽, 큰 화면의 짧은 표기, 「오늘」의 자리, 남은 일(장 고르기 판).
 - `DESIGN.md`: §6의 「날짜 이동 줄」과 「캘린더 날짜 고르기」.
 - `docs/design/responsive-composition.md`, `docs/design/daily-office.md`: 컨테이너 쿼리를 쓰던 설명과 그림의 날짜.
-- `docs/known-issues.md`, `docs/topics/liturgical.md`: §84(캘린더 목록의 날짜 칸 간격 e2e가 이 PR 전부터 실패한다).
+- `docs/known-issues.md`, `docs/topics/liturgical.md`: §84(캘린더 목록의 날짜 칸 간격 e2e가 이 PR 전부터 실패한다), §85(팝오버 뒤 목록 스크롤 e2e가 자주 실패한다), §78에 2026-11-29에 실패하는 시험을 덧붙였다.
 - `docs/topics/routing.md`: 「휴대폰의 긴 장 제목」의 폭과 글자 크기를 잰 값으로 고쳤다(제목이 왼쪽이라 자리가 넓어져 320px에서는 줄지 않는다).
 - `tests/README.md`: 바뀐 e2e 파일의 설명과 건수, 새 파일 `test_small_top_bar.py`.
+
+## 리뷰 반영
+
+1회차(자체 리뷰 `/code-review medium --fix`, 2026-11-29)
+
+- **목록에서 달력을 연 채 다른 기기의 설정으로 다시 그리면 달력의 머리가 상단 바에서 사라졌다(고침).** 캘린더의 줄(`commitMonthBar`)이 새 줄을 그리기 전에 판의 단추를 삼아(`adoptPickerTrigger`), 머리가 곧 지울 옛 줄에 들어갔다. 상단 바에는 목록의 달과 그 ‹ ›가 돌아와 ‹ ›가 달력 대신 목록을 옮겼다. 새 줄을 그린 뒤에 삼는다. 전례독서는 순서가 맞았다. 두 화면의 동기화 시험에 「머리가 상단 바에 남는다」를 더했고, 순서를 되돌리면 목록 시험이 실패한다.
+- **달력을 연 동안 폭이 바뀌면 닫은 뒤 날짜가 옛 표기로 남았다(고침).** 열린 동안 상단 바의 날짜는 숨어 있어 표기를 고르지 않는다. 머리를 판으로 돌려놓을 때 다시 고른다. e2e 1건(390px에서 열고 320px으로 줄인 뒤 닫으면 「1월 2일」)을 더했고, 다시 고르는 줄을 지우면 실패한다.
+- **판을 두는 자리의 주석(고침).** 이 변경이 지운 `container-type`을 지금 있는 것처럼 적고 있었다.
+- 리뷰가 돌린 e2e에서 이 PR과 상관없는 실패 둘이 나왔다. `test_advent_sunday_marks_the_new_liturgical_year`는 오늘(2026-11-29)이 그 칸이라 실패한다(known-issues §78에 덧붙였다). `test_the_popover_does_not_follow_the_list_scrolled_behind_it`는 이 브랜치 전에도 자주 실패한다(5e2adc35에서 5번 가운데 4번, known-issues §85).

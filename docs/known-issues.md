@@ -587,3 +587,9 @@ ADR-038 §3의 렌더 기반이 복원하는 전례 표기는 계응 ◯(`.respo
 ## 84. 캘린더 목록의 날짜 칸 간격 e2e가 제목 없는 날의 위아래 여백 차이 4px로 실패한다 (2026-11-28)
 
 - §84 → [topics/liturgical.md](topics/liturgical.md)
+
+---
+
+## 85. 큰 화면의 날짜 고르기 팝오버 뒤에서 목록을 스크롤하는 e2e가 자주 실패한다 (2026-11-29)
+
+- §85 → [topics/liturgical.md](topics/liturgical.md)

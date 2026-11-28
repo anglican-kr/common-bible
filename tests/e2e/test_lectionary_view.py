@@ -2620,6 +2620,11 @@ def test_settings_from_another_device_redraw_the_lectionary_under_the_open_calen
     assert page.evaluate("""() => { const p = document.querySelector('.cal-picker'); return !p.hidden && !p.classList.contains('cal-picker-closing'); }""")
     assert page.evaluate("document.documentElement.classList.contains('cal-drop')")
     assert page.get_attribute(btn, "aria-expanded") == "true"
+    # 달력의 머리는 다시 그린 상단 바에 그대로 있다(ADR-061 §3)
+    assert page.evaluate("""() => { const bar = document.getElementById('page-title');
+        const head = bar.querySelector(':scope > .lect-bar-title > button.cal-picker-title');
+        return !!head && head.getClientRects().length > 0 && bar.querySelectorAll(':scope > .lect-bar-end > .cal-picker-step').length === 2
+          && !bar.querySelector('.lect-date').getClientRects().length; }""")
     press_center(page, btn)
     page.wait_for_timeout(500)
     assert page.evaluate("() => document.querySelector('.cal-picker').hidden")

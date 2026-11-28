@@ -2087,6 +2087,12 @@ def test_settings_from_another_device_redraw_the_list_under_the_open_calendar(mo
     assert page.url == f"{BASE}/calendar/list/2027-02-10"
     # 받은 설정이 그날의 색을 바꿨을 수 있어 열린 달력도 다시 그리고, 포커스는 같은 날에 둔다(코드 리뷰 2026-11-28)
     assert page.evaluate("() => !window.__day.isConnected && document.activeElement.dataset.date === '2027-02-10'")
+    # 달력의 머리는 다시 그린 상단 바에 그대로 있다(ADR-061 §3, 코드 리뷰 2026-11-28. 전에는 목록이 새 줄을 그리기 전에 머리를 옛 줄에 넣어,
+    # 상단 바에 목록의 달과 그 ‹ ›가 돌아왔다)
+    assert page.evaluate("""() => { const bar = document.getElementById('page-title');
+        const head = bar.querySelector(':scope > .lect-bar-title > button.cal-picker-title');
+        return !!head && head.getClientRects().length > 0 && bar.querySelectorAll(':scope > .lect-bar-end > .cal-picker-step').length === 2
+          && !bar.querySelector('.lect-date').getClientRects().length; }""")
     _press(page, ".cal-picker-trigger")   # 새로 그린 아이콘으로 닫는다
     page.wait_for_timeout(500)
     assert _picker(page) is None

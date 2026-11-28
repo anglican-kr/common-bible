@@ -308,3 +308,21 @@ def test_large_layout_keeps_the_steps_in_place_between_calendar_and_lectionary(d
         seen.append([_box(page, f'#page-title a[data-focus-key="{k}"]')["left"] for k in ("prev", "next")])
         assert page.locator("#page-title .lect-today .lect-today-num").count() == 1
     assert abs(seen[0][0] - seen[1][0]) <= 1 and abs(seen[0][1] - seen[1][1]) <= 1
+
+
+def test_closing_the_calendar_fits_the_date_again_after_the_width_changed(browser):
+    """④ 달력이 열린 동안 상단 바의 날짜는 숨어 있어 표기를 고르지 않는다. 그사이 폭이 줄었으면 닫을 때 다시 골라, 옛 표기가 잘린 채 남지 않는다
+    (코드 리뷰 2026-11-28)."""
+    ctx = _context(browser)
+    page = ctx.new_page()
+    _open(page, "/lectionary/2027-01-02", ".lect-day")
+    assert page.evaluate(SHOWN_DATE) == "2027년 1월 2일"
+    page.locator("#page-title .cal-picker-trigger").click()
+    page.wait_for_selector(".cal-picker:not([hidden]) .cal-picker-day")
+    page.wait_for_timeout(400)
+    page.set_viewport_size({"width": 320, "height": 844})
+    page.wait_for_timeout(300)
+    page.locator("#page-title .cal-picker-trigger").click()
+    page.wait_for_timeout(500)
+    assert page.evaluate(SHOWN_DATE) == "1월 2일"
+    ctx.close()
