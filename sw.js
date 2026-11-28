@@ -1,6 +1,8 @@
 // SHELL_CACHE name is derived from /sw-version.js (release.py rewrites it
 // per release). Bumping APP_VERSION changes this importScripts target's
-// byte-diff, which is how the SW update algorithm detects new releases.
+// byte-diff, which is how the SW update algorithm detects new releases. In a
+// deploy build APP_VERSION is the build id "X.Y.Z-<app commit>" (ADR-052 §1),
+// so the shell cache is "shell-X.Y.Z-<app commit>" there.
 // DATA_CACHE / AUDIO_CACHE / FONT_CACHE names are fixed: content-hash
 // manifests (bible-manifest.json, audio-manifest.json) drive per-entry
 // invalidation through js/manifest-sync.js — see ADR-021.
