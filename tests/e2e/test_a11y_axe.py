@@ -215,6 +215,7 @@ def test_a11y_search_local_days(browser):
 
 def test_a11y_calendar_date_picker(browser):
     """캘린더 날짜 고르기(ADR-038 §2, ADR-058 §3): 작은 화면 목록의 날 판(내려오는 달력, 전례색 점)과 해 판, 월간의 달 판(팝오버) — critical/serious 위반 0건.
+    작은 화면에서 달력이 열린 동안 그 머리(제목과 ‹ ›)는 상단 바에 있어(ADR-061 §3) 상단 바도 함께 검사한다.
     판은 요소의 click()으로 연다. Playwright의 click은 누르기 전에 상단 바 안의 단추를 화면 안으로 스크롤한다(test_calendar_view.py `_press`)."""
     from .conftest import IPHONE_UA, MOBILE_VIEWPORT
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
@@ -226,11 +227,12 @@ def test_a11y_calendar_date_picker(browser):
         page.evaluate("() => document.querySelector('.cal-picker-trigger').click()")
         page.wait_for_selector(".cal-picker:not([hidden]) .cal-picker-bar")
         page.wait_for_timeout(400)
-        v = _violations(page, context=".cal-picker")
+        dropped = {"include": [[".cal-picker"], ["#page-title"]]}
+        v = _violations(page, context=dropped)
         assert not v, f"Date picker (days): {len(v)} violation(s):\n{_fmt(v)}"
-        page.evaluate("() => { const t = document.querySelector('.cal-picker button.cal-picker-title'); t.click(); t.click(); }")
+        page.evaluate("() => { const t = document.querySelector('#page-title button.cal-picker-title'); t.click(); t.click(); }")
         page.wait_for_selector(".cal-picker button[data-year]")
-        v = _violations(page, context=".cal-picker")
+        v = _violations(page, context=dropped)
         assert not v, f"Date picker (years): {len(v)} violation(s):\n{_fmt(v)}"
     finally:
         ctx.close()

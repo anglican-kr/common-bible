@@ -33,9 +33,10 @@ import {
 } from "./liturgical-engine.js";
 import {
   LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
+  applyTitleCompactness, buildFitText,
 } from "./views.js";
 import {
-  shortName, statusSuffix, isGrid, todayKey, commitDateBar, headLinesOf, lectionaryModelOf,
+  shortName, statusSuffix, isGrid, todayKey, commitDateBar, headLinesOf, lectionaryModelOf, titleDateLengths, titleDateProbes,
   CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO, TRACK_NAME,
 } from "./lectionary.js";
 
@@ -67,7 +68,7 @@ const PAGE_TITLE = LITURGICAL_VIEWS.calendar.title;
 /**
  * 월간 화면이 그리는 것 전부 — 순수 함수 `buildMonthGrid` 의 반환. DOM 은 이것만 읽는다.
  * @typedef {{
- *   year: number, month: number, title: string, shortTitle: string, weeks: CalendarCell[][],
+ *   year: number, month: number, title: string, lengths: [string, string, string], weeks: CalendarCell[][],
  *   hrefs: { prev: string | null, next: string | null, today: string, view: string },
  * }} CalendarMonth
  */
@@ -82,7 +83,7 @@ const PAGE_TITLE = LITURGICAL_VIEWS.calendar.title;
 /**
  * 목록의 상단 바가 보이는 달 — 순수 함수 `listMonthOf` 의 반환.
  * @typedef {{
- *   year: number, month: number, title: string, shortTitle: string,
+ *   year: number, month: number, title: string, lengths: [string, string, string],
  *   hrefs: { prev: string | null, next: string | null, today: string, view: string },
  * }} ListMonth
  */
@@ -308,7 +309,7 @@ function buildMonthGrid(y, m, today, resolve) {
   }
   const key = `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}`;
   return {
-    year: y, month: m, title: `${y}년 ${m}월`, shortTitle: `${y}.${String(m).padStart(2, "0")}`, weeks,
+    year: y, month: m, title: `${y}년 ${m}월`, lengths: titleDateLengths(y, m), weeks,
     hrefs: {
       // 「오늘」은 오늘의 전례독서로 간다(사용자 결정 2026-11-27). 오늘 줄은 탭 바의 캘린더를 다시 누르면 간다
       prev: monthStepPath(y, m, -1, today), next: monthStepPath(y, m, 1, today), today: "/lectionary",
@@ -581,7 +582,7 @@ function listDatesAfter(date, n) {
  */
 function listMonthOf(y, m, today) {
   return {
-    year: y, month: m, title: `${y}년 ${m}월`, shortTitle: `${y}.${String(m).padStart(2, "0")}`,
+    year: y, month: m, title: `${y}년 ${m}월`, lengths: titleDateLengths(y, m),
     // 「오늘」은 오늘의 전례독서로 간다(사용자 결정 2026-11-27)
     hrefs: { prev: listStepPath(y, m, -1, today), next: listStepPath(y, m, 1, today), today: "/lectionary", view: monthPathOf(y, m, today) },
   };
@@ -732,19 +733,17 @@ function announceMonth(/** @type {CalendarMonth} */ model) {
  * @param {"month" | "list"} view  지금 보기. 오른쪽 단추는 다른 보기로 간다
  */
 function commitMonthBar(model, view) {
-  // 폭이 모자라면 CSS가 짧은 표기를 보인다(사용자 결정 2026-11-05). 스크린 리더는 단추의 이름(전체 이름)을 읽는다.
-  const month = el("span", { className: "cal-month" });
-  month.appendChild(el("span", { className: "cal-month-full" }, model.title));
-  month.appendChild(el("span", { className: "cal-month-short", "aria-hidden": "true" }, model.shortTitle));
-  // 작은 화면의 달 제목은 글자이고, 오른쪽 단추가 월간 달력을 내린다(ADR-058 §3). 큰 화면은 달 제목이 판을 여는 단추다
+  // 달은 「2027년 1월」이고 폭이 모자라면 「27년 1월」, 「1월」로 줄인다(ADR-061 §4). 스크린 리더는 전체 달을 읽는다(큰 화면은 단추의 이름,
+  // 작은 화면은 숨긴 글). 작은 화면의 달 제목은 글자이고, 오른쪽 단추가 월간 달력을 내린다(ADR-058 §3). 큰 화면은 달 제목이 판을 여는 단추다
   const small = isSmallLayout();
+  const month = el("span", { className: "cal-month" },
+    buildFitText(model.lengths, titleDateProbes(model.year, false), small ? model.title : undefined, titleDateProbes(model.year, true)));
   const trigger = small ? calendarDropTrigger("") : datePickerTrigger(month);
   setPickerTrigger(trigger, model, view);
   // 작은 화면의 달력은 뒤를 막지 않아 열린 동안에도 아이콘을 누를 수 있다. 다시 누르면 닫는다(ADR-058 §3)
   trigger.addEventListener("click", (e) => {
     if (!closeCalendarPicker()) openCalendarPicker(trigger, view, e.detail > 0);
   });
-  adoptPickerTrigger(trigger, view);
   // 이전 · 다음 달은 계산 범위 밖이면 자리만 지킨다
   commitDateBar({
     title: small ? month : trigger,
@@ -755,6 +754,8 @@ function commitMonthBar(model, view) {
       ? { href: model.hrefs.view, label: "목록으로 보기", icon: HEADER_ICON_PATHS.viewList }
       : { href: model.hrefs.view, label: "월간으로 보기", icon: HEADER_ICON_PATHS.viewMonth },
   });
+  // 새 줄을 그린 뒤에 삼는다. 작은 화면은 달력의 머리를 새 줄에 넣으므로(`mountPickerHead`), 먼저 삼으면 머리가 지울 옛 줄에 들어간다
+  adoptPickerTrigger(trigger, view);
   if (pickerState?.trigger === trigger) placePicker();
 }
 
@@ -765,13 +766,13 @@ function commitMonthBar(model, view) {
 // 2026-11-18). 판은 한 번에 한 단계만 보인다. 날과 월간의 달은 링크라 고르면 라우터가 그 화면을 그리고(route()가 열린 판을 닫는다), 해와 목록,
 // 전례독서의 달은 단추라 판 안에서 한 단계 아래로 내려간다. 다만 작은 화면의 캘린더 목록에서 날을 고르면 판을 닫지 않고 그 아래 목록을 그날로
 // 옮긴다(`showDateInList`). 판은 상단 바(#sticky-group) 바로 뒤에 한 번 만들어 두고 다시 쓴다. 작은 화면의 달력은 Tab을 가두지 않아 문서의 차례대로
-// 가므로 상단 바, 달력, 화면의 차례여야 한다. 제목 칸(#page-title)은 `container-type`이 있어, 그 안에 두면 고정 위치(position: fixed)가 화면이 아니라
-// 그 칸을 기준으로 잡힌다.
+// 가므로 상단 바, 달력, 화면의 차례여야 한다. 제목 칸(#page-title)에는 두지 않는다. 그 칸에 `container-type`이 있으면
+// 고정 위치(position: fixed)가 화면이 아니라 그 칸을 기준으로 잡힌다(2026-11-28까지 그랬다).
 
 /** 팝오버와 제목 사이, 팝오버와 화면 가장자리 사이(px). */
 const PICKER_POPOVER_GAP = 8;
-/** 판 머리의 그림: 펼침 표시와 ‹ ›. */
-const PICKER_ICON = { down: "m6 9 6 6 6-6", prev: "m15 18-6-6 6-6", next: "m9 18 6-6-6-6" };
+/** 판 머리의 그림: 펼침 표시와 ‹ ›. ‹ ›는 작은 화면의 상단 바와 같다(ADR-061 §3). */
+const PICKER_ICON = { down: "m6 9 6 6 6-6", prev: HEADER_ICON_PATHS.stepPrev, next: HEADER_ICON_PATHS.stepNext };
 
 /**
  * 판의 상태. `view`는 판을 연 화면(월간, 목록, 전례독서), `mode`는 지금 단계다. `y`와 `m`은 날 판과 달 판이 보이는 해와 달이고, `yearStart`는 해 판의 첫 해다.
@@ -788,11 +789,17 @@ let pickerState = null;
 /**
  * 한 번 만들어 두는 판의 요소와 오버레이 제어기(ADR-032).
  * @type {{
- *   panel: HTMLElement, backing: HTMLElement, title: HTMLButtonElement, heading: HTMLElement, prev: HTMLButtonElement, next: HTMLButtonElement, body: HTMLElement,
+ *   panel: HTMLElement, backing: HTMLElement, head: HTMLElement, steps: HTMLElement, title: HTMLButtonElement, heading: HTMLElement,
+ *   prev: HTMLButtonElement, next: HTMLButtonElement, body: HTMLElement,
  *   overlay: { open: (returnFocusEl?: HTMLElement | null) => void, close: () => void, readonly isOpen: boolean },
  * } | null}
  */
 let picker = null;
+/**
+ * 포커스가 있던 판의 머리 단추(제목, ‹ ›). 작은 화면에서 머리는 상단 바 안에 있어, 상단 바를 다시 그리면(받은 설정, 목록의 범위 끝) 문서에서 빠지며
+ * 포커스를 잃는다. 새 줄에 다시 넣을 때 돌려준다(`mountPickerHead`). @type {HTMLElement | null}
+ */
+let pickerHeadFocus = null;
 /** 작은 화면과 큰 화면의 경계를 넘어 판을 닫는 중이다. 달력과 팝오버는 자리가 다르므로 움직임 없이 닫는다. */
 let layoutSwitching = false;
 
@@ -844,7 +851,7 @@ function focusInPicker(target) {
 /** 판의 머리 글을 알린다 — 단계를 바꾸거나 ‹ ›로 옮겼을 때. */
 function announcePicker() {
   if (!picker) return;
-  announce(picker.title.hidden ? picker.heading.textContent || "" : picker.title.textContent || "");
+  announce(picker.title.hidden ? picker.heading.textContent || "" : picker.title.dataset.text || "");
 }
 
 /**
@@ -949,8 +956,11 @@ function renderPicker() {
   if (s.mode === "year") p.heading.textContent = page.title;
   else {
     clearNode(p.title);
-    p.title.append(page.title, headerIcon(PICKER_ICON.down));
+    // 날 판의 달은 상단 바의 달처럼 폭이 모자라면 「27년 1월」, 「1월」로 줄인다(ADR-061 §4). 작은 화면에서는 이 단추가 상단 바에 있다(`mountPickerHead`)
+    p.title.dataset.text = page.title;
+    p.title.append(s.mode === "day" ? buildFitText(titleDateLengths(s.y, s.m), titleDateProbes(s.y, false)) : page.title, headerIcon(PICKER_ICON.down));
   }
+  if (p.title.closest("#page-title")) applyTitleCompactness();
   p.prev.disabled = page.prev === null;
   p.next.disabled = page.next === null;
   p.prev.setAttribute("aria-label", stepLabels[0]);
@@ -1156,7 +1166,8 @@ function ensurePicker() {
   heading.hidden = true;
   const prev = /** @type {HTMLButtonElement} */ (el("button", { type: "button", className: "cal-picker-step" }, headerIcon(PICKER_ICON.prev)));
   const next = /** @type {HTMLButtonElement} */ (el("button", { type: "button", className: "cal-picker-step" }, headerIcon(PICKER_ICON.next)));
-  const head = el("div", { className: "cal-picker-head" }, title, heading, el("span", { className: "cal-picker-steps" }, prev, next));
+  const steps = el("span", { className: "cal-picker-steps" }, prev, next);
+  const head = el("div", { className: "cal-picker-head" }, title, heading, steps);
   const body = el("div", { className: "cal-picker-body" });
   // 「닫기」 단추는 두지 않는다. 작은 화면의 달력은 아이콘을 다시 누르거나 Esc로 닫고, 팝오버는 바깥을 누르거나 Esc로 닫는다(사용자 결정 2026-11-28)
   panel.append(head, body);
@@ -1191,6 +1202,7 @@ function ensurePicker() {
     onOpen: () => {
       cancelClosing();
       panel.setAttribute("aria-modal", String(large.matches));
+      mountPickerHead();
       placePicker();
       // 큰 화면의 팝오버는 뒤를 막으므로 그 뒤의 주석 툴팁도 닫는다. 남겨 두면 Esc가 팝오버보다 가려진 툴팁을 먼저 닫는다(app.js). 제목 단추를
       // 누르는 것이 툴팁 바깥을 누르는 것이라 대개 이미 닫혀 있지만, 그 처리(citations.js)는 HTML 요소를 누른 것만 보므로 여기서도 닫아 둔다
@@ -1201,10 +1213,15 @@ function ensurePicker() {
       });
     },
     // 포커스가 판 안에 있었으면 판을 연 단추로 돌려준다. 작은 화면의 달력은 뒤를 막지 않으므로, 밀려난 화면에 있던 포커스는 그 자리에 둔다
+    // 작은 화면에서 상단 바에 넣어 둔 머리(`mountPickerHead`)는 판의 머리로 돌려놓는다. 그 머리에 있던 포커스도 판을 연 단추로 간다
     onClose: () => {
       const active = document.activeElement;
+      const onHead = active === title || active === prev || active === next;
+      mountPickerHead();
       const trigger = pickerState?.trigger;
-      if ((!active || active === document.body || panel.contains(active)) && trigger?.isConnected) focusInPicker(trigger);
+      if ((onHead || !document.activeElement || document.activeElement === document.body || panel.contains(active)) && trigger?.isConnected) {
+        focusInPicker(trigger);
+      }
     },
     // 작은 화면의 달력은 위로 미끄러져 닫힌다. 팝오버, 움직임을 줄인 설정, 작은 화면과 큰 화면의 경계를 넘을 때는 바로 닫는다
     // 다른 화면으로 가면(라우터가 닫으면) 판을 바로 숨기지 않고 새 화면 위에서 접혀 올라가게 한다. 새 화면은 밀려나지 않은 제자리에 바로 그린다
@@ -1267,6 +1284,13 @@ function ensurePicker() {
   });
   prev.addEventListener("click", () => stepPicker(-1));
   next.addEventListener("click", () => stepPicker(1));
+  // 머리의 포커스를 기억한다. 문서에서 빠지며 잃은 포커스(blur가 오더라도 그 뒤 연결이 끊겨 있다)는 지우지 않는다
+  for (const b of [title, prev, next]) {
+    b.addEventListener("focus", () => { pickerHeadFocus = b; });
+    b.addEventListener("blur", () => {
+      queueMicrotask(() => { if (pickerHeadFocus === b && b.isConnected) pickerHeadFocus = null; });
+    });
+  }
   // 해를 고르면 그해의 달 판, 목록에서 달을 고르면 그달의 날 판으로 내려간다
   body.addEventListener("click", (e) => {
     const s = pickerState;
@@ -1306,8 +1330,38 @@ function ensurePicker() {
   window.addEventListener("resize", () => {
     if (overlay.isOpen) placePicker();
   });
-  picker = { panel, backing, title, heading, prev, next, body, overlay };
+  picker = { panel, backing, head, steps, title, heading, prev, next, body, overlay };
   return picker;
+}
+
+/**
+ * 작은 화면에서 달력이 열린 동안 달력의 머리(제목 단추와 ‹ ›)를 상단 바의 글자 칸과 ‹ › 자리에 넣는다(ADR-061 §3). 상단 바의 글자와 ‹ ›는
+ * 그동안 CSS가 숨긴다(`#page-title:has(.cal-picker-title)`). 판이 닫히면, 그리고 큰 화면의 팝오버에서는 판의 머리로 돌려놓는다. 상단 바를 다시 그리면
+ * (목록의 범위 끝, 받은 설정) 새 줄에 다시 넣는다(`adoptPickerTrigger`). 다른 화면으로 가면 새 줄을 그리며 빠지고, 다음에 열 때 제자리로 돌아온다.
+ * 요소를 옮기므로 처리기와 이름은 그대로다.
+ */
+function mountPickerHead() {
+  const p = picker;
+  if (!p) return;
+  const bar = document.getElementById("page-title");
+  const cell = bar?.querySelector(":scope > .lect-bar-title");
+  const end = bar?.querySelector(":scope > .lect-bar-end");
+  if (p.overlay.isOpen && !window.matchMedia(LARGE_LAYOUT_QUERY).matches && cell && end) {
+    // 옛 줄과 함께 문서에서 빠진 머리 단추에 포커스가 있었으면 새 줄에 넣은 뒤 돌려준다
+    const lost = pickerHeadFocus && !pickerHeadFocus.isConnected ? pickerHeadFocus : null;
+    if (p.title.parentElement !== cell) cell.append(p.title, p.heading);
+    if (p.prev.parentElement !== end) end.prepend(p.prev, p.next);
+    applyTitleCompactness();
+    const active = document.activeElement;
+    if (lost && lost.isConnected && !lost.hidden && (!active || active === document.body)) focusInPicker(lost);
+    return;
+  }
+  pickerHeadFocus = null;
+  const wasInBar = p.title.parentElement !== p.head;
+  if (wasInBar) p.head.prepend(p.title, p.heading);
+  if (p.prev.parentElement !== p.steps) p.steps.append(p.prev, p.next);
+  // 상단 바의 글자는 달력이 열린 동안 숨어 있어 표기를 고르지 않았다(views.js `fitDateCell`). 그사이 폭이나 글자 크기가 바뀌었을 수 있다
+  if (wasInBar && bar?.querySelector(":scope > .lect-bar-title")) applyTitleCompactness();
 }
 
 /**
@@ -1364,6 +1418,7 @@ function adoptPickerTrigger(trigger, view) {
   if (!pickerState || !picker?.overlay.isOpen || pickerState.view !== view) return false;
   pickerState.trigger = trigger;
   trigger.setAttribute("aria-expanded", "true");
+  mountPickerHead();
   // 받은 설정(교구, 본당)이 그날의 색을 바꿨을 수 있다. 아래 화면만 새로 그리면 열어 둔 달력의 막대가 옛 색이다
   if (pickerRedrawPending) {
     pickerRedrawPending = false;
@@ -1709,10 +1764,18 @@ function updateMonthBar(model) {
     restoreFocusSpot(spot, null);
     return;
   }
-  const full = bar.querySelector(".cal-month-full");
-  const short = bar.querySelector(".cal-month-short");
-  if (full) full.textContent = model.title;
-  if (short) short.textContent = model.shortTitle;
+  const holder = bar.querySelector(".cal-month > .fit-text");
+  if (holder instanceof HTMLElement) {
+    model.lengths.forEach((text, i) => {
+      const len = holder.querySelector(`:scope > .fit-len-${i}`);
+      if (len) len.textContent = text;
+    });
+    const sr = holder.querySelector(":scope > .sr-only");
+    if (sr) sr.textContent = model.title;
+    holder.dataset.probes = JSON.stringify(titleDateProbes(model.year, false));
+    holder.dataset.widthProbes = JSON.stringify(titleDateProbes(model.year, true));
+    applyTitleCompactness();
+  }
   const trigger = bar.querySelector(".cal-picker-trigger");
   if (trigger instanceof HTMLElement) setPickerTrigger(trigger, model, "list");
   if (model.hrefs.prev) prev?.setAttribute("href", model.hrefs.prev);

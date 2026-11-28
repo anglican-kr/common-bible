@@ -132,7 +132,7 @@ test("buildMonthGrid: 2026년 10월 — 1일(목)이 있는 주의 일요일 9.2
   const calls = [];
   const m = ctx.buildMonthGrid(2026, 10, "2026-10-15", (d) => { calls.push(d); return plainDay(d); });
   assert.strictEqual(m.title, "2026년 10월");
-  assert.strictEqual(m.shortTitle, "2026.10");
+  same(m.lengths, ["2026년 10월", "26년 10월", "10월"]);   // 폭이 모자랄 때의 표기(ADR-061 §4)
   assert.strictEqual(m.weeks.length, 6);
   for (const w of m.weeks) assert.strictEqual(w.length, 7);
   const cells = m.weeks.flat();
@@ -566,7 +566,7 @@ test("listRowOf: 색이 둘이면 함께 적고, 성인의 색이 다르면 「�
 test("listMonthOf: 앞뒤 달은 1일의 줄, 오른쪽 단추는 그 달", () => {
   const m = ctx.listMonthOf(2028, 2, "2026-10-15");
   assert.strictEqual(m.title, "2028년 2월");
-  assert.strictEqual(m.shortTitle, "2028.02");
+  same(m.lengths, ["2028년 2월", "28년 2월", "2월"]);
   same(m.hrefs, { prev: "/calendar/list/2028-01-01", next: "/calendar/list/2028-03-01", today: "/lectionary", view: "/calendar/2028-02" });
   assert.strictEqual(ctx.listMonthOf(2026, 10, "2026-10-15").hrefs.view, "/calendar");   // 이번 달
   assert.strictEqual(ctx.listMonthOf(9999, 12, "2026-10-15").hrefs.next, null);   // 계산 범위 끝

@@ -104,6 +104,16 @@ test("dateLabel · monthDayLabel: 요일 포함 · 깨진 날짜는 그대로", 
   assert.strictEqual(ctx.monthDayLabel("2026-08-09"), "8월 9일");
 });
 
+test("titleDateLengths · titleDateProbes: 상단 바의 날짜와 달의 표기 셋 — 연도, 두 자리 연도, 연도 없음(ADR-061 §4)", () => {
+  // 달과 날 앞에는 0을 붙이지 않고, 두 자리 연도는 붙인다
+  assert.deepStrictEqual([...ctx.titleDateLengths(2027, 1, 2)], ["2027년 1월 2일", "27년 1월 2일", "1월 2일"]);
+  assert.deepStrictEqual([...ctx.titleDateLengths(2027, 12)], ["2027년 12월", "27년 12월", "12월"]);
+  assert.deepStrictEqual([...ctx.titleDateLengths(2007, 3, 9)], ["2007년 3월 9일", "07년 3월 9일", "3월 9일"]);
+  // 표기마다 가장 긴 글 — 두 자리 달과 날. 날을 옮겨도 같은 폭이면 표기가 바뀌지 않는다
+  assert.deepStrictEqual([...ctx.titleDateProbes(2027, true)], ["2027년 12월 28일", "27년 12월 28일", "12월 28일"]);
+  assert.deepStrictEqual([...ctx.titleDateProbes(1583, false)], ["1583년 12월", "83년 12월", "12월"]);
+});
+
 test("statusSuffix: 옮김 · 선택 봉헌 · 생략 · 기념일 · 저녁 상태 표시, 기념만 하는 후보는 없음", () => {
   assert.strictEqual(ctx.statusSuffix(cand(obs("d1206-성-니콜라", "성 니콜라(미라의 주교)"), "transferred_in", { from: "2026-12-06" })), " · 12월 6일에서 옮겨 옴");
   // 옮겨 간 후보는 전례독서 목록에 없고(2026-11-04) 이 상태 표시는 캘린더 모델이 쓴다

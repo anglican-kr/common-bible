@@ -11,7 +11,7 @@
   ⑤ 기념일 — 전례독서 목록이 아니라 제목 아래 「… 기념일」 줄, 본문 없는 날도 그 아래 이름 줄
   ⑥ 날짜 — 오늘 · 전날/다음날 · 잘못된 날짜
   ⑦ 탭 바 — 캘린더 탭 소속이라 독서 화면에서 캘린더 탭이 활성(ADR-038 A2)
-  ⑧ 머리의 날짜 이동 줄(날짜 글자만 가운데) · 본문 제목과 공통 라벨 없음 · 응답 반행과 송영의 색
+  ⑧ 머리의 날짜 이동 줄(작은 화면은 왼쪽에 날짜, 오른쪽에 단추) · 본문 제목과 공통 라벨 없음 · 응답 반행과 송영의 색
 
 실데이터(data/ 서브모듈)가 필요하다 — 로컬 전용(CLAUDE.md 「테스트」).
 """
@@ -1816,12 +1816,14 @@ def test_gospel_copy_bridges_verse_numbers_absent_in_translation(desktop_context
 # ── ⑧ 머리의 날짜 이동 줄 · 본문 색(사용자 결정 2026-11-03) ──
 
 def _title_date(page):
-    """머리에 보이는 날짜 글자와 「오늘」, 앞뒤 단추의 자리."""
+    """머리에 보이는 날짜 글자(표기 셋 가운데 보이는 것, ADR-061 §4)와 「오늘」, 앞뒤 단추, 달력 단추의 자리. `start`는 상단 바의 글이 시작하는 자리다."""
     return page.evaluate("""() => {
       const r = (s) => document.querySelector(s).getBoundingClientRect();
-      const shown = document.querySelector('#page-title .lect-date-label');
+      const title = document.getElementById('page-title');
+      const shown = [...title.querySelectorAll('.lect-date-label .fit-len')].find((e) => e.getClientRects().length);
       const d = shown.getBoundingClientRect(), t = r('#page-title .lect-today');
-      return { text: (shown.querySelector('[aria-hidden]') || shown).textContent, left: d.left, right: d.right, mid: (d.left + d.right) / 2, top: d.top, bottom: d.bottom,
+      return { text: shown.textContent, left: d.left, right: d.right, top: d.top, bottom: d.bottom, lines: shown.getClientRects().length,
+               start: title.getBoundingClientRect().left + parseFloat(getComputedStyle(title).paddingLeft),
                todayLeft: t.left, todayRight: t.right, todayMid: (t.top + t.bottom) / 2,
                prev: r("#page-title a.lect-datenav-btn[aria-label='전날']").left,
                next: r("#page-title a.lect-datenav-btn[aria-label='다음날']").right,
@@ -1830,22 +1832,24 @@ def _title_date(page):
     }""")
 
 
-def test_title_row_is_the_date_nav_and_only_the_date_text_is_centered(mobile_context):
-    """머리의 제목 자리가 날짜 이동 줄(오늘, ‹ 날짜 ›, 보기 전환 단추)이고 본문 맨 위의 날짜 줄은 없다. 보이는 날짜는 YY.MM.DD이고
-    요일이 없으며, 스크린 리더는 전체 날짜를 읽는다. 날짜 글자는 화면 가운데에 있다(사용자 결정 2026-11-05, 배치는 2026-11-07)."""
+def test_title_row_is_the_date_nav_with_the_date_at_the_left(mobile_context):
+    """머리의 제목 자리가 날짜 이동 줄이고 본문 맨 위의 날짜 줄은 없다. 작은 화면은 왼쪽에 날짜, 오른쪽에 ‹ › 「오늘」 달력 단추다(ADR-061 §2).
+    보이는 날짜는 「2026년 12월 30일」이고 요일이 없으며, 스크린 리더는 전체 날짜를 읽는다(ADR-061 §4)."""
     page = mobile_context.new_page()
     _open(page, "lectionary/2026-12-30")
     title = page.locator("#page-title")
     assert title.locator("a.lect-datenav-btn[aria-label='전날']").count() == 1
     assert title.locator("a.lect-datenav-btn[aria-label='다음날']").count() == 1
-    assert title.locator("a.lect-today").inner_text() == "오늘"
+    # 「오늘」은 오늘의 날을 적은 아이콘이고 이름은 「오늘, 11월 28일」이다(ADR-061 §5, test_small_top_bar.py ⑤)
+    assert title.locator("a.lect-today").get_attribute("title") == "오늘"
+    assert title.locator("a.lect-today").get_attribute("aria-label").startswith("오늘, ")
     assert title.locator(".lect-date time").get_attribute("datetime") == "2026-12-30"
     # 작은 화면의 날짜는 누르는 단추가 아니고 스크린 리더는 숨긴 전체 날짜를 읽는다. 오른쪽 단추가 월간 달력을 내린다(ADR-058 §3)
     assert title.locator(".lect-date button").count() == 0
-    assert title.locator(".lect-date time [aria-hidden='true']").inner_text() == "26.12.30"
+    assert title.locator(".lect-date time .fit-len").evaluate_all("els => els.map((e) => e.getAttribute('aria-hidden'))") == ["true"] * 3
     assert title.locator(".lect-date time .sr-only").text_content() == "2026년 12월 30일 (수)"
     drop = title.locator("button.title-view-btn")
-    assert drop.get_attribute("aria-label") == "26.12.30, 2026년 12월 30일 (수), 날짜 고르기"
+    assert drop.get_attribute("aria-label") == "2026년 12월 30일 (수), 날짜 고르기"
     assert drop.get_attribute("aria-haspopup") == "dialog"
     drop_box = drop.bounding_box()
     assert drop_box["width"] >= 44 and drop_box["height"] >= 44, drop_box
@@ -1856,14 +1860,16 @@ def test_title_row_is_the_date_nav_and_only_the_date_text_is_centered(mobile_con
     assert box and box["width"] >= 44 and box["height"] >= 44, box
     assert title.bounding_box()["height"] < 40
 
-    assert _title_date(page)["text"] == "26.12.30"
+    assert _title_date(page)["text"] == "2026년 12월 30일"
     for width in (320, 375, 390, 430):
         page.set_viewport_size({"width": width, "height": 844})
+        page.wait_for_timeout(100)
         state = _title_date(page)
-        assert abs(state["mid"] - width / 2) <= 1, (width, state)
-        assert state["todayRight"] <= state["prev"] and state["next"] <= state["view"], (width, state)
-    _open(page, "lectionary/2027-01-02")   # 월과 일은 두 자리다
-    assert _title_date(page)["text"] == "27.01.02"
+        assert abs(state["left"] - state["start"]) <= 1, (width, state)   # 날짜는 왼쪽에서 시작한다
+        assert state["right"] <= state["prev"] + 0.5 and state["next"] <= state["todayLeft"] + 0.5, (width, state)
+        assert state["todayRight"] <= state["view"] + 0.5, (width, state)
+    _open(page, "lectionary/2027-01-02")   # 달과 날 앞에 0을 붙이지 않는다
+    assert _title_date(page)["text"] == "2027년 1월 2일"
 
 
 def test_title_date_steps_start_the_new_day_at_the_top(mobile_context):
@@ -1924,14 +1930,17 @@ def test_single_candidate_day_has_no_choice_rows(mobile_context):
 
 
 def test_title_date_stays_on_one_line_with_the_largest_font_on_320px(mobile_context):
-    """글자 크기 24px(설정의 가장 큰 값)로 320px에서도 날짜와 「오늘」이 한 줄에 다 보인다. 자리가 모자라면 왼쪽 빈칸이 줄어
-    날짜가 가운데에서 조금 왼쪽으로 옮겨 가고, 앞뒤 단추와 겹치거나 가로로 넘치지 않는다."""
+    """글자 크기 24px(설정의 가장 큰 값)로 320px에서도 날짜와 단추가 한 줄에 다 보인다. 날짜는 연도 없는 「12월 30일」이고(ADR-061 §4)
+    앞뒤 단추와 겹치거나 가로로 넘치지 않는다."""
     page = mobile_context.new_page()
     page.set_viewport_size({"width": 320, "height": 700})
     _open(page, "lectionary/2026-12-30")
     page.evaluate("() => { document.documentElement.style.fontSize = '24px'; }")
+    page.wait_for_timeout(300)   # 제목 줄의 크기 감시가 다시 잰다
     state = _title_date(page)
-    assert state["todayRight"] <= state["prev"] and state["next"] <= state["view"], state   # 세 칸이 겹치지 않는다
+    assert state["text"] == "12월 30일" and state["lines"] == 1, state
+    assert state["right"] <= state["prev"] + 0.5, state   # 날짜가 ‹ 와 겹치지 않는다
+    assert state["next"] <= state["todayLeft"] + 0.5 and state["todayRight"] <= state["view"] + 0.5, state   # 단추끼리 겹치지 않는다
     assert state["top"] <= state["todayMid"] <= state["bottom"], state   # 「오늘」은 날짜와 같은 줄
     assert state["scrollWidth"] == 320, state
     assert state["height"] < 44, state   # 「오늘」이 두 줄로 꺾이면 머리가 높아진다
@@ -2585,7 +2594,10 @@ def _picker_state(page):
       const p = document.querySelector('.cal-picker');
       if (!p || p.hidden || p.classList.contains('cal-picker-closing')) return null;
       const a = document.activeElement;
-      return { name: p.getAttribute('aria-label'), title: p.querySelector('.cal-picker-title:not([hidden])').textContent,
+      // 작은 화면에서 달력이 열린 동안 머리는 상단 바에 있다(ADR-061 §3). 날 판의 제목은 표기 셋(ADR-061 §4) 가운데 보이는 것을 읽는다
+      const head = document.querySelector('.cal-picker-title:not([hidden])');
+      const len = [...head.querySelectorAll('.fit-len')].find((e) => e.getClientRects().length);
+      return { name: p.getAttribute('aria-label'), title: (len ?? head).textContent,
                current: p.querySelector('.cal-picker-body [aria-current="true"]')?.getAttribute('href') ?? null,
                focus: p.contains(a) ? a.getAttribute('href') : null };
     }""")
@@ -2608,6 +2620,11 @@ def test_settings_from_another_device_redraw_the_lectionary_under_the_open_calen
     assert page.evaluate("""() => { const p = document.querySelector('.cal-picker'); return !p.hidden && !p.classList.contains('cal-picker-closing'); }""")
     assert page.evaluate("document.documentElement.classList.contains('cal-drop')")
     assert page.get_attribute(btn, "aria-expanded") == "true"
+    # 달력의 머리는 다시 그린 상단 바에 그대로 있다(ADR-061 §3)
+    assert page.evaluate("""() => { const bar = document.getElementById('page-title');
+        const head = bar.querySelector(':scope > .lect-bar-title > button.cal-picker-title');
+        return !!head && head.getClientRects().length > 0 && bar.querySelectorAll(':scope > .lect-bar-end > .cal-picker-step').length === 2
+          && !bar.querySelector('.lect-date').getClientRects().length; }""")
     press_center(page, btn)
     page.wait_for_timeout(500)
     assert page.evaluate("() => document.querySelector('.cal-picker').hidden")
@@ -2624,7 +2641,7 @@ def test_title_icon_drops_the_month_calendar_and_a_day_opens_its_lectionary(mobi
     page.clock.set_fixed_time(datetime.datetime(2026, 11, 17, 12))
     _open(page, "lectionary/2027-05-02")
     btn = "#page-title button.title-view-btn"
-    assert page.get_attribute(btn, "aria-label") == "27.05.02, 2027년 5월 2일 (일), 날짜 고르기"
+    assert page.get_attribute(btn, "aria-label") == "2027년 5월 2일 (일), 날짜 고르기"
     press_center(page, btn)
     page.wait_for_selector(".cal-picker:not([hidden])")
     page.wait_for_timeout(400)   # 판을 불러와 달력이 내려오고 포커스가 옮겨 간다
@@ -2670,7 +2687,7 @@ def test_keyboard_focus_with_the_calendar_open_neither_jumps_nor_hides(mobile_co
     page.clock.set_fixed_time(datetime.datetime(2026, 11, 28, 12))
     _open(page, "lectionary/2026-11-29")
     page.wait_for_selector("#launch-screen", state="detached", timeout=5_000)
-    page.evaluate("() => window.scrollTo(0, 900)")
+    page.evaluate("() => window.scrollTo({ top: 900, behavior: 'instant' })")   # 문서의 스크롤은 부드럽게 움직여(scroll-behavior: smooth) 바로 옮긴다
     page.wait_for_timeout(200)
     y = page.evaluate("scrollY")
     page.evaluate("() => document.querySelector('#page-title button.title-view-btn').focus({ preventScroll: true })")
@@ -2733,8 +2750,9 @@ def test_title_date_opens_the_picker_as_a_popover_on_desktop(desktop_context):
     page.clock.set_fixed_time(datetime.datetime(2026, 11, 17, 12))
     _open(page, "lectionary/2027-05-02")
     btn = "#page-title .lect-date > .cal-title-btn"
-    # 스크린 리더는 날짜 단추의 이름으로 전체 날짜를 읽고, 이름은 보이는 글로 시작한다(WCAG 2.5.3). 펼침 표시는 없다
-    assert page.get_attribute(btn, "aria-label") == "27.05.02, 2027년 5월 2일 (일), 날짜 고르기"
+    # 스크린 리더는 날짜 단추의 이름으로 전체 날짜를 읽는다. 이름이 전체 날짜로 시작해 보이는 표기(「2027년 5월 2일」, 「27년 5월 2일」,
+    # 「5월 2일」, ADR-061 §4)가 모두 그 안에 있다(WCAG 2.5.3). 펼침 표시는 없다
+    assert page.get_attribute(btn, "aria-label") == "2027년 5월 2일 (일), 날짜 고르기"
     assert page.get_attribute(btn, "aria-haspopup") == "dialog"
     assert page.locator(f"{btn} time[datetime='2027-05-02']").count() == 1
     assert page.evaluate("s => getComputedStyle(document.querySelector(s), '::after').content", btn) == "none"
