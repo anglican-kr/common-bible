@@ -101,7 +101,9 @@ jobs:
 
       - name: 데이터 서브모듈과 서버 저장소 받기
         run: |
-          git -C common-bible config \
+          # --global이어야 한다. 서브모듈은 따로 실행되는 `git clone`이 받아서 상위 저장소의
+          # 로컬 설정(`git -C common-bible config`)을 읽지 않는다(2026-11-28 첫 실행이 이것으로 실패).
+          git config --global \
             url."git@github-data:anglican-kr/common-bible-data".insteadOf \
             "git@github.com:anglican-kr/common-bible-data"
           git -C common-bible submodule update --init data
