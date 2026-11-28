@@ -1901,8 +1901,9 @@ def test_list_icon_drops_the_month_calendar_and_pushes_the_list_below_it(mobile_
     under_bar = _row_top_under_head(page, "2027-02-01")   # 달의 첫 줄이라 달 이름 아래다
     _open_picker(page)
     state = _picker(page)
+    # 28일과 첫 주, 마지막 주를 채운 앞뒤 달의 날(1월 31일, 3월 1-6일)
     assert state == {"title": "2027년 2월", "current": "/calendar/list/2027-02-01", "focus": "/calendar/list/2027-02-01",
-                     "cells": 28, "prev": True, "next": True, "expanded": "true"}, state
+                     "cells": 35, "prev": True, "next": True, "expanded": "true"}, state
     assert page.evaluate("scrollY") == y   # 여는 동안 스크롤하지 않는다
     assert page.url == f"{BASE}/calendar/list/2027-02-01"
     place = page.evaluate("""() => { const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
@@ -2149,7 +2150,8 @@ def test_picker_title_steps_up_to_months_and_years_and_back_down(mobile_context)
     _press(page, ".cal-picker button[data-month='12']")
     page.wait_for_timeout(150)
     state = _picker(page)
-    assert (state["title"], state["cells"], state["focus"]) == ("2030년 12월", 31, "/calendar/list/2030-12-01"), state
+    # 31일과 마지막 주를 채운 다음 달의 날 넷(1-4일). 작은 화면의 달력은 앞뒤 달의 날을 흐리게 둔다(ADR-058 §3)
+    assert (state["title"], state["cells"], state["focus"]) == ("2030년 12월", 35, "/calendar/list/2030-12-01"), state
 
 
 def test_month_title_opens_the_month_picker_as_a_popover_and_goes_to_the_month(desktop_context):
@@ -2312,23 +2314,62 @@ def test_the_list_moves_with_the_unfolding_calendar_and_never_shows_what_was_und
     assert page.evaluate("getComputedStyle(document.getElementById('app')).transform") == "none"
 
 
-def test_the_list_follows_the_calendar_height_without_motion(mobile_context):
-    """판을 바꾸거나 달을 옮겨 달력의 높이가 바뀌면 목록도 움직임 없이 그만큼 따라가, 맨 위 줄이 늘 달력 바로 아래에 있다(ADR-058 §3)."""
+def test_the_list_follows_the_calendar_height_with_the_same_motion(mobile_context):
+    """판을 바꾸거나 달을 옮겨 달력의 높이가 바뀌면 목록도 달력이 펼쳐질 때와 같은 움직임으로 그만큼 따라가, 움직임이 끝나면 맨 위 줄이 달력
+    바로 아래에 있다(ADR-058 §3, 사용자 결정 2026-11-28. 그전에는 움직임 없이 튀었다)."""
     page = mobile_context.new_page()
     _freeze_today(page)
     _open_list(page, "calendar/list/2026-12-15")
     _open_picker(page)
     gap = lambda: _under_calendar(page, "2026-12-15")
     first = gap()
+    moving = "() => document.getElementById('app').getAnimations().some((a) => a.playState === 'running')"
     _press(page, ".cal-picker button.cal-picker-title")   # 날 판(다섯 주)에서 달 판(세 줄)으로
-    page.wait_for_timeout(100)
-    assert page.evaluate("document.getElementById('app').getAnimations().length") == 0
+    page.wait_for_timeout(40)
+    assert page.evaluate(moving)
+    page.wait_for_timeout(400)
     assert abs(gap() - first) <= 1
     _press(page, ".cal-picker button[data-month='1']")   # 2026년 1월은 다섯 주, 2월은 네 주다
-    page.wait_for_timeout(100)
+    page.wait_for_timeout(400)
     _press(page, ".cal-picker .cal-picker-step >> nth=1")
-    page.wait_for_timeout(100)
+    page.wait_for_timeout(40)
+    assert page.evaluate(moving)
+    page.wait_for_timeout(400)
     assert abs(gap() - first) <= 1
+
+
+def test_the_dropped_calendar_fills_the_first_and_last_weeks_with_faded_neighbouring_days(mobile_context, desktop_context):
+    """작은 화면의 달력은 첫 주와 마지막 주의 빈 칸을 앞뒤 달의 날로 흐리게 채우고, 누르면 그날로 간다(ADR-058 §3, 사용자 결정 2026-11-28).
+    이름은 그날의 달로 읽는다. 누르면 목록이 그날의 줄을 달력 바로 아래에 두고 달력은 그 달로 넘어간다. 큰 화면의 팝오버는 그 칸을 비운다."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2027-02-10")
+    length = page.evaluate("() => history.length")
+    _open_picker(page)
+    outside = page.evaluate("""() => [...document.querySelectorAll('.cal-picker .cal-picker-day.is-outside')].map((a) => [a.dataset.date, a.getAttribute('aria-label')])""")
+    assert outside[0] == ["2027-01-31", "1월 31일 일요일, 녹색"], outside
+    assert [o[0] for o in outside[1:]] == [f"2027-03-0{d}" for d in range(1, 7)], outside
+    look = page.evaluate("""() => { const a = document.querySelector('.cal-picker a[data-date="2027-03-01"]'), b = document.querySelector('.cal-picker a[data-date="2027-02-27"]');
+        const tertiary = getComputedStyle(document.documentElement).getPropertyValue('--text-tertiary').trim();
+        const probe = document.createElement('span'); probe.style.color = tertiary; document.body.append(probe); const want = getComputedStyle(probe).color; probe.remove();
+        return { num: getComputedStyle(a.querySelector('.cal-picker-num')).color, want, inMonth: getComputedStyle(b.querySelector('.cal-picker-num')).color,
+                 bars: getComputedStyle(a.querySelector('.cal-picker-bars')).opacity }; }""")
+    assert look["num"] == look["want"] and look["inMonth"] != look["want"] and float(look["bars"]) < 1, look
+    _press(page, ".cal-picker a[data-date='2027-01-31']")   # 앞 달의 날(1월의 첫 줄이 아니라 달 이름 아래가 아니다)
+    page.wait_for_url(f"{BASE}/calendar/list/2027-01-31")
+    page.wait_for_timeout(500)
+    state = _picker(page)
+    assert state["title"] == "2027년 1월" and state["current"] == "/calendar/list/2027-01-31", state
+    assert abs(_under_calendar(page, "2027-01-31")) <= 2
+    assert page.evaluate("() => history.length") == length
+
+    big = desktop_context.new_page()
+    _freeze_today(big)
+    _open_list(big, "calendar/list/2027-02-10")
+    _press(big, ".cal-picker-trigger")
+    big.wait_for_selector(".cal-picker:not([hidden])")
+    assert big.evaluate("() => document.querySelectorAll('.cal-picker .cal-picker-day.is-outside').length") == 0
+    assert big.evaluate("() => document.querySelectorAll('.cal-picker .cal-picker-day').length") == 28
 
 
 @pytest.mark.only_browser("chromium")

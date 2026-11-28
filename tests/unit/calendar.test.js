@@ -657,6 +657,25 @@ test("pickerDays: 일요일부터 칸에 넣고 다른 달의 날은 비운다. 
   assert.ok(nov.cells.every((c) => c === null || !c.isCurrent));
 });
 
+test("pickerDays(adjacent): 작은 화면의 달력은 첫 주와 마지막 주의 빈 칸을 앞뒤 달의 날로 채운다(ADR-058 §3, 2026-11-28)", () => {
+  const colorsOf = (date) => (date === "2027-01-31" ? ["white"] : ["green"]);
+  // 2027-02-01은 월요일이고 28일은 일요일 — 앞에 1월 31일, 뒤에 3월 1-6일
+  const days = ctx.pickerDays(2027, 2, "2027-01-31", "2027-01-31", colorsOf, true);
+  assert.strictEqual(days.cells.length, 35);
+  same(days.cells[0], { date: "2027-01-31", day: 31, weekday: 0, colors: ["white"], isToday: false, isCurrent: false, outside: true });
+  same(days.cells.slice(29).map((c) => [c.date, c.weekday, c.outside]), [
+    ["2027-03-01", 1, true], ["2027-03-02", 2, true], ["2027-03-03", 3, true], ["2027-03-04", 4, true], ["2027-03-05", 5, true], ["2027-03-06", 6, true],
+  ]);
+  assert.ok(days.cells.slice(1, 29).every((c) => c && !c.outside));
+  // 주 수는 그대로다 — 다른 달의 날로 주를 더하지 않는다
+  assert.strictEqual(ctx.pickerDays(2026, 2, "2026-11-17", null, () => [], true).cells.length, 28);
+  // 앞뒤 달이 계산 범위 밖이면 비운 채 둔다(1583-01-01은 토요일, 9999-12-31은 금요일)
+  const first = ctx.pickerDays(1583, 1, "2026-11-17", null, () => [], true);
+  assert.ok(first.cells.slice(0, 6).every((c) => c === null));
+  const end = ctx.pickerDays(9999, 12, "2026-11-17", null, () => [], true);
+  assert.strictEqual(end.cells[end.cells.length - 1], null);
+});
+
 test("pickerDays: 계산 범위의 끝 달은 그쪽으로 옮길 수 없다", () => {
   assert.strictEqual(ctx.pickerDays(1583, 1, "2026-11-17", null, () => []).prev, null);
   assert.strictEqual(ctx.pickerDays(9999, 12, "2026-11-17", null, () => []).next, null);

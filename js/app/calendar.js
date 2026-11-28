@@ -96,8 +96,8 @@ const PAGE_TITLE = LITURGICAL_VIEWS.calendar.title;
  */
 /** 전례독서 모델. @typedef {import("./lectionary.js").LectionaryModel} LectionaryModel */
 /**
- * 날짜 고르기의 날 판 칸 하나 — `pickerDays`의 반환. `weekday`는 일요일이 0이다.
- * @typedef {{ date: string, day: number, weekday: number, colors: string[], isToday: boolean, isCurrent: boolean }} PickerDay
+ * 날짜 고르기의 날 판 칸 하나 — `pickerDays`의 반환. `weekday`는 일요일이 0이다. `outside`는 첫 주와 마지막 주의 빈 칸을 채운 앞뒤 달의 날이다.
+ * @typedef {{ date: string, day: number, weekday: number, colors: string[], isToday: boolean, isCurrent: boolean, outside?: boolean }} PickerDay
  */
 /** 날 판 — 칸은 일요일부터 7칸씩이고 다른 달의 날은 null이다. 앞뒤 달이 계산 범위 밖이면 null. @typedef {{ y: number, m: number, title: string, cells: (PickerDay | null)[], prev: { y: number, m: number } | null, next: { y: number, m: number } | null }} PickerDays */
 /** 달 판과 해 판의 칸 하나(해 판은 `m`이 0). @typedef {{ y: number, m: number, label: string, isToday: boolean, isCurrent: boolean }} PickerCell */
@@ -626,24 +626,35 @@ function daysInMonth(y, m) {
 
 /**
  * 날 판: 그달의 날을 일요일부터 칸에 넣는다. 다른 달의 날은 비운다(null). 날마다 그날의 색(월간 칸의 점과 같다), 오늘인지, 지금 보는 날(목록의
- * 맨 위 줄)인지를 싣는다.
+ * 맨 위 줄)인지를 싣는다. `adjacent`면 첫 주와 마지막 주의 빈 칸을 앞뒤 달의 날로 채운다(작은 화면의 달력, ADR-058 §3, 사용자 결정 2026-11-28).
+ * 그 날은 `outside`이고 오늘이나 지금 보는 날로 표시하지 않는다. 앞뒤 달이 계산 범위 밖이면 비운 채 둔다.
  * @param {number} y @param {number} m
  * @param {string} today  "YYYY-MM-DD"
  * @param {string | null} current  지금 보는 날
  * @param {(date: string) => string[]} colorsOf  그날의 색 코드
+ * @param {boolean} [adjacent]
  * @returns {PickerDays}
  */
-function pickerDays(y, m, today, current, colorsOf) {
+function pickerDays(y, m, today, current, colorsOf, adjacent = false) {
   const lead = dayOfWeek(toKey(y, m, 1));
+  const prev = monthStep(y, m, -1);
+  const next = monthStep(y, m, 1);
+  /** @type {(y: number, m: number, d: number, weekday: number) => PickerDay} */
+  const outsideDay = (py, pm, d, weekday) => {
+    const date = toKey(py, pm, d);
+    return { date, day: d, weekday, colors: colorsOf(date), isToday: false, isCurrent: false, outside: true };
+  };
   /** @type {(PickerDay | null)[]} */
-  const cells = Array.from({ length: lead }, () => null);
+  const cells = [];
+  const prevLast = adjacent && prev ? daysInMonth(prev.y, prev.m) : 0;
+  for (let i = 0; i < lead; i++) cells.push(adjacent && prev ? outsideDay(prev.y, prev.m, prevLast - lead + 1 + i, i) : null);
   const last = daysInMonth(y, m);
   for (let d = 1; d <= last; d++) {
     const date = toKey(y, m, d);
     cells.push({ date, day: d, weekday: (lead + d - 1) % 7, colors: colorsOf(date), isToday: date === today, isCurrent: date === current });
   }
-  while (cells.length % 7) cells.push(null);
-  return { y, m, title: `${y}년 ${m}월`, cells, prev: monthStep(y, m, -1), next: monthStep(y, m, 1) };
+  for (let d = 1; cells.length % 7; d++) cells.push(adjacent && next ? outsideDay(next.y, next.m, d, cells.length % 7) : null);
+  return { y, m, title: `${y}년 ${m}월`, cells, prev, next };
 }
 
 /**
@@ -845,7 +856,10 @@ function buildPickerDay(c, m, today, view) {
   const cls = ["cal-picker-day"];
   if (c.isCurrent) cls.push("is-selected");
   if (c.isToday) cls.push("is-today");
-  const label = [c.isToday ? "오늘" : null, `${m}월 ${c.day}일 ${CAL_WEEKDAY_FULL[c.weekday]}`, c.colors.length ? colorNames(c.colors) : null]
+  // 첫 주와 마지막 주를 채운 앞뒤 달의 날은 흐리게 그린다. 이름은 그날의 달로 읽는다(작은 화면, ADR-058 §3)
+  if (c.outside) cls.push("is-outside");
+  const month = c.outside ? Number(c.date.slice(5, 7)) : m;
+  const label = [c.isToday ? "오늘" : null, `${month}월 ${c.day}일 ${CAL_WEEKDAY_FULL[c.weekday]}`, c.colors.length ? colorNames(c.colors) : null]
     .filter(Boolean).join(", ");
   const a = el("a", {
     className: cls.join(" "), href: view === "lectionary" ? lectionaryPathOf(c.date, today) : listPathOf(c.date, today), "aria-label": label,
@@ -860,7 +874,7 @@ function buildPickerDay(c, m, today, view) {
   return a;
 }
 
-/** 날 판: 요일 머리가 있는 표. 다른 달의 날은 빈 칸이다. @param {PickerDays} days @param {string} today  "YYYY-MM-DD" @param {PickerView} view */
+/** 날 판: 요일 머리가 있는 표. 다른 달의 날은 빈 칸이거나(큰 화면) 흐린 날이다(작은 화면). @param {PickerDays} days @param {string} today  "YYYY-MM-DD" @param {PickerView} view */
 function buildPickerDays(days, today, view) {
   const table = el("table", { className: "cal-picker-days" });
   table.appendChild(el("caption", { className: "sr-only" }, days.title));
@@ -915,7 +929,7 @@ function renderPicker() {
   /** @type {[string, string]} */
   let stepLabels;
   if (s.mode === "day") {
-    page = pickerDays(s.y, s.m, s.today, s.current, pickerColorsOf);
+    page = pickerDays(s.y, s.m, s.today, s.current, pickerColorsOf, isSmallLayout());
     stepLabels = ["이전 달", "다음 달"];
     p.body.appendChild(buildPickerDays(page, s.today, s.view));
     p.title.setAttribute("aria-label", `${page.title}, 달 고르기`);
@@ -1203,7 +1217,9 @@ function ensurePicker() {
   new MutationObserver(() => {
     if (panel.hidden) settlePush();
   }).observe(panel, { attributes: true, attributeFilter: ["hidden"] });
-  // 판을 바꾸거나 달을 옮겨 달력의 높이가 바뀌면 밀려난 화면도 움직임 없이 따라간다. 달력의 높이는 움직이지 않고 바로 바뀌기 때문이다
+  // 판을 바꾸거나 달을 옮기거나 목록을 스크롤해 주 수가 다른 달로 넘어가 달력의 높이가 바뀌면, 밀려난 화면은 달력이 펼쳐질 때와 같은 움직임으로
+  // 따라간다(CSS `html.cal-drop`의 전환, 사용자 결정 2026-11-28). 전에는 움직임 없이 한 주의 높이만큼 튀었다. 달력이 줄어 화면이 올라가는 동안
+  // 달력과 화면 사이는 화면과 같이 움직이는 바탕(`.cal-picker-backing`, 높이는 새 길이)이 덮는다
   if (typeof ResizeObserver === "function") {
     new ResizeObserver(() => {
       const root = document.documentElement;
@@ -1211,7 +1227,6 @@ function ensurePicker() {
       const h = panel.offsetHeight;
       if (Math.abs(h - (parseFloat(root.style.getPropertyValue(DROP_HEIGHT_VAR)) || 0)) < 1) return;
       root.style.setProperty(DROP_HEIGHT_VAR, `${h}px`);
-      finishPushMotion();
       dropNoteTooltip();
     }).observe(panel);
   }

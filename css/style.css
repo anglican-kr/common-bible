@@ -1712,6 +1712,10 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
 .cal-picker-day.is-selected .cal-picker-num { font-weight: 600; }
 .cal-picker-day.is-today:not(.is-selected) { box-shadow: inset 0 0 0 1.5px var(--accent); }
 .cal-picker-day.is-today:not(.is-selected) .cal-picker-num { font-weight: 600; }
+/* 작은 화면의 달력에서 첫 주와 마지막 주의 빈 칸을 채운 앞뒤 달의 날은 흐리게 그린다. 누를 수 있으므로 숫자는 바탕과 4.5:1을 넘는
+   --text-tertiary이고(라이트 4.57:1, 다크 4.9:1), 막대는 흐리게 둔다(ADR-058 §3, 사용자 결정 2026-11-28) */
+.cal-picker-day.is-outside .cal-picker-num { color: var(--text-tertiary); }
+.cal-picker-day.is-outside .cal-picker-bars { opacity: 0.4; }
 .cal-picker-bars {
   display: flex;
   align-items: center;
