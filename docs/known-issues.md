@@ -581,3 +581,9 @@ ADR-038 §3의 렌더 기반이 복원하는 전례 표기는 계응 ◯(`.respo
 ## 83. 작은 화면 달력이 열린 채 상단 바의 높이만 바뀌면 달력의 자리와 밀어 낸 길이를 다시 재지 않는다 (2026-11-28)
 
 - §83 → [topics/liturgical.md](topics/liturgical.md)
+
+---
+
+## 84. 캘린더 목록의 날짜 칸 간격 e2e가 제목 없는 날의 위아래 여백 차이 4px로 실패한다 (2026-11-28)
+
+- §84 → [topics/liturgical.md](topics/liturgical.md)

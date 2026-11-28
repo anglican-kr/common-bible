@@ -34,7 +34,13 @@ title: "feat: 작은 화면 상단 바의 제목을 왼쪽에, 단추를 오른�
 
 ## 검증
 
-(작성 중)
+- 유닛 `node --test tests/unit/*.test.js` 통과(날짜 표기 셋 `titleDateLengths`, `titleDateProbes` +1, 달 모델의 표기 셋, ‹ › 그림 경로). 타입 검사 통과.
+- e2e(작업 폴더의 서버를 8131에 띄우고 `tests/e2e`를 임시 폴더에 복사해 포트를 바꿔 돌림): `test_top_bar.py`, `test_small_top_bar.py`(새 파일), `test_calendar_view.py`, `test_lectionary_view.py`, `test_liturgical_lazy_load.py`, `test_a11y_axe.py`, `test_lectionary_cites.py`. 옛 배치를 기대하던 시험(「오늘」이 왼쪽, 「27.05.02」, 달력의 머리가 판 안, 글자 칸 가운데 맞춤)을 새 동작에 맞추었다. 지키던 내용(포커스, 스크롤, 움직임, 판의 단계, 이름)은 그대로 본다.
+  - 새 파일 `test_small_top_bar.py`: 제목 왼쪽과 그림의 오른쪽 맞춤(성서 목록, 장, 검색, 북마크), 날짜 줄의 단추 차례와 두 화면에서 같은 자리, 폭에 따른 표기(390px, 350px, 320px), 가장 긴 날짜로 고르기, 큰 글자에서 글씨 줄이기, 달력 머리가 상단 바로 올라오고 ‹ ›는 달력만 옮기며 닫으면 돌아오기, 「오늘」 아이콘의 숫자와 이름과 크기, 큰 화면의 ‹ › 자리.
+  - 시험을 맞추면서 결함 하나를 찾아 고쳤다. 북마크 단추를 바깥으로 민 뒤에도 제목 칸의 안쪽 여백을 그대로 두어, 장 제목을 재는 자리가 글이 꺾이는 폭보다 25px 넓었다. 폭 250-310px에 글자 22-24px의 「마카베오하 15장」이 줄지 않고 두 줄로 꺾였다. 여백을 단추가 칸 안에서 차지하는 폭으로 줄이고, 재는 자리가 여백 안쪽을 넘지 않게 했다(`test_top_bar.py`의 긴 장 제목 시험 5건이 고치기 전 실패, 고친 뒤 통과).
+  - 결과: `test_top_bar.py`와 `test_small_top_bar.py` 64건 통과. 일곱 파일을 함께 돌리면 이 결함 5건과 아래 1건을 뺀 나머지가 통과했다(352건 가운데).
+  - `test_calendar_view.py`의 `test_list_date_cell_keeps_date_bar_and_weekday_together_with_even_spacing`은 이 브랜치 전(5e2adc35)에서도 같은 값으로 실패한다. 이 PR과 상관없다.
+- 화면을 찍어 보았다(Chromium, 390px, 365px, 320px, 320px의 글자 24px, 1280px, 달력을 연 상태의 날 판과 달 판). 실제 아이폰에서는 아직 보지 못했다.
 
 ## 갱신한 문서
 
@@ -47,3 +53,6 @@ title: "feat: 작은 화면 상단 바의 제목을 왼쪽에, 단추를 오른�
 - `docs/topics/routing.md`: 작은 화면의 제목 왼쪽, 큰 화면의 짧은 표기, 「오늘」의 자리, 남은 일(장 고르기 판).
 - `DESIGN.md`: §6의 「날짜 이동 줄」과 「캘린더 날짜 고르기」.
 - `docs/design/responsive-composition.md`, `docs/design/daily-office.md`: 컨테이너 쿼리를 쓰던 설명과 그림의 날짜.
+- `docs/known-issues.md`, `docs/topics/liturgical.md`: §84(캘린더 목록의 날짜 칸 간격 e2e가 이 PR 전부터 실패한다).
+- `docs/topics/routing.md`: 「휴대폰의 긴 장 제목」의 폭과 글자 크기를 잰 값으로 고쳤다(제목이 왼쪽이라 자리가 넓어져 320px에서는 줄지 않는다).
+- `tests/README.md`: 바뀐 e2e 파일의 설명과 건수, 새 파일 `test_small_top_bar.py`.

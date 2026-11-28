@@ -6292,8 +6292,11 @@ html.cite-sheet-open {
      그 밑으로 들어가지 않게 그만큼 안쪽 여백을 둔다. 장 제목은 views.js measureTitleCompactness가 단추 사이의 폭으로 잰다. */
   #page-title { text-align: start; }
   #page-title:has(> .title-back-btn) { padding-inline-start: calc(var(--icon-btn-touch) + var(--space-2)); }
-  #page-title:has(> .title-bookmark-btn:not(.has-bookmark, .is-list)) { padding-inline-end: calc(var(--icon-btn-touch) + var(--space-2)); }
-  #page-title:has(> .title-actions) { padding-inline-end: calc(var(--icon-btn-touch) * 2 + var(--space-3)); }
+  /* 오른쪽 단추는 --bar-icon-shift-sm만큼 바깥으로 밀려 있어(위) 제목 칸 안에서는 그만큼 덜 차지한다. 여백은 칸 안에서 차지하는 폭과 같게 둔다.
+     views.js measureTitleCompactness가 재는 자리(칸 폭에서 단추가 차지하는 폭을 뺀 것)와 글이 실제로 꺾이는 폭이 같아야, 긴 장 제목이 줄지 않은
+     채 두 줄로 꺾이지 않는다(폭 250-310px에 글자 22-24px에서 25px 어긋났다). 그림 사이의 틈은 단추 상자의 안쪽에 있다 */
+  #page-title:has(> .title-bookmark-btn:not(.has-bookmark, .is-list)) { padding-inline-end: calc(var(--icon-btn-touch) - var(--bar-icon-shift-sm)); }
+  #page-title:has(> .title-actions) { padding-inline-end: calc(var(--icon-btn-touch) * 2 + var(--space-1) - var(--bar-icon-shift-sm)); }
   /* 장 고르기는 제목 아래 왼쪽에 맞춘다 */
   .chapter-popover { left: 0; transform: none; }
 

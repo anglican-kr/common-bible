@@ -556,7 +556,10 @@ function measureTitleCompactness() {
       rightReserve = Math.max(rightReserve, titleRect.right - r.left);
     }
   }
-  const room = $title.clientWidth - leftReserve - rightReserve;
+  // The text wraps at the content box, which the CSS padding keeps clear of the buttons; never count more room than that.
+  const titleStyle = getComputedStyle($title);
+  const contentBox = $title.clientWidth - (parseFloat(titleStyle.paddingLeft) || 0) - (parseFloat(titleStyle.paddingRight) || 0);
+  const room = Math.min($title.clientWidth - leftReserve - rightReserve, contentBox);
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 
   const full = /** @type {HTMLElement | null} */ ($title.querySelector(".title-text-full"));
