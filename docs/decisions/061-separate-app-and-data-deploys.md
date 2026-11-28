@@ -42,7 +42,7 @@ ADR-052 §5가 다음 단계로 적어 둔 일이다. 사용자 기기의 데이
 ### 2. 데이터 형식 번호
 
 - 데이터 저장소의 `data-version.json`에 형식 번호를 적는다(`{"format": 1}`). 배포할 때 데이터 커밋을 더한 사본을 데이터 빌드에 넣는다(`{"format": 1, "commit": "82c056b"}`). 커밋은 자기 해시를 담을 수 없으므로 저장소의 파일에는 적지 않는다(ADR-052 §1과 같은 까닭).
-- 앱의 `version.json`에 읽을 수 있는 형식 번호의 목록을 적는다(`{"version": "2.3.0", "data_formats": [1]}`). 목록이 없는 옛 앱은 1만 읽는 것으로 본다. 그 사이트에 `data-version.json`이 없으면(전환 전) 데이터의 형식을 1로 본다.
+- 앱의 `version.json`에 읽을 수 있는 형식 번호의 목록을 적는다(`{"version": "2.3.0", "data_formats": [1]}`). 목록이 없는 옛 앱은 1만 읽는 것으로 본다.
 - 번호는 1에서 시작한다. 이 ADR을 쓸 때의 데이터 형식이 1이다.
 
 | 바뀐 것 | 번호 | 예 |
@@ -70,7 +70,7 @@ ADR-052 §5가 다음 단계로 적어 둔 일이다. 사용자 기기의 데이
 | --- | --- |
 | `deploy-data.sh dev`와 CI의 dev 배포 | 데이터 커밋이 데이터 저장소의 `origin/main`에 있다. dev.anglican.kr의 앱(`/version.json`의 `data_formats`)이 그 형식을 읽는다 |
 | `deploy-data.sh promote` | dev가 가리키는 데이터 빌드가 그 커밋을 로컬에서 빌드한 것과 파일마다 같다. 운영의 앱이 그 형식을 읽는다. 앱 `origin/main`의 실데이터 유닛 테스트가 그 데이터로 통과한다 |
-| `deploy.sh dev`, `prod`, `promote`(앱) | 그 사이트의 데이터(`/data/data-version.json`의 `format`)를 이 앱의 `data_formats`가 읽는다 |
+| `deploy.sh dev`, `prod`, `promote`(앱) | 그 사이트가 데이터 빌드를 내고 있고(`/data/data-version.json`에 `commit`이 있다), 그 형식(`format`)을 이 앱의 `data_formats`가 읽는다. 전환 전 사이트에는 데이터를 뺀 앱을 올리지 않는다 |
 | `deploy-data.sh rollback` | 확인하지 않는다. 되돌리는 일은 막지 않는다 |
 
 - 실데이터 유닛 테스트는 앱 저장소의 `tests/unit/*.data.test.js`와 `tests/unit/sw.test.js`다. 엔진, 전례독서, 캘린더, 인용, 검색이 실제 데이터로 도는지와, 매니페스트가 가리키는 경로를 서비스 워커가 데이터 캐시로 보내는지 본다. 형식 번호는 약속을 어긴 것(칸 이름을 바꾸고 번호를 올리지 않은 경우)을 잡지 못하므로 테스트로 한 번 더 본다.
@@ -105,7 +105,7 @@ ADR-052 §5가 다음 단계로 적어 둔 일이다. 사용자 기기의 데이
 
 1. 앱: §6의 `books.json`과 `search-meta.json` 처리, 버전 줄, `data_formats`를 넣은 릴리스를 운영에 낸다.
 2. 데이터: `data-version.json`, 사이트맵 스크립트, CI의 호환 검사와 dev 배포를 머지한다.
-3. 서버: 데이터 빌드를 올리고 dev의 nginx를 바꿔 dev.anglican.kr에서 확인한 뒤, 운영의 데이터 링크를 만들고 운영의 nginx를 바꾼다. 그다음 데이터를 뺀 배포 목록으로 앱을 배포한다.
+3. 서버: 데이터 빌드를 올리고 dev의 nginx를 바꿔 dev.anglican.kr에서 확인한 뒤, 운영의 데이터 링크를 만들고 운영의 nginx를 바꾼다. nginx 설정은 두 사이트가 함께 쓰므로, 운영은 데이터 링크를 만들기 전까지 지금의 앱 빌드 폴더를 데이터 자리로 쓴다. 그다음 데이터를 뺀 배포 목록으로 앱을 배포한다.
 4. 앱: 저장소의 `sitemap.xml`과 사이트맵 스크립트를 지우고, 규칙 문서(CLAUDE.md 「데이터 수정과 릴리스」, `docs/workflow.md` 「릴리스」)를 새 순서로 고친다.
 
 - 3에서 처음 올리는 데이터가 지금 운영과 내용이 같으면, nginx를 바꾸기 전후에 사용자가 받는 파일이 같다.
