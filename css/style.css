@@ -1468,7 +1468,7 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
    값은 그대로이고, 움직임은 달력이 펼쳐지고 접히는 것과 같은 시간과 속도다. 화면을 옮기면 상단 바에 가려져 있던 줄이 상단 바 아래로 나오는데, 달력과
    그 뒤의 바탕(.cal-picker-backing)이 덮는다. 바탕은 화면과 같은 옮기기로 움직여, 쉴 때는 상단 바 뒤에 있고 아래 끝이 늘 밀려난 화면의 위 끝에 있다.
    좁은 판의 양옆(가로 화면)과 판의 자르기보다 화면의 옮기기가 앞서는 프레임(아이폰 Safari, pitfalls §44)에 그 줄이 비치지 않는다. 달력의 아래
-   모서리는 둥글리지 않는다. 상단 바와 달력이 한 층이고 그 아래에 밀려난 화면이 맞닿기 때문이다(사용자 결정 2026-11-28). */
+   모서리는 둥글리지 않고 그림자도 두지 않는다. 상단 바와 달력이 한 층이고 그 아래에 밀려난 화면이 맞닿기 때문이다(사용자 결정 2026-11-28). */
 .cal-picker-backing {
   position: fixed;
   left: 0;
@@ -1507,7 +1507,6 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
   color: var(--text);
   background: var(--bg);
   border-radius: 0;
-  box-shadow: var(--shadow-2);
   /* 화면이 낮으면(휴대폰을 가로로 든 때) 판을 화면 안에 두고 판의 칸만 스크롤한다 */
   display: flex;
   flex-direction: column;
@@ -1522,18 +1521,18 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
   margin: -4px;
 }
 /* 상단 바 아래에서 펼쳐져 내려오고 위로 접혀 올라간다. 판(.cal-picker)은 옮기지 않고 자르기(clip-path)의 아래 끝만 움직이며, 안의 머리와 칸이 16px 위에서
-   미끄러져 내려온다. 판의 위 끝은 움직이지 않아 늘 상단 바의 아래 끝에 있고, 판 위로 나간 내용은 판의 자르기가 가린다. 그림자가 잘리지 않게 아래와 옆은
-   여유를 둔다. 보이는 아래 끝은 상단 바의 아래 끝에서 시작해, 같은 속도로 밀려나는 화면의 위 끝보다 늘 아래에 있다(위의 바탕).
+   미끄러져 내려온다. 판의 위 끝은 움직이지 않아 늘 상단 바의 아래 끝에 있고, 판 위로 나간 내용은 판의 자르기가 가린다. 보이는 아래
+   끝은 상단 바의 아래 끝에서 시작해, 같은 속도로 밀려나는 화면의 위 끝과 함께 움직인다(어긋나면 위의 바탕이 덮는다).
    판째로 옮기면서(transform) 위쪽을 같은 만큼 잘라 위 끝을 맞추던 때는, 아이폰 Safari가 옮기기는 합성 스레드에서, 자르기는 메인 스레드에서 움직여 한두
    프레임 어긋났다. 어긋난 만큼 판과 상단 바 사이에 뒤 가림이 비쳐, 열 때 어두운 선이 생겼다가 얇아지며 사라졌다(사용자 보고 2026-11-28). 이제 위 끝을
    정하는 값은 움직이지 않으므로 두 움직임이 어긋나도 틈이 생기지 않는다 */
 @keyframes cal-picker-in-down {
-  from { clip-path: inset(0 -32px 100% -32px); }
-  to { clip-path: inset(0 -32px -32px -32px); }
+  from { clip-path: inset(0 0 100% 0); }
+  to { clip-path: inset(0); }
 }
 @keyframes cal-picker-out-up {
-  from { clip-path: inset(0 -32px -32px -32px); }
-  to { clip-path: inset(0 -32px 100% -32px); }
+  from { clip-path: inset(0); }
+  to { clip-path: inset(0 0 100% 0); }
 }
 @keyframes cal-picker-slide-in {
   from { transform: translateY(-16px); }
