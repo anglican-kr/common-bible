@@ -1,4 +1,5 @@
 ---
+pr: 678
 date: 2026-11-28
 branch: feat/ci-dev-deploy
 title: "feat: pre-release를 내면 CI가 dev.anglican.kr에 올린다"
