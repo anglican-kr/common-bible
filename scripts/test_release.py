@@ -24,7 +24,6 @@ class ReleaseCommitMessageTest(unittest.TestCase):
         message = release.release_commit_message("2.2.10")
         self.assertTrue(changelog.is_app_noise(message))
         self.assertTrue(changelog.is_app_noise(f"{message} (#700)"))
-        self.assertTrue(changelog.is_app_noise(f"{message} (#654)"))
 
 
 class BumpSemverTest(unittest.TestCase):
