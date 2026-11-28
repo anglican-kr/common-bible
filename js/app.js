@@ -67,7 +67,11 @@ document.addEventListener("keydown", (e) => {
     // them through their controller (window.close{Settings,ChapterPopover}) so
     // focus-trap teardown + aria reset + focus restore run — never hide them
     // directly here. Settings sits above the chapter picker, so it wins first.
-    // 캘린더의 날짜 고르기 판(ADR-038 §2)은 뒤 화면을 막는 시트라 가장 위에 있다.
+    // 캘린더의 날짜 고르기 판(ADR-038 §2)은 뒤를 막는 창이 열리면 먼저 닫히므로(overlay.js `open`) 열려 있으면 가장 위에 있다. 다만 작은 화면의
+    // 달력은 뒤를 막지 않아(ADR-058 §3) 밀려난 화면에서 연 주석 툴팁이 그 위에 있을 수 있다. 툴팁은 citations.js가 이 키로 닫으므로 달력은
+    // 다음 Esc에 닫는다. 한 번의 Esc가 두 층을 닫지 않게 한다.
+    // 달력이 열린 채면 아래의 「aria-expanded」 정리도 건너뛴다. 달력 아이콘이 열린 상태를 그대로 알려야 한다
+    if (document.querySelector("#note-tooltip:not([hidden])") && document.querySelector(".cal-picker:not([hidden]):not(.cal-picker-closing)")) return;
     if (window.closeCalendarPicker?.()) return;
     if (document.querySelector(".settings-popover:not([hidden])")) { window.closeSettings?.(); return; }
     if (document.querySelector(".chapter-popover:not([hidden])")) { window.closeChapterPopover?.(); return; }

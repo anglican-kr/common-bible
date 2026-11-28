@@ -123,6 +123,34 @@ def test_a_sheet_opened_under_the_dropped_calendar_closes_the_calendar(mobile_co
     assert page.evaluate("getComputedStyle(document.getElementById('app')).transform") == "none"
 
 
+def test_one_escape_closes_the_note_tooltip_before_the_dropped_calendar(mobile_context):
+    """작은 화면에서 달력을 연 채 밀려난 전례독서의 주석 어절을 누르면 툴팁이 달력 위에 열린다. Esc 한 번은 툴팁만 닫고, 다음 Esc가 달력을 닫는다
+    (코드 리뷰 2026-11-28). 작은 화면의 달력은 뒤를 막지 않아 두 층이 함께 열릴 수 있다(ADR-058 §3)."""
+    page = mobile_context.new_page()
+    _open(page, "lectionary/2026-07-19")
+    page.evaluate("() => document.querySelector('#page-title button.title-view-btn').click()")
+    page.wait_for_selector(".cal-picker:not([hidden])")
+    page.wait_for_timeout(400)
+    anchor = page.locator(".lect-reading[data-slot='first'] article.chapter-text .note-anchor")
+    # 밀려난 화면은 달력의 높이만큼 아래에 그려지므로, 어절이 달력 아래에 보이게 직접 스크롤한다
+    anchor.evaluate("""e => window.scrollBy({ top: e.getBoundingClientRect().top - (document.querySelector('.cal-picker').getBoundingClientRect().bottom + 120),
+        behavior: 'instant' })""")
+    page.wait_for_timeout(200)
+    box = anchor.bounding_box()
+    page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    page.wait_for_function(NOTE_TOOLTIP_OPEN)
+    calendar_open = "() => { const p = document.querySelector('.cal-picker'); return !p.hidden && !p.classList.contains('cal-picker-closing'); }"
+    assert page.evaluate(calendar_open)
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(300)
+    assert not page.evaluate(NOTE_TOOLTIP_OPEN)
+    assert page.evaluate(calendar_open)   # 달력은 남는다
+    assert page.get_attribute("#page-title button.title-view-btn", "aria-expanded") == "true"
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(500)
+    assert not page.evaluate(calendar_open)
+
+
 def test_note_anchor_survives_half_verse_cut_and_opens_tooltip(desktop_context):
     """창세 28:10-19상: 19절을 「그 곳을 베델이라 불렀다.」까지 자르고도 어절 「베델」의 주석 자리가 남아, 누르면 툴팁이 열린다.
     주석은 반절 자르기 앞에 감싼다(lectionary.js buildReading)."""

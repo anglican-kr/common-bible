@@ -1857,6 +1857,19 @@ def test_list_date_cell_keeps_date_bar_and_weekday_together_with_even_spacing(mo
     assert all(abs(w - h) < 0.5 and r == "50%" for _, w, h, r in picker["marks"]), picker
 
 
+def test_selected_white_day_keeps_its_ring_in_dark_mode(mobile_context):
+    """다크 모드에서 고른 날이 백색인 날이어도 그 막대에 바탕색 테두리가 있다. 채운 사각형(옅은 차콜)과 흰 막대는 비슷해, 테두리가 없으면 막대가
+    거의 보이지 않는다. 다크 모드의 흰 막대 규칙과 명시도가 같아, 고른 날의 규칙이 뒤에 와야 한다(코드 리뷰 2026-11-28)."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2026-12-25")   # 성탄일, 백색
+    page.evaluate("() => document.documentElement.setAttribute('data-theme', 'dark')")
+    _open_picker(page)
+    shadow = page.evaluate("""() => { const bar = document.querySelector('.cal-picker-day.is-selected .cal-picker-bar');
+        return [bar.classList.contains('lit-swatch--white'), getComputedStyle(bar).boxShadow, getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()]; }""")
+    assert shadow[0] and "0px 0px 0px 1px" in shadow[1] and "inset" not in shadow[1], shadow
+
+
 def _open_picker(page):
     _press(page, ".cal-picker-trigger")
     page.wait_for_selector(".cal-picker:not([hidden])")
