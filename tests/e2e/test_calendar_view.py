@@ -1959,15 +1959,16 @@ def test_dropped_calendar_slides_down_and_up_unless_motion_is_reduced(mobile_con
         const top = p.getBoundingClientRect().top + (m ? Number(m[1]) : 0);
         const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom; all.forEach(a => a.play());
         return { gap: top - bar, moved: s.transform !== 'none' }; }"""
+    # 판의 위 끝은 상단 바 아래 끝을 내림한 자리라(`placePicker`) 1px 안에서 바와 겹칠 수 있다
     for t in (0, 0.25, 0.5, 0.75):
         r = page.evaluate(visible_top, t)
-        assert -0.5 <= r["gap"] <= 0.5 and not r["moved"], (t, r)
+        assert -1 < r["gap"] <= 0.5 and not r["moved"], (t, r)
     page.wait_for_timeout(500)
     page.keyboard.press("Escape")
     assert names() == [["cal-picker-out-up"], ["cal-picker-slide-out"] * 3]
     for t in (0.25, 0.5, 0.75, 1):
         r = page.evaluate(visible_top, t)
-        assert -0.5 <= r["gap"] <= 0.5 and not r["moved"], (t, r)
+        assert -1 < r["gap"] <= 0.5 and not r["moved"], (t, r)
     page.wait_for_selector(".cal-picker", state="hidden")
     # 안의 머리와 칸이 먼저 다 올라가도(그 animationend도 판으로 올라온다) 판 자신의 움직임이 끝날 때까지 숨기지 않는다
     _open_picker(page)
