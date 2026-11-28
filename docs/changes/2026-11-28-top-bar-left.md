@@ -1,4 +1,5 @@
 ---
+pr: 687
 date: 2026-11-28
 branch: feat/top-bar-left
 title: "feat: 작은 화면 상단 바의 제목을 왼쪽에, 단추를 오른쪽에"
