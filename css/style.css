@@ -4260,16 +4260,21 @@ mark.search-highlight--cut-start {
   }
 }
 
-/* Resume-banner name swap — same swap pattern as book-list / page-title. */
-.resume-text-mobile { display: none; }
+/* Resume-banner name swap — same swap pattern as book-list / page-title. The name alone (.bare, without 「이어읽기:」) comes last,
+   when even the short name does not fit (사용자 결정 2026-11-28); it outranks the phone's forced short name. */
+.resume-text-mobile,
+.resume-text-bare { display: none; }
 .resume-banner.compact .resume-text-full { display: none; }
 .resume-banner.compact .resume-text-mobile { display: inline; }
 @media not all and (min-width: 700px) and (min-height: 600px) {
   @media (hover: none) and (pointer: coarse) {
-    .resume-banner .resume-text-full { display: none; }
+    .resume-banner:has(.resume-text-mobile) .resume-text-full { display: none; }
     .resume-banner .resume-text-mobile { display: inline; }
   }
 }
+.resume-banner.bare .resume-text-full,
+.resume-banner.bare .resume-text-mobile { display: none; }
+.resume-banner.bare .resume-text-bare { display: inline; }
 
 .resume-banner-close {
   display: flex;

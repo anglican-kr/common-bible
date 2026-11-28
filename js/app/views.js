@@ -778,16 +778,15 @@ function renderResumeBanner(books) {
   const fullLabel = `이어읽기: ${where(lastBook.name_ko)}`;
   const mobileBookName = NT_MOBILE_NAME[lastBook.id];
   const mobileLabel = mobileBookName ? `이어읽기: ${where(mobileBookName)}` : null;
+  // 짧은 이름으로도 들어가지 않으면 머리 「이어읽기:」를 빼고 이름만 보인다(사용자 결정 2026-11-28, ADR-030 「적용 확장」). 폭 320px에 글자 20-24px의
+  // 작은 화면 알약이다. 그래도 넘치면 말줄임표다. 스크린 리더는 늘 전체 이름을 읽는다
+  const bareLabel = where(mobileBookName ?? lastBook.name_ko);
 
   const wrapper = el("div", { className: "resume-banner" });
-  const link = el("a", { className: "resume-banner-link", href });
-  if (mobileLabel) {
-    link.setAttribute("aria-label", fullLabel);
-    link.appendChild(el("span", { className: "resume-text-full", "aria-hidden": "true" }, fullLabel));
-    link.appendChild(el("span", { className: "resume-text-mobile", "aria-hidden": "true" }, mobileLabel));
-  } else {
-    link.textContent = fullLabel;
-  }
+  const link = el("a", { className: "resume-banner-link", href, "aria-label": fullLabel });
+  link.appendChild(el("span", { className: "resume-text-full", "aria-hidden": "true" }, fullLabel));
+  if (mobileLabel) link.appendChild(el("span", { className: "resume-text-mobile", "aria-hidden": "true" }, mobileLabel));
+  link.appendChild(el("span", { className: "resume-text-bare", "aria-hidden": "true" }, bareLabel));
   wrapper.appendChild(link);
 
   const closeBtn = el("button", {
@@ -804,10 +803,8 @@ function renderResumeBanner(books) {
 
   clearNode($resumeBannerSlot);
   $resumeBannerSlot.appendChild(wrapper);
-  if (mobileLabel) {
-    applyResumeBannerCompactness(wrapper);
-    _observeResumeBanner(wrapper);
-  }
+  applyResumeBannerCompactness(wrapper);
+  _observeResumeBanner(wrapper);
 }
 
 // Resume banner compactness — same measurement idea as book-list / title.
@@ -819,33 +816,36 @@ let _resumeBannerObs = null;
 /** @type {HTMLElement | null} */
 let _observedResumeBanner = null;
 
-/** @param {HTMLElement} wrapper */
+/**
+ * The resume label in three lengths: 「이어읽기: 데살로니카인들에게 보낸 둘째 편지 3장」, the short book name 「이어읽기: 2데살로니카 3장」 (New
+ * Testament books only), and the name alone 「2데살로니카 3장」 when even the short one does not fit (사용자 결정 2026-11-28). `.compact` picks
+ * the short one (a phone in the small layout always shows it, CSS), `.bare` the name alone. Each is measured on one line against the link's
+ * inner width.
+ * @param {HTMLElement} wrapper
+ */
 function applyResumeBannerCompactness(wrapper) {
   const link = /** @type {HTMLElement | null} */ (wrapper.querySelector(".resume-banner-link"));
   const full = /** @type {HTMLElement | null} */ (wrapper.querySelector(".resume-text-full"));
-  const mobile = wrapper.querySelector(".resume-text-mobile");
-  if (!link || !full || !mobile) {
-    wrapper.classList.remove("compact");
-    return;
-  }
-  wrapper.classList.remove("compact");
+  const mobile = /** @type {HTMLElement | null} */ (wrapper.querySelector(".resume-text-mobile"));
+  wrapper.classList.remove("compact", "bare");
+  if (!link || !full) return;
 
-  const prevWs = full.style.whiteSpace;
-  const prevDisplay = full.style.display;
-  full.style.whiteSpace = "nowrap";
-  full.style.display = "inline-block";
-  const naturalWidth = full.offsetWidth;
-  full.style.whiteSpace = prevWs;
-  full.style.display = prevDisplay;
-
+  /** @param {HTMLElement} span */
+  const naturalWidth = (span) => {
+    const prev = span.style.cssText;
+    span.style.whiteSpace = "nowrap";
+    span.style.display = "inline-block";
+    const width = span.offsetWidth;
+    span.style.cssText = prev;
+    return width;
+  };
   const cs = getComputedStyle(link);
-  const padL = parseFloat(cs.paddingLeft) || 0;
-  const padR = parseFloat(cs.paddingRight) || 0;
-  const availableWidth = link.clientWidth - padL - padR;
+  const availableWidth = link.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
 
-  if (naturalWidth > availableWidth + 0.5) {
-    wrapper.classList.add("compact");
-  }
+  if (mobile && naturalWidth(full) > availableWidth + 0.5) wrapper.classList.add("compact");
+  // The label on show now: the short one when compact or when the phone media query forces it, else the full one
+  const shown = mobile && getComputedStyle(mobile).display !== "none" ? mobile : full;
+  if (naturalWidth(shown) > availableWidth + 0.5) wrapper.classList.add("bare");
 }
 
 /** @param {HTMLElement} wrapper */

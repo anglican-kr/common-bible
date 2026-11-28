@@ -16,6 +16,8 @@ Covers three mechanisms:
 
 Server prerequisite: `python3 scripts/serve.py 8080`.
 """
+import pytest
+
 
 BASE = "http://localhost:8080"
 _IPHONE_UA = (
@@ -315,5 +317,30 @@ def test_resume_pill_measures_the_name_again_when_the_text_size_changes(browser)
         assert _resume_pill_state(page)["visible"] == "이어읽기: 요한의 첫째 편지 3장"
         page.evaluate("() => window.applyFontSize(24)")
         page.wait_for_function("() => document.querySelector('.resume-banner').classList.contains('compact')", timeout=2_000)
+    finally:
+        ctx.close()
+
+
+@pytest.mark.parametrize("book, chapter, shown", [("cant", 4, "이사야 첫째 송가"), ("2thess", 3, "2데살로니카 3장")])
+def test_resume_pill_drops_the_lead_when_even_the_short_name_does_not_fit(browser, book, chapter, shown):
+    """On a 320px phone at 24px text, 「이어읽기: 이사야 첫째 송가」 and even the short 「이어읽기: 2데살로니카 3장」 do not fit the pill: the
+    lead 「이어읽기:」 goes and the name alone shows (`.bare`, 사용자 결정 2026-11-28). Screen readers keep the full label."""
+    ctx = browser.new_context(viewport={"width": 320, "height": 568}, is_mobile=True, has_touch=True, user_agent=_IPHONE_UA)
+    ctx.add_init_script(
+        f"localStorage.setItem('bible-last-read', JSON.stringify({{bookId: '{book}', chapter: {chapter}}}));"
+        "localStorage.setItem('bible-startup', 'home');"
+        "localStorage.setItem('bible-font-size', '24');"
+    )
+    try:
+        page = ctx.new_page()
+        page.goto(f"{BASE}/")
+        page.wait_for_selector(".resume-banner")
+        page.wait_for_timeout(150)
+        state = _resume_pill_state(page)
+        assert state["visible"] == shown, state
+        assert page.evaluate("() => document.querySelector('.resume-banner').classList.contains('bare')")
+        assert state["ariaLabel"].startswith("이어읽기: ")
+        # The name alone fits: no ellipsis cuts it
+        assert page.evaluate("() => { const l = document.querySelector('.resume-banner-link'); return l.scrollWidth <= l.clientWidth; }")
     finally:
         ctx.close()
