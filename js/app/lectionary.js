@@ -59,7 +59,11 @@ const $app = _$("app");
 const $title = _$("page-title");
 /** 마지막으로 그린 날짜 — 날짜가 바뀐 다시 그리기만 맨 위에서 시작한다(commit). @type {string | null} */
 let committedDate = null;
-/** 「오늘」을 눌러 가는 주소. 그 주소의 다음 그리기는 같은 날이어도 맨 위에서 시작한다(commit, 사용자 결정 2026-11-28). @type {string | null} */
+/**
+ * 「오늘」을 눌러 가는 주소와 그 누름이 여는 라우트의 순번. 그 라우트의 그리기는 같은 날이어도 맨 위에서 시작한다(commit, 사용자 결정 2026-11-28).
+ * 순번이 다르면 그 라우트가 그리지 못하고 끝난 것이라(실패, 다른 화면으로 감) 뒤의 다시 그리기에 남기지 않는다.
+ * @type {{ path: string, seq: number | null } | null}
+ */
 let topOnNextDraw = null;
 // 이름은 views.js에 있다 — 이 모듈을 받지 못했을 때 라우터가 같은 제목으로 실패 화면을 그린다.
 const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
@@ -1331,7 +1335,9 @@ function commitDateBar(o) {
   const today = el("a", { className: "lect-today", href: o.todayHref, "data-focus-key": "today" }, "오늘");
   // 「오늘」로 가는 전례독서는 맨 위부터 그린다(commit). 새 탭으로 여는 클릭은 이 화면을 바꾸지 않으므로 남기지 않는다
   today.addEventListener("click", (e) => {
-    if (!isModifiedClick(e)) topOnNextDraw = new URL(o.todayHref, location.origin).pathname;
+    // 이 처리기가 라우터(문서의 클릭 처리)보다 먼저 돌므로 이 누름의 라우트는 다음 순번이다
+    const seq = window.routeSeq?.();
+    if (!isModifiedClick(e)) topOnNextDraw = { path: new URL(o.todayHref, location.origin).pathname, seq: seq === undefined ? null : seq + 1 };
   });
   const mid = el("span", { className: "lect-bar-mid" });
   mid.appendChild(buildDateStep("prev", o.prev.href, o.prev.label));
@@ -2129,7 +2135,8 @@ function commit(m, chapters) {
   // 스켈레톤이 그려지기 전에 이 화면이 들어와 스크롤이 그대로 남았다. 같은 날의 전례독서 목록 · 독서 카드는 누른 자리로 돌아오고(라우터),
   // 뒤로 가기는 이 뒤에 떠날 때의 스크롤을 되살린다(tab-history.js onRouteEnd). 「오늘」은 오늘을 보고 있었어도, 같은 날을 전에 그렸어도
   // 늘 맨 위부터다(사용자 결정 2026-11-28, ADR-038 §3). 같은 날이면 위의 규칙으로는 스크롤이 남는다
-  const fromTop = m.date !== committedDate || topOnNextDraw === location.pathname;
+  const fromTop = m.date !== committedDate
+    || (topOnNextDraw?.path === location.pathname && (topOnNextDraw.seq === null || topOnNextDraw.seq === window.routeSeq?.()));
   committedDate = m.date;
   topOnNextDraw = null;
 

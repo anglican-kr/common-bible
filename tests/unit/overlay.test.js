@@ -579,6 +579,22 @@ test("closeAllOverlays({ keepNonBlocking }): a same-address redraw leaves an ope
   assert.equal(drop.hidden, true);
 });
 
+test("closeAllOverlays({ keepNonBlocking }): a non-blocking panel mid-dismiss finishes its own exit, without onNavigateAway (ADR-058 §3)", () => {
+  const env = makeEnv();
+  const drop = new env.StubEl();
+  /** @type {(() => void) | null} */
+  let finalize = null;
+  let away = 0;
+  const dropOv = env.createOverlay({ panel: drop, modal: false, onNavigateAway: () => { away++; }, closeTransition: (_p, done) => { finalize = done; } });
+  dropOv.open();
+  dropOv.close();   // folding up
+  env.closeAllOverlays({ keepNonBlocking: true });   // a same-address redraw lands mid-fold
+  assert.equal(away, 0);
+  assert.equal(drop.hidden, false);
+  /** @type {() => void} */ (/** @type {unknown} */ (finalize))();
+  assert.equal(drop.hidden, true);
+});
+
 test("whenNoOverlayOpen: an open non-blocking overlay does not hold the work back (ADR-058 §3)", async () => {
   const env = makeEnv();
   const dropOv = env.createOverlay({ panel: new env.StubEl(), modal: false });

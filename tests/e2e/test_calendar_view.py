@@ -1971,6 +1971,24 @@ def test_a_day_in_the_dropped_calendar_moves_the_list_below_and_keeps_it_open(mo
     assert page.url == f"{BASE}/calendar/list/2027-03-20"
 
 
+def test_a_day_tapped_while_the_calendar_still_unfolds_comes_to_the_top(mobile_context):
+    """달력이 펼쳐지는 동안(화면이 아직 밀려나는 중에) 날을 누르면, 움직이는 중의 밀린 길이로 재지 않고 움직임을 끝낸 뒤 잰다. 움직임이 끝난 뒤에도
+    고른 줄이 달력 바로 아래이고 주소가 그날이다(코드 리뷰 2026-11-28)."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2027-02-01")
+    page.evaluate("() => document.querySelector('.cal-picker-trigger').click()")
+    page.wait_for_selector(".cal-picker:not([hidden])")
+    page.wait_for_timeout(60)   # 펼치는 움직임(250ms)의 앞부분
+    moving = page.evaluate("() => new DOMMatrixReadOnly(getComputedStyle(document.getElementById('app')).transform).m42 < document.querySelector('.cal-picker').offsetHeight - 1")
+    page.evaluate("() => document.querySelector(\".cal-picker a[href='/calendar/list/2027-02-17']\").click()")
+    page.wait_for_timeout(700)
+    assert moving   # 누른 때 화면은 아직 밀려나는 중이었다
+    assert page.url == f"{BASE}/calendar/list/2027-02-17"
+    assert _picker(page)["current"] == "/calendar/list/2027-02-17"
+    assert abs(_under_calendar(page, "2027-02-17")) <= 2
+
+
 def test_settings_from_another_device_redraw_the_list_under_the_open_calendar(mobile_context):
     """작은 화면에서 달력을 연 채 다른 기기에서 받은 설정이 목록의 내용을 바꾸면, 목록은 다시 그리고 달력은 열린 채로 둔다. 맨 위 줄은 그대로
     달력 바로 아래다(ADR-058 §3, 코드 리뷰 2026-11-28. 전에는 같은 주소를 다시 그리는 라우터가 달력을 접었다)."""

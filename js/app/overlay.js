@@ -87,7 +87,8 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
     for (let i = _overlayRegistry.length - 1; i >= 0; i--) {
       const { panel, controller, onNavigateAway, blocking } = _overlayRegistry[i];
       if (!panel.isConnected) { _overlayRegistry.splice(i, 1); continue; }
-      if (keepNonBlocking && controller.isOpen && !blocking()) continue;
+      // Also when it is mid-dismiss: its own exit animation finishes and settles it. onNavigateAway would cut that short.
+      if (keepNonBlocking && !blocking() && (controller.isOpen || !panel.hidden)) continue;
       if (controller.isOpen) controller.close();
       if (panel.hidden) continue;
       if (onNavigateAway) onNavigateAway();

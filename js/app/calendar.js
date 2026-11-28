@@ -1065,6 +1065,8 @@ function settlePush() {
 function showDateInList(date) {
   let list = activeList;
   if (!list?.root.isConnected || list.isStale()) return false;
+  // 화면이 아직 밀려나는 중이면(달력을 연 직후) 끝으로 보낸다. 움직이는 중의 길이로 재면 움직임이 끝난 뒤 고른 줄이 맨 위에서 벗어난다
+  finishPushMotion();
   if (list.root.querySelector(`li[data-date="${date}"]`)) scrollToRow(date);
   // 그려 둔 줄이어도 그 뒤의 줄이 모자라면(목록의 아래 끝 가까이) 스크롤이 끝에 막혀 그 줄이 맨 위에 오지 못한다. 그때도 그날의 줄을 맨 위에 두고
   // 다시 그린다. 그러지 않으면 아래에서 맨 위 줄로 적는 날이 고른 날이 아니다
