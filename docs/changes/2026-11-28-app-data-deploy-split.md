@@ -1,4 +1,5 @@
 ---
+pr: 686
 date: 2026-11-28
 branch: claude/pensive-goodall-wxwd13
 title: "feat: 앱과 데이터를 따로 배포하기 위한 준비"
