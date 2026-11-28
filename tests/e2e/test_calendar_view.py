@@ -25,7 +25,6 @@ import pytest
 from .conftest import (
     CLEAR_APP_STORAGE,
     IPHONE_UA,
-    assert_sheet_close_button,
     emulate_side_safe_areas,
     emulate_status_bar,
     press_center,
@@ -2022,7 +2021,7 @@ def test_month_title_opens_the_month_picker_as_a_popover_and_goes_to_the_month(d
     # 팝오버는 뒤를 막고 화면을 밀어 내지 않는다
     assert page.evaluate("""() => [getComputedStyle(document.getElementById('app')).transform, getComputedStyle(document.querySelector('.cal-picker-backing')).display,
         document.getElementById('app').inert, document.querySelector('.cal-picker').getAttribute('aria-modal')]""") == ["none", "none", True, "true"]
-    assert page.locator(".cal-picker-close").is_hidden()   # 「닫기」는 작은 화면의 달력에만
+    assert page.locator(".cal-picker-close").count() == 0   # 「닫기」 단추는 없다(사용자 결정 2026-11-28)
     _press(page, ".cal-picker .cal-picker-step >> nth=1")
     page.wait_for_timeout(150)
     assert _picker(page)["title"] == "2028년"
@@ -2035,7 +2034,7 @@ def test_month_title_opens_the_month_picker_as_a_popover_and_goes_to_the_month(d
 
 
 def test_picker_closes_without_moving_the_list_and_returns_focus(mobile_context):
-    """아이콘을 다시 누르거나, Esc를 누르거나, 포커스를 받으면 나타나는 「닫기」로 닫히고 포커스는 아이콘으로 돌아간다(ADR-058 §3). 목록은 제자리로
+    """아이콘을 다시 누르거나 Esc를 누르면 닫히고 포커스는 아이콘으로 돌아간다(ADR-058 §3). 「닫기」 단추는 없다(사용자 결정 2026-11-28). 목록은 제자리로
     올라오고 스크롤 값과 주소는 그대로다. 포커스 테두리는 닫은 입력으로 정해, 탭으로 열었어도 키보드로 닫으면 그리고 눌러 닫으면 그리지 않는다.
     포커스가 밀려난 목록에 있으면 Esc로 닫아도 그 자리에 둔다."""
     page = mobile_context.new_page()
@@ -2043,22 +2042,21 @@ def test_picker_closes_without_moving_the_list_and_returns_focus(mobile_context)
     _open_list(page, "calendar/list/2026-12-15")
     y = page.evaluate("scrollY")
     icon = page.locator(".cal-picker-trigger").bounding_box()
-    for close in ("icon", "escape", "button"):
+    for close in ("icon", "escape", "enter"):
         _open_picker(page)
+        assert page.locator(".cal-picker-close").count() == 0, close
         if close == "icon":
             page.mouse.click(icon["x"] + icon["width"] / 2, icon["y"] + icon["height"] / 2)
         elif close == "escape":
             page.keyboard.press("Escape")
-        else:
-            hidden = page.evaluate("document.querySelector('.cal-picker-close').getBoundingClientRect().width")
-            assert hidden <= 1, hidden   # 포커스가 없으면 보이지 않는다
-            page.locator(".cal-picker-close").focus()
-            assert_sheet_close_button(page, ".cal-picker-close")
+        else:   # 키보드로 아이콘에 가서 다시 누른다. 상단 바는 막히지 않는다
+            page.evaluate("document.querySelector('.cal-picker-trigger').focus({ preventScroll: true })")
             page.keyboard.press("Enter")
         page.wait_for_timeout(500)
         assert _picker(page) is None, close
         assert page.evaluate("document.activeElement.classList.contains('cal-picker-trigger')"), close
-        assert page.evaluate("document.activeElement.matches(':focus-visible')") is (close in ("escape", "button")), close
+        if close != "enter":
+            assert page.evaluate("document.activeElement.matches(':focus-visible')") is (close == "escape"), close
         assert page.get_attribute(".cal-picker-trigger", "aria-expanded") == "false", close
         assert page.evaluate("scrollY") == y, close
         assert page.url == f"{BASE}/calendar/list/2026-12-15", close
@@ -2081,7 +2079,7 @@ def test_dropped_calendar_slides_down_and_up_unless_motion_is_reduced(mobile_con
     page.wait_for_selector(".cal-picker:not([hidden])")
     names = lambda: page.evaluate("""() => { const p = document.querySelector('.cal-picker');
         return [p.getAnimations().map(a => a.animationName), [...p.children].map(c => c.getAnimations().map(a => a.animationName).join())]; }""")
-    assert names() == [["cal-picker-in-down"], ["cal-picker-slide-in"] * 3]
+    assert names() == [["cal-picker-in-down"], ["cal-picker-slide-in"] * 2]
     # 움직이는 동안 보이는 위 끝이 상단 바의 아래 끝에 있다. 바를 덮지 않고(코드 리뷰 2026-11-26), 바와 판 사이에 틈도 없다.
     # 판은 옮기지 않아(transform 없음) 위 끝이 판의 움직임에 기대지 않는다. 아이폰 Safari는 옮기기를 자르기보다 앞서 움직여, 판째로 옮기던 때는
     # 그 틈이 어두운 선으로 보였다(사용자 보고 2026-11-28). 그래서 안의 내용이 판보다 앞서 움직여도 위 끝이 같은지 본다
@@ -2099,7 +2097,7 @@ def test_dropped_calendar_slides_down_and_up_unless_motion_is_reduced(mobile_con
         assert -1 < r["gap"] <= 0.5 and not r["moved"], (t, r)
     page.wait_for_timeout(500)
     page.keyboard.press("Escape")
-    assert names() == [["cal-picker-out-up"], ["cal-picker-slide-out"] * 3]
+    assert names() == [["cal-picker-out-up"], ["cal-picker-slide-out"] * 2]
     for t in (0.25, 0.5, 0.75, 1):
         r = page.evaluate(visible_top, t)
         assert -1 < r["gap"] <= 0.5 and not r["moved"], (t, r)
@@ -2116,7 +2114,7 @@ def test_dropped_calendar_slides_down_and_up_unless_motion_is_reduced(mobile_con
     page.emulate_media(reduced_motion="reduce")
     _press(page, ".cal-picker-trigger")
     page.wait_for_selector(".cal-picker:not([hidden])")
-    assert names() == [[], [""] * 3]
+    assert names() == [[], [""] * 2]
     page.keyboard.press("Escape")
     assert page.evaluate("document.querySelector('.cal-picker').hidden") is True
 
@@ -2336,8 +2334,7 @@ def test_picker_steps_stop_at_the_ends_of_the_calendar(desktop_context):
 
 
 def test_picker_works_with_the_keyboard(desktop_context):
-    """키보드로 제목 단추를 열면 지금 보는 칸에 포커스가 가고, Tab과 Shift+Tab은 판 안에서만 돈다. 팝오버에서는 숨긴 「닫기」를 건너뛰고 끝에서
-    처음으로 돌아온다. 이번 달은 날짜 없이 `/calendar`다. Enter로 고르면 그 달로 가고 제목 단추에 포커스가 돌아온다."""
+    """키보드로 제목 단추를 열면 지금 보는 칸에 포커스가 가고, Tab과 Shift+Tab은 판 안에서만 돈다. 끝에서 처음으로 돌아온다. 이번 달은 날짜 없이 `/calendar`다. Enter로 고르면 그 달로 가고 제목 단추에 포커스가 돌아온다."""
     page = desktop_context.new_page()
     _freeze_today(page)
     _open(page, "calendar/2026-11")

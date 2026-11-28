@@ -1557,19 +1557,7 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
 .cal-picker.cal-picker-closing > * {
   animation: cal-picker-slide-out var(--duration-base) ease-in both;
 }
-/* 「닫기」는 화면에 보이지 않다가 포커스를 받으면 나타나, 키보드로 달력을 지나가다 닫을 수 있다(calendar.js `ensurePicker`) */
-.cal-picker-close:not(:focus) {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  min-width: 0;
-  min-height: 0;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-}
-.cal-picker-close:focus { align-self: flex-end; }
-/* 바텀 시트와 사이드 패널의 「닫기」 글자 단추. 인용 시트, 북마크 패널, 책 고르기 시트가 같이 쓰고 자리는 머리의 오른쪽 끝이다. 날짜 고르기도 같은 단추를 쓰지만 포커스를 받을 때만 보인다
+/* 바텀 시트와 사이드 패널의 「닫기」 글자 단추. 인용 시트, 북마크 패널, 책 고르기 시트가 같이 쓰고 자리는 머리의 오른쪽 끝이다
    (DESIGN.md 「시트 vs 모달」, 사용자 결정 2026-11-17). 글자 크기와 색, 최소 크기(44px)가 모두 같다. 모달은 ×를 그대로 둔다. */
 .sheet-close {
   flex-shrink: 0;
@@ -1778,7 +1766,6 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   }
   .cal-picker:not([hidden]):not(.cal-picker-closing),
   .cal-picker:not([hidden]):not(.cal-picker-closing) > * { animation: none; }
-  .cal-picker-close { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1105,8 +1105,6 @@ function ensurePicker() {
   const backing = el("div", { className: "cal-picker-backing", "aria-hidden": "true" });
   const panel = el("div", { className: "cal-picker", role: "dialog", "aria-label": "날짜 고르기" });
   panel.hidden = true;
-  // 「닫기」는 화면에 보이지 않고 포커스를 받으면 나타나, 키보드로 달력을 지나가다 닫을 수 있다. 팝오버에서는 CSS가 숨긴다
-  const close = el("button", { type: "button", className: "cal-picker-close sheet-close" }, "닫기");
   const title = /** @type {HTMLButtonElement} */ (el("button", { type: "button", className: "cal-picker-title" }));
   const heading = el("span", { className: "cal-picker-title" });
   heading.hidden = true;
@@ -1114,7 +1112,8 @@ function ensurePicker() {
   const next = /** @type {HTMLButtonElement} */ (el("button", { type: "button", className: "cal-picker-step" }, headerIcon(PICKER_ICON.next)));
   const head = el("div", { className: "cal-picker-head" }, title, heading, el("span", { className: "cal-picker-steps" }, prev, next));
   const body = el("div", { className: "cal-picker-body" });
-  panel.append(head, body, close);
+  // 「닫기」 단추는 두지 않는다. 작은 화면의 달력은 아이콘을 다시 누르거나 Esc로 닫고, 팝오버는 바깥을 누르거나 Esc로 닫는다(사용자 결정 2026-11-28)
+  panel.append(head, body);
   const bar = document.getElementById("sticky-group");
   if (bar) bar.after(backing, panel);
   else document.body.append(backing, panel);
@@ -1185,7 +1184,6 @@ function ensurePicker() {
     },
   });
 
-  close.addEventListener("click", () => overlay.close());
   new MutationObserver(() => {
     if (panel.hidden) settlePush();
   }).observe(panel, { attributes: true, attributeFilter: ["hidden"] });

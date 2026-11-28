@@ -352,9 +352,9 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     /** @param {KeyboardEvent} e */
     function handler(e) {
       if (e.key !== "Tab") return;
-      // Skip elements that are not rendered (display: none on them or an ancestor, e.g. the date picker's
-      // close row on desktop): they cannot take focus, so treating one as the first/last stop lets Tab leave
-      // the dialog or makes the wrap-around focus() a no-op.
+      // Skip elements that are not rendered (display: none on them or an ancestor — the date picker's desktop
+      // popover once hid its close button this way): they cannot take focus, so treating one as the first/last
+      // stop lets Tab leave the dialog or makes the wrap-around focus() a no-op.
       const focusable = Array.from(/** @type {NodeListOf<HTMLElement>} */ (
         container.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')
       )).filter((node) => node.getClientRects().length > 0);
