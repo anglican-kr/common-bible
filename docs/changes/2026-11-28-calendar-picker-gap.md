@@ -2,6 +2,7 @@
 date: 2026-11-28
 branch: claude/wizardly-knuth-q4pi3h
 title: "fix: 월간 달력이 내려올 때 상단 바 아래의 어두운 선"
+pr: 677
 ---
 
 ## 요약
