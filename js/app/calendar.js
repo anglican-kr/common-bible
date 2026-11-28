@@ -1061,7 +1061,10 @@ function ensurePicker() {
         return;
       }
       p.classList.add("cal-picker-closing");
-      const done = () => {
+      /** @param {Event} [e] */
+      const done = (e) => {
+        // 안의 머리와 칸이 올라가는 움직임(cal-picker-slide-out)의 끝도 판으로 올라온다. 판 자신의 움직임이 끝날 때 숨긴다
+        if (e instanceof Event && e.target !== p) return;
         cancelClosing();
         finalizeHide();
       };
