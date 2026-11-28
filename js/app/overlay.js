@@ -42,20 +42,27 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
    * @property {string | null} [ariaExpanded]  Selector of trigger(s) whose `aria-expanded` mirrors the open state.
    * @property {(() => void) | null} [onOpen]
    * @property {(() => void) | null} [onClose]  Runs before focus restore, so it can tear down child state first.
-   * @property {((panel: HTMLElement, finalizeHide: () => void) => void) | null} [closeTransition]
+   * @property {((panel: HTMLElement, finalizeHide: () => void, how: { navigating: boolean }) => void) | null} [closeTransition]
    *   Animated/async dismiss. When set, close() runs the logical close
    *   immediately (scrim hide, inert off, trap/listener teardown, onClose, focus
    *   restore) but DEFERS `panel.hidden = true` to `finalizeHide` — call it when
    *   the exit animation ends. A re-open before then cancels the pending hide
    *   (sequence-guarded), so rapid close→open never hides the freshly reopened
-   *   panel. Without it, the panel hides synchronously.
+   *   panel. Without it, the panel hides synchronously. `how.navigating` is true
+   *   when a route change closes it (closeAllOverlays).
+   * @property {boolean} [exitOverNavigation]  A route change lets this panel's exit
+   *   animation play to its end over the incoming view instead of hiding it at
+   *   once. The small layout's drop-down calendar folds up over the new screen
+   *   (ADR-058 §3). Default false.
    */
 
   // Registry of every createOverlay instance so closeAllOverlays() can dismiss
   // all open overlays on a route change without the router hardcoding each one
   // (ADR-034 PR5b).
-  /** @type {{ panel: HTMLElement, controller: { close: () => void, readonly isOpen: boolean } }[]} */
+  /** @type {{ panel: HTMLElement, controller: { close: () => void, readonly isOpen: boolean }, exitOverNavigation: boolean }[]} */
   const _overlayRegistry = [];
+  // True while closeAllOverlays closes them, so close() can tell its closeTransition.
+  let _navigating = false;
 
   // Close every currently-open overlay (route() calls this on navigation).
   // controller.close() runs the full unwind (scrim / inert / focus trap /
@@ -64,14 +71,22 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
   // isOpen=false immediately but keep the panel visible until the exit animation
   // ends, so a navigation mid-dismiss must still force the panel hidden now or it
   // lingers over the incoming view (matches the old closeIfOpen `!node.hidden`
-  // contract; Bugbot PR #227). Detached panels (per-open-rebuilt overlays whose
-  // element was replaced, e.g. chapter picker) are pruned so the list stays bounded.
+  // contract; Bugbot PR #227). An overlay made with `exitOverNavigation` is the
+  // exception: its exit animation is meant to play over the incoming view, and its
+  // closeTransition still hides it when the animation ends. Detached panels
+  // (per-open-rebuilt overlays whose element was replaced, e.g. chapter picker) are
+  // pruned so the list stays bounded.
   function closeAllOverlays() {
-    for (let i = _overlayRegistry.length - 1; i >= 0; i--) {
-      const { panel, controller } = _overlayRegistry[i];
-      if (!panel.isConnected) { _overlayRegistry.splice(i, 1); continue; }
-      if (controller.isOpen) controller.close();
-      if (!panel.hidden) panel.hidden = true;
+    _navigating = true;
+    try {
+      for (let i = _overlayRegistry.length - 1; i >= 0; i--) {
+        const { panel, controller, exitOverNavigation } = _overlayRegistry[i];
+        if (!panel.isConnected) { _overlayRegistry.splice(i, 1); continue; }
+        if (controller.isOpen) controller.close();
+        if (!panel.hidden && !exitOverNavigation) panel.hidden = true;
+      }
+    } finally {
+      _navigating = false;
     }
   }
 
@@ -123,6 +138,7 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
       onOpen = null,
       onClose = null,
       closeTransition = null,
+      exitOverNavigation = false,
     } = opts;
 
     let _open = false;
@@ -248,7 +264,7 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
       // animation when closeTransition is set. The seq guard drops the hide if
       // the overlay was reopened in the meantime.
       if (closeTransition) {
-        closeTransition(panel, () => { if (mySeq === _seq) panel.hidden = true; });
+        closeTransition(panel, () => { if (mySeq === _seq) panel.hidden = true; }, { navigating: _navigating });
       } else {
         panel.hidden = true;
       }
@@ -263,7 +279,7 @@ window.appOverlay = (/** @returns {AppOverlay} */ () => {
     };
     // Per-open-rebuilt overlays push a fresh instance each time; closeAllOverlays
     // prunes detached panels (ADR-034 PR5b).
-    _overlayRegistry.push({ panel, controller });
+    _overlayRegistry.push({ panel, controller, exitOverNavigation });
     return controller;
   }
 

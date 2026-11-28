@@ -534,6 +534,35 @@ test("closeAllOverlays: force-hides an animated panel mid-dismiss (isOpen alread
   assert.equal(panel.hidden, true); // force-hidden so it doesn't linger over the next view
 });
 
+test("closeTransition: tells whether a route change closed it (closeAllOverlays) or a plain close()", () => {
+  const env = makeEnv();
+  const panel = new env.StubEl();
+  /** @type {boolean[]} */
+  const seen = [];
+  const ov = env.createOverlay({ panel, closeTransition: (_p, done, how) => { seen.push(how.navigating); done(); } });
+  ov.open();
+  ov.close();
+  ov.open();
+  env.closeAllOverlays();
+  ov.open();
+  ov.close();   // the flag does not outlive closeAllOverlays
+  assert.deepEqual(seen, [false, true, false]);
+});
+
+test("closeAllOverlays: exitOverNavigation lets the exit animation finish over the incoming view (ADR-058 §3)", () => {
+  const env = makeEnv();
+  const panel = new env.StubEl();
+  /** @type {(() => void) | null} */
+  let finalize = null;
+  const ov = env.createOverlay({ panel, exitOverNavigation: true, closeTransition: (_p, done) => { finalize = done; } });
+  ov.open();
+  env.closeAllOverlays();
+  assert.equal(ov.isOpen, false);
+  assert.equal(panel.hidden, false);   // still folding away
+  /** @type {() => void} */ (/** @type {unknown} */ (finalize))();
+  assert.equal(panel.hidden, true);
+});
+
 test("closeAllOverlays: leaves an already-hidden, never-opened overlay untouched", () => {
   const env = makeEnv();
   const panel = new env.StubEl();

@@ -1079,7 +1079,11 @@ export interface OverlayOptions {
   onClose?: (() => void) | null;
   // Animated/async dismiss: close() defers panel.hidden=true to finalizeHide
   // (call on animation end); a re-open before then cancels it (seq-guarded).
-  closeTransition?: ((panel: HTMLElement, finalizeHide: () => void) => void) | null;
+  // how.navigating: a route change closes it (closeAllOverlays).
+  closeTransition?: ((panel: HTMLElement, finalizeHide: () => void, how: { navigating: boolean }) => void) | null;
+  // A route change lets the exit animation play to its end over the incoming view instead of hiding the panel at once
+  // (the small layout's drop-down calendar, ADR-058 §3). Default false.
+  exitOverNavigation?: boolean;
 }
 
 export interface OverlayController {

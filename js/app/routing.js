@@ -486,7 +486,8 @@ async function route(opts) {
   // PR5b / ADR-032): scrims, focus traps, body scroll locks and focus
   // restoration all unwind consistently, and animated-dismiss panels (cite
   // sheet / drawer) are force-hidden so they don't linger over the incoming
-  // view. The overlay controller owns the registry, so the router no longer
+  // view — except one made to fold away over it (the small layout's drop-down
+  // calendar, overlay.js `exitOverNavigation`). The overlay controller owns the registry, so the router no longer
   // hardcodes each overlay's id + close fn (was 12 closeIfOpen calls + the
   // settings / chapter popovers). Closing the chapter picker / settings popover
   // on nav also makes the /settings desktop fallback's gear.click() always OPEN.

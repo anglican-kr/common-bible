@@ -25,8 +25,8 @@ from pathlib import Path
 import pytest
 
 from .conftest import (
-    CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, SHOW_ALT_READINGS, emulate_status_bar, open_settings, press_center, pseudo_session,
-    style_in_state,
+    CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, RECORD_FRAMES, SHOW_ALT_READINGS, assert_calendar_folds_over_the_new_screen, emulate_status_bar,
+    open_settings, press_center, pseudo_session, style_in_state,
 )
 
 BASE = "http://localhost:8080"
@@ -2593,8 +2593,8 @@ def _picker_state(page):
 
 def test_title_icon_drops_the_month_calendar_and_a_day_opens_its_lectionary(mobile_context):
     """작은 화면의 전례독서에서 오른쪽 아이콘은 캘린더와 같은 월간 달력을 내린다(ADR-058 §3). 그달의 날 판이 상단 바 아래로 내려오고 지금 보는 날이
-    골라져 있다. 뒤를 가리지 않고 전례독서를 달력의 높이만큼 밀어 낸다(사용자 결정 2026-11-28). 날을 고르면 달력이 올라가고 그날의 전례독서가
-    열리며(고른 전례일과 독서 세트는 남기지 않는다), 새 화면은 밀려나 있지 않고 포커스는 새 화면의 아이콘으로 돌아온다. 오늘은 날짜 없이
+    골라져 있다. 뒤를 가리지 않고 전례독서를 달력의 높이만큼 밀어 낸다(사용자 결정 2026-11-28). 날을 고르면 그날의 전례독서가 열리고(고른
+    전례일과 독서 세트는 남기지 않는다), 새 화면은 처음부터 제자리에 그리며 달력만 그 위에서 접혀 올라간다. 포커스는 새 화면의 아이콘으로 돌아온다. 오늘은 날짜 없이
     /lectionary다. 달력이 열린 동안 아이콘을 다시 누르면 닫힌다."""
     page = mobile_context.new_page()
     page.clock.set_fixed_time(datetime.datetime(2026, 11, 17, 12))
@@ -2612,10 +2612,11 @@ def test_title_icon_drops_the_month_calendar_and_a_day_opens_its_lectionary(mobi
     pushed = page.evaluate("""() => ({ scrim: document.querySelectorAll('.cal-picker-scrim').length, inert: document.getElementById('app').inert,
         push: new DOMMatrixReadOnly(getComputedStyle(document.getElementById('app')).transform).m42 - document.querySelector('.cal-picker').offsetHeight })""")
     assert pushed["scrim"] == 0 and pushed["inert"] is False and abs(pushed["push"]) < 0.5, pushed
+    page.evaluate(RECORD_FRAMES)
     press_center(page, ".cal-picker a[href='/lectionary/2027-05-10']")
     page.wait_for_url(f"{BASE}/lectionary/2027-05-10")
     page.wait_for_selector("#page-title .lect-date time[datetime='2027-05-10']")
-    page.wait_for_timeout(300)
+    assert_calendar_folds_over_the_new_screen(page, "/lectionary/2027-05-10")
     assert _picker_state(page) is None
     assert page.evaluate("s => document.activeElement === document.querySelector(s)", btn)
     assert page.get_attribute(btn, "aria-expanded") == "false"

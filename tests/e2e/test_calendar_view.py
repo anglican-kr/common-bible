@@ -30,6 +30,8 @@ from .conftest import (
     emulate_status_bar,
     press_center,
     RECORD_ANNOUNCEMENTS,
+    RECORD_FRAMES,
+    assert_calendar_folds_over_the_new_screen,
 )
 
 BASE = "http://localhost:8080"
@@ -1882,7 +1884,8 @@ def test_a_day_in_the_dropped_calendar_moves_the_list_below_and_keeps_it_open(mo
 
 def test_the_dropped_calendar_follows_the_list_scrolled_below_it(mobile_context):
     """달력이 열린 동안에도 밀려난 목록을 스크롤할 수 있고, 맨 위 줄이 바뀌면 달력의 지금 보는 날이 그 줄의 날로, 다른 달이면 그 달로 바뀐다
-    (ADR-058 §3). 목록을 누른다고 달력이 닫히지는 않는다. 줄을 누르면 그날의 전례독서로 가고, 달력은 닫히며 새 화면은 밀려나 있지 않다."""
+    (ADR-058 §3). 목록을 누른다고 달력이 닫히지는 않는다. 줄을 누르면 그날의 전례독서로 간다. 새 화면은 처음부터 상단 바 아래 제자리에 그리고,
+    달력만 그 위에서 접혀 올라간다(사용자 결정 2026-11-28)."""
     page = mobile_context.new_page()
     _freeze_today(page)
     _open_list(page, "calendar/list/2027-02-24")
@@ -1907,10 +1910,11 @@ def test_the_dropped_calendar_follows_the_list_scrolled_below_it(mobile_context)
     row = page.evaluate("""() => { const p = document.querySelector('.cal-picker').getBoundingClientRect().bottom + 120;
         const a = [...document.querySelectorAll('.cal-list a.cal-row')].find((r) => r.getBoundingClientRect().top > p);
         const r = a.getBoundingClientRect(); return { href: a.getAttribute('href'), x: r.left + r.width / 2, y: r.top + 10 }; }""")
+    page.evaluate(RECORD_FRAMES)
     page.mouse.click(row["x"], row["y"])
     page.wait_for_url(f"{BASE}{row['href']}")
     page.wait_for_selector(".lect-head")
-    page.wait_for_timeout(300)
+    assert_calendar_folds_over_the_new_screen(page, row["href"])
     assert _picker(page) is None
     assert page.evaluate("[getComputedStyle(document.getElementById('app')).transform, document.documentElement.classList.contains('cal-drop')]") == ["none", False]
 
