@@ -1,4 +1,5 @@
 ---
+pr: 680
 date: 2026-11-28
 branch: fix/deploy-dev-submodule
 title: "fix: dev 배포 CI가 데이터 서브모듈을 받지 못하던 것"
