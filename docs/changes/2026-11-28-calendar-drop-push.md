@@ -55,6 +55,7 @@ pr: 681
 - `docs/topics/routing.md` 「컴포넌트와 뷰 층 모듈화」: 오버레이 제어기의 `modal`, `onNavigateAway`, 한 번에 한 층
 - `docs/topics/design-system.md` pitfalls §44: 자르기와 옮기기가 맞물리는 가장자리를 바탕으로 덮는 사례와 규칙
 - `docs/decisions/038-calendar-lectionary-ui.md` §3 「날짜 이동 줄」: 「오늘」은 늘 맨 위부터
+- `docs/decisions/038-calendar-lectionary-ui.md` §2 「날짜 고르기」: 큰 화면 팝오버의 날 판도 전례색 막대와 요일 아래의 선 하나. 「검토한 대안 — 날짜 고르기」 J, K
 - `docs/topics/liturgical.md` 「캘린더 탭과 상단 바」: 「오늘」은 늘 맨 위부터
 - `DESIGN.md` 「캘린더 날짜 고르기」: 뒤 가림을 없애고 화면을 밀어 내는 것, 둥글리지 않는 아래 모서리와 없앤 그림자, 없앤 「닫기」, 요일 아래의 선 하나, 전례색 막대
 - `DESIGN.md` 「캘린더 목록」, `docs/topics/liturgical.md` 「캘린더 목록 보기」: 오늘 날짜 칸의 중립 차콜, 날짜 칸의 덩어리와 같은 간격, 둘 이상의 색은 원
@@ -78,3 +79,12 @@ pr: 681
 - ADR-060 §2가 오늘 날짜 칸을 짙은 남색이라고 적고 있었다. 중립 차콜로 고치고 남색을 「검토한 대안」에 남겼다(리뷰가 고침).
 - 달력이 열린 동안 키보드로 상단 바의 단추에 가면 페이지가 크게 튀었다(전례독서에서 900px에서 480px로). 1회차에 키보드 포커스가 달력에 가리지 않게 위쪽 스크롤 여백에 달력의 높이를 더했는데, 상단 바의 단추는 그 여백 안에 있어 브라우저가 단추를 가려진 것으로 보고 스크롤했다(known-issues §56과 같은 까닭). 늘린 여백을 포커스가 밀려난 화면(#app) 안에 있을 때만 쓰게 했다(`html.cal-drop:has(main#app:focus-within)`). 밀려난 화면으로 Tab하면 포커스를 받은 요소(인용 칩)가 달력 바로 아래에 보인다. e2e `test_keyboard_focus_with_the_calendar_open_neither_jumps_nor_hides`.
 - 새 e2e 셋은 모두 고치기 전 코드에서 실패하고 고친 코드에서 통과한다. 날짜 고르기, 「오늘」, 날짜 칸, 인용과 주석을 다루는 e2e 79건 통과. 유닛 2005건, 타입 검사 통과.
+
+3회차 — `/code-review high --fix`(2026-11-28). 세 건을 고쳤다. 툴팁을 고친 뒤 그 둘레를 확인하다 같은 까닭의 버그 하나와 바뀐 결정을 따르지 않던 시험 하나를 더 찾아 고쳤다.
+
+- 달력을 연 채 밀려난 전례독서에서 주석 툴팁을 열면, 툴팁이 어절 위의 자리에 열려 달력에 가렸다. 툴팁은 상단 바의 아래 끝까지만 피했고, 달력(층 71)과 그 뒤의 바탕(층 19)이 툴팁(층 15)보다 위다. 작은 화면에서 달력이 열려 있으면 툴팁이 피할 자리를 달력의 아래 끝까지로 했다(citations.js `_positionNoteTooltip`) e2e `test_note_tooltip_opens_below_the_dropped_calendar_not_under_it`.
+- ADR-038 §2가 큰 화면 팝오버의 날 판을 전례색 점과 주 사이의 선으로 적고 있었다. 막대와 요일 아래의 선 하나로 고치고 버린 두 안을 「검토한 대안」에 남겼다.
+- `docs/topics/routing.md`의 「inert」를 역따옴표로 묶고 한국어 이름을 앞에 두었다.
+- 툴팁이 열린 채 아이콘으로 달력을 열거나 닫으면, 툴팁이 어절에서 떨어져 남았다. 열면 달력 밑에 가리고, 닫으면 어절이 화면 위쪽으로 올라간 뒤에도 그 자리에 떠 다른 줄을 덮었다(390px에서 어절 100px, 툴팁 454px). 툴팁은 창에 고정된 자리라 스크롤과 창 크기만 따라가는데, 달력은 화면을 옮기기로 밀어 스크롤이 일어나지 않는다. 아이콘을 누르는 것은 툴팁 바깥을 누르는 것이지만, 아이콘의 그림(SVG)을 누르면 citations.js의 바깥 누르기 처리가 HTML 요소만 보아 닫지 않는다. 달력이 화면을 밀거나 올릴 때(`pushScreen`, 움직임 없이 닫을 때의 `settlePush`, 달력의 높이가 바뀔 때) 툴팁을 닫는다(calendar.js `dropNoteTooltip`). e2e `test_note_tooltip_closes_when_the_calendar_moves_the_screen`.
+- 원으로 바꾼 뒤 골라 돌린 시험에 들지 않았던 `test_two_colours_of_the_saints_are_two_bars_one_above_the_other`가 색이 둘이면 막대 둘을 위아래로 둔다는 옛 결정을 보고 있어 실패했다. 사용자 결정(2026-11-28)대로 원 둘이 한 줄에 나란히 있는지 보도록 고치고 이름을 `test_two_colours_of_the_saints_are_two_circles_in_one_row`로 바꿨다.
+- 새 e2e 둘은 고치기 전 코드에서 실패하고 고친 코드에서 통과한다. 유닛 2005건, 타입 검사 통과.
