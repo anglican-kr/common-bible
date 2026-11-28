@@ -67,7 +67,7 @@ DATA_CACHE와 AUDIO_CACHE는 이제 번호 없는 고정 이름(`"data"`, `"audi
 - 새로 만든 `sw-version.js`(한 줄짜리 `self.APP_VERSION = "X.Y.Z";`)
 - `sw.js`가 `importScripts('/sw-version.js')`로 받아 `SHELL_CACHE = "shell-" + self.APP_VERSION`을 만든다.
 - importScripts로 불러온 파일도 서비스 워커 업데이트의 바이트 비교 검사 대상이다(Chrome 78+/FF/Safari 14+). 그래서 APP_VERSION 한 줄을 바꾸면 서비스 워커가 저절로 업데이트된다.
-- 배포한 빌드의 `version.json` 사본에는 앱 커밋과 데이터 커밋이 더 있고, `sw-version.js` 사본의 `APP_VERSION`은 빌드 식별자(`X.Y.Z-<앱 커밋>`)다(ADR-052 §1, 2026-11-28). 저장소의 두 파일은 버전만 담는다. 그래서 서비스 워커는 버전을 올리거나 앱 파일이 바뀐 빌드를 낼 때 새로 설치되고, 데이터만 낸 배포에서는 그대로다.
+- 배포한 빌드의 `version.json` 사본에는 앱 커밋과 데이터 커밋이 더 있고, `sw-version.js` 사본의 `APP_VERSION`은 빌드 식별자(`X.Y.Z-<앱 커밋>`)다(ADR-052 §1). 저장소의 두 파일은 버전만 담는다. 그래서 서비스 워커는 버전을 올리거나 앱 파일이 바뀐 빌드를 낼 때 새로 설치되고, 데이터만 낸 배포에서는 그대로다.
 
 `scripts/release.py`를 다시 쓴다.
 - 인자는 `patch | minor | major | X.Y.Z` 하나뿐이다.

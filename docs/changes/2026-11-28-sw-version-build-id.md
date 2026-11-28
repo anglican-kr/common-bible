@@ -31,3 +31,4 @@ title: "fix: 같은 버전의 새 앱 빌드를 기기가 업데이트로 알아
 - `docs/decisions/021-pwa-versioning-content-hash.md` §3: 서비스 워커가 새로 설치되는 때
 - `docs/topics/cache-release.md` 「결정」: 배포 빌드의 `sw-version.js`
 - `docs/architecture.md`: 셸 캐시 이름의 예
+- `docs/decisions/015-storage-strategy.md`: 캐시 표의 셸 캐시 이름
