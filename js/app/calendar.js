@@ -1071,7 +1071,9 @@ function showDateInList(date) {
   let list = activeList;
   if (!list?.root.isConnected || list.isStale()) return false;
   if (list.root.querySelector(`li[data-date="${date}"]`)) scrollToRow(date);
-  else list = drawList(date, list.today, list.rowOf, list.isStale);
+  // 그려 둔 줄이어도 그 뒤의 줄이 모자라면(목록의 아래 끝 가까이) 스크롤이 끝에 막혀 그 줄이 맨 위에 오지 못한다. 그때도 그날의 줄을 맨 위에 두고
+  // 다시 그린다. 그러지 않으면 아래에서 맨 위 줄로 적는 날이 고른 날이 아니다
+  if (rowUnderBar(list.root)?.dataset.date !== date) list = drawList(date, list.today, list.rowOf, list.isStale);
   // 다시 그린 목록은 그날의 달과 날을 이미 적어 두었으므로, 비우고 다시 잰다
   list.month = "";
   list.top = "";
@@ -1160,7 +1162,10 @@ function ensurePicker() {
       cancelClosing();
       panel.setAttribute("aria-modal", String(large.matches));
       placePicker();
+      // 큰 화면의 팝오버는 뒤를 막으므로 그 뒤의 주석 툴팁도 닫는다. 남겨 두면 Esc가 팝오버보다 가려진 툴팁을 먼저 닫는다(app.js). 제목 단추를
+      // 누르는 것이 툴팁 바깥을 누르는 것이라 대개 이미 닫혀 있지만, 그 처리(citations.js)는 HTML 요소를 누른 것만 보므로 여기서도 닫아 둔다
       if (!large.matches) pushScreen(true);
+      else dropNoteTooltip();
       requestAnimationFrame(() => {
         if (overlay.isOpen) focusInPicker(pickerFocusTarget());
       });
