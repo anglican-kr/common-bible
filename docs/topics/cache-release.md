@@ -51,8 +51,16 @@
 - **설정 화면을 버전보다 먼저 그리면 버전이 도착한 뒤 줄을 채운다.** 설정 화면에서 앱을 열거나 새로 고치면 `loadVersion()`이 끝나기 전에 그려진다. 전에는 이때 버전 없이 "공동번역성서"만 남았다(2026-11-23 e2e에서 발견).
 - **pre-release를 내면 CI가 dev.anglican.kr에 올린다.** 서버 저장소의 `prerelease.sh`가 빌드 식별자로 태그를 달고 pre-release를 만들면, `deploy-dev.yml`이 `deploy.sh dev-ci`로 그 태그를 올린다. 식별자가 태그 이름과 다르면 빌드하기 전에 멈춘다(2026-11-28). 순서는 `docs/workflow.md` "릴리스"에 있다.
 
+### 앱과 데이터를 따로 배포하기 (ADR-061)
+
+- **`version.json`에 `data_formats`가 있다.** 이 앱이 읽을 수 있는 데이터 형식 번호의 목록이다(지금 `[1]`). 데이터 저장소의 `data-version.json`이 데이터의 형식 번호(`format`)를 적고, 배포 스크립트가 둘을 견준다(ADR-061 §2, §4). `release.py`는 버전만 바꾸고 이 칸은 그대로 둔다(`write_version_json`).
+- **`books.json`과 `search-meta.json`은 운영에서 캐시의 사본을 먼저 내고 뒤에서 새로 받는다**(`sw.js`의 `handleShellDataRefresh`). 설치 때 셸 캐시에 미리 받는 것은 그대로이고, 뒤에서 받은 파일이 정상(2xx)일 때만 셸 캐시의 사본을 바꾼다. 데이터만 낸 배포 뒤 다음 실행부터 새 파일을 쓴다. dev 호스트는 다른 셸 파일처럼 네트워크 우선이다. 화면 없는 Chromium의 e2e는 서비스 워커를 막고 돌아 이 길을 지나지 않으므로 `sw.test.js`가 블록을 실행해 본다.
+- **dev의 버전 줄은 데이터 커밋을 `/data/data-version.json`의 `commit`에서 읽는다**(`data-fetch.js`의 `fetchDataCommit`). 그 파일이 없거나(전환 전 서버) JSON이 아니면(로컬 서버는 없는 파일에 `index.html`을 낸다) `version.json`의 `data_commit`을 쓴다. 운영은 지금처럼 버전만 보인다.
+- 서버의 데이터 폴더, `deploy-data.sh`, 데이터 저장소의 CI는 각 저장소에서 따로 만든다. 순서는 ADR-061 §8이고, 남은 것은 아래 「남은 일」에 있다.
+
 ## 결정
 
+- ADR-061 "앱과 데이터를 따로 배포하고, 데이터 형식 번호로 둘을 맞춘다"
 - ADR-052 "배포한 빌드에 앱과 데이터의 커밋을 적고, 운영에 내기 전에 pre-release를 만든다"
 - ADR-021 「PWA 버전 식별자를 콘텐츠 해시 매니페스트로」
 - ADR-001 「SPA 아키텍처 선택」(오프라인 우선)
@@ -70,7 +78,7 @@
 
 | 변경 대상 | 무효화 방식 | 호출/자동화 |
 |-----------|------------|-------------|
-| 셸 (JS/CSS/HTML/icons + `books.json`·`search-meta.json`·매니페스트 2종) | `SHELL_CACHE` 이름 bump (= `"shell-" + APP_VERSION`) | `release.py patch`가 `version.json`과 `sw-version.js`를 한 줄씩 갱신. 배포 빌드에서는 앱 커밋이 바뀌어도 이름이 바뀐다(ADR-052 §1) |
+| 셸 (JS/CSS/HTML/icons + `books.json`·`search-meta.json`·매니페스트 2종) | `SHELL_CACHE` 이름 bump (= `"shell-" + APP_VERSION`). `books.json`과 `search-meta.json`은 운영에서 뒤에서 새로 받아 사본을 바꾸고, 매니페스트 2종은 네트워크 우선이라 데이터만 낸 배포에서도 바뀐다(ADR-061 §6) | `release.py patch`가 `version.json`과 `sw-version.js`를 한 줄씩 갱신. 배포 빌드에서는 앱 커밋이 바뀌어도 이름이 바뀐다(ADR-052 §1) |
 | 본문 (`/data/bible/*`) 또는 검색 인덱스 (`search-{ot,nt,dc,lit}.json`) | 항목마다 처음 쓸 때 무효화 (콘텐츠 해시 매니페스트 비교) | `common-bible-data` CI가 `bible-manifest.json`을 자동으로 갱신하고, 앱이 시작할 때 `js/manifest-sync.js`가 처리 |
 | 오디오 mp3 | 항목마다 처음 쓸 때 무효화 | 위와 같다 (`audio-manifest.json`) |
 
@@ -93,6 +101,7 @@ DATA_CACHE와 AUDIO_CACHE의 이름은 더 이상 올리지 않는다(`"data"`, 
 
 ## 남은 일
 
+- **앱과 데이터를 따로 배포하는 전환**(ADR-061 §8). 이 저장소의 준비(`data_formats`, 셸 데이터 갱신, 버전 줄)를 운영에 낸 뒤, 데이터 저장소의 `data-version.json`과 CI, 서버 저장소의 `deploy-data.sh`와 nginx 설정을 적용한다. 전환을 마치면 저장소의 `sitemap.xml`과 `scripts/build_sitemap.py`를 지우고, CLAUDE.md 「데이터 수정과 릴리스」와 `workflow.md` 「릴리스」를 새 순서로 고치고, ADR-061의 상태를 구현 완료로 바꾼다.
 - **known-issues §6.1** **서비스 워커 설치와 오프라인 동작은 확인하지 못했다.** 화면 없이 돌리는 테스트용 브라우저(헤드리스 Chromium)에서는 파일을 동시에 10개 넘게 받는 설치 단계가 멈춰서(main의 `sw.js`도 같다) 브라우저로 볼 수 없었다. 설치 때 받을 파일(`SHELL_FILES`) 54개가 모두 정상(200)으로 응답하는 것만 curl로 확인했다. 배포 전에 실기기에서 한 번 확인한다.
   - **오프라인 저장이 서비스 워커를 거치는 길은 dev에서 확인했다**(2026-11-18, `bible-2.1.0-caf6627`). 화면 없는 Chromium의 e2e는 서비스 워커를 막고 돌려 이 길을 지나지 않아서, dev에서 화면 없는 Chromium에 아이폰 사용자 에이전트를 주고 따로 확인했다. 그때의 파일 1,506개를 5.1초에 모두 받았고, 크기 목록 `bible-sizes.json`은 셸 캐시가 아니라 DATA_CACHE에 있었다. 인터넷을 끊은 뒤 요한 묵시록 22장, 마카베오하 15장, 검색 「사랑」(709건), 캘린더, 2027-03-21의 전례독서가 열렸다. `navigator.storage.persisted()`는 false였다. 화면 없는 브라우저는 오래 보관을 허락하지 않으므로 예상한 값이다.
   - **아이폰에서 오프라인 저장을 켜고 내려받기가 끝나는 것을 확인했다**(사용자 실기기 2026-11-19). 서비스 워커가 실기기에서 설치되고 파일을 받는 것은 이것으로 확인됐다. 인터넷을 끊고 여는 확인은 아직 듣지 못해 이 항목을 닫지 않는다.

@@ -1416,6 +1416,23 @@ def test_version_line_shows_the_build_ids_on_a_dev_host_without_overflow_at_320p
         ctx.close()
 
 
+def test_version_line_reads_the_data_commit_from_the_data_build(browser):
+    """데이터는 앱과 따로 배포한다(ADR-061 §6). 데이터 커밋은 데이터 빌드의 data-version.json이 알려 주고, 앱 빌드의
+    version.json에 적힌 값보다 앞선다."""
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.route("**/version.json", _fulfill_json('{"version": "2.3.0", "data_formats": [1], "app_commit": "9985216"}'))
+    ctx.route("**/data/data-version.json", _fulfill_json('{"format": 1, "commit": "82c056b"}'))
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/settings")
+        link = _version_link(page)
+        page.wait_for_function("() => /82c056b/.test(document.querySelector('.settings-view .settings-about').textContent)")
+        assert link.inner_text().strip() == "공동번역성서 2.3.0-9985216 · 데이터 82c056b"
+    finally:
+        ctx.close()
+
+
 def test_version_line_without_build_ids_shows_the_version_and_its_release(browser):
     """저장소의 version.json(로컬 서버가 내주는 파일)에는 빌드 식별자가 없다. 그러면 운영과 같이 버전과 그 Release 링크다."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)

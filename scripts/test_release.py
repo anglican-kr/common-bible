@@ -72,5 +72,14 @@ class WriteSwVersionTest(unittest.TestCase):
             release.write_sw_version("// no version here\n", "1.0.0")
 
 
+class WriteVersionJsonTest(unittest.TestCase):
+    def test_replaces_only_the_version(self):
+        out = release.write_version_json('{"version": "2.2.9", "data_formats": [1]}\n', "2.3.0")
+        self.assertEqual(out, '{"version": "2.3.0", "data_formats": [1]}\n')
+
+    def test_version_only_file(self):
+        self.assertEqual(release.write_version_json('{"version": "1.0.0"}', "1.0.1"), '{"version": "1.0.1"}\n')
+
+
 if __name__ == "__main__":
     unittest.main()

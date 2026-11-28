@@ -320,3 +320,78 @@ test("bible-manifest 가 추적하는 모든 접두사가 DATA_CACHE 로 라우�
     "매니페스트가 추적하는데 DATA_CACHE 로 안 가는 경로 — "
     + `해시가 바뀌어도 무효화되지 않는다: ${misrouted}`);
 });
+
+// ── 데이터만 낸 배포에서도 바뀌는 셸 데이터 (ADR-061 §6) ─────────────────────
+//
+// books.json과 search-meta.json은 설치 때 셸 캐시에 미리 받는다. 데이터를 앱과 따로 배포하면 서비스 워커가 새로
+// 설치되지 않으므로, 운영에서 이 둘은 캐시의 사본을 먼저 내고 뒤에서 새로 받아 그 사본을 바꾼다. 아래는
+// `// ── BEGIN/END SHELL_DATA_REFRESH ──` 블록을 vm으로 실행해 그 동작을 본다(표시는 지우지 않는다).
+
+function loadShellDataRefresh({ cached = null, network }) {
+  const stored = [];
+  const ctx = vm.createContext({
+    SHELL_CACHE: "shell-x",
+    Set,
+    Request: class { constructor(req, init) { this.url = req.url; this.init = init; } },
+    fetch: async (req) => network(req),
+    caches: {
+      match: async () => cached,
+      open: async (name) => ({ put: async (req, res) => { stored.push({ name, url: req.url, body: res.body }); } }),
+    },
+  });
+  vm.runInContext(extractBlock("SHELL_DATA_REFRESH", SW_SOURCE, "sw.js")
+    + "\nglobalThis.__paths = SHELL_DATA_REFRESH_PATHS; globalThis.__handle = handleShellDataRefresh;", ctx);
+  const run = async (url) => {
+    let response;
+    const waits = [];
+    ctx.__handle({
+      request: { url },
+      respondWith: (p) => { response = p; },
+      waitUntil: (p) => { waits.push(p); },
+    });
+    const res = await response;
+    await Promise.all(waits);
+    return res;
+  };
+  return { paths: ctx.__paths, run, stored };
+}
+
+const fakeRes = (body, ok = true) => ({ ok, body, clone() { return fakeRes(body, ok); } });
+
+test("셸 데이터 갱신: books.json과 search-meta.json이 대상이고, 설치 때 셸 캐시에 미리 받는다", () => {
+  const { paths } = loadShellDataRefresh({ network: async () => fakeRes("new") });
+  assert.deepEqual([...paths].sort(), ["/data/books.json", "/data/search-meta.json"]);
+  for (const p of paths) {
+    assert.ok(SHELL_SET.has(p), `${p} must stay in SHELL_FILES so the first offline launch has it`);
+    assert.equal(cacheNameFor(p), "shell-x", `${p} lives in SHELL_CACHE, where the refresh stores it`);
+  }
+});
+
+test("셸 데이터 갱신: 캐시의 사본을 먼저 내고, 새로 받은 파일로 셸 캐시를 바꾼다", async () => {
+  const h = loadShellDataRefresh({ cached: fakeRes("old"), network: async () => fakeRes("new") });
+  const res = await h.run("https://bible.anglican.kr/data/books.json");
+  assert.equal(res.body, "old");
+  assert.deepEqual(h.stored, [{ name: "shell-x", url: "https://bible.anglican.kr/data/books.json", body: "new" }]);
+});
+
+test("셸 데이터 갱신: 받기에 실패하거나 서버가 오류를 내면 사본을 그대로 둔다", async () => {
+  for (const network of [async () => { throw new TypeError("offline"); }, async () => fakeRes("error page", false)]) {
+    const h = loadShellDataRefresh({ cached: fakeRes("old"), network });
+    assert.equal((await h.run("https://bible.anglican.kr/data/search-meta.json")).body, "old");
+    assert.deepEqual(h.stored, []);
+  }
+});
+
+test("셸 데이터 갱신: 사본이 없으면 네트워크의 응답을 내고 저장한다", async () => {
+  const h = loadShellDataRefresh({ network: async () => fakeRes("new") });
+  assert.equal((await h.run("https://bible.anglican.kr/data/books.json")).body, "new");
+  assert.equal(h.stored.length, 1);
+});
+
+test("셸 데이터 갱신: 운영에서만 쓰고, dev 호스트는 다른 셸 파일처럼 네트워크 우선이다", () => {
+  const handler = SW_SOURCE.slice(SW_SOURCE.indexOf('self.addEventListener("fetch"'));
+  const refresh = handler.indexOf("if (!IS_DEV && SHELL_DATA_REFRESH_PATHS.has(pathname))");
+  assert.ok(refresh > 0, "the fetch handler must send these paths to handleShellDataRefresh outside dev hosts");
+  assert.ok(refresh < handler.indexOf("const targetCache = cacheNameFor(pathname);"),
+    "the refresh must come before the cache-first branch, which would otherwise serve the stale copy");
+});
