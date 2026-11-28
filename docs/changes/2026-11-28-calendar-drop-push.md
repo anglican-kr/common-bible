@@ -51,7 +51,7 @@ pr: 681
 ## 갱신한 문서
 
 - `docs/decisions/058-calendar-list-only.md` §3: 두 층과 밀려나는 화면, 칸의 전례색 막대, 다른 화면으로 갈 때 접혀 올라가는 달력, 둥글리지 않는 아래 모서리와 없앤 그림자, 날을 눌러도 열린 채인 달력, 닫는 방법. 「검토한 대안」 2건
-- `docs/topics/liturgical.md` 「캘린더 날짜 고르기」: 밀려난 화면, 덮는 바탕, 목록에서 날 고르기, 포커스, 요일 아래의 선 하나, 전례색 막대, 포커스가 밀려난 화면 안일 때만 늘리는 스크롤 여백, 툴팁과 달력의 Esc
+- `docs/topics/liturgical.md` 「캘린더 날짜 고르기」: 밀려난 화면, 덮는 바탕, 목록에서 날 고르기, 포커스, 요일 아래의 선 하나, 전례색 막대, 포커스가 밀려난 화면 안일 때만 늘리는 스크롤 여백, 툴팁과 달력의 Esc, 달력이 열린 동안 툴팁의 자리와 화면을 옮길 때 닫는 툴팁, 목록의 아래 끝 가까이의 날
 - `docs/topics/routing.md` 「컴포넌트와 뷰 층 모듈화」: 오버레이 제어기의 `modal`, `onNavigateAway`, 한 번에 한 층
 - `docs/topics/design-system.md` pitfalls §44: 자르기와 옮기기가 맞물리는 가장자리를 바탕으로 덮는 사례와 규칙
 - `docs/decisions/038-calendar-lectionary-ui.md` §3 「날짜 이동 줄」: 「오늘」은 늘 맨 위부터
@@ -82,7 +82,7 @@ pr: 681
 
 3회차 — `/code-review high --fix`(2026-11-28). 세 건을 고쳤다. 툴팁을 고친 뒤 그 둘레를 확인하다 같은 까닭의 버그 하나와 바뀐 결정을 따르지 않던 시험 하나를 더 찾아 고쳤다.
 
-- 달력을 연 채 밀려난 전례독서에서 주석 툴팁을 열면, 툴팁이 어절 위의 자리에 열려 달력에 가렸다. 툴팁은 상단 바의 아래 끝까지만 피했고, 달력(층 71)과 그 뒤의 바탕(층 19)이 툴팁(층 15)보다 위다. 작은 화면에서 달력이 열려 있으면 툴팁이 피할 자리를 달력의 아래 끝까지로 했다(citations.js `_positionNoteTooltip`) e2e `test_note_tooltip_opens_below_the_dropped_calendar_not_under_it`.
+- 달력을 연 채 밀려난 전례독서에서 주석 툴팁을 열면, 툴팁이 어절 위의 자리에 열려 달력에 가렸다. 툴팁은 상단 바의 아래 끝까지만 피했고, 달력(층 71)과 그 뒤의 바탕(층 19)이 툴팁(층 15)보다 위다. 작은 화면에서 달력이 열려 있으면 툴팁이 피할 자리를 달력의 아래 끝까지로 했다(citations.js `_positionNoteTooltip`). e2e `test_note_tooltip_opens_below_the_dropped_calendar_not_under_it`.
 - ADR-038 §2가 큰 화면 팝오버의 날 판을 전례색 점과 주 사이의 선으로 적고 있었다. 막대와 요일 아래의 선 하나로 고치고 버린 두 안을 「검토한 대안」에 남겼다.
 - `docs/topics/routing.md`의 「inert」를 역따옴표로 묶고 한국어 이름을 앞에 두었다.
 - 툴팁이 열린 채 아이콘으로 달력을 열거나 닫으면, 툴팁이 어절에서 떨어져 남았다. 열면 달력 밑에 가리고, 닫으면 어절이 화면 위쪽으로 올라간 뒤에도 그 자리에 떠 다른 줄을 덮었다(390px에서 어절 100px, 툴팁 454px). 툴팁은 창에 고정된 자리라 스크롤과 창 크기만 따라가는데, 달력은 화면을 옮기기로 밀어 스크롤이 일어나지 않는다. 아이콘을 누르는 것은 툴팁 바깥을 누르는 것이지만, 아이콘의 그림(SVG)을 누르면 citations.js의 바깥 누르기 처리가 HTML 요소만 보아 닫지 않는다. 달력이 화면을 밀거나 올릴 때(`pushScreen`, 움직임 없이 닫을 때의 `settlePush`, 달력의 높이가 바뀔 때) 툴팁을 닫는다(calendar.js `dropNoteTooltip`). e2e `test_note_tooltip_closes_when_the_calendar_moves_the_screen`.
