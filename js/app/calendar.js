@@ -1001,6 +1001,10 @@ function placePicker() {
     p.backing.style.top = `${bar}px`;
     // 화면이 낮으면 판이 화면 아래까지 온다. 홈 표시줄의 자리는 비운다
     p.panel.style.maxHeight = `calc(${Math.max(window.innerHeight - top - PICKER_POPOVER_GAP, 0)}px - env(safe-area-inset-bottom, 0px))`;
+    // 밀어 낸 길이는 상단 바의 아래 끝의 소수 자리에 따라 달라진다(`dropLength`). 상단 바만 바뀌면(다시 그리거나 창 크기가 바뀔 때) 판의 크기는 그대로라
+    // ResizeObserver가 부르지 않으므로 여기서도 다시 잰다
+    const root = document.documentElement;
+    if (root.classList.contains("cal-drop")) root.style.setProperty(DROP_HEIGHT_VAR, `${dropLength(p.panel)}px`);
     return;
   }
   const r = s.trigger.getBoundingClientRect();
@@ -1020,8 +1024,8 @@ function clearPickerPlace(panel) {
 }
 
 // ── 작은 화면의 달력이 밀어 낸 화면(ADR-058 §3, 사용자 결정 2026-11-28) ──
-// 상단 바와 달력이 맨 위 층이고, 그 아래 층인 화면(#app)은 달력이 내려오면 달력의 높이만큼 아래로 밀려난다. 옮기기(transform)라 문서의 배치, 스크롤 값,
-// 스크롤 고정은 그대로다. 그래서 맨 위 줄은 여전히 배치에서 상단 바 바로 아래에 있는 줄이고, 화면에서는 그 줄이 달력 바로 아래에 보인다. 줄의 자리를
+// 상단 바와 달력이 맨 위 층이고, 그 아래 층인 화면(#app)은 달력이 내려오면 달력 맨 아래 구분선의 위 끝까지 아래로 밀려난다(`dropLength`).
+// 옮기기(transform)라 문서의 배치, 스크롤 값, 스크롤 고정은 그대로다. 그래서 맨 위 줄은 여전히 배치에서 상단 바 바로 아래에 있는 줄이고, 화면에서는 그 줄이 달력 바로 아래에 보인다. 줄의 자리를
 // 화면에서 잴 때(getBoundingClientRect)는 밀어 낸 길이가 더해져 있으므로 `pushedBy`를 더해 견준다. 움직임은 CSS의 전환(transition)이 달력이 펼쳐지고
 // 접히는 것과 같은 시간과 속도로 맡는다(CSS `html.cal-drop`).
 

@@ -1474,8 +1474,8 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
 .lect-date > .cal-title-btn::after { content: none; }
 
 /* 내려오는 달력: 상단 바의 아래 끝에서 시작해 높이는 내용만큼이다. 자리(top)와 높이 제한(max-height)은 calendar.js `placePicker`가 상단 바를 재어
-   준다. 뒤를 어둡게 가리지 않고, 그 아래의 화면(#app)을 달력의 높이만큼 밀어 낸다(ADR-058 §3, 사용자 결정 2026-11-28). 상단 바와 달력이 맨 위 층이고
-   밀려난 화면이 그 아래 층이다. 밀어 낸 길이(--cal-drop-h)는 calendar.js `pushScreen`이 달력을 재어 준다. 옮기기(transform)라 문서의 배치와 스크롤
+   준다. 뒤를 어둡게 가리지 않고, 그 아래의 화면(#app)을 달력 맨 아래 구분선의 위 끝까지 밀어 낸다(ADR-058 §3, 사용자 결정 2026-11-28). 상단 바와
+   달력이 맨 위 층이고 밀려난 화면이 그 아래 층이다. 밀어 낸 길이(--cal-drop-h)는 calendar.js `dropLength`가 달력을 재어 준다. 옮기기(transform)라 문서의 배치와 스크롤
    값은 그대로이고, 움직임은 달력이 펼쳐지고 접히는 것과 같은 시간과 속도다. 화면을 옮기면 상단 바에 가려져 있던 줄이 상단 바 아래로 나오는데, 달력과
    그 뒤의 바탕(.cal-picker-backing)이 덮는다. 바탕은 화면과 같은 옮기기로 움직여, 쉴 때는 상단 바 뒤에 있고 아래 끝이 늘 밀려난 화면의 위 끝에 있다.
    좁은 판의 양옆(가로 화면)과 판의 자르기보다 화면의 옮기기가 앞서는 프레임(아이폰 Safari, pitfalls §44)에 그 줄이 비치지 않는다. 달력의 아래

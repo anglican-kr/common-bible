@@ -1943,21 +1943,31 @@ def test_list_icon_drops_the_month_calendar_and_pushes_the_list_below_it(mobile_
 def test_the_stuck_week_label_tucks_under_the_divider_without_a_gap(mobile_context):
     """상단 바의 아래 끝이 소수 자리여도, 밀려난 목록의 고정된 주간 라벨은 달력 맨 아래의 구분선 밑에 틈 없이 들어간다(ADR-058 §3). 전에는 달력의
     높이를 반올림한 만큼 밀어 라벨과 달력 사이에 1px이 안 되는 틈이 생기고, 그 틈으로 상단 바에 가려져 있던 줄의 글자가 비쳤다(사용자 보고
-    2026-11-28). 달력이 줄어 목록이 따라 올라가는 동안에도 화면 위를 덮는 바탕의 아래 끝이 목록의 위 끝에 있다."""
+    2026-11-28). 달력이 열린 채 상단 바의 아래 끝이 바뀌어도(다시 그리거나 창 크기가 바뀔 때) 다시 재어 틈이 생기지 않는다(코드 리뷰 2026-11-28). 달력이
+    줄어 목록이 따라 올라가는 동안에도 화면 위를 덮는 바탕의 아래 끝이 목록의 위 끝에 있다."""
     page = mobile_context.new_page()
     _freeze_today(page)
     _open_list(page, "calendar/list/2027-03-08")
     # 아이폰의 상단 바는 글꼴과 상태 표시줄 때문에 아래 끝이 소수 자리다
-    page.evaluate("() => document.getElementById('sticky-group').style.setProperty('padding-bottom', '0.66px', 'important')")
+    bar_pad = "px => document.getElementById('sticky-group').style.setProperty('padding-bottom', px, 'important')"
+    page.evaluate(bar_pad, "0.3px")
     page.wait_for_timeout(100)
     _open_picker(page)
-    state = page.evaluate("""() => { const p = document.querySelector('.cal-picker'); const line = parseFloat(getComputedStyle(p, '::after').height);
+    measure = """() => { const p = document.querySelector('.cal-picker'); const line = parseFloat(getComputedStyle(p, '::after').height);
         const head = document.querySelector('li[data-date="2027-03-08"]').closest('.cal-week-group').querySelector('.cal-week').getBoundingClientRect();
         return { frac: document.getElementById('sticky-group').getBoundingClientRect().bottom % 1,
                  head: head.top - (p.getBoundingClientRect().bottom - line),
-                 backing: document.querySelector('.cal-picker-backing').getBoundingClientRect().bottom - head.top }; }""")
+                 backing: document.querySelector('.cal-picker-backing').getBoundingClientRect().bottom - head.top }; }"""
+    state = page.evaluate(measure)
     assert 0.1 < state["frac"] < 0.9, state
     assert abs(state["head"]) < 0.01 and abs(state["backing"]) < 0.01, state
+    # 달력이 열린 채 상단 바의 아래 끝만 바뀐다. 판의 크기는 그대로라 판의 ResizeObserver는 부르지 않고, 창 크기 처리가 자리를 다시 잡는다
+    page.evaluate(bar_pad, "0.66px")
+    page.evaluate("() => window.dispatchEvent(new Event('resize'))")
+    page.wait_for_timeout(400)
+    moved = page.evaluate(measure)
+    assert moved["frac"] != state["frac"], (state, moved)
+    assert abs(moved["head"]) < 0.01 and abs(moved["backing"]) < 0.01, moved
     _press(page, ".cal-picker button.cal-picker-title")   # 날 판(다섯 주)에서 달 판(세 줄)으로 줄어든다
     page.wait_for_timeout(60)
     gap = page.evaluate("""() => { const app = document.getElementById('app'); const back = document.querySelector('.cal-picker-backing');
