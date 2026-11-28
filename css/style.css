@@ -1474,8 +1474,8 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
 .lect-date > .cal-title-btn::after { content: none; }
 
 /* 내려오는 달력: 상단 바의 아래 끝에서 시작해 높이는 내용만큼이다. 자리(top)와 높이 제한(max-height)은 calendar.js `placePicker`가 상단 바를 재어
-   준다. 뒤를 어둡게 가리지 않고, 그 아래의 화면(#app)을 달력의 높이만큼 밀어 낸다(ADR-058 §3, 사용자 결정 2026-11-28). 상단 바와 달력이 맨 위 층이고
-   밀려난 화면이 그 아래 층이다. 밀어 낸 길이(--cal-drop-h)는 calendar.js `pushScreen`이 달력을 재어 준다. 옮기기(transform)라 문서의 배치와 스크롤
+   준다. 뒤를 어둡게 가리지 않고, 그 아래의 화면(#app)을 달력 맨 아래 구분선의 위 끝까지 밀어 낸다(ADR-058 §3, 사용자 결정 2026-11-28). 상단 바와
+   달력이 맨 위 층이고 밀려난 화면이 그 아래 층이다. 밀어 낸 길이(--cal-drop-h)는 calendar.js `dropLength`가 달력을 재어 준다. 옮기기(transform)라 문서의 배치와 스크롤
    값은 그대로이고, 움직임은 달력이 펼쳐지고 접히는 것과 같은 시간과 속도다. 화면을 옮기면 상단 바에 가려져 있던 줄이 상단 바 아래로 나오는데, 달력과
    그 뒤의 바탕(.cal-picker-backing)이 덮는다. 바탕은 화면과 같은 옮기기로 움직여, 쉴 때는 상단 바 뒤에 있고 아래 끝이 늘 밀려난 화면의 위 끝에 있다.
    좁은 판의 양옆(가로 화면)과 판의 자르기보다 화면의 옮기기가 앞서는 프레임(아이폰 Safari, pitfalls §44)에 그 줄이 비치지 않는다. 달력의 아래
@@ -1499,7 +1499,7 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
     transform: translateY(var(--cal-drop-h, 0px));
     transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }
-  /* 키보드로 옮긴 포커스가 화면 아래로 밀려난 자리나 달력에 가려진 자리에 가지 않게 한다. 밀려난 화면의 줄은 화면에서 달력의 높이만큼 아래에 있다.
+  /* 키보드로 옮긴 포커스가 화면 아래로 밀려난 자리나 달력에 가려진 자리에 가지 않게 한다. 밀려난 화면의 줄은 화면에서 밀어 낸 길이(--cal-drop-h)만큼 아래에 있다.
      위쪽 여백은 포커스가 밀려난 화면(#app) 안에 있을 때만 늘린다. 상단 바의 단추는 여백 안에 있어, 그 단추로 포커스가 가면 브라우저가 단추를
      가려진 것으로 보고 늘린 만큼 페이지를 스크롤했다(known-issues §56, 코드 리뷰 2026-11-28) */
   html.cal-drop { scroll-padding-bottom: var(--cal-drop-h, 0px); }
@@ -1525,6 +1525,21 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
   /* 화면이 낮으면(휴대폰을 가로로 든 때) 판을 화면 안에 두고 판의 칸만 스크롤한다 */
   display: flex;
   flex-direction: column;
+}
+/* 작은 화면의 달력과 밀려난 화면 사이의 구분선. 상단 바 아래의 선(#app-header::after)처럼 양 끝으로 갈수록 투명해진다(ADR-058 §3, 사용자 결정
+   2026-11-28). 그림자가 아니라 달력의 맨 아래 1px 안에 그린 선이고, 밀려난 화면의 위 끝은 이 선 밑에 들어간다(calendar.js `dropLength`, pitfalls
+   §45). 판의 자르기 안에 있어 다 펼쳐질 때 나타나고 접히기 시작하면 사라진다. 큰 화면의 팝오버는 테두리가 있어 긋지 않는다 */
+@media not all and (min-width: 700px) and (min-height: 600px) {
+  .cal-picker::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--border) 20%, var(--border) 80%, transparent);
+    pointer-events: none;
+  }
 }
 .cal-picker-head { flex-shrink: 0; }
 /* 칸의 포커스 테두리가 스크롤 상자에 잘리지 않게 안쪽 여백을 두고, 같은 크기의 바깥 여백을 음수로 두어 자리는 그대로 둔다 */

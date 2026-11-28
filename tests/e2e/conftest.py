@@ -319,6 +319,15 @@ def open_settings(page):
     return popover
 
 
+# 밀려난 화면(#app)의 위 끝에서 작은 화면 달력의 맨 아래 구분선(.cal-picker::after)의 위 끝까지의 거리. 화면의 위 끝은 구분선 밑에 들어가
+# 0이다(calendar.js `dropLength`, ADR-058 §3). 달력과 화면이 맞닿기만 하면 브라우저가 두 끝을 따로 화면의 점에 맞춰 틈이 비친다(사용자 보고 2026-11-28).
+SCREEN_UNDER_DIVIDER = """() => { const p = document.querySelector('.cal-picker');
+    const line = parseFloat(getComputedStyle(p, '::after').height) || 0;
+    const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
+    const t = getComputedStyle(document.getElementById('app')).transform;
+    return bar + (t === 'none' ? 0 : new DOMMatrixReadOnly(t).m42) - (p.getBoundingClientRect().bottom - line); }"""
+
+
 # 프레임마다 주소, 판이 보이는지, 접히는 중인지, 화면(#app)이 밀려난 길이를 window.__frames에 적는다. 다른 화면으로 가는 순간의 모습을 본다.
 RECORD_FRAMES = """() => { window.__frames = []; const tick = () => { const p = document.querySelector('.cal-picker');
     const t = getComputedStyle(document.getElementById('app')).transform;

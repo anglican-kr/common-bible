@@ -760,7 +760,7 @@ function commitMonthBar(model, view) {
 
 // ── 날짜 고르기(ADR-038 §2 「날짜 고르기」, ADR-058 §3, DESIGN.md §6) ──
 // 큰 화면에서는 상단 바의 달 제목이 여는 팝오버이고, 작은 화면에서는 오른쪽 단추가 상단 바 아래로 내리는 월간 달력이다. 같은 요소를 CSS가 바꾼다.
-// 팝오버는 뒤를 막는다. 작은 화면의 달력은 뒤를 막지 않고, 그 아래의 화면(#app)을 달력의 높이만큼 밀어 낸다. 밀려난 화면은 그대로 스크롤하고 누를 수
+// 팝오버는 뒤를 막는다. 작은 화면의 달력은 뒤를 막지 않고, 그 아래의 화면(#app)을 달력 맨 아래 구분선의 위 끝까지 밀어 낸다(`dropLength`). 밀려난 화면은 그대로 스크롤하고 누를 수
 // 있다(사용자 결정 2026-11-28, `pushScreen`). 전례독서 화면도 같은 판을 연다(lectionary.js `openDatePicker`가 이 모듈의 `openCalendarPicker`를 부른다,
 // 2026-11-18). 판은 한 번에 한 단계만 보인다. 날과 월간의 달은 링크라 고르면 라우터가 그 화면을 그리고(route()가 열린 판을 닫는다), 해와 목록,
 // 전례독서의 달은 단추라 판 안에서 한 단계 아래로 내려간다. 다만 작은 화면의 캘린더 목록에서 날을 고르면 판을 닫지 않고 그 아래 목록을 그날로
@@ -992,12 +992,19 @@ function placePicker() {
   if (!window.matchMedia(LARGE_LAYOUT_QUERY).matches) {
     // 판은 내림으로 잰다. 올림하면 상단 바의 아래 끝(예: 60.6px)과 판 사이에 1px이 안 되는 틈이 생겨 판이 내려오는 동안 선처럼 보였다(사용자
     // 보고 2026-11-27). 판이 상단 바를 1px 안쪽으로 덮는 것은 보이지 않는다
-    const top = Math.max(Math.floor(barBottom()), 0);
+    const bar = Math.max(barBottom(), 0);
+    const top = Math.floor(bar);
     p.panel.style.left = "";
     p.panel.style.top = `${top}px`;
-    p.backing.style.top = `${top}px`;
+    // 바탕은 내림하지 않는다. 바탕의 아래 끝(위 끝과 밀어 낸 길이)이 밀려난 화면의 위 끝(상단 바의 아래 끝과 같은 길이)과 같아야, 달력의 높이가
+    // 바뀌어 화면이 따라가는 동안 둘 사이로 상단 바에 가려져 있던 줄이 비치지 않는다. 바탕의 위 끝은 상단 바 뒤라 보이지 않는다
+    p.backing.style.top = `${bar}px`;
     // 화면이 낮으면 판이 화면 아래까지 온다. 홈 표시줄의 자리는 비운다
     p.panel.style.maxHeight = `calc(${Math.max(window.innerHeight - top - PICKER_POPOVER_GAP, 0)}px - env(safe-area-inset-bottom, 0px))`;
+    // 밀어 낸 길이는 상단 바의 아래 끝의 소수 자리에 따라 달라진다(`dropLength`). 상단 바만 바뀌면(다시 그리거나 창 크기가 바뀔 때) 판의 크기는 그대로라
+    // ResizeObserver가 부르지 않으므로 여기서도 다시 잰다
+    const root = document.documentElement;
+    if (root.classList.contains("cal-drop")) root.style.setProperty(DROP_HEIGHT_VAR, `${dropLength(p.panel)}px`);
     return;
   }
   const r = s.trigger.getBoundingClientRect();
@@ -1017,13 +1024,25 @@ function clearPickerPlace(panel) {
 }
 
 // ── 작은 화면의 달력이 밀어 낸 화면(ADR-058 §3, 사용자 결정 2026-11-28) ──
-// 상단 바와 달력이 맨 위 층이고, 그 아래 층인 화면(#app)은 달력이 내려오면 달력의 높이만큼 아래로 밀려난다. 옮기기(transform)라 문서의 배치, 스크롤 값,
-// 스크롤 고정은 그대로다. 그래서 맨 위 줄은 여전히 배치에서 상단 바 바로 아래에 있는 줄이고, 화면에서는 그 줄이 달력 바로 아래에 보인다. 줄의 자리를
+// 상단 바와 달력이 맨 위 층이고, 그 아래 층인 화면(#app)은 달력이 내려오면 달력 맨 아래 구분선의 위 끝까지 아래로 밀려난다(`dropLength`).
+// 옮기기(transform)라 문서의 배치, 스크롤 값, 스크롤 고정은 그대로다. 그래서 맨 위 줄은 여전히 배치에서 상단 바 바로 아래에 있는 줄이고, 화면에서는 그 줄이 달력 바로 아래에 보인다. 줄의 자리를
 // 화면에서 잴 때(getBoundingClientRect)는 밀어 낸 길이가 더해져 있으므로 `pushedBy`를 더해 견준다. 움직임은 CSS의 전환(transition)이 달력이 펼쳐지고
 // 접히는 것과 같은 시간과 속도로 맡는다(CSS `html.cal-drop`).
 
-/** 달력이 화면을 밀어 낸 길이를 CSS에 알리는 변수. 달력의 높이다. */
+/** 달력이 화면을 밀어 낸 길이를 CSS에 알리는 변수. 값은 `dropLength`다. */
 const DROP_HEIGHT_VAR = "--cal-drop-h";
+
+/**
+ * 화면을 밀어 낼 길이(px): 상단 바의 아래 끝에서 달력 맨 아래 구분선(CSS `.cal-picker::after`)의 위 끝까지. 화면의 맨 위 1px은 구분선 밑에 들어간다.
+ * 두 끝을 맞닿게만 두면 브라우저가 소수 자리의 두 끝을 따로 화면의 점에 맞춰 한 점까지 벌어지고, 그 틈으로 상단 바에 가려져 있던 줄의 글자가
+ * 비쳤다(사용자 보고 2026-11-28). 달력의 위 끝은 상단 바의 아래 끝을 내림한 자리라(`placePicker`) 이 길이는 달력의 높이와 같지 않다. 판은 옮기지
+ * 않으므로(자르기만 움직인다) 펼치는 중에도 다 펼친 판의 아래 끝을 잰다.
+ * @param {HTMLElement} panel
+ */
+function dropLength(panel) {
+  const line = parseFloat(getComputedStyle(panel, "::after").height) || 0;
+  return Math.max(panel.getBoundingClientRect().bottom - line - barBottom(), 0);
+}
 
 /** 작은 화면의 달력이 지금 화면을 밀어 낸 길이(px). 움직이는 중에는 그 순간의 값이다. */
 function pushedBy() {
@@ -1044,7 +1063,7 @@ function finishPushMotion() {
  */
 function pushScreen(on) {
   const root = document.documentElement;
-  if (on && picker) root.style.setProperty(DROP_HEIGHT_VAR, `${picker.panel.offsetHeight}px`);
+  if (on && picker) root.style.setProperty(DROP_HEIGHT_VAR, `${dropLength(picker.panel)}px`);
   root.classList.toggle("cal-drop", on);
   dropNoteTooltip();
 }
@@ -1224,8 +1243,9 @@ function ensurePicker() {
     new ResizeObserver(() => {
       const root = document.documentElement;
       if (!overlay.isOpen || !root.classList.contains("cal-drop")) return;
-      const h = panel.offsetHeight;
-      if (Math.abs(h - (parseFloat(root.style.getPropertyValue(DROP_HEIGHT_VAR)) || 0)) < 1) return;
+      // 1px이 안 되는 차이도 따라간다. 화면의 위 끝이 달력의 아래 끝에서 떨어지면 그 틈이 비친다
+      const h = dropLength(panel);
+      if (Math.abs(h - (parseFloat(root.style.getPropertyValue(DROP_HEIGHT_VAR)) || 0)) < 0.01) return;
       root.style.setProperty(DROP_HEIGHT_VAR, `${h}px`);
       dropNoteTooltip();
     }).observe(panel);
@@ -1282,7 +1302,7 @@ function ensurePicker() {
     }
     overlay.close();
   });
-  // 큰 화면에서 창 크기가 바뀌면 자리를 다시 잡는다. 레이아웃의 경계를 넘으면 아래의 change 처리가 판을 닫는다
+  // 창 크기가 바뀌면 자리를 다시 잡는다. 작은 화면에서는 밀어 낸 길이도 다시 잰다(`placePicker`). 레이아웃의 경계를 넘으면 아래의 change 처리가 판을 닫는다
   window.addEventListener("resize", () => {
     if (overlay.isOpen) placePicker();
   });
