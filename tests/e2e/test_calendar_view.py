@@ -1751,7 +1751,7 @@ def _picker(page):
 
 def test_picker_marks_whole_day_squares_and_one_fading_line_under_the_weekdays(mobile_context):
     """월간 달력은 날을 원이 아니라 칸 전체의 사각형으로 표시한다. 지금 보는 날은 채우고 오늘은 테두리다. 선은 요일 머리와 날짜 사이에 하나만
-    있고 양 끝이 투명해진다. 주와 주 사이에는 선이 없다(사용자 결정 2026-11-28). 판의 위 끝은 상단 바의 아래 끝보다 아래로 떨어지지 않는다(틈이 선처럼 보였다, 사용자 결정 2026-11-27). 뒤를 어둡게 가리지 않는다
+    있고 양 끝이 투명해진다. 주와 주 사이에는 선이 없다. 전례색은 끝이 둥근 짧은 막대이고 날짜와 함께 칸의 가운데에 있다(사용자 결정 2026-11-28). 판의 위 끝은 상단 바의 아래 끝보다 아래로 떨어지지 않는다(틈이 선처럼 보였다, 사용자 결정 2026-11-27). 뒤를 어둡게 가리지 않는다
     (사용자 결정 2026-11-28)."""
     page = mobile_context.new_page()
     _freeze_today(page)
@@ -1771,6 +1771,9 @@ def test_picker_marks_whole_day_squares_and_one_fading_line_under_the_weekdays(m
             selected: cs(sel).backgroundColor, selectedNum: cs(sel.querySelector('.cal-picker-num')).backgroundColor,
             today: cs(today).boxShadow, line: cs(head).backgroundImage, linePlace: cs(head).backgroundPositionY,
             weeks: [...document.querySelectorAll('.cal-picker-days tbody td')].map((td) => cs(td).backgroundImage).filter((b) => b !== 'none').length,
+            ...(() => { const r = sel.getBoundingClientRect(), n = sel.querySelector('.cal-picker-num').getBoundingClientRect();
+                const b = sel.querySelector('.cal-picker-bar'); const br = b.getBoundingClientRect();
+                return { above: n.top - r.top, below: r.bottom - br.bottom, barW: br.width, barH: br.height, barRound: cs(b).borderRadius }; })(),
             gap: document.querySelector('.cal-picker').getBoundingClientRect().top - bar,
             scrim: document.querySelectorAll('.cal-picker-scrim').length,
         }; }""")
@@ -1780,6 +1783,10 @@ def test_picker_marks_whole_day_squares_and_one_fading_line_under_the_weekdays(m
     assert state["line"].startswith("linear-gradient") and "rgba(0, 0, 0, 0)" in state["line"], state   # 양 끝이 투명하다
     assert state["linePlace"] == "100%", state   # 요일 머리의 아래 끝
     assert state["weeks"] == 0, state   # 주와 주 사이에는 선이 없다
+    # 전례색은 목록의 날짜 칸처럼 끝이 둥근 짧은 막대이고, 날짜와 막대는 한 덩어리로 칸의 가운데에 있어 채운 사각형 안의 위아래에 여유가 있다
+    # (사용자 결정 2026-11-28)
+    assert state["barW"] > state["barH"] * 2 and state["barRound"] != "0px", state
+    assert state["above"] >= 6 and state["below"] >= 6 and abs(state["above"] - state["below"]) <= 1, state
     assert state["gap"] <= 0, state
     assert state["scrim"] == 0, state
 
@@ -1831,7 +1838,7 @@ def test_list_icon_drops_the_month_calendar_and_pushes_the_list_below_it(mobile_
     assert place["radius"] == "0px" and place["shadow"] == "none", place   # 상단 바와 한 층이라 둥글리지 않고 그림자도 없다(사용자 결정 2026-11-28)
     assert abs(_under_calendar(page, "2027-02-01") - under_bar) <= 1
     ash = page.locator(".cal-picker a[href='/calendar/list/2027-02-10']")
-    assert ash.locator(".cal-picker-dot.lit-swatch--violet").count() == 1
+    assert ash.locator(".cal-picker-bar.lit-swatch--violet").count() == 1
     assert ash.get_attribute("aria-label") == "2월 10일 수요일, 자색"
     assert page.get_attribute(".cal-picker", "role") == "dialog"
     assert page.get_attribute(".cal-picker", "aria-label") == "날짜 고르기"

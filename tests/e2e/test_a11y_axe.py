@@ -224,7 +224,7 @@ def test_a11y_calendar_date_picker(browser):
         page.goto(f"{BASE}/calendar/list/2027-02-01")
         page.wait_for_selector(".cal-rows", timeout=20_000)
         page.evaluate("() => document.querySelector('.cal-picker-trigger').click()")
-        page.wait_for_selector(".cal-picker:not([hidden]) .cal-picker-dot")
+        page.wait_for_selector(".cal-picker:not([hidden]) .cal-picker-bar")
         page.wait_for_timeout(400)
         v = _violations(page, context=".cal-picker")
         assert not v, f"Date picker (days): {len(v)} violation(s):\n{_fmt(v)}"

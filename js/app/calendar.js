@@ -858,9 +858,10 @@ function buildPickerDay(c, m, today, view) {
   });
   if (c.isCurrent) a.setAttribute("aria-current", "true");
   a.appendChild(el("span", { className: "cal-picker-num" }, String(c.day)));
-  const dots = el("span", { className: "cal-picker-dots", "aria-hidden": "true" });
-  for (const color of c.colors) dots.appendChild(el("span", { className: `cal-picker-dot lit-swatch lit-swatch--${color}` }));
-  a.appendChild(dots);
+  // 전례색은 목록의 날짜 칸처럼 끝이 둥근 짧은 막대다(사용자 결정 2026-11-28)
+  const bars = el("span", { className: "cal-picker-bars", "aria-hidden": "true" });
+  for (const color of c.colors) bars.appendChild(el("span", { className: `cal-picker-bar lit-swatch lit-swatch--${color}` }));
+  a.appendChild(bars);
   return a;
 }
 
