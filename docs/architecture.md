@@ -471,7 +471,8 @@ python scripts/release.py patch                       # 또는 minor / major / X
 # 앱 저장소의 --bump-data / --bump-audio 플래그는 제거됨.
 
 # 2. 배포 (common-bible-server 저장소에서 실행, $APP_ROOT 자동 감지 또는 명시)
-~/projects/common-bible-server/scripts/deploy.sh dev      # /var/www/bible-{ver}-{sha} 생성 + /var/www/dev 교체
+~/projects/common-bible-server/scripts/prerelease.sh <초안>  # 태그 + pre-release → CI deploy-dev.yml이 dev에 올림
+~/projects/common-bible-server/scripts/deploy.sh dev      # /var/www/bible-{ver}-{sha} 생성 + /var/www/dev 교체 (pre-release 없는 배포)
 ~/projects/common-bible-server/scripts/deploy.sh prod     # 동일하게 생성 + /var/www/bible 교체 (확인 프롬프트)
 ~/projects/common-bible-server/scripts/deploy.sh promote  # /var/www/bible -> readlink(/var/www/dev), 재빌드 X
 ~/projects/common-bible-server/scripts/deploy.sh rollback dev|prod  # -previous와 swap (reversible)
@@ -483,7 +484,7 @@ python scripts/release.py patch                       # 또는 minor / major / X
 
 링크를 교체하거나 `promote`, `rollback`을 실행한 직후마다 자동 검증 11종이 실행된다. 검증은 `/version.json`의 버전과 빌드 식별자 일치(식별자가 없는 옛 빌드는 버전만), `/sw.js`의 200과 Content-Type, `/index.html`의 200과 ETag, `/data/books.json`, `/sw-version.js`, 매니페스트 2종, 교회력 묶음 하나와 전례독서 묶음 하나(`lectionary/sanctoral.json`, `lectionary/eucharist-readings.json`), 크기 목록(`bible-sizes.json`), 성시 색인(`search-lit.json`)의 200이다. 실패하면 수동 롤백 안내를 출력한다. zip 파일에 넣을 경로는 `scripts/deploy-manifest.txt`가 정하고, 목록의 항목이 없으면 `build-deploy.sh`가 멈춘다. 목록에 없는 새 경로는 검사되지 않으므로 데이터 디렉터리를 더하면 목록도 고친다. 보호 심볼릭 링크 4개(`dev`, `bible`, `dev-previous`, `bible-previous`)와 `BUILD_RETENTION`(기본 3)개를 넘는 옛 빌드 디렉터리는 자동으로, 또는 확인한 뒤 정리한다. 자세한 흐름은 `common-bible-server/scripts/deploy.sh`의 헤더 주석에 있다.
 
-릴리스 순서의 기준은 `CLAUDE.md` 「데이터 수정과 릴리스」 4번이다. `release.py patch`는 버전 커밋까지만 만들고, 그 커밋은 릴리스 PR로 dev에 들어간다(원장이 릴리스 노트 초안이다). dev의 그 커밋을 `deploy.sh dev`로 올려 pre-release를 만들고(ADR-052 §4) 확인한 뒤, main을 그 커밋으로 앞당기고 정식 태그와 GitHub Release를 만들고 `deploy.sh promote`를 실행한다(ADR-051 §3). 변경 목록은 `scripts/changelog.py`가 만든다(`--generate-notes`를 대신한다).
+릴리스 순서의 기준은 `CLAUDE.md` 「데이터 수정과 릴리스」 4번이다. `release.py patch`는 버전 커밋까지만 만들고, 그 커밋은 릴리스 PR로 dev에 들어간다(원장이 릴리스 노트 초안이다). dev의 그 커밋에 `prerelease.sh`로 pre-release를 만들면 CI가 dev에 올리고(ADR-052 §4), 확인한 뒤 main을 그 커밋으로 앞당기고 정식 태그와 GitHub Release를 만들고 `deploy.sh promote`를 실행한다(ADR-051 §3). 변경 목록은 `scripts/changelog.py`가 만든다(`--generate-notes`를 대신한다).
 
 업데이트 토스트 흐름:
 
