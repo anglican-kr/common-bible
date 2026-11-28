@@ -39,7 +39,7 @@ import { loadChapter, loadBooks, getBooksCache } from "./data-fetch.js";
 import {
   appendVersesWithAids, bindCopyAttribution, absentVerseNumbers, RESPONSORY_MARK,
   LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
-  applyTitleCompactness,
+  applyTitleCompactness, buildFitText,
 } from "./views.js";
 import { specCoversVerse, parseVerseSpec, verseInstanceKeys, citationSource, formatVerseRanges, halfVerseMark } from "./verse-spec.js";
 import {
@@ -153,6 +153,26 @@ function dateLabel(/** @type {string} */ dateStr) {
   const p = parseDate(dateStr);
   if (!p) return dateStr;
   return `${p.y}년 ${p.m}월 ${p.d}일 (${WEEKDAY_KO[dayOfWeek(dateStr)]})`;
+}
+
+/**
+ * 상단 바의 날짜와 달의 표기 셋(ADR-061 §4) — 기본, 두 자리 연도, 연도 없음. 날을 주면 전례독서의 날짜(「2027년 1월 2일」, 「27년 1월 2일」,
+ * 「1월 2일」), 주지 않으면 캘린더의 달(「2027년 1월」, 「27년 1월」, 「1월」)이다. 달과 날 앞에는 0을 붙이지 않고 두 자리 연도는 붙인다(「07년」).
+ * @param {number} y @param {number} m @param {number} [d]
+ * @returns {[string, string, string]}
+ */
+function titleDateLengths(y, m, d) {
+  const tail = d === undefined ? `${m}월` : `${m}월 ${d}일`;
+  return [`${y}년 ${tail}`, `${String(y % 100).padStart(2, "0")}년 ${tail}`, tail];
+}
+
+/**
+ * 표기마다 가장 긴 글 — 두 자리 달과 두 자리 날(숫자는 폭이 같다, `tabular-nums`). 상단 바는 이 글이 들어가는 표기를 써서, 날을 옮겨도 같은 폭이면
+ * 표기가 바뀌지 않는다(ADR-061 §4).
+ * @param {number} y @param {boolean} withDay
+ */
+function titleDateProbes(y, withDay) {
+  return titleDateLengths(y, 12, withDay ? 28 : undefined);
 }
 
 /** "2026-08-09" → "8월 9일" — 문구 속 날짜. */
@@ -1309,77 +1329,120 @@ function pickAnotherDate(message) {
 }
 
 /**
- * 날짜 이동 줄의 원형 단추 하나. 링크가 없으면(계산 범위 끝) 자리만 지켜 가운데가 흔들리지 않게 한다. 방향이 글리프(‹ ›)와
+ * 날짜 이동 줄의 원형 단추 하나. 링크가 없으면(계산 범위 끝) 자리만 지켜 단추가 흔들리지 않게 한다. 방향이 글리프(‹ ›)와
  * 다시 그린 뒤 포커스를 돌려줄 자리(`data-focus-key` — `prev` · `next`, 라우터가 돌려준다 — helpers.js focusSpotOf)를 정한다.
- * 범위 끝으로 가 새 화면에 같은 단추가 없으면 「오늘」이 넘겨받는다(`data-focus-fallback`).
- * @param {"prev" | "next"} dir @param {string | null} href @param {string} label
+ * 범위 끝으로 가 새 화면에 같은 단추가 없으면 「오늘」이 넘겨받는다(`data-focus-fallback`). 작은 화면의 ‹ ›는 내려오는 달력의 ‹ ›(calendar.js
+ * `ensurePicker`)와 같은 그림이다. 달력이 열리면 그 단추가 이 자리에 들어오므로(ADR-061 §3) 모양이 같아야 한다.
+ * @param {"prev" | "next"} dir @param {string | null} href @param {string} label @param {boolean} small
  */
-function buildDateStep(dir, href, label) {
+function buildDateStep(dir, href, label, small) {
+  const glyph = small ? headerIcon(dir === "prev" ? HEADER_ICON_PATHS.stepPrev : HEADER_ICON_PATHS.stepNext) : dir === "prev" ? "‹" : "›";
   if (!href) return el("span", { className: "lect-datenav-btn", "aria-hidden": "true" });
   return el("a", {
     className: "lect-datenav-btn", href, "aria-label": label, "data-focus-key": dir, "data-focus-fallback": "today",
-  }, dir === "prev" ? "‹" : "›");
+  }, glyph);
+}
+
+/** 「오늘」 아이콘의 이름 — 보이는 숫자(오늘의 날)가 이름 안에 있다(WCAG 2.5.3). @param {Date} now */
+function todayIconLabel(now) {
+  return `오늘, ${now.getMonth() + 1}월 ${now.getDate()}일`;
 }
 
 /**
- * 캘린더와 전례독서의 머리(DESIGN.md §6 「날짜 이동 줄」, 사용자 결정 2026-11-07). 왼쪽 칸은 「오늘」, 가운데 칸은 ‹ 글자 ›,
- * 오른쪽 칸은 보기 전환 단추다. 화면마다 다른 것은 가운데 글자(날짜 `<time>` · 달)와 라벨, 단추가 가는 곳뿐이다. 모두 문장 안
- * 요소(`<a>` · `<span>` · `<button>`)라 머리의 `<h1>` 안에 넣을 수 있다. 「오늘」의 `data-focus-key`는 `today` — 앞뒤 단추가 자리만
- * 남는 범위 끝에서 포커스가 돌아갈 대체 자리다. 데스크톱에서 성서 목록으로 가는 길은 상단 바의 「성서」 탭이다(ADR-043 §3).
+ * 「오늘」 — 탭 바의 캘린더 아이콘과 같은 그림(`#tab-glyph-calendar`)의 머리 줄 아래 네모 안에 오늘의 날을 적는다(ADR-061 §5). 크기와 선 굵기는
+ * 옆의 월간 달력 단추와 같다(사용자 결정 2026-11-28). 그 단추처럼 24칸 그림(helpers.js `headerIcon`)에 선 굵기 2로 그려, 네모가 x 4.5-19.5로 같은
+ * 폭이다. 탭 바는 같은 그림을 18칸에 그려 더 크다. 머리 줄 아래 네모가 y 9.5-20이라 숫자의 가운데를 (12, 15)에 둔다.
+ * @param {string} href
+ */
+function buildTodayIcon(href) {
+  const now = new Date();
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", "lect-today-icon");
+  const g = document.createElementNS(ns, "g");
+  for (const [k, v] of [["fill", "none"], ["stroke", "currentColor"], ["stroke-width", "2"], ["stroke-linecap", "round"], ["stroke-linejoin", "round"]]) {
+    g.setAttribute(k, v);
+  }
+  const use = document.createElementNS(ns, "use");
+  use.setAttribute("href", "#tab-glyph-calendar");
+  g.appendChild(use);
+  const num = document.createElementNS(ns, "text");
+  num.setAttribute("class", "lect-today-num");
+  num.setAttribute("x", "12");
+  num.setAttribute("y", "15");
+  num.setAttribute("text-anchor", "middle");
+  num.setAttribute("dominant-baseline", "central");
+  num.textContent = String(now.getDate());
+  svg.append(g, num);
+  return el("a", {
+    className: "lect-today", href, "aria-label": todayIconLabel(now), title: "오늘", "data-focus-key": "today",
+  }, svg);
+}
+
+// 앱을 켜 둔 채 날이 바뀌면 다시 볼 때 「오늘」의 숫자와 이름을 그날로 고친다(ADR-061 §5). 가는 곳(`/lectionary`, 오늘 줄)은 늘 그날이다.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  const now = new Date();
+  for (const a of document.querySelectorAll("#page-title .lect-today")) {
+    const num = a.querySelector(".lect-today-num");
+    if (num) num.textContent = String(now.getDate());
+    a.setAttribute("aria-label", todayIconLabel(now));
+  }
+});
+
+/**
+ * 캘린더와 전례독서의 머리(DESIGN.md §6 「날짜 이동 줄」). 화면마다 다른 것은 글자(날짜 `<time>` · 달)와 라벨, 단추가 가는 곳뿐이다. 모두 문장 안
+ * 요소(`<a>` · `<span>` · `<button>`)라 머리의 `<h1>` 안에 넣을 수 있다. 「오늘」의 `data-focus-key`는 `today` — 앞뒤 단추가 자리만 남는 범위
+ * 끝에서 포커스가 돌아갈 대체 자리다.
+ * - 작은 화면(ADR-061 §2): 왼쪽 칸(`.lect-bar-title`)에 글자, 오른쪽 칸(`.lect-bar-end`)에 ‹ › 「오늘」 월간 달력 단추. 단추는 오른쪽 끝에서부터
+ *   늘 같은 자리라 글자 칸의 폭을 고정하지 않는다. 내려오는 달력이 열리면 calendar.js `mountPickerHead`가 달력의 머리를 이 두 칸에 넣는다.
+ * - 큰 화면(ADR-043 §1): ‹ 글자 › 「오늘」 보기 전환 단추가 한 덩어리로 가운데에 선다. 데스크톱에서 성서 목록으로 가는 길은 상단 바의 「성서」
+ *   탭이다(ADR-043 §3).
+ * 레이아웃이 바뀌면 다시 그린다(캘린더는 화면을, 전례독서는 이 줄을, 아래 `LARGE_LAYOUT_QUERY` 처리).
  * @param {{ title: HTMLElement, todayHref: string,
  *   prev: { href: string | null, label: string }, next: { href: string | null, label: string },
  *   view?: { href: string, label: string, icon: string } | { trigger: HTMLElement } }} o
  */
 function commitDateBar(o) {
-  const start = el("span", { className: "lect-bar-start" });
-  const today = el("a", { className: "lect-today", href: o.todayHref, "data-focus-key": "today" }, "오늘");
+  const small = !isLargeLayout();
+  const today = buildTodayIcon(o.todayHref);
   // 「오늘」로 가는 전례독서는 맨 위부터 그린다(commit). 새 탭으로 여는 클릭은 이 화면을 바꾸지 않으므로 남기지 않는다
   today.addEventListener("click", (e) => {
     // 이 처리기가 라우터(문서의 클릭 처리)보다 먼저 돌므로 이 누름의 라우트는 다음 순번이다
     const seq = window.routeSeq?.();
     if (!isModifiedClick(e)) topOnNextDraw = { path: new URL(o.todayHref, location.origin).pathname, seq: seq === undefined ? null : seq + 1 };
   });
-  const mid = el("span", { className: "lect-bar-mid" });
-  mid.appendChild(buildDateStep("prev", o.prev.href, o.prev.label));
-  mid.appendChild(el("span", { className: "lect-date" }, o.title));
-  mid.appendChild(buildDateStep("next", o.next.href, o.next.label));
+  const prev = buildDateStep("prev", o.prev.href, o.prev.label, small);
+  const next = buildDateStep("next", o.next.href, o.next.label, small);
+  const date = el("span", { className: "lect-date" }, o.title);
   const end = el("span", { className: "lect-bar-end" });
-  if (o.view && "trigger" in o.view) end.appendChild(o.view.trigger);   // 작은 화면: 월간 달력을 내리는 단추(ADR-058 §3)
+  /** @type {HTMLElement | null} */
+  let view = null;
+  if (o.view && "trigger" in o.view) view = o.view.trigger;   // 작은 화면: 월간 달력을 내리는 단추(ADR-058 §3)
   else if (o.view) {
-    end.appendChild(el("a", {
+    view = el("a", {
       className: "title-view-btn", href: o.view.href, "aria-label": o.view.label, title: o.view.label, "data-focus-key": "view",
-    }, headerIcon(o.view.icon)));
+    }, headerIcon(o.view.icon));
   }
   clearNode($title);
-  $title.appendChild(start);
-  $title.appendChild(mid);
-  $title.appendChild(end);
-  placeToday(today, start, end);
-  applyTitleCompactness();   // 데스크톱의 상단 바에 이 줄이 들어가는지 다시 잰다 — 달 이름을 줄이거나 탭과 검색창을 좁힌다(views.js fitTopBar)
+  if (small) {
+    end.append(prev, next, today);
+    if (view) end.appendChild(view);
+    $title.append(el("span", { className: "lect-bar-title" }, date), end);
+  } else {
+    end.appendChild(today);
+    if (view) end.appendChild(view);
+    $title.append(el("span", { className: "lect-bar-mid" }, prev, date, next), end);
+  }
+  applyTitleCompactness();   // 글자 칸에 들어가는 표기를 고르고(ADR-061 §4), 데스크톱에서는 상단 바에 이 줄이 들어가는지 다시 잰다(views.js fitTopBar)
 }
 
-/**
- * 「오늘」의 자리. 큰 화면의 한 줄 상단 바에서는 다음 단추(›)의 오른쪽, 곧 오른쪽 칸의 맨 앞이다(ADR-043 §1, 사용자 결정 2026-11-14).
- * 작은 화면은 왼쪽 칸이다(ADR-038 §1). 요소를 옮기므로 화면의 차례와 포커스의 차례가 같고, 포커스를 돌려줄 자리(`data-focus-key`)도 하나다.
- * @param {Element} today @param {Element} start @param {Element} end
- */
-function placeToday(today, start, end) {
-  const focused = document.activeElement === today;
-  if (isLargeLayout()) end.insertBefore(today, end.firstChild);
-  else start.appendChild(today);
-  // 요소를 떼었다 붙이면 포커스가 사라진다. 「오늘」에 포커스가 있었으면 돌려준다.
-  if (focused && today instanceof HTMLElement) today.focus({ preventScroll: true });
-}
-
-// 앱 화면의 크기가 작은 화면과 큰 화면의 경계를 넘으면(ADR-050 §2) 이미 그린 줄의 「오늘」을 그 레이아웃의 칸으로 옮긴다. 본문은 다시 그리지 않으므로 스크롤이 그대로이고,
-// 포커스는 placeToday 가 돌려준다.
+// 앱 화면의 크기가 작은 화면과 큰 화면의 경계를 넘으면(ADR-050 §2) 전례독서의 줄을 그 레이아웃으로 다시 그린다. 본문은 다시 그리지 않으므로 스크롤이
+// 그대로다. 캘린더는 화면째 다시 그린다(calendar.js 끝의 `LARGE_LAYOUT_QUERY` 처리).
 if (typeof window.matchMedia === "function") {
   window.matchMedia(LARGE_LAYOUT_QUERY).addEventListener("change", () => {
-    const today = $title.querySelector(":scope .lect-today");
-    const start = $title.querySelector(":scope > .lect-bar-start");
-    const end = $title.querySelector(":scope > .lect-bar-end");
-    if (today && start && end) placeToday(today, start, end);
-    // 전례독서의 줄은 레이아웃마다 다르다(날짜 단추와 보기 전환 단추, 달력을 내리는 단추). 다시 그리고 포커스를 돌려준다
     if (titleModel && $title.querySelector(".lect-date-label") && window.parsePath?.().view === "lectionary") {
       const active = document.activeElement;
       const key = active instanceof HTMLElement && $title.contains(active) ? active.dataset.focusKey : null;
@@ -1397,32 +1460,25 @@ if (typeof window.matchMedia === "function") {
 let titleModel = null;
 
 /**
- * 머리에 보이는 날짜 — "2026-12-28" → "26.12.28"(YY.MM.DD, 요일 없음, 사용자 결정 2026-11-05). 스크린 리더는 숨긴 전체 날짜를 읽는다.
- * @param {{ y: number, m: number, d: number }} p
- */
-function titleDateText(p) {
-  return [p.y % 100, p.m, p.d].map((n) => String(n).padStart(2, "0")).join(".");
-}
-
-/**
  * 전례독서의 머리 — 제목 자리에 날짜 이동 줄을 그린다(사용자 결정 2026-11-03: 스크롤해도 날짜와 「오늘」이 보이고 하루씩 옮길
- * 수 있게. 그전엔 본문 맨 위 줄이었고, 머리에는 「전례독서」가 있었다). 「전례독서」는 문서 제목(setTitle)에 남는다. 보이는 날짜는
- * 짧은 표기이고(`titleDateText`), 스크린 리더는 날짜 단추의 이름으로 전체 날짜를 읽는다. 오른쪽 단추는 마지막으로 쓴 보기의 그 날짜로 간다(ADR-038 §2).
+ * 수 있게. 그전엔 본문 맨 위 줄이었고, 머리에는 「전례독서」가 있었다). 「전례독서」는 문서 제목(setTitle)에 남는다. 날짜는 「2027년 1월 2일」이고
+ * 폭이 모자라면 「27년 1월 2일」, 「1월 2일」로 줄인다(ADR-061 §4, `titleDateLengths`). 스크린 리더는 늘 요일까지 전체 날짜를 읽는다(작은 화면은
+ * 숨긴 글, 큰 화면은 날짜 단추의 이름). 오른쪽 단추는 마지막으로 쓴 보기의 그 날짜로 간다(ADR-038 §2).
  * 큰 화면의 날짜는 날짜 고르기 판을 여는 단추다(ADR-038 §2 「날짜 고르기」, 사용자 결정 2026-11-18). 캘린더의 달 제목과 같은 단추이고 펼침 표시는 없다.
  * @param {LectionaryModel} m
  */
 function commitTitleDateNav(m) {
   const p = /** @type {{ y: number, m: number, d: number }} */ (parseDate(m.date));
-  const shown = titleDateText(p);
-  const label = el("time", { className: "lect-date-label", datetime: m.date }, shown);
+  const full = dateLabel(m.date);
+  const label = el("time", { className: "lect-date-label", datetime: m.date },
+    buildFitText(titleDateLengths(p.y, p.m, p.d), titleDateProbes(p.y, true)));
   titleModel = m;
   if (!isLargeLayout()) {
     // 작은 화면의 날짜는 글자이고, 오른쪽 단추가 월간 달력을 내린다(ADR-058 §3). 스크린 리더는 날짜 글자 뒤에 숨긴 전체 날짜를 읽는다
-    const drop = calendarDropTrigger(`${shown}, ${dateLabel(m.date)}, 날짜 고르기`);
+    const drop = calendarDropTrigger(`${full}, 날짜 고르기`);
     drop.dataset.date = m.date;
     drop.addEventListener("click", (e) => openDatePicker(drop, e.detail > 0));
-    label.textContent = "";
-    label.append(el("span", { "aria-hidden": "true" }, shown), el("span", { className: "sr-only" }, dateLabel(m.date)));
+    label.appendChild(el("span", { className: "sr-only" }, full));
     commitDateBar({
       title: label,
       todayHref: m.hrefs.today,
@@ -1435,9 +1491,9 @@ function commitTitleDateNav(m) {
     return;
   }
   // 캘린더의 달 제목과 같은 단추다(helpers.js `datePickerTrigger`). 판에서 날을 고르면 새 화면의 이 단추로 포커스가 돌아온다. 단추의 이름은
-  // 보이는 글(「27.05.02」)로 시작하고 전체 날짜를 덧붙인다. 음성으로 조작하는 사용자가 보이는 글을 말해도 누를 수 있어야 한다(WCAG 2.5.3,
-  // 코드 리뷰 2026-11-18). 스크린 리더는 이 이름으로 전체 날짜를 읽는다
-  const trigger = datePickerTrigger(label, `${shown}, ${dateLabel(m.date)}, 날짜 고르기`);
+  // 전체 날짜로 시작해, 보이는 표기(「2027년 1월 2일」, 「27년 1월 2일」, 「1월 2일」)가 모두 그 안에 있다. 음성으로 조작하는 사용자가 보이는 글을
+  // 말해도 누를 수 있어야 한다(WCAG 2.5.3, 코드 리뷰 2026-11-18). 스크린 리더는 이 이름으로 전체 날짜를 읽는다
+  const trigger = datePickerTrigger(label, `${full}, 날짜 고르기`);
   trigger.dataset.date = m.date;
   trigger.addEventListener("click", (e) => openDatePicker(trigger, e.detail > 0));
   const history = window.tabHistory;
@@ -2320,6 +2376,6 @@ function nextReadingHref(found) {
 // 캘린더 탭(calendar.js — ADR-038 §2 A2)이 같은 이름 · 날짜 · 색 규칙을 쓴다(복제 금지 — 칸 · 줄의 이름이 전례독서 목록과 같아야 한다).
 export {
   renderLectionaryView, buildLectionaryModel,
-  shortName, statusSuffix, isGrid, todayKey, commitDateBar, headLinesOf, lectionaryModelOf,
+  shortName, statusSuffix, isGrid, todayKey, commitDateBar, headLinesOf, lectionaryModelOf, titleDateLengths, titleDateProbes,
   CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO, TRACK_NAME,
 };

@@ -998,6 +998,9 @@ test("HEADER_ICON_PATHS: one frozen path per glyph — every control drawing the
     home: "M3 11.5 12 4l9 7.5M5.5 9.8V19a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.8",
     viewMonth: "M5.5 4.5h13a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1zM4.5 9.5h15M4.5 14.5h15M9.5 4.5v15M14.5 4.5v15",
     viewList: "M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01",
+    // ‹ › of the small layout's date bar and the date picker — the picker's steps take the bar's place (ADR-061 §3)
+    stepPrev: "m15 18-6-6 6-6",
+    stepNext: "m9 18 6-6-6-6",
   });
   assert.ok(Object.isFrozen(P));
   assert.equal(h.helpers.headerIcon(P.back)._children[0].getAttribute("d"), P.back);

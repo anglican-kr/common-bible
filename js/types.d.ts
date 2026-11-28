@@ -1001,7 +1001,7 @@ export interface AppHelpers {
   /** 헤더 아이콘의 SVG — path `d` 만 받는다(규격은 helpers.js 한 곳). 단추 · 링크와 그 동작은 호출 쪽 몫. */
   headerIcon: (d: string) => SVGSVGElement;
   /** 헤더 아이콘의 path — 글리프마다 하나(`back` 왼쪽 꺾쇠 · `home` 집 · `viewMonth` 칸 아홉 개 · `viewList` 점과 줄). 같은 글리프를 그리는 곳은 모두 이것을 `headerIcon` 에 넘긴다. */
-  HEADER_ICON_PATHS: Readonly<{ back: string; home: string; viewMonth: string; viewList: string }>;
+  HEADER_ICON_PATHS: Readonly<{ back: string; home: string; viewMonth: string; viewList: string; stepPrev: string; stepNext: string }>;
   isModifiedClick: (e: Event) => boolean;
   /** 위쪽 내용이 바뀌어도 브라우저가 보던 내용을 그 자리에 두는가(스크롤 고정 — Chrome · Edge · Firefox, Safari 27+). */
   SCROLL_ANCHORING: boolean;

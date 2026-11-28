@@ -484,6 +484,8 @@ function applyTitleCompactness() {
     document.fonts?.addEventListener?.("loadingdone", () => applyTitleCompactness());
   }
 
+  // The date bar's month or date (ADR-061 §4) is fitted right away as well: drawn at its longest, it would overflow its cell for a frame.
+  if ($title && $title.querySelector(".fit-text")) measureTitleCompactness();
   // Defer the actual measurement to the next frame. Several render paths append
   // the settings gear *after* calling setTitle/setTitleWithChapterPicker, and on
   // mobile that gear is part of the right-side reservation — measuring before
@@ -522,17 +524,19 @@ function measureTitleCompactness() {
   $title.classList.remove("compact");
   clearPhoneTitleFit();
 
-  // The title text is centered (text-align: center) while the home / bookmark /
-  // settings buttons are absolute-positioned at the edges. A centered string
-  // overruns whichever side reaches furthest inward, symmetrically — so the room
-  // for the text is clientWidth − 2 × (largest side reservation). Measure the
-  // real buttons from the live DOM rather than hardcoding, because the layout
-  // differs by breakpoint: on desktop the bookmark sits flush right (right: 0)
-  // and the settings gear lives in the top row (absent here); on mobile the
-  // settings gear is minted into this row at right: 0 and the bookmark is inset
-  // to right: 2.4rem, so the right side reserves ~4.6rem, not 2.2rem. The old
-  // fixed 5.2rem matched only the desktop layout, leaving mobile titles to
-  // collide with the bookmark/gear.
+  // The calendar's and the lectionary's bar (ADR-061 §2): its month or date takes the longest length that fits the cell left of the
+  // buttons.
+  const dateCell = $title.querySelector(":scope > .lect-bar-title");
+  if (dateCell instanceof HTMLElement) {
+    fitDateCell(dateCell);
+    return;
+  }
+
+  // The title text starts at the left (ADR-061 §1) while the back / bookmark /
+  // settings buttons are absolute-positioned at the edges, so the room for the
+  // text is what the buttons leave between them: clientWidth − left reservation
+  // − right reservation. Measure the real buttons from the live DOM rather than
+  // hardcoding, because which buttons the row has differs by view.
   //
   // Use getBoundingClientRect, not getComputedStyle left/right: for an
   // abs-positioned element the browser resolves *both* insets to used pixels
@@ -552,7 +556,7 @@ function measureTitleCompactness() {
       rightReserve = Math.max(rightReserve, titleRect.right - r.left);
     }
   }
-  const room = $title.clientWidth - 2 * Math.max(leftReserve, rightReserve);
+  const room = $title.clientWidth - leftReserve - rightReserve;
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 
   const full = /** @type {HTMLElement | null} */ ($title.querySelector(".title-text-full"));
@@ -565,9 +569,9 @@ function measureTitleCompactness() {
     const naturalWidth = full.offsetWidth;
     full.style.whiteSpace = prevWs;
     full.style.display = prevDisplay;
-    // Picker button has a ~0.4em chevron after the label — allow for it. Plus some breathing room on each side.
+    // Picker button has a ~0.4em chevron after the label — allow for it. Plus some breathing room before the buttons on the right.
     const chevronAllowance = full.closest(".title-picker-btn") ? 0.8 * rem : 0;
-    if (naturalWidth + chevronAllowance > room - 2 * 0.8 * rem + 0.5) $title.classList.add("compact");
+    if (naturalWidth + chevronAllowance > room - 0.8 * rem + 0.5) $title.classList.add("compact");
   }
 
   // 짧은 명칭으로 바꿔도, 또는 짧은 명칭이 없어 장 제목과 꺾쇠가 양옆 단추와 겹치면 들어갈 때까지 제목 글씨를 한 단계씩
@@ -590,6 +594,92 @@ function measureTitleCompactness() {
   picker.style.maxWidth = `${Math.max(0, room)}px`;
 }
 
+// ── 상단 바의 날짜와 달(ADR-061 §4) ──
+
+/**
+ * A month or a date of the calendar's and the lectionary's bar in its three lengths (lectionary.js `titleDateLengths`: 「2027년 1월 2일」,
+ * 「27년 1월 2일」, 「1월 2일」). All three are drawn, hidden from screen readers (`sr` is what they read, when the holder is not inside a
+ * named button); the bar shows the one in `data-len` (CSS `.fit-text`). Which one is chosen from `probes`, the longest text of each length
+ * (two-digit month and day), so stepping a day keeps the length (ADR-061 §4). `widthProbes` — the date's probes on a month screen — set the
+ * width of the large layout's date cell, which keeps ‹ › in one place between the calendar and the lectionary (fitTopBar).
+ * @param {string[]} lengths @param {string[]} probes @param {string} [sr] @param {string[]} [widthProbes]
+ * @returns {HTMLElement}
+ */
+function buildFitText(lengths, probes, sr, widthProbes) {
+  const holder = el("span", { className: "fit-text", "data-len": "0" });
+  holder.dataset.probes = JSON.stringify(probes);
+  holder.dataset.widthProbes = JSON.stringify(widthProbes ?? probes);
+  lengths.forEach((text, i) => holder.appendChild(el("span", { className: `fit-len fit-len-${i}`, "aria-hidden": "true" }, text)));
+  if (sr) holder.appendChild(el("span", { className: "sr-only" }, sr));
+  return holder;
+}
+
+/** The one-line width of `text` in the holder's font, measured in a hidden span inside it. @param {HTMLElement} holder @param {string} text */
+function fitProbeWidth(holder, text) {
+  let probe = holder.querySelector(":scope > .fit-probe");
+  if (!probe) {
+    probe = el("span", { className: "fit-probe", "aria-hidden": "true" });
+    holder.appendChild(probe);
+  }
+  probe.textContent = text;
+  return probe.getBoundingClientRect().width;
+}
+
+/**
+ * The longest length whose probe fits `room` px (the shortest when none does).
+ * @param {HTMLElement} holder @param {number} room
+ * @returns {boolean} whether the chosen length fits
+ */
+function fitTextIn(holder, room) {
+  /** @type {string[]} */
+  const probes = JSON.parse(holder.dataset.probes || "[]");
+  let len = 0;
+  while (len < probes.length - 1 && fitProbeWidth(holder, probes[len]) > room + 0.5) len++;
+  holder.dataset.len = String(len);
+  return !probes.length || fitProbeWidth(holder, probes[len]) <= room + 0.5;
+}
+
+/**
+ * The small layout's date bar: the cell left of the buttons takes the leftover width (CSS flex), and each month or date shown in it gets
+ * the longest length that fits. While the drop-down calendar is open its title button stands there instead (calendar.js
+ * `mountPickerHead`); its chevron and gap take room too. A holder that is not shown (the bar's own date then) is fitted when it shows.
+ * @param {HTMLElement} cell
+ */
+function fitDateCell(cell) {
+  const room = cell.clientWidth;
+  const fitAll = () => {
+    let fits = true;
+    for (const holder of cell.querySelectorAll(".fit-text")) {
+      if (!(holder instanceof HTMLElement) || !holder.getClientRects().length) continue;
+      const box = holder.closest("button");
+      const extra = box && cell.contains(box) ? box.getBoundingClientRect().width - holder.getBoundingClientRect().width : 0;
+      fits = fitTextIn(holder, room - extra) && fits;
+    }
+    return fits;
+  };
+  if (fitAll()) return;
+  // Even the shortest length does not fit (「12월 28일」 at the largest font size on a 320px screen): the title's font steps down as a long
+  // chapter title's does (title-shrink-1, -2, 사용자 결정 2026-11-19), and the length is chosen again at the smaller size.
+  for (const step of TITLE_SHRINK_STEPS) {
+    $title.classList.remove(...TITLE_SHRINK_STEPS);
+    $title.classList.add(step);
+    if (fitAll()) return;
+  }
+}
+
+/**
+ * Set the large layout's date row to one length, its date cell as wide as that length's longest date — on the calendar as well, so ‹ › stand
+ * where they stand on the lectionary.
+ * @param {HTMLElement} holder @param {number} len
+ */
+function setDateRowLength(holder, len) {
+  holder.dataset.len = String(len);
+  /** @type {string[]} */
+  const probes = JSON.parse(holder.dataset.widthProbes || "[]");
+  const cell = holder.closest(".lect-date");
+  if (cell instanceof HTMLElement && probes[len]) cell.style.minWidth = `${Math.ceil(fitProbeWidth(holder, probes[len]))}px`;
+}
+
 /** The chapter picker button's one-line width, its chevron included. @param {HTMLElement} picker */
 function pickerNaturalWidth(picker) {
   const prev = picker.style.cssText;
@@ -605,8 +695,8 @@ function pickerNaturalWidth(picker) {
  * Fit the desktop top bar (ADR-043 §1, §8). The title cell is as wide as its content and both side cells take the
  * wider one's width, which keeps the title at the centre of the window; whatever is in the title cell — a chapter
  * title with its buttons, the date steps of the calendar and the lectionary, a search title — has the room that
- * is left. When it does not fit, the title takes its short form (`.compact` on the title — the short book name,
- * the month as 「2027.12」). When that is not enough the bar gets tighter (`.tight` on the bar — the tabs keep
+ * is left. When it does not fit, the title takes its short form (`.compact` on the title — the short book name;
+ * the calendar's month and the lectionary's date step through their lengths instead, ADR-061 §4). When that is not enough the bar gets tighter (`.tight` on the bar — the tabs keep
  * only their icons and the search field narrows), and the title goes back to its full form if the tighter bar
  * has room for it. A title with no short form that still does not fit is cut with an ellipsis by CSS. Measured from the laid-out bar, so every button, gap and margin is counted as drawn.
  * @param {HTMLElement} bar  #app-header @param {CSSStyleDeclaration} barStyle
@@ -628,7 +718,16 @@ function fitTopBar(bar, barStyle) {
     contentWidth() <= inner - 2 * Math.max(widthOf("header-nav"), widthOf("header-actions")) - 2 * gap + 0.5;
   bar.classList.remove("tight");
   $title.classList.remove("compact");
-  if (!fits()) {
+  // The calendar's and the lectionary's row steps through the lengths of its month or date (ADR-061 §4) — the tighter bar first gets the
+  // full date back, as below.
+  const dateText = $title.querySelector(".lect-date .fit-text");
+  if (dateText instanceof HTMLElement) {
+    for (const [tight, len] of /** @type {Array<[boolean, number]>} */ ([[false, 0], [false, 1], [true, 0], [true, 1], [true, 2]])) {
+      bar.classList.toggle("tight", tight);
+      setDateRowLength(dateText, len);
+      if (fits()) break;
+    }
+  } else if (!fits()) {
     $title.classList.add("compact");
     if (!fits()) {
       bar.classList.add("tight");
@@ -2151,5 +2250,5 @@ export {
   renderBookList, renderChapterList, renderChapter, renderPrologue,
   renderLoading, renderBibleFailure,
   appendVerses, appendVersesWithAids, RESPONSORY_MARK,
-  LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, applyTitleCompactness, renderLiturgicalFailure, renderLiturgicalLoadFailure,
+  LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, applyTitleCompactness, buildFitText, renderLiturgicalFailure, renderLiturgicalLoadFailure,
 };
