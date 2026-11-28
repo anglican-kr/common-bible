@@ -4254,20 +4254,27 @@ mark.search-highlight--cut-start {
   text-align: center;
 }
 
-.resume-banner-link:hover {
-  opacity: 0.85;
+@media (hover: hover) {
+  .resume-banner-link:hover {
+    opacity: 0.85;
+  }
 }
 
-/* Resume-banner name swap — same swap pattern as book-list / page-title. */
-.resume-text-mobile { display: none; }
+/* Resume-banner name swap — same swap pattern as book-list / page-title. The name alone (.bare, without 「이어읽기:」) comes last,
+   when even the short name does not fit (사용자 결정 2026-11-28); it outranks the phone's forced short name. */
+.resume-text-mobile,
+.resume-text-bare { display: none; }
 .resume-banner.compact .resume-text-full { display: none; }
 .resume-banner.compact .resume-text-mobile { display: inline; }
 @media not all and (min-width: 700px) and (min-height: 600px) {
   @media (hover: none) and (pointer: coarse) {
-    .resume-banner .resume-text-full { display: none; }
+    .resume-banner:has(.resume-text-mobile) .resume-text-full { display: none; }
     .resume-banner .resume-text-mobile { display: inline; }
   }
 }
+.resume-banner.bare .resume-text-full,
+.resume-banner.bare .resume-text-mobile { display: none; }
+.resume-banner.bare .resume-text-bare { display: inline; }
 
 .resume-banner-close {
   display: flex;
@@ -4285,29 +4292,74 @@ mark.search-highlight--cut-start {
   flex-shrink: 0;
 }
 
-.resume-banner-close:hover {
-  background: color-mix(in srgb, var(--bg) 15%, transparent);
+@media (hover: hover) {
+  .resume-banner-close:hover {
+    background: color-mix(in srgb, var(--bg) 15%, transparent);
+  }
 }
 
-/* ── ADR-030 개정(가로): 이어읽기 배너 → 하단 dock pill ─────────────────────────
-   가로는 헤더 + 배너 띠 + 탭이 세로로 쌓여 본문을 많이 가린다. 가로에서만 이어읽기
-   배너를 sticky 그룹 띠에서 빼내 하단 dock 행(미니 오디오와 동일 자리 — 탭바 우측~검색
-   사이, --tab-bar-w 재사용)에 pill 로 띄운다. 책 목록 뷰 전용이라 오디오(chapter 뷰)와
-   같은 자리를 다른 뷰에서 공유 — 충돌 없음. 테마색 솔리드 채움은 유지(주요 CTA 강조).
-   세로는 무변경. 큰 화면은 탭 바와 dock 이 없어 제외한다. 가로로 든 휴대폰은 폭이 넓어도 높이가
-   600px보다 낮아 작은 화면이다(ADR-050 §2, ADR-030 가로 오디오 규칙과 같은 조건). */
+/* ── ADR-030 「적용 확장」: 작은 화면의 이어 읽기 배너 → 하단 알약 ──────────────────
+   작은 화면에서는 이어 읽기 배너를 상단 바 묶음의 띠에서 빼내 화면 아래에 알약으로 띄운다.
+   상단 바, 배너 띠, 구분 탭이 세로로 쌓여 책 목록을 가리던 것을 덜어 낸다. 테마색 솔리드 채움은
+   그대로 둔다(주요 행동을 강조하고, 글래스 캡슐 사이에서 색 있는 알약으로 보인다). 큰 화면은 탭
+   바가 없어 헤더 아래의 띠 그대로다. 가로로 든 휴대폰은 폭이 넓어도 높이가 600px보다 낮아 작은
+   화면이다(ADR-050 §2, ADR-030 가로 오디오 규칙과 같은 조건).
+   - 가로(2026-06-10): 탭 바와 검색 원형 사이의 독 줄. 미니 오디오와 같은 자리이고(--tab-bar-w),
+     배너는 책 목록에, 오디오는 장 화면에 나와 부딪치지 않는다.
+   - 세로(2026-11-28, 사용자 결정): 독 줄 바로 위의 따로 된 줄. 양 끝은 독 줄과 같다(--dock-left,
+     --dock-right). 세로의 탭 넷과 검색 원형 사이는 390px에서 40px, 320px에서 8px뿐이라 글을 넣을
+     수 없다. */
 @media not all and (min-width: 700px) and (min-height: 600px) {
+  .resume-banner {
+    position: fixed;
+    height: var(--dock-control);
+    margin: 0;
+    /* dock 캡슐(탭바·검색·미니 오디오)과 동일 — 둥근 사각 --radius 대신 반원 캡 pill. */
+    border-radius: var(--radius-pill);
+    z-index: var(--nav-z);
+  }
+  /* 닫기 × — 세로 구분선 제거 + × 키움 + 중심을 우측 반원 캡 중심에 정렬.
+     버튼 폭을 --dock-control(60px)로 두고 × 를 가운데 정렬하면 × 중심 = 버튼 중심 =
+     pill 우측 끝 −30px = 반원 캡(반지름 --dock-control/2=30px) 중심과 일치. */
+  .resume-banner-close {
+    align-self: stretch;
+    border-left: none;
+    width: var(--dock-control);
+    font-size: var(--font-2xl);
+  }
+  /* One line, cut with an ellipsis, in both orientations. The pill is one --dock-control tall, so a label that
+     wrapped was clipped top and bottom: portrait 320px at 20-24px text (「이어읽기: 이사야 첫째 송가」, 「이어읽기:
+     2데살로니카 3장」 even after the short-name swap), and landscape 568px at every text size and 667px at 22-24px
+     (the pill between the tab bar and the search circle). The strip it replaced grew instead. min-width: 0 lets
+     the flex item shrink below its unwrapped text, which keeps the × in view and the compact measurement (link
+     width) meaningful. Screen readers still get the whole label (aria-label, or the text itself). */
+  .resume-banner-link {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  @media (orientation: portrait) {
+    /* The dock row sits at --space-1 above the bottom (plus the home indicator, like #tab-dock) and is
+       --dock-control tall; the pill keeps --space-2 above it. Nothing of #tab-dock reaches up here, so the
+       landscape pointer-events pass-through below is not needed. */
+    .resume-banner {
+      bottom: calc(var(--space-1) + var(--dock-control) + var(--space-2) + env(safe-area-inset-bottom) * 0.75);
+      left: var(--dock-left);
+      right: var(--dock-right);
+    }
+    /* The pill adds a row above the dock, so the list keeps that much more room at its bottom: the last
+       book cards (and chapter cells) scroll up clear of the pill as they clear the tab bar today. Beats
+       `body:not(.verse-select-active) #app` by specificity (2 ids). */
+    body:has(#resume-banner-slot .resume-banner) #app {
+      padding-bottom: calc(var(--tabbar-reserve) + var(--dock-control) + var(--space-2));
+    }
+  }
   @media (orientation: landscape) {
     .resume-banner {
-      position: fixed;
       bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
       left: calc(var(--dock-left) + var(--tab-bar-w, calc(var(--dock-control) * 4)) + var(--space-2));
       right: calc(var(--dock-right) + var(--dock-control) + var(--space-2));
-      height: var(--dock-control);
-      margin: 0;
-      /* dock 캡슐(탭바·검색·미니 오디오)과 동일 — 둥근 사각 --radius 대신 반원 캡 pill. */
-      border-radius: var(--radius-pill);
-      z-index: var(--nav-z);
     }
     /* 배치만 맡는 투명한 `#tab-dock` 요소가 가운데 빈 영역의 클릭을 가로채, 그 아래의 이어 읽기
        알약 단추(링크와 ×)가 눌리지 않았다. `#tab-dock` 요소는 DOM 순서로 배너보다 뒤에 있고 쌓임
@@ -4320,15 +4372,6 @@ mark.search-highlight--cut-start {
     body:has(#resume-banner-slot .resume-banner) #tab-dock { pointer-events: none; }
     body:has(#resume-banner-slot .resume-banner) #tab-bar,
     body:has(#resume-banner-slot .resume-banner) #tab-search-dock { pointer-events: auto; }
-    /* 닫기 × — 세로 구분선 제거 + × 키움 + 중심을 우측 반원 캡 중심에 정렬.
-       버튼 폭을 --dock-control(60px)로 두고 × 를 가운데 정렬하면 × 중심 = 버튼 중심 =
-       pill 우측 끝 −30px = 반원 캡(반지름 --dock-control/2=30px) 중심과 일치. */
-    .resume-banner-close {
-      align-self: stretch;
-      border-left: none;
-      width: var(--dock-control);
-      font-size: var(--font-2xl);
-    }
   }
 }
 

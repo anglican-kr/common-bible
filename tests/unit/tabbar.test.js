@@ -126,15 +126,17 @@ test("noticeBottom: 탭 독 위 8px — 업데이트 토스트가 탭 바를 가
   assert.equal(noticeBottom([box(600, 660)], 664), 72);
 });
 
-test("noticeBottom: 여러 막대 가운데 가장 위의 것 — 탭 독 위에 뜬 오디오 바, 선택 바 위의 카운트 칩", () => {
+test("noticeBottom: 여러 막대 가운데 가장 위의 것 — 탭 독 위에 뜬 오디오 바와 이어 읽기 알약, 선택 바 위의 카운트 칩", () => {
   const { noticeBottom } = noticeCtx();
   assert.equal(noticeBottom([box(600, 660), box(522, 583)], 664), 150);
   assert.equal(noticeBottom([box(600, 660), box(554, 592)], 664), 118);
+  // 세로의 이어 읽기 알약은 탭 독 위의 따로 된 줄이다(390×844: 독 780-840, 알약 712-772).
+  assert.equal(noticeBottom([box(780, 840), box(712, 772)], 844), 140);
 });
 
 test("noticeBottom: 숨은 막대(빈 상자)와 화면 위쪽 절반의 상자는 세지 않는다", () => {
   const { noticeBottom } = noticeCtx();
-  // 세로의 이어 읽기 배너는 헤더 아래에 붙어 있다.
+  // 큰 화면의 이어 읽기 배너는 헤더 아래에 붙어 있다.
   assert.equal(noticeBottom([box(0, 0), box(56, 100), box(600, 660)], 664), 72);
 });
 
