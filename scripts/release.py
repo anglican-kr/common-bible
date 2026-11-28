@@ -58,9 +58,12 @@ def write_sw_version(text: str, new_version: str) -> str:
 
 
 def release_commit_message(new_version: str) -> str:
-    """Subject of the release commit. `changelog.py` drops it by this format
-    (RELEASE_COMMIT_RE), so the two must change together."""
-    return f"release: {new_version} 릴리스"
+    """Subject of the version bump commit. The bump goes to dev and is first
+    published as a pre-release (`X.Y.Z-<app commit>`), so its type is
+    `pre-release` (user decision 2026-11-28; 2.2.5-2.2.9 used `release: X.Y.Z 릴리스`).
+    `changelog.py` drops it by this format (RELEASE_COMMIT_RE), so the two must
+    change together."""
+    return f"pre-release: {new_version}"
 
 
 def stage_and_commit(new_version: str) -> str:
