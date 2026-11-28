@@ -17,6 +17,7 @@
 
 실데이터(data/ 서브모듈)가 필요하다 — 로컬 전용(CLAUDE.md 「테스트」).
 """
+import base64
 import datetime
 import re
 
@@ -1789,6 +1790,71 @@ def test_picker_marks_whole_day_squares_and_one_fading_line_under_the_weekdays(m
     assert state["above"] >= 6 and state["below"] >= 6 and abs(state["above"] - state["below"]) <= 1, state
     assert state["gap"] <= 0, state
     assert state["scrim"] == 0, state
+
+
+_INK_ROWS = """async ([b64, w]) => { const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode();
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0);
+    const { data } = ctx.getImageData(0, 0, c.width, c.height); const s = c.width / w;
+    const x0 = Math.floor(c.width * 0.2), x1 = Math.ceil(c.width * 0.8), at = 4 * (Math.ceil(3 * s) * c.width + x0);
+    const bg = [data[at], data[at + 1], data[at + 2]];   // 줄 사이 선(칸의 맨 위 1px) 아래의 바탕
+    const runs = []; let start = -1;
+    for (let y = 0; y < c.height; y++) {
+        let ink = false;
+        for (let x = x0; x < x1 && !ink; x++) { const i = 4 * (y * c.width + x); ink = Math.abs(data[i] - bg[0]) + Math.abs(data[i + 1] - bg[1]) + Math.abs(data[i + 2] - bg[2]) > 60; }
+        if (ink && start < 0) start = y;
+        if (!ink && start >= 0) { runs.push([start / s, y / s]); start = -1; }
+    }
+    if (start >= 0) runs.push([start / s, c.height / s]);
+    return { h: c.height / s, runs: runs.filter(([a, b]) => b > 2) }; }"""
+
+
+def _date_cell_ink(page, date):
+    """목록 날짜 칸의 잉크 줄(CSS px): 날짜, 전례색, 요일. 줄 상자는 줄 높이와 글꼴의 여유를 품어 숫자와 한글의 잉크 자리를 알려 주지 않으므로, 칸을
+    찍은 그림에서 바탕과 다른 줄을 찾는다. 요일 글자는 획이 떨어져 여러 줄로 잡히므로 셋째부터는 하나로 묶는다."""
+    cell = page.locator(f"li[data-date='{date}'] .cal-row-date")
+    page.wait_for_selector("#launch-screen", state="detached", timeout=5_000)   # 런치 화면이 다 걷힌 뒤에 찍는다(2초 동안 옅어진다)
+    cell.evaluate("e => e.scrollIntoView({ block: 'center', behavior: 'instant' })")   # 고정된 주간 라벨과 상단 바에 가리지 않게
+    page.wait_for_timeout(100)
+    png = cell.screenshot()
+    ink = page.evaluate(_INK_ROWS, [base64.b64encode(png).decode(), cell.bounding_box()["width"]])
+    runs = ink["runs"]
+    day, mark, week = runs[0], runs[1], (runs[2][0], runs[-1][1])
+    return {"top": day[0], "above": mark[0] - day[1], "below": week[0] - mark[1], "bottom": ink["h"] - week[1]}
+
+
+def test_list_date_cell_keeps_date_bar_and_weekday_together_with_even_spacing(mobile_context):
+    """목록의 날짜 칸에서 날짜, 전례색 막대, 요일은 한 덩어리다. 보이는 글자 사이의 간격이 같고, 위아래에 같은 최소 여백이 있어 제목이 없는 날
+    (11월 28일)도 요일이 칸의 아래 끝에 붙지 않는다. 색이 둘 이상인 날(9월 16일)은 막대 대신 원을 한 줄에 나란히 둔다. 월간 달력의 날 판도 같고,
+    원이 있는 날도 한 주의 숫자 높이가 같다(사용자 결정 2026-11-28, ADR-060 §2). 전에는 날짜 아래가 12.75px, 요일 위가 4.5px였고 제목이 없는
+    날은 요일 아래가 0이었다."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    marks = """d => [...document.querySelectorAll(`li[data-date="${d}"] .cal-row-bar`)].map((b) => { const x = b.getBoundingClientRect();
+        return { top: Math.round(x.top), w: x.width, h: x.height, round: getComputedStyle(b).borderRadius }; })"""
+    _open_list(page, "calendar/list/2026-11-25")
+    for date in ("2026-11-28", "2026-11-26", "2026-11-25"):
+        m = _date_cell_ink(page, date)
+        assert abs(m["above"] - m["below"]) <= 2, (date, m)   # 날짜와 막대, 막대와 요일 사이가 같다
+        assert m["bottom"] >= 12, (date, m)   # 요일이 아래 끝에 붙지 않는다
+        if date == "2026-11-28":
+            assert abs(m["top"] - m["bottom"]) <= 3, m   # 제목이 없는 날은 덩어리의 위아래 여백이 같다
+        bars = page.evaluate(marks, date)
+        assert len(bars) == 1 and bars[0]["w"] > bars[0]["h"] * 2, (date, bars)
+    _open_list(page, "calendar/list/2026-09-16")
+    m = _date_cell_ink(page, "2026-09-16")
+    assert abs(m["above"] - m["below"]) <= 2, m
+    circles = page.evaluate(marks, "2026-09-16")
+    assert len(circles) == 2 and len({x["top"] for x in circles}) == 1, circles   # 한 줄에
+    assert all(abs(x["w"] - x["h"]) < 0.5 and x["round"] == "50%" for x in circles), circles   # 원
+    _open_picker(page)
+    picker = page.evaluate("""() => { const cell = (d) => document.querySelector(`.cal-picker-day[data-date="${d}"]`);
+        const num = (d) => Math.round(cell(d).querySelector('.cal-picker-num').getBoundingClientRect().top * 10) / 10;
+        const marks = [...cell('2026-09-16').querySelectorAll('.cal-picker-bar')].map((b) => { const x = b.getBoundingClientRect();
+            return [Math.round(x.top), x.width, x.height, getComputedStyle(b).borderRadius]; });
+        return { nums: [num('2026-09-15'), num('2026-09-16'), num('2026-09-17')], marks }; }""")
+    assert len(set(picker["nums"])) == 1, picker   # 원이 있는 날도 숫자가 같은 높이다
+    assert len(picker["marks"]) == 2 and picker["marks"][0][0] == picker["marks"][1][0], picker
+    assert all(abs(w - h) < 0.5 and r == "50%" for _, w, h, r in picker["marks"]), picker
 
 
 def _open_picker(page):
