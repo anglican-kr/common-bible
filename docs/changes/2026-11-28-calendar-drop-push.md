@@ -55,7 +55,7 @@ pr: 681
 - `docs/topics/routing.md` 「컴포넌트와 뷰 층 모듈화」: 오버레이 제어기의 `modal`, `onNavigateAway`, 한 번에 한 층
 - `docs/topics/design-system.md` pitfalls §44: 자르기와 옮기기가 맞물리는 가장자리를 바탕으로 덮는 사례와 규칙
 - `docs/decisions/038-calendar-lectionary-ui.md` §3 「날짜 이동 줄」: 「오늘」은 늘 맨 위부터
-- `docs/decisions/038-calendar-lectionary-ui.md` §2 「날짜 고르기」: 큰 화면 팝오버의 날 판도 전례색 막대와 요일 아래의 선 하나. 「검토한 대안 — 날짜 고르기」 J, K
+- `docs/decisions/038-calendar-lectionary-ui.md` §2 「날짜 고르기」: 큰 화면 팝오버의 날 판도 전례색 막대와 요일 아래의 선 하나, 없앤 「닫기」. 「검토한 대안 — 날짜 고르기」 J, K
 - `docs/topics/liturgical.md` 「캘린더 탭과 상단 바」: 「오늘」은 늘 맨 위부터
 - `DESIGN.md` 「캘린더 날짜 고르기」: 뒤 가림을 없애고 화면을 밀어 내는 것, 둥글리지 않는 아래 모서리와 없앤 그림자, 없앤 「닫기」, 요일 아래의 선 하나, 전례색 막대
 - `DESIGN.md` 「캘린더 목록」, `docs/topics/liturgical.md` 「캘린더 목록 보기」: 오늘 날짜 칸의 중립 차콜, 날짜 칸의 덩어리와 같은 간격, 둘 이상의 색은 원
