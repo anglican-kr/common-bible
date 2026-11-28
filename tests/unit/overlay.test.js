@@ -176,6 +176,7 @@ function makeEnv() {
     createOverlay: ctx.appOverlay.createOverlay,
     closeAllOverlays: ctx.appOverlay.closeAllOverlays,
     whenNoOverlayOpen: ctx.appOverlay.whenNoOverlayOpen,
+    anyOverlayOpen: ctx.appOverlay.anyOverlayOpen,
     attachSheetDrag: ctx.appOverlay.attachSheetDrag,
     attachSheetResize: ctx.appOverlay.attachSheetResize,
     document,
@@ -346,6 +347,52 @@ test("outside click: a node the click re-rendered out of the panel still counts 
   assert.equal(ov.isOpen, true);
 });
 
+test("modal: false leaves the background usable — no inert, no focus trap, no outside-click close (ADR-058 §3)", () => {
+  const env = makeEnv();
+  const panel = new env.StubEl();
+  const outside = new env.StubEl();
+  const trigger = new env.StubEl();
+  trigger.setAttribute("id", "drop");
+  const ov = env.createOverlay({ panel, modal: false, inertSelectors: "main", closeOnOutside: true, ariaExpanded: "#drop" });
+
+  ov.open();
+  env.flushRaf();
+  assert.equal(panel.hidden, false);
+  assert.equal(trigger.getAttribute("aria-expanded"), "true");
+  assert.deepEqual(env.inertCalls, []);
+  assert.deepEqual(env.trapCalls, []);
+  assert.equal(env.document._listenerCount("click"), 0);
+  env.document._dispatch("click", clickOn(outside, [outside]));
+  assert.equal(ov.isOpen, true);
+
+  ov.close();
+  assert.equal(panel.hidden, true);
+  assert.deepEqual(env.inertCalls, []);   // nothing to undo
+  assert.equal(env.getTrapCleanupCount(), 0);
+  assert.equal(trigger.getAttribute("aria-expanded"), "false");
+});
+
+test("modal: a function is read at each open, and close undoes only what that open did", () => {
+  const env = makeEnv();
+  const panel = new env.StubEl();
+  let large = false;
+  const ov = env.createOverlay({ panel, modal: () => large, inertSelectors: "main" });
+
+  ov.open();
+  large = true;   // the layout changes while open: close must not lift an inert that open never set
+  ov.close();
+  assert.deepEqual(env.inertCalls, []);
+  assert.equal(env.getTrapCleanupCount(), 0);
+
+  ov.open();
+  assert.deepEqual(env.inertCalls, [[true, "main"]]);
+  assert.equal(env.trapCalls.length, 1);
+  large = false;
+  ov.close();
+  assert.deepEqual(env.inertCalls, [[true, "main"], [false, "main"]]);
+  assert.equal(env.getTrapCleanupCount(), 1);
+});
+
 // ── misc ─────────────────────────────────────────────────────────────────────
 
 test("idempotency: re-open / re-close are no-ops", () => {
@@ -486,6 +533,110 @@ test("closeAllOverlays: force-hides an animated panel mid-dismiss (isOpen alread
   assert.equal(panel.hidden, false); // still visible (animation in flight)
   env.closeAllOverlays(); // navigation lands mid-dismiss
   assert.equal(panel.hidden, true); // force-hidden so it doesn't linger over the next view
+});
+
+test("closeAllOverlays: onNavigateAway runs instead of the force-hide, open or mid-dismiss, and the exit finishes over the new view (ADR-058 §3)", () => {
+  const env = makeEnv();
+  const panel = new env.StubEl();
+  /** @type {(() => void) | null} */
+  let finalize = null;
+  let away = 0;
+  const ov = env.createOverlay({ panel, onNavigateAway: () => { away++; }, closeTransition: (_p, done) => { finalize = done; } });
+  ov.open();
+  env.closeAllOverlays();   // open: close() runs, then the hook
+  assert.equal(ov.isOpen, false);
+  assert.equal(panel.hidden, false);   // still folding away
+  assert.equal(away, 1);
+  env.closeAllOverlays();   // mid-dismiss (a normal close the reader made just before leaving): the hook again, no force-hide
+  assert.equal(away, 2);
+  assert.equal(panel.hidden, false);
+  /** @type {() => void} */ (/** @type {unknown} */ (finalize))();
+  assert.equal(panel.hidden, true);
+  env.closeAllOverlays();   // hidden: nothing to settle
+  assert.equal(away, 2);
+});
+
+test("closeAllOverlays({ keepNonBlocking }): a same-address redraw leaves an open non-blocking overlay open and closes the rest (ADR-058 §3)", () => {
+  const env = makeEnv();
+  const drop = new env.StubEl();
+  const sheet = new env.StubEl();
+  let away = 0;
+  const dropOv = env.createOverlay({ panel: drop, modal: false, onNavigateAway: () => { away++; } });
+  const sheetOv = env.createOverlay({ panel: sheet, modal: false });
+  const blocking = env.createOverlay({ panel: new env.StubEl() });
+  dropOv.open();
+  sheetOv.open();
+  env.closeAllOverlays({ keepNonBlocking: true });
+  assert.equal(dropOv.isOpen && sheetOv.isOpen, true);
+  assert.equal(drop.hidden, false);
+  assert.equal(away, 0);
+  blocking.open();   // closes the non-blocking ones (one layer at a time)
+  env.closeAllOverlays({ keepNonBlocking: true });
+  assert.equal(blocking.isOpen, false);
+  dropOv.open();
+  env.closeAllOverlays();   // a real navigation still closes it (no exit animation here, so no hook either)
+  assert.equal(dropOv.isOpen, false);
+  assert.equal(drop.hidden, true);
+});
+
+test("closeAllOverlays({ keepNonBlocking }): a non-blocking panel mid-dismiss finishes its own exit, without onNavigateAway (ADR-058 §3)", () => {
+  const env = makeEnv();
+  const drop = new env.StubEl();
+  /** @type {(() => void) | null} */
+  let finalize = null;
+  let away = 0;
+  const dropOv = env.createOverlay({ panel: drop, modal: false, onNavigateAway: () => { away++; }, closeTransition: (_p, done) => { finalize = done; } });
+  dropOv.open();
+  dropOv.close();   // folding up
+  env.closeAllOverlays({ keepNonBlocking: true });   // a same-address redraw lands mid-fold
+  assert.equal(away, 0);
+  assert.equal(drop.hidden, false);
+  /** @type {() => void} */ (/** @type {unknown} */ (finalize))();
+  assert.equal(drop.hidden, true);
+});
+
+test("whenNoOverlayOpen: an open non-blocking overlay does not hold the work back (ADR-058 §3)", async () => {
+  const env = makeEnv();
+  const dropOv = env.createOverlay({ panel: new env.StubEl(), modal: false });
+  const modalOv = env.createOverlay({ panel: new env.StubEl(), modal: () => true });
+  const ran = [];
+  dropOv.open();
+  assert.equal(env.anyOverlayOpen(), false);
+  env.whenNoOverlayOpen(() => ran.push("now"));
+  assert.deepStrictEqual(ran, ["now"]);
+  modalOv.open();
+  assert.equal(env.anyOverlayOpen(), true);
+  env.whenNoOverlayOpen(() => ran.push("later"));
+  assert.deepStrictEqual(ran, ["now"]);
+  modalOv.close();
+  await Promise.resolve();
+  assert.deepStrictEqual(ran, ["now", "later"]);
+});
+
+test("open: a blocking overlay closes an open non-blocking one first, which hands focus back before the capture (ADR-058 §3)", () => {
+  const env = makeEnv();
+  const drop = new env.StubEl();
+  const sheet = new env.StubEl();
+  const chip = new env.StubEl();
+  const icon = new env.StubEl();
+  const order = [];
+  const dropOv = env.createOverlay({ panel: drop, modal: false, onClose: () => { order.push("drop closed"); env.setActive(icon); } });
+  const sheetOv = env.createOverlay({ panel: sheet, inertSelectors: "main" });
+  const otherDrop = env.createOverlay({ panel: new env.StubEl(), modal: false });
+  dropOv.open();
+  otherDrop.open();   // two non-blocking ones stay open together
+  assert.equal(dropOv.isOpen && otherDrop.isOpen, true);
+  env.setActive(chip);
+  sheetOv.open();
+  assert.equal(dropOv.isOpen, false);
+  assert.equal(otherDrop.isOpen, false);
+  assert.deepEqual(order, ["drop closed"]);
+  sheetOv.close();
+  assert.equal(env.getActive(), icon);   // the sheet returns focus to where the closing drop left it
+  // A non-blocking open leaves a blocking one alone
+  sheetOv.open();
+  dropOv.open();
+  assert.equal(sheetOv.isOpen, true);
 });
 
 test("closeAllOverlays: leaves an already-hidden, never-opened overlay untouched", () => {

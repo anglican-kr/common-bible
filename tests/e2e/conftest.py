@@ -319,6 +319,23 @@ def open_settings(page):
     return popover
 
 
+# 프레임마다 주소, 판이 보이는지, 접히는 중인지, 화면(#app)이 밀려난 길이를 window.__frames에 적는다. 다른 화면으로 가는 순간의 모습을 본다.
+RECORD_FRAMES = """() => { window.__frames = []; const tick = () => { const p = document.querySelector('.cal-picker');
+    const t = getComputedStyle(document.getElementById('app')).transform;
+    window.__frames.push({ path: location.pathname, shown: !!p && !p.hidden, closing: !!p && p.classList.contains('cal-picker-closing'),
+        pushed: t === 'none' ? 0 : new DOMMatrixReadOnly(t).m42 });
+    if (window.__frames.length < 120) requestAnimationFrame(tick); }; requestAnimationFrame(tick); }"""
+
+
+def assert_calendar_folds_over_the_new_screen(page, path):
+    """다른 화면으로 간 뒤의 프레임들: 새 화면은 처음부터 밀려나 있지 않고, 달력은 그 위에서 접히다가 숨는다(ADR-058 §3, 사용자 결정 2026-11-28)."""
+    page.wait_for_timeout(700)
+    after = [f for f in page.evaluate("window.__frames") if f["path"] == path]
+    assert after and all(f["pushed"] == 0 for f in after), after[:5]
+    assert after[0]["shown"] and after[0]["closing"], after[:5]   # 바로 숨지 않고 접힌다
+    assert not after[-1]["shown"], after[-3:]
+
+
 def press_center(page, selector) -> None:
     """좌표로 누른다. Playwright의 click은 누르기 전에 요소를 화면 안으로 스크롤하는데, 목록 화면의 위쪽 여백(scroll-padding-top) 때문에
     상단 바 안의 단추에서도 페이지를 스크롤한다. 사람이 누를 때는 그런 스크롤이 없다."""

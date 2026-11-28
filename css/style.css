@@ -102,9 +102,10 @@
   --lit-rose: #e39bb9;
   --lit-blue: #3b6fb6;
   --lit-swatch-border: rgba(0, 0, 0, 0.25);
-  /* 캘린더 목록의 날짜 칸(ADR-060 §2). 바탕은 줄과 다른 옅은 색이고, 오늘은 짙은 남색으로 채운다. 흰 전례색 막대는 가는 선으로 두른다. */
+  /* 캘린더 목록의 날짜 칸(ADR-060 §2). 바탕은 줄과 다른 옅은 색이고, 오늘은 중립 차콜(--accent, 월간 달력에서 고른 날과 같은 색)로 채운다
+     (사용자 결정 2026-11-28. 그전에는 네이비 #22244a). 흰 전례색 막대는 가는 선으로 두른다. */
   --cal-date-bg: #f1eee9;
-  --cal-today-bg: #22244a;
+  --cal-today-bg: var(--accent);
   --cal-today-text: #ffffff;
   --cal-white-bar-edge: 0 0 0 1px #d9d3c8;
   --cal-bar-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
@@ -256,7 +257,7 @@
   --danger-border: #884444;
   --lit-swatch-border: rgba(255, 255, 255, 0.35);
   --cal-date-bg: #2a2a48;
-  --cal-today-bg: #8ab4d8;
+  --cal-today-bg: var(--accent);
   --cal-today-text: #1f1f36;
   --cal-white-bar-edge: inset 0 0 0 1px #ffffff;
   --cal-bar-shadow: 0 0 0 1px var(--text);
@@ -1365,7 +1366,9 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
   width: 3.25rem;
   justify-content: flex-start;
   gap: 0;
-  padding-top: var(--space-3);
+  /* 날짜, 전례색 막대, 요일은 한 덩어리이고 위아래에 같은 최소 여백을 둔다(사용자 결정 2026-11-28). 제목이 없는 날은 오른쪽 글이 짧아 이 덩어리가
+     줄의 높이를 정하는데, 아래 여백이 없어 요일이 칸의 아래 끝에 붙었다. 덩어리는 위에서부터 두어 날짜가 오른쪽 첫 줄과 같은 높이에 있다 */
+  padding: var(--space-3) 0;
   box-sizing: border-box;
   background: var(--cal-date-bg);
 }
@@ -1384,13 +1387,15 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
   color: var(--cal-today-text);
   font-weight: 700;
 }
-/* 색이 둘이면 막대 둘을 위아래로 둔다. 함께 쓰는 두 색과 성인에 따라 「또는」인 두 색이 같다(ADR-060 §2, 사용자 결정 2026-11-27). */
+/* 날짜, 막대, 요일 사이의 간격은 같다(사용자 결정 2026-11-28). 날짜의 줄 높이가 요일보다 커서 같은 여백을 주면 날짜 아래가 넓어 보였다(390px에서 숫자
+   아래 12.75px, 요일 위 4.5px). 막대를 날짜 쪽으로 옮겨 두 간격을 같게 하고(약 8.6px) 덩어리의 높이는 그대로 둔다. rem이라 글자 크기를 바꿔도
+   비율이 같다. 색이 둘 이상이면 막대 대신 원을 한 줄에 나란히 둔다(사용자 결정 2026-11-28. 그전에는 막대 둘을 위아래로). 함께 쓰는 두 색과
+   성인에 따라 「또는」인 두 색이 같다(ADR-060 §2). */
 .cal-row-colors {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: var(--space-0_5);
-  margin: 0.3rem 0 0.25rem;
+  gap: 0.15rem;
+  margin: 0.07rem 0 0.44rem;
 }
 /* 끝이 둥근 짧은 가로 막대. 라이트 모드는 모든 막대에 옅은 그림자를 두고, 흰색에는 옅은 선을 더한다. 다크 모드는 그림자 대신 날짜 글자색의
    가는 테두리다. 짙은 바탕에 막대가 묻히기 때문이다. 흰색은 제 선이 있어 테두리를 두르지 않는다(사용자 결정 2026-11-27). */
@@ -1406,6 +1411,12 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
 [data-theme="dark"] .cal-row-bar.lit-swatch--white { box-shadow: var(--cal-white-bar-edge); }
 /* 오늘 칸은 진한 바탕이라 라이트 모드에서도 날짜 글자색의 가는 테두리를 두른다. */
 .cal-list .cal-row--today .cal-row-bar { box-shadow: 0 0 0 1px var(--cal-today-text); }
+/* 색이 둘 이상인 날의 원 */
+.cal-row-colors:has(> :nth-child(2)) > .cal-row-bar {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+}
 .cal-list .cal-row-body > :first-child { margin-top: 0; }
 /* 제목이 없는 날은 첫 줄의 글자가 작아, 그 첫 줄의 가운데를 날짜 글자의 가운데에 맞춘다(사용자 결정 2026-11-27). 줄 높이를 바꾸지 않고
    그 자리에서 내리기만 한다(position: relative). 위 여백으로 내리면 목록으로 돌아올 때 주소의 줄이 아니라 그 앞 주일 줄이 맨 위에 왔다
@@ -1463,14 +1474,38 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
 .lect-date > .cal-title-btn::after { content: none; }
 
 /* 내려오는 달력: 상단 바의 아래 끝에서 시작해 높이는 내용만큼이다. 자리(top)와 높이 제한(max-height)은 calendar.js `placePicker`가 상단 바를 재어
-   준다. 뒤 가림도 상단 바 아래부터라, 달력을 연 아이콘이 있는 상단 바는 가리지 않는다. */
-.cal-picker-scrim {
+   준다. 뒤를 어둡게 가리지 않고, 그 아래의 화면(#app)을 달력의 높이만큼 밀어 낸다(ADR-058 §3, 사용자 결정 2026-11-28). 상단 바와 달력이 맨 위 층이고
+   밀려난 화면이 그 아래 층이다. 밀어 낸 길이(--cal-drop-h)는 calendar.js `pushScreen`이 달력을 재어 준다. 옮기기(transform)라 문서의 배치와 스크롤
+   값은 그대로이고, 움직임은 달력이 펼쳐지고 접히는 것과 같은 시간과 속도다. 화면을 옮기면 상단 바에 가려져 있던 줄이 상단 바 아래로 나오는데, 달력과
+   그 뒤의 바탕(.cal-picker-backing)이 덮는다. 바탕은 화면과 같은 옮기기로 움직여, 쉴 때는 상단 바 뒤에 있고 아래 끝이 늘 밀려난 화면의 위 끝에 있다.
+   좁은 판의 양옆(가로 화면)과 판의 자르기보다 화면의 옮기기가 앞서는 프레임(아이폰 Safari, pitfalls §44)에 그 줄이 비치지 않는다. 달력의 아래
+   모서리는 둥글리지 않고 그림자도 두지 않는다. 상단 바와 달력이 한 층이고 그 아래에 밀려난 화면이 맞닿기 때문이다(사용자 결정 2026-11-28). */
+.cal-picker-backing {
   position: fixed;
-  inset: 0;
-  z-index: 70;
-  background: rgba(0, 0, 0, 0.4);
+  left: 0;
+  right: 0;
+  /* 화면(#app) 위, 상단 바(#sticky-group, 20) 아래 */
+  z-index: 19;
+  height: var(--cal-drop-h, 0px);
+  margin-top: calc(-1 * var(--cal-drop-h, 0px));
+  background: var(--bg);
+  pointer-events: none;
 }
-.cal-picker-scrim[hidden],
+@media not all and (min-width: 700px) and (min-height: 600px) {
+  main#app,
+  .cal-picker-backing { transition: transform var(--duration-base) ease-in; }
+  html.cal-drop main#app,
+  html.cal-drop .cal-picker-backing {
+    transform: translateY(var(--cal-drop-h, 0px));
+    transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+  /* 키보드로 옮긴 포커스가 화면 아래로 밀려난 자리나 달력에 가려진 자리에 가지 않게 한다. 밀려난 화면의 줄은 화면에서 달력의 높이만큼 아래에 있다.
+     위쪽 여백은 포커스가 밀려난 화면(#app) 안에 있을 때만 늘린다. 상단 바의 단추는 여백 안에 있어, 그 단추로 포커스가 가면 브라우저가 단추를
+     가려진 것으로 보고 늘린 만큼 페이지를 스크롤했다(known-issues §56, 코드 리뷰 2026-11-28) */
+  html.cal-drop { scroll-padding-bottom: var(--cal-drop-h, 0px); }
+  html.cal-drop:has(main#app:focus-within) { scroll-padding-top: calc(var(--top-bar-h, 0px) + var(--cal-drop-h, 0px)); }
+  html.cal-drop:has(main#app:focus-within):has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week-h) + 8px + var(--cal-drop-h, 0px)); }
+}
 .cal-picker[hidden],
 .cal-picker-title[hidden] { display: none; }
 .cal-picker {
@@ -1486,8 +1521,7 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
   line-height: var(--leading-snug);
   color: var(--text);
   background: var(--bg);
-  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
-  box-shadow: var(--shadow-2);
+  border-radius: 0;
   /* 화면이 낮으면(휴대폰을 가로로 든 때) 판을 화면 안에 두고 판의 칸만 스크롤한다 */
   display: flex;
   flex-direction: column;
@@ -1502,18 +1536,18 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
   margin: -4px;
 }
 /* 상단 바 아래에서 펼쳐져 내려오고 위로 접혀 올라간다. 판(.cal-picker)은 옮기지 않고 자르기(clip-path)의 아래 끝만 움직이며, 안의 머리와 칸이 16px 위에서
-   미끄러져 내려온다. 판의 위 끝은 움직이지 않아 늘 상단 바의 아래 끝에 있고, 판 위로 나간 내용은 판의 자르기가 가린다. 그림자가 잘리지 않게 아래와 옆은
-   여유를 둔다. 펼치기 시작의 아래쪽을 판 높이보다 16px 더 잘라, 펼쳐지는 아래 끝이 판째로 옮기던 때와 같은 자리에 있다.
+   미끄러져 내려온다. 판의 위 끝은 움직이지 않아 늘 상단 바의 아래 끝에 있고, 판 위로 나간 내용은 판의 자르기가 가린다. 보이는 아래
+   끝은 상단 바의 아래 끝에서 시작해, 같은 속도로 밀려나는 화면의 위 끝과 함께 움직인다(어긋나면 위의 바탕이 덮는다).
    판째로 옮기면서(transform) 위쪽을 같은 만큼 잘라 위 끝을 맞추던 때는, 아이폰 Safari가 옮기기는 합성 스레드에서, 자르기는 메인 스레드에서 움직여 한두
    프레임 어긋났다. 어긋난 만큼 판과 상단 바 사이에 뒤 가림이 비쳐, 열 때 어두운 선이 생겼다가 얇아지며 사라졌다(사용자 보고 2026-11-28). 이제 위 끝을
    정하는 값은 움직이지 않으므로 두 움직임이 어긋나도 틈이 생기지 않는다 */
 @keyframes cal-picker-in-down {
-  from { clip-path: inset(0 -32px calc(100% + 16px) -32px); }
-  to { clip-path: inset(0 -32px -32px -32px); }
+  from { clip-path: inset(0 0 100% 0); }
+  to { clip-path: inset(0); }
 }
 @keyframes cal-picker-out-up {
-  from { clip-path: inset(0 -32px -32px -32px); }
-  to { clip-path: inset(0 -32px calc(100% + 16px) -32px); }
+  from { clip-path: inset(0); }
+  to { clip-path: inset(0 0 100% 0); }
 }
 @keyframes cal-picker-slide-in {
   from { transform: translateY(-16px); }
@@ -1534,19 +1568,7 @@ html:has(.cal-list) { scroll-padding-top: calc(var(--top-bar-h) + var(--cal-week
 .cal-picker.cal-picker-closing > * {
   animation: cal-picker-slide-out var(--duration-base) ease-in both;
 }
-/* 「닫기」는 화면에 보이지 않다가 포커스를 받으면 나타난다(calendar.js `ensurePicker`) */
-.cal-picker-close:not(:focus) {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  min-width: 0;
-  min-height: 0;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-}
-.cal-picker-close:focus { align-self: flex-end; }
-/* 바텀 시트와 사이드 패널의 「닫기」 글자 단추. 인용 시트, 북마크 패널, 책 고르기 시트가 같이 쓰고 자리는 머리의 오른쪽 끝이다. 날짜 고르기도 같은 단추를 쓰지만 포커스를 받을 때만 보인다
+/* 바텀 시트와 사이드 패널의 「닫기」 글자 단추. 인용 시트, 북마크 패널, 책 고르기 시트가 같이 쓰고 자리는 머리의 오른쪽 끝이다
    (DESIGN.md 「시트 vs 모달」, 사용자 결정 2026-11-17). 글자 크기와 색, 최소 크기(44px)가 모두 같다. 모달은 ×를 그대로 둔다. */
 .sheet-close {
   flex-shrink: 0;
@@ -1626,7 +1648,7 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   cursor: default;
 }
 
-/* 날 판(목록): 요일 머리는 월간 칸의 요일(.cal-grid th)과 같다. 다른 달의 날은 빈 칸이다. 날 아래에는 월간 칸과 같은 색 점을 작게 둔다. */
+/* 날 판(목록): 요일 머리는 월간 칸의 요일(.cal-grid th)과 같다. 다른 달의 날은 빈 칸이다. 날 아래에는 목록의 날짜 칸과 같은 전례색 막대를 둔다. */
 .cal-picker-days {
   width: 100%;
   border-collapse: collapse;
@@ -1640,38 +1662,39 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   text-align: center;
 }
 .cal-picker-days td { padding: 1px 0; text-align: center; }
-/* 주와 주 사이의 선은 목록의 선처럼 양 끝으로 갈수록 투명해진다(사용자 결정 2026-11-27). 표의 줄(tr)에는 바탕을 그리지 못하는 브라우저가 있어,
-   칸마다 일곱 칸 너비의 그라디언트를 깔고 칸의 자리만큼 옮겨 한 줄로 잇는다 */
-.cal-picker-days tbody tr + tr td {
+/* 선은 요일 머리와 날짜 사이에 하나만 둔다. 주와 주 사이에는 두지 않는다(사용자 결정 2026-11-28. 2026-11-27부터는 주 사이에 있었다). 목록의 선처럼
+   양 끝으로 갈수록 투명해진다. 표의 줄(tr)에는 바탕을 그리지 못하는 브라우저가 있어, 요일 칸마다 일곱 칸 너비의 그라디언트를 아래 끝에 깔고 칸의
+   자리만큼 옮겨 한 줄로 잇는다 */
+.cal-picker-days thead th {
   background-image: linear-gradient(to right, transparent, var(--border) 20%, var(--border) 80%, transparent);
   background-size: 700% 1px;
   background-repeat: no-repeat;
 }
-.cal-picker-days tbody tr + tr td:nth-child(1) { background-position: 0 0; }
-.cal-picker-days tbody tr + tr td:nth-child(2) { background-position: calc(100% / 6) 0; }
-.cal-picker-days tbody tr + tr td:nth-child(3) { background-position: calc(200% / 6) 0; }
-.cal-picker-days tbody tr + tr td:nth-child(4) { background-position: 50% 0; }
-.cal-picker-days tbody tr + tr td:nth-child(5) { background-position: calc(400% / 6) 0; }
-.cal-picker-days tbody tr + tr td:nth-child(6) { background-position: calc(500% / 6) 0; }
-.cal-picker-days tbody tr + tr td:nth-child(7) { background-position: 100% 0; }
+.cal-picker-days thead th:nth-child(1) { background-position: 0 100%; }
+.cal-picker-days thead th:nth-child(2) { background-position: calc(100% / 6) 100%; }
+.cal-picker-days thead th:nth-child(3) { background-position: calc(200% / 6) 100%; }
+.cal-picker-days thead th:nth-child(4) { background-position: 50% 100%; }
+.cal-picker-days thead th:nth-child(5) { background-position: calc(400% / 6) 100%; }
+.cal-picker-days thead th:nth-child(6) { background-position: calc(500% / 6) 100%; }
+.cal-picker-days thead th:nth-child(7) { background-position: 100% 100%; }
+/* 선 아래의 첫 주가 선에 붙지 않게 한다 */
+.cal-picker-days tbody tr:first-child td { padding-top: var(--space-1); }
 .cal-picker-day {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-0_5);
+  gap: var(--space-1);
   min-height: var(--touch-target);
+  padding: var(--space-1) 0;
+  box-sizing: border-box;
   border-radius: var(--radius-sm);
   color: var(--text);
   text-decoration: none;
 }
+/* 날짜와 그 아래의 막대는 한 덩어리로 칸의 가운데에 둔다. 숫자는 글자 높이만 차지해, 지금 보는 날의 채운 사각형 안에서 덩어리의 위아래에 여유가
+   남는다(사용자 결정 2026-11-28). 전에는 숫자가 2rem 원의 자리를 차지해 점이 사각형의 아래 끝에 붙었다 */
 .cal-picker-num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: var(--radius-pill);
   font-size: var(--font-md);
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -1687,19 +1710,39 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   color: var(--bg);
 }
 .cal-picker-day.is-selected .cal-picker-num { font-weight: 600; }
-/* 채운 칸 위의 색 점은 바탕과 비슷할 수 있어(자색 점과 남색 바탕) --bg 테두리를 두른다 */
-.cal-picker-day.is-selected .cal-picker-dot { box-shadow: 0 0 0 1px var(--bg); }
 .cal-picker-day.is-today:not(.is-selected) { box-shadow: inset 0 0 0 1.5px var(--accent); }
 .cal-picker-day.is-today:not(.is-selected) .cal-picker-num { font-weight: 600; }
-.cal-picker-dots {
+/* 작은 화면의 달력에서 첫 주와 마지막 주의 빈 칸을 채운 앞뒤 달의 날은 흐리게 그린다. 누를 수 있으므로 숫자는 바탕과 4.5:1을 넘는
+   --text-tertiary이고(라이트 4.57:1, 다크 4.9:1), 막대는 흐리게 둔다(ADR-058 §3, 사용자 결정 2026-11-28) */
+.cal-picker-day.is-outside .cal-picker-num { color: var(--text-tertiary); }
+.cal-picker-day.is-outside .cal-picker-bars { opacity: 0.4; }
+.cal-picker-bars {
   display: flex;
-  gap: 2px;
-  min-height: 0.32rem;
+  align-items: center;
+  gap: 0.15rem;
+  height: 0.25rem;
 }
-.cal-picker-dot {
-  width: 0.32rem;
-  height: 0.32rem;
+/* 목록의 날짜 칸의 막대(.cal-row-bar)와 같은 크기와 그림자다. 색이 둘 이상이면 목록처럼 막대 대신 원을 한 줄에 나란히 둔다(사용자 결정
+   2026-11-28). 막대와 원의 높이가 달라도 숫자가 한 주에서 같은 높이에 오게, 자리의 높이는 막대의 높이로 두고 원은 그 가운데에서 위아래로
+   조금 넘친다. 막대가 덩어리의 아래 끝이라 덩어리가 사각형의 가운데에 온다 */
+.cal-picker-bar {
+  display: block;
+  width: 0.875rem;
+  height: 0.25rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  box-shadow: var(--cal-bar-shadow);
 }
+.cal-picker-bars:has(> :nth-child(2)) > .cal-picker-bar {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+}
+.cal-picker-bar.lit-swatch--white { box-shadow: var(--cal-white-bar-edge), var(--cal-bar-shadow); }
+[data-theme="dark"] .cal-picker-bar.lit-swatch--white { box-shadow: var(--cal-white-bar-edge); }
+/* 채운 칸 위의 막대는 바탕과 비슷할 수 있어(자색 막대와 남색 바탕) --bg 테두리를 두른다. 다크 모드의 흰 막대 규칙과 명시도가 같아 그 뒤에 둔다.
+   앞에 두면 다크 모드에서 고른 날의 흰 막대가 이 테두리를 잃는다 */
+.cal-picker-day.is-selected .cal-picker-bar { box-shadow: 0 0 0 1px var(--bg); }
 
 /* 달 판과 해 판: 네 칸씩 세 줄, 글자만. 지금 보는 것은 채운 알약, 오늘이 있는 달과 해는 테두리 알약이다. */
 .cal-picker-grid {
@@ -1740,7 +1783,7 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
 /* 마우스를 쓰는 넓은 화면: 제목 아래 팝오버(장 고르기 팝오버 .chapter-popover와 같은 반경, 그림자, 테두리). 다른 시트는 이 조건에서 오른쪽
    패널로 바뀌지만, 이 판은 작아서 팝오버로 둔다(DESIGN.md §6). 자리(top, left)는 calendar.js placePicker가 제목 단추로 잰다. */
 @media (min-width: 700px) and (min-height: 600px) {
-  .cal-picker-scrim { display: none; }
+  .cal-picker-backing { display: none; }
   .cal-picker {
     right: auto;
     bottom: auto;
@@ -1755,7 +1798,6 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   }
   .cal-picker:not([hidden]):not(.cal-picker-closing),
   .cal-picker:not([hidden]):not(.cal-picker-closing) > * { animation: none; }
-  .cal-picker-close { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1763,6 +1805,8 @@ button.cal-picker-title:focus-visible { background: var(--bg-card); }
   .cal-picker:not([hidden]):not(.cal-picker-closing) > *,
   .cal-picker.cal-picker-closing,
   .cal-picker.cal-picker-closing > * { animation: none; }
+  main#app,
+  .cal-picker-backing { transition: none; }
 }
 
 /* In-page search input (mirrors the header #search-bar, used in #app). */

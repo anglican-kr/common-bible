@@ -17,6 +17,7 @@
 
 실데이터(data/ 서브모듈)가 필요하다 — 로컬 전용(CLAUDE.md 「테스트」).
 """
+import base64
 import datetime
 import re
 
@@ -25,10 +26,12 @@ import pytest
 from .conftest import (
     CLEAR_APP_STORAGE,
     IPHONE_UA,
-    assert_sheet_close_button,
     emulate_side_safe_areas,
     emulate_status_bar,
     press_center,
+    RECORD_ANNOUNCEMENTS,
+    RECORD_FRAMES,
+    assert_calendar_folds_over_the_new_screen,
 )
 
 BASE = "http://localhost:8080"
@@ -886,16 +889,18 @@ def test_date_cell_and_first_line_start_at_the_same_height(mobile_context):
     assert all(abs(g) <= 1 for g in gaps), gaps
 
 
-def test_two_colours_of_the_saints_are_two_bars_one_above_the_other(mobile_context):
-    """성인에 따라 「적색 또는 백색」인 날은 막대 둘을 위아래로 둔다. 색 이름은 링크 이름에 있다(ADR-060 §2, 사용자 결정 2026-11-27)."""
+def test_two_colours_of_the_saints_are_two_circles_in_one_row(mobile_context):
+    """성인에 따라 「적색 또는 백색」인 날은 막대 대신 작은 원 둘을 한 줄에 나란히 둔다. 색 이름은 링크 이름에 있다
+    (ADR-060 §2, 사용자 결정 2026-11-28. 그전에는 막대 둘을 위아래로 두었다)."""
     page = mobile_context.new_page()
     _open_list(page, "calendar/list/2026-02-14")
     row = _row(page, "2026-02-14")
     assert "적색 또는 백색" in row.get_attribute("aria-label")
-    bars = page.evaluate("""() => [...document.querySelectorAll('li[data-date="2026-02-14"] .cal-row-bar')].map((b) => {
-        const r = b.getBoundingClientRect(); return [b.className.split(' ').pop(), r.top, r.bottom, r.left]; })""")
-    assert [b[0] for b in bars] == ["lit-swatch--red", "lit-swatch--white"], bars
-    assert bars[1][1] >= bars[0][2] and abs(bars[1][3] - bars[0][3]) <= 0.5, bars   # 아래로 쌓고 왼쪽 끝이 같다
+    marks = page.evaluate("""() => [...document.querySelectorAll('li[data-date="2026-02-14"] .cal-row-bar')].map((b) => {
+        const r = b.getBoundingClientRect(); return [b.className.split(' ').pop(), r.top, r.left, r.right, r.width, r.height]; })""")
+    assert [m[0] for m in marks] == ["lit-swatch--red", "lit-swatch--white"], marks
+    assert abs(marks[1][1] - marks[0][1]) <= 0.5 and marks[1][2] >= marks[0][3], marks   # 같은 줄에 왼쪽부터 나란히
+    assert all(abs(m[4] - m[5]) <= 0.5 for m in marks), marks   # 너비와 높이가 같은 원
 
 
 def test_row_marks_sunday_weight_year_start_and_keeps_alternate_colours_out(mobile_context):
@@ -1747,9 +1752,10 @@ def _picker(page):
     }""")
 
 
-def test_picker_marks_whole_day_squares_and_fading_week_lines(mobile_context):
-    """월간 달력은 날을 원이 아니라 칸 전체의 사각형으로 표시한다. 지금 보는 날은 채우고 오늘은 테두리다. 주와 주 사이에는 양 끝이 투명해지는
-    선이 있다. 판의 위 끝은 상단 바의 아래 끝보다 아래로 떨어지지 않고, 뒤 가림은 상단 바를 덮지 않는다(어두운 선처럼 보였다, 사용자 결정 2026-11-27)."""
+def test_picker_marks_whole_day_squares_and_one_fading_line_under_the_weekdays(mobile_context):
+    """월간 달력은 날을 원이 아니라 칸 전체의 사각형으로 표시한다. 지금 보는 날은 채우고 오늘은 테두리다. 선은 요일 머리와 날짜 사이에 하나만
+    있고 양 끝이 투명해진다. 주와 주 사이에는 선이 없다. 전례색은 끝이 둥근 짧은 막대이고 날짜와 함께 칸의 가운데에 있다(사용자 결정 2026-11-28). 판의 위 끝은 상단 바의 아래 끝보다 아래로 떨어지지 않는다(틈이 선처럼 보였다, 사용자 결정 2026-11-27). 뒤를 어둡게 가리지 않는다
+    (사용자 결정 2026-11-28)."""
     page = mobile_context.new_page()
     _freeze_today(page)
     _open_list(page, "calendar/list/2026-11-05")
@@ -1762,21 +1768,108 @@ def test_picker_marks_whole_day_squares_and_fading_week_lines(mobile_context):
         const day = (sel) => document.querySelector(`.cal-picker-day${sel}`);
         const cs = (el) => getComputedStyle(el);
         const sel = day('.is-selected'), today = day('.is-today:not(.is-selected)');
-        const second = document.querySelector('.cal-picker-days tbody tr + tr td');
+        const head = document.querySelector('.cal-picker-days thead th');
         const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
         return {
             selected: cs(sel).backgroundColor, selectedNum: cs(sel.querySelector('.cal-picker-num')).backgroundColor,
-            today: cs(today).boxShadow, line: cs(second).backgroundImage, firstRow: cs(document.querySelector('.cal-picker-days tbody td')).backgroundImage,
+            today: cs(today).boxShadow, line: cs(head).backgroundImage, linePlace: cs(head).backgroundPositionY,
+            weeks: [...document.querySelectorAll('.cal-picker-days tbody td')].map((td) => cs(td).backgroundImage).filter((b) => b !== 'none').length,
+            ...(() => { const r = sel.getBoundingClientRect(), n = sel.querySelector('.cal-picker-num').getBoundingClientRect();
+                const b = sel.querySelector('.cal-picker-bar'); const br = b.getBoundingClientRect();
+                return { above: n.top - r.top, below: r.bottom - br.bottom, barW: br.width, barH: br.height, barRound: cs(b).borderRadius }; })(),
             gap: document.querySelector('.cal-picker').getBoundingClientRect().top - bar,
-            scrimGap: document.querySelector('.cal-picker-scrim').getBoundingClientRect().top - bar,
+            scrim: document.querySelectorAll('.cal-picker-scrim').length,
         }; }""")
     assert state["selected"] not in ("rgba(0, 0, 0, 0)", "transparent"), state   # 칸 전체를 채운다
     assert state["selectedNum"] in ("rgba(0, 0, 0, 0)", "transparent"), state    # 숫자의 원은 없다
     assert "inset" in state["today"], state
     assert state["line"].startswith("linear-gradient") and "rgba(0, 0, 0, 0)" in state["line"], state   # 양 끝이 투명하다
-    assert state["firstRow"] == "none", state   # 첫 주 위에는 선이 없다
+    assert state["linePlace"] == "100%", state   # 요일 머리의 아래 끝
+    assert state["weeks"] == 0, state   # 주와 주 사이에는 선이 없다
+    # 전례색은 목록의 날짜 칸처럼 끝이 둥근 짧은 막대이고, 날짜와 막대는 한 덩어리로 칸의 가운데에 있어 채운 사각형 안의 위아래에 여유가 있다
+    # (사용자 결정 2026-11-28)
+    assert state["barW"] > state["barH"] * 2 and state["barRound"] != "0px", state
+    assert state["above"] >= 6 and state["below"] >= 6 and abs(state["above"] - state["below"]) <= 1, state
     assert state["gap"] <= 0, state
-    assert 0 <= state["scrimGap"] < 0.1, state   # 뒤 가림은 상단 바를 덮지 않고, 판 양옆에 틈을 남기지 않는다
+    assert state["scrim"] == 0, state
+
+
+_INK_ROWS = """async ([b64, w]) => { const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode();
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0);
+    const { data } = ctx.getImageData(0, 0, c.width, c.height); const s = c.width / w;
+    const x0 = Math.floor(c.width * 0.2), x1 = Math.ceil(c.width * 0.8), at = 4 * (Math.ceil(3 * s) * c.width + x0);
+    const bg = [data[at], data[at + 1], data[at + 2]];   // 줄 사이 선(칸의 맨 위 1px) 아래의 바탕
+    const runs = []; let start = -1;
+    for (let y = 0; y < c.height; y++) {
+        let ink = false;
+        for (let x = x0; x < x1 && !ink; x++) { const i = 4 * (y * c.width + x); ink = Math.abs(data[i] - bg[0]) + Math.abs(data[i + 1] - bg[1]) + Math.abs(data[i + 2] - bg[2]) > 60; }
+        if (ink && start < 0) start = y;
+        if (!ink && start >= 0) { runs.push([start / s, y / s]); start = -1; }
+    }
+    if (start >= 0) runs.push([start / s, c.height / s]);
+    return { h: c.height / s, runs: runs.filter(([a, b]) => b > 2) }; }"""
+
+
+def _date_cell_ink(page, date):
+    """목록 날짜 칸의 잉크 줄(CSS px): 날짜, 전례색, 요일. 줄 상자는 줄 높이와 글꼴의 여유를 품어 숫자와 한글의 잉크 자리를 알려 주지 않으므로, 칸을
+    찍은 그림에서 바탕과 다른 줄을 찾는다. 요일 글자는 획이 떨어져 여러 줄로 잡히므로 셋째부터는 하나로 묶는다."""
+    cell = page.locator(f"li[data-date='{date}'] .cal-row-date")
+    page.wait_for_selector("#launch-screen", state="detached", timeout=5_000)   # 런치 화면이 다 걷힌 뒤에 찍는다(2초 동안 옅어진다)
+    cell.evaluate("e => e.scrollIntoView({ block: 'center', behavior: 'instant' })")   # 고정된 주간 라벨과 상단 바에 가리지 않게
+    page.wait_for_timeout(100)
+    png = cell.screenshot()
+    ink = page.evaluate(_INK_ROWS, [base64.b64encode(png).decode(), cell.bounding_box()["width"]])
+    runs = ink["runs"]
+    day, mark, week = runs[0], runs[1], (runs[2][0], runs[-1][1])
+    return {"top": day[0], "above": mark[0] - day[1], "below": week[0] - mark[1], "bottom": ink["h"] - week[1]}
+
+
+def test_list_date_cell_keeps_date_bar_and_weekday_together_with_even_spacing(mobile_context):
+    """목록의 날짜 칸에서 날짜, 전례색 막대, 요일은 한 덩어리다. 보이는 글자 사이의 간격이 같고, 위아래에 같은 최소 여백이 있어 제목이 없는 날
+    (11월 28일)도 요일이 칸의 아래 끝에 붙지 않는다. 색이 둘 이상인 날(9월 16일)은 막대 대신 원을 한 줄에 나란히 둔다. 월간 달력의 날 판도 같고,
+    원이 있는 날도 한 주의 숫자 높이가 같다(사용자 결정 2026-11-28, ADR-060 §2). 전에는 날짜 아래가 12.75px, 요일 위가 4.5px였고 제목이 없는
+    날은 요일 아래가 0이었다."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    marks = """d => [...document.querySelectorAll(`li[data-date="${d}"] .cal-row-bar`)].map((b) => { const x = b.getBoundingClientRect();
+        return { top: Math.round(x.top), w: x.width, h: x.height, round: getComputedStyle(b).borderRadius }; })"""
+    _open_list(page, "calendar/list/2026-11-25")
+    for date in ("2026-11-28", "2026-11-26", "2026-11-25"):
+        m = _date_cell_ink(page, date)
+        assert abs(m["above"] - m["below"]) <= 2, (date, m)   # 날짜와 막대, 막대와 요일 사이가 같다
+        assert m["bottom"] >= 12, (date, m)   # 요일이 아래 끝에 붙지 않는다
+        if date == "2026-11-28":
+            assert abs(m["top"] - m["bottom"]) <= 3, m   # 제목이 없는 날은 덩어리의 위아래 여백이 같다
+        bars = page.evaluate(marks, date)
+        assert len(bars) == 1 and bars[0]["w"] > bars[0]["h"] * 2, (date, bars)
+    _open_list(page, "calendar/list/2026-09-16")
+    m = _date_cell_ink(page, "2026-09-16")
+    assert abs(m["above"] - m["below"]) <= 2, m
+    circles = page.evaluate(marks, "2026-09-16")
+    assert len(circles) == 2 and len({x["top"] for x in circles}) == 1, circles   # 한 줄에
+    assert all(abs(x["w"] - x["h"]) < 0.5 and x["round"] == "50%" for x in circles), circles   # 원
+    _open_picker(page)
+    picker = page.evaluate("""() => { const cell = (d) => document.querySelector(`.cal-picker-day[data-date="${d}"]`);
+        const num = (d) => Math.round(cell(d).querySelector('.cal-picker-num').getBoundingClientRect().top * 10) / 10;
+        const marks = [...cell('2026-09-16').querySelectorAll('.cal-picker-bar')].map((b) => { const x = b.getBoundingClientRect();
+            return [Math.round(x.top), x.width, x.height, getComputedStyle(b).borderRadius]; });
+        return { nums: [num('2026-09-15'), num('2026-09-16'), num('2026-09-17')], marks }; }""")
+    assert len(set(picker["nums"])) == 1, picker   # 원이 있는 날도 숫자가 같은 높이다
+    assert len(picker["marks"]) == 2 and picker["marks"][0][0] == picker["marks"][1][0], picker
+    assert all(abs(w - h) < 0.5 and r == "50%" for _, w, h, r in picker["marks"]), picker
+
+
+def test_selected_white_day_keeps_its_ring_in_dark_mode(mobile_context):
+    """다크 모드에서 고른 날이 백색인 날이어도 그 막대에 바탕색 테두리가 있다. 채운 사각형(옅은 차콜)과 흰 막대는 비슷해, 테두리가 없으면 막대가
+    거의 보이지 않는다. 다크 모드의 흰 막대 규칙과 명시도가 같아, 고른 날의 규칙이 뒤에 와야 한다(코드 리뷰 2026-11-28)."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2026-12-25")   # 성탄일, 백색
+    page.evaluate("() => document.documentElement.setAttribute('data-theme', 'dark')")
+    _open_picker(page)
+    shadow = page.evaluate("""() => { const bar = document.querySelector('.cal-picker-day.is-selected .cal-picker-bar');
+        return [bar.classList.contains('lit-swatch--white'), getComputedStyle(bar).boxShadow, getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()]; }""")
+    assert shadow[0] and "0px 0px 0px 1px" in shadow[1] and "inset" not in shadow[1], shadow
 
 
 def _open_picker(page):
@@ -1790,43 +1883,227 @@ def _freeze_today(page):
     page.clock.set_fixed_time(datetime.datetime(2026, 11, 17, 12))
 
 
-def test_list_icon_drops_the_month_calendar_and_a_day_opens_its_row(mobile_context):
+def _under_calendar(page, date):
+    """그 날짜의 줄 위쪽과, 내려온 달력의 아래 끝에 고정된 주간 라벨의 높이를 더한 자리의 거리. 달력이 목록을 밀어 내면 맨 위 줄은 달력 바로 아래다."""
+    return page.evaluate("""d => document.querySelector(`li[data-date="${d}"]`).getBoundingClientRect().top
+        - (document.querySelector('.cal-picker').getBoundingClientRect().bottom + (document.querySelector('.cal-week')?.getBoundingClientRect().height ?? 0))""", date)
+
+
+def test_list_icon_drops_the_month_calendar_and_pushes_the_list_below_it(mobile_context):
     """작은 화면 목록의 오른쪽 아이콘을 누르면 그달의 날 판이 상단 바 아래로 내려오고 지금 보는 날(맨 위 줄)이 골라져 있다(ADR-058 §3). 달 제목은
-    누르는 단추가 아니다. 날마다 월간 칸과 같은 색 점이 있다. ›로 다음 달로 옮겨 날을 누르면 그날의 줄이 맨 위인 목록이 열리고, 포커스는 새 아이콘으로 돌아간다."""
+    누르는 단추가 아니다. 날마다 월간 칸과 같은 색 점이 있다. 뒤를 어둡게 가리지 않고, 목록은 달력의 높이만큼 밀려나 맨 위 줄이 달력 바로 아래에
+    보인다(사용자 결정 2026-11-28). 스크롤 값과 주소는 그대로다. 밀려난 목록은 막지 않는다. 달력의 아래 모서리는 둥글리지 않고 그림자도 없다."""
     page = mobile_context.new_page()
     _freeze_today(page)
     _open_list(page, "calendar/list/2027-02-01")
     assert page.locator("#page-title .cal-title-btn").count() == 0
     y = page.evaluate("scrollY")
+    under_bar = _row_top_under_head(page, "2027-02-01")   # 달의 첫 줄이라 달 이름 아래다
     _open_picker(page)
     state = _picker(page)
+    # 28일과 첫 주, 마지막 주를 채운 앞뒤 달의 날(1월 31일, 3월 1-6일)
     assert state == {"title": "2027년 2월", "current": "/calendar/list/2027-02-01", "focus": "/calendar/list/2027-02-01",
-                     "cells": 28, "prev": True, "next": True, "expanded": "true"}, state
-    assert page.evaluate("scrollY") == y   # 여는 동안 목록이 움직이지 않는다
+                     "cells": 35, "prev": True, "next": True, "expanded": "true"}, state
+    assert page.evaluate("scrollY") == y   # 여는 동안 스크롤하지 않는다
+    assert page.url == f"{BASE}/calendar/list/2027-02-01"
     place = page.evaluate("""() => { const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
         const p = document.querySelector('.cal-picker').getBoundingClientRect();
-        const s = document.querySelector('.cal-picker-scrim').getBoundingClientRect();
-        return { panel: p.top - bar, left: p.left, right: innerWidth - p.right, scrim: s.top - bar, scrimBottom: s.bottom - innerHeight }; }""")
-    assert abs(place["panel"]) <= 1 and abs(place["scrim"]) <= 1 and abs(place["scrimBottom"]) <= 1, place   # 상단 바를 덮지 않는다
-    assert abs(place["left"]) <= 1 and abs(place["right"]) <= 1, place
+        return { panel: p.top - bar, left: p.left, right: innerWidth - p.right, scrim: document.querySelectorAll('.cal-picker-scrim').length,
+                 push: new DOMMatrixReadOnly(getComputedStyle(document.getElementById('app')).transform).m42 - p.height,
+                 inert: document.getElementById('app').inert || document.getElementById('sticky-group').inert,
+                 modal: document.querySelector('.cal-picker').getAttribute('aria-modal'),
+                 radius: getComputedStyle(document.querySelector('.cal-picker')).borderBottomLeftRadius,
+                 shadow: getComputedStyle(document.querySelector('.cal-picker')).boxShadow }; }""")
+    assert abs(place["panel"]) <= 1 and abs(place["left"]) <= 1 and abs(place["right"]) <= 1, place   # 상단 바를 덮지 않는다
+    assert place["scrim"] == 0 and abs(place["push"]) < 0.5, place   # 달력의 높이만큼 밀려난다
+    assert place["inert"] is False and place["modal"] == "false", place
+    assert place["radius"] == "0px" and place["shadow"] == "none", place   # 상단 바와 한 층이라 둥글리지 않고 그림자도 없다(사용자 결정 2026-11-28)
+    assert abs(_under_calendar(page, "2027-02-01") - under_bar) <= 1
     ash = page.locator(".cal-picker a[href='/calendar/list/2027-02-10']")
-    assert ash.locator(".cal-picker-dot.lit-swatch--violet").count() == 1
+    assert ash.locator(".cal-picker-bar.lit-swatch--violet").count() == 1
     assert ash.get_attribute("aria-label") == "2월 10일 수요일, 자색"
     assert page.get_attribute(".cal-picker", "role") == "dialog"
     assert page.get_attribute(".cal-picker", "aria-label") == "날짜 고르기"
     assert page.locator(".cal-picker table caption").inner_text() == "2027년 2월"
+    # 문서의 차례가 상단 바, 달력, 화면이라 Tab이 그 차례로 간다
+    assert page.evaluate("""() => { const p = document.querySelector('.cal-picker');
+        return p.previousElementSibling.matches('.cal-picker-backing') && p.nextElementSibling.matches('main#app')
+            && document.getElementById('sticky-group').nextElementSibling.matches('.cal-picker-backing'); }""")
+
+
+def test_a_day_in_the_dropped_calendar_moves_the_list_below_and_keeps_it_open(mobile_context):
+    """달력에서 날을 누르면 달력은 열린 채로 있고, 그 아래의 목록이 그날의 줄을 달력 바로 아래에 둔다(ADR-058 §3, 사용자 결정 2026-11-28). 지금 보는
+    날도 그날로 바뀌고, 상단 바의 달과 주소가 맨 위 줄을 따른다. 방문 기록은 늘지 않는다. 그려 두지 않은 먼 날이면 목록을 다시 그린다. 아이콘을
+    다시 누르면 달력이 올라가고 목록은 그 줄이 상단 바 바로 아래에 오게 제자리로 올라온다."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2027-02-01")
+    length = page.evaluate("() => history.length")
+    _open_picker(page)
+    page.evaluate(RECORD_ANNOUNCEMENTS)
+    _press(page, ".cal-picker a[href='/calendar/list/2027-02-10']")   # 그려 둔 줄
+    page.wait_for_url(f"{BASE}/calendar/list/2027-02-10")
+    page.wait_for_timeout(300)
+    state = _picker(page)
+    assert state is not None and state["current"] == "/calendar/list/2027-02-10" and state["title"] == "2027년 2월", state
+    assert page.locator(".cal-picker [aria-current='true']").count() == 1
+    assert abs(_under_calendar(page, "2027-02-10")) <= 2
+    assert page.evaluate("window.__said") == ["2월 10일 수요일 목록"]
     _press(page, ".cal-picker .cal-picker-step >> nth=1")
     page.wait_for_timeout(150)
     assert _picker(page)["title"] == "2027년 3월"
-    assert page.inner_text(".cal-month") == "2027년 2월"   # 바뀌는 것은 달력뿐이고 뒤의 목록은 그대로다
-    _press(page, ".cal-picker a[href='/calendar/list/2027-03-10']")
-    page.wait_for_url(f"{BASE}/calendar/list/2027-03-10")
+    assert page.inner_text(".cal-month") == "2027년 2월"   # ‹ ›로 바뀌는 것은 달력뿐이다
+    _press(page, ".cal-picker a[href='/calendar/list/2027-03-20']")   # 그려 두지 않은 날
+    page.wait_for_url(f"{BASE}/calendar/list/2027-03-20")
+    page.wait_for_timeout(300)
+    assert _picker(page)["current"] == "/calendar/list/2027-03-20"
+    assert abs(_under_calendar(page, "2027-03-20")) <= 2
+    assert page.inner_text(".cal-month") == "2027년 3월"
+    assert page.get_attribute(".cal-picker-trigger", "aria-label") == "2027년 3월, 날짜 고르기"
+    assert page.evaluate("() => history.length") == length
+    assert page.evaluate("document.querySelector('.cal-picker').contains(document.activeElement)")
+    _press(page, ".cal-picker-trigger")
     page.wait_for_timeout(500)
     assert _picker(page) is None
-    assert abs(_row_top_under_head(page, "2027-03-10")) <= 2
+    assert abs(_row_top_under_head(page, "2027-03-20")) <= 2
+    assert page.evaluate("getComputedStyle(document.getElementById('app')).transform") == "none"
     assert page.evaluate("document.activeElement.classList.contains('cal-picker-trigger')")
-    assert page.get_attribute(".cal-picker-trigger", "aria-label") == "2027년 3월, 날짜 고르기"
     assert page.get_attribute(".cal-picker-trigger", "aria-expanded") == "false"
+    assert page.url == f"{BASE}/calendar/list/2027-03-20"
+
+
+def test_a_day_tapped_while_the_calendar_still_unfolds_comes_to_the_top(mobile_context):
+    """달력이 펼쳐지는 동안(화면이 아직 밀려나는 중에) 날을 누르면, 움직이는 중의 밀린 길이로 재지 않고 움직임을 끝낸 뒤 잰다. 움직임이 끝난 뒤에도
+    고른 줄이 달력 바로 아래이고 주소가 그날이다(코드 리뷰 2026-11-28)."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2027-02-01")
+    page.evaluate("() => document.querySelector('.cal-picker-trigger').click()")
+    page.wait_for_selector(".cal-picker:not([hidden])")
+    page.wait_for_timeout(60)   # 펼치는 움직임(250ms)의 앞부분
+    moving = page.evaluate("() => new DOMMatrixReadOnly(getComputedStyle(document.getElementById('app')).transform).m42 < document.querySelector('.cal-picker').offsetHeight - 1")
+    page.evaluate("() => document.querySelector(\".cal-picker a[href='/calendar/list/2027-02-17']\").click()")
+    page.wait_for_timeout(700)
+    assert moving   # 누른 때 화면은 아직 밀려나는 중이었다
+    assert page.url == f"{BASE}/calendar/list/2027-02-17"
+    assert _picker(page)["current"] == "/calendar/list/2027-02-17"
+    assert abs(_under_calendar(page, "2027-02-17")) <= 2
+
+
+def test_settings_from_another_device_redraw_the_list_under_the_open_calendar(mobile_context):
+    """작은 화면에서 달력을 연 채 다른 기기에서 받은 설정이 목록의 내용을 바꾸면, 목록은 다시 그리고 달력은 열린 채로 둔다. 맨 위 줄은 그대로
+    달력 바로 아래다(ADR-058 §3, 코드 리뷰 2026-11-28. 전에는 같은 주소를 다시 그리는 라우터가 달력을 접었다)."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2027-02-10")
+    _open_picker(page)
+    page.evaluate("() => { window.__mark = document.querySelector('.cal-list'); window.__day = document.querySelector('.cal-picker a[data-date=\"2027-02-10\"]'); }")
+    assert page.evaluate("() => document.activeElement === window.__day")
+    # 동기화가 대체 독서 표시를 바꿔 저장한 뒤 부르는 것과 같다(sync/state-machine.js)
+    page.evaluate("() => { localStorage.setItem('bible-lectionary-alt-show', '1'); window.redrawIfSyncedSettingsChanged(); }")
+    page.wait_for_function("() => !window.__mark.isConnected && document.querySelector('li[data-date=\"2027-02-10\"]')")
+    page.wait_for_timeout(400)
+    state = _picker(page)
+    assert state is not None and state["current"] == "/calendar/list/2027-02-10" and state["expanded"] == "true", state
+    assert page.evaluate("document.documentElement.classList.contains('cal-drop')")
+    assert abs(_under_calendar(page, "2027-02-10")) <= 2
+    assert page.url == f"{BASE}/calendar/list/2027-02-10"
+    # 받은 설정이 그날의 색을 바꿨을 수 있어 열린 달력도 다시 그리고, 포커스는 같은 날에 둔다(코드 리뷰 2026-11-28)
+    assert page.evaluate("() => !window.__day.isConnected && document.activeElement.dataset.date === '2027-02-10'")
+    _press(page, ".cal-picker-trigger")   # 새로 그린 아이콘으로 닫는다
+    page.wait_for_timeout(500)
+    assert _picker(page) is None
+    assert page.evaluate("getComputedStyle(document.getElementById('app')).transform") == "none"
+    assert page.evaluate("document.activeElement.classList.contains('cal-picker-trigger')")
+
+
+def test_a_day_near_the_end_of_the_drawn_list_still_comes_to_the_top(mobile_context):
+    """달력에서 고른 날이 그려 둔 목록의 아래 끝 가까이에 있으면 스크롤이 끝에 막혀 그 줄이 맨 위에 오지 못한다. 그때는 목록을 그날부터 다시 그려,
+    맨 위 줄과 주소와 달력의 지금 보는 날이 모두 고른 날이다(코드 리뷰 2026-11-28. 전에는 몇 줄 위의 날이 맨 위에 남아 주소가 그날로 바뀌었다)."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2027-03-01")
+    last = page.evaluate("() => [...document.querySelectorAll('li[data-date]')].pop().dataset.date")   # 그려 둔 마지막 줄
+    assert last.startswith("2027-03"), last
+    _open_picker(page)
+    _press(page, f".cal-picker a[href='/calendar/list/{last}']")
+    page.wait_for_timeout(600)   # 스크롤로 맨 위 줄을 적는 처리까지 기다린다
+    assert page.url == f"{BASE}/calendar/list/{last}"
+    assert _picker(page)["current"] == f"/calendar/list/{last}"
+    assert abs(_under_calendar(page, last)) <= 2
+
+
+def test_the_dropped_calendar_follows_the_list_scrolled_below_it(mobile_context):
+    """달력이 열린 동안에도 밀려난 목록을 스크롤할 수 있고, 맨 위 줄이 바뀌면 달력의 지금 보는 날이 그 줄의 날로, 다른 달이면 그 달로 바뀐다
+    (ADR-058 §3). 목록을 누른다고 달력이 닫히지는 않는다. 줄을 누르면 그날의 전례독서로 간다. 새 화면은 처음부터 상단 바 아래 제자리에 그리고,
+    달력만 그 위에서 접혀 올라간다(사용자 결정 2026-11-28)."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2027-02-24")
+    _open_picker(page)
+    page.mouse.move(195, 760)
+    page.mouse.wheel(0, 1500)
+    page.wait_for_function("() => location.pathname.startsWith('/calendar/list/2027-03')", timeout=5000)
+    page.wait_for_timeout(300)
+    top = page.evaluate("location.pathname")
+    state = _picker(page)
+    assert state is not None and state["current"] == top and state["title"] == "2027년 3월", (top, state)
+    assert page.locator(".cal-picker [aria-current='true']").count() == 1
+    assert page.evaluate("""d => { const li = document.querySelector(`li[data-date="${d}"]`).getBoundingClientRect();
+        const line = document.querySelector('.cal-picker').getBoundingClientRect().bottom + document.querySelector('.cal-week').getBoundingClientRect().height;
+        return li.top <= line + 8 && li.bottom > line + 8; }""", top.rsplit("/", 1)[1])   # 맨 위 줄은 달력 바로 아래에 보이는 줄이다
+    head = page.evaluate("""() => { const p = document.querySelector('.cal-picker').getBoundingClientRect().bottom;
+        const h = [...document.querySelectorAll('.cal-week')].find((w) => Math.abs(w.getBoundingClientRect().top - p) < 2).getBoundingClientRect();
+        return { x: h.left + h.width / 2, y: h.top + h.height / 2 }; }""")
+    page.mouse.click(head["x"], head["y"])   # 달력 바로 아래에 고정된 주간 라벨
+    page.wait_for_timeout(300)
+    assert _picker(page) is not None
+    row = page.evaluate("""() => { const p = document.querySelector('.cal-picker').getBoundingClientRect().bottom + 120;
+        const a = [...document.querySelectorAll('.cal-list a.cal-row')].find((r) => r.getBoundingClientRect().top > p);
+        const r = a.getBoundingClientRect(); return { href: a.getAttribute('href'), x: r.left + r.width / 2, y: r.top + 10 }; }""")
+    page.evaluate(RECORD_FRAMES)
+    page.mouse.click(row["x"], row["y"])
+    page.wait_for_url(f"{BASE}{row['href']}")
+    page.wait_for_selector(".lect-head")
+    assert_calendar_folds_over_the_new_screen(page, row["href"])
+    assert _picker(page) is None
+    assert page.evaluate("[getComputedStyle(document.getElementById('app')).transform, document.documentElement.classList.contains('cal-drop')]") == ["none", False]
+
+
+def test_leaving_while_the_calendar_folds_up_draws_the_new_screen_in_place(mobile_context):
+    """달력을 닫아 접히는 동안(목록이 올라오는 중) 줄을 눌러 다른 화면으로 가도, 새 화면은 처음부터 제자리이고 달력만 마저 접힌다(ADR-058 §3,
+    코드 리뷰 2026-11-28). 라우터가 접히는 중인 판을 만나도 밀어 낸 화면을 제자리에 둔다(overlay.js `onNavigateAway`)."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2026-12-15")
+    _open_picker(page)
+    href = page.evaluate("""() => { const p = document.querySelector('.cal-picker').getBoundingClientRect().bottom + 120;
+        return [...document.querySelectorAll('.cal-list a.cal-row')].find((r) => r.getBoundingClientRect().top > p).getAttribute('href'); }""")
+    page.evaluate(RECORD_FRAMES)
+    page.evaluate("""h => { document.querySelector('.cal-picker-trigger').click();
+        requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector(`.cal-list a.cal-row[href="${h}"]`).click())); }""", href)
+    page.wait_for_url(f"{BASE}{href}")
+    page.wait_for_selector(".lect-head")
+    assert_calendar_folds_over_the_new_screen(page, href)
+
+
+def test_the_popover_does_not_follow_the_list_scrolled_behind_it(desktop_context):
+    """큰 화면의 팝오버는 뒤를 막으므로, 그 뒤에서 목록이 스크롤돼도 보던 판을 바꾸지 않는다(코드 리뷰 2026-11-28). 달력이 맨 위 줄을 따라가는 것은
+    작은 화면의 내려오는 달력뿐이다(ADR-058 §3)."""
+    page = desktop_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2026-12-15")
+    _open_picker(page)
+    _press(page, ".cal-picker .cal-picker-step >> nth=1")
+    page.wait_for_timeout(150)
+    assert _picker(page)["title"] == "2027년 1월"
+    page.evaluate("() => window.scrollBy(0, 900)")
+    page.wait_for_timeout(700)   # 스크롤이 멈추면 맨 위 줄을 주소에 남긴다
+    assert page.evaluate("location.pathname") != "/calendar/list/2026-12-15"
+    assert _picker(page)["title"] == "2027년 1월"   # 보던 달이 그대로다
+    _press(page, ".cal-picker .cal-picker-step >> nth=0")
+    page.wait_for_timeout(150)
+    assert _picker(page)["current"] == "/calendar/list/2026-12-15"   # 지금 보는 날도 연 때의 날이다
 
 
 def test_dropped_calendar_starts_under_the_status_bar_and_fits_320px(browser):
@@ -1876,7 +2153,8 @@ def test_picker_title_steps_up_to_months_and_years_and_back_down(mobile_context)
     _press(page, ".cal-picker button[data-month='12']")
     page.wait_for_timeout(150)
     state = _picker(page)
-    assert (state["title"], state["cells"], state["focus"]) == ("2030년 12월", 31, "/calendar/list/2030-12-01"), state
+    # 31일과 마지막 주를 채운 다음 달의 날 넷(1-4일). 작은 화면의 달력은 앞뒤 달의 날을 흐리게 둔다(ADR-058 §3)
+    assert (state["title"], state["cells"], state["focus"]) == ("2030년 12월", 35, "/calendar/list/2030-12-01"), state
 
 
 def test_month_title_opens_the_month_picker_as_a_popover_and_goes_to_the_month(desktop_context):
@@ -1893,8 +2171,10 @@ def test_month_title_opens_the_month_picker_as_a_popover_and_goes_to_the_month(d
         const t = document.querySelector('.cal-title-btn').getBoundingClientRect();
         return { gap: p.top - t.bottom, mid: (p.left + p.right) / 2 - (t.left + t.right) / 2 }; }""")
     assert 0 < box["gap"] <= 12 and abs(box["mid"]) <= 1, box
-    assert page.locator(".cal-picker-scrim").is_hidden()
-    assert page.locator(".cal-picker-close").is_hidden()   # 「닫기」는 작은 화면의 달력에만
+    # 팝오버는 뒤를 막고 화면을 밀어 내지 않는다
+    assert page.evaluate("""() => [getComputedStyle(document.getElementById('app')).transform, getComputedStyle(document.querySelector('.cal-picker-backing')).display,
+        document.getElementById('app').inert, document.querySelector('.cal-picker').getAttribute('aria-modal')]""") == ["none", "none", True, "true"]
+    assert page.locator(".cal-picker-close").count() == 0   # 「닫기」 단추는 없다(사용자 결정 2026-11-28)
     _press(page, ".cal-picker .cal-picker-step >> nth=1")
     page.wait_for_timeout(150)
     assert _picker(page)["title"] == "2028년"
@@ -1907,34 +2187,39 @@ def test_month_title_opens_the_month_picker_as_a_popover_and_goes_to_the_month(d
 
 
 def test_picker_closes_without_moving_the_list_and_returns_focus(mobile_context):
-    """아이콘을 다시 누르거나, 바깥(뒤 가림)을 누르거나, Esc를 누르거나, 포커스를 받으면 나타나는 「닫기」로 닫히고 포커스는 아이콘으로 돌아간다
-    (ADR-058 §3). 목록은 움직이지 않는다. 포커스 테두리는 닫은 입력으로 정해, 탭으로 열었어도 키보드로 닫으면 그리고 눌러 닫으면 그리지 않는다."""
+    """아이콘을 다시 누르거나 Esc를 누르면 닫히고 포커스는 아이콘으로 돌아간다(ADR-058 §3). 「닫기」 단추는 없다(사용자 결정 2026-11-28). 목록은 제자리로
+    올라오고 스크롤 값과 주소는 그대로다. 포커스 테두리는 닫은 입력으로 정해, 탭으로 열었어도 키보드로 닫으면 그리고 눌러 닫으면 그리지 않는다.
+    포커스가 밀려난 목록에 있으면 Esc로 닫아도 그 자리에 둔다."""
     page = mobile_context.new_page()
     _freeze_today(page)
     _open_list(page, "calendar/list/2026-12-15")
     y = page.evaluate("scrollY")
     icon = page.locator(".cal-picker-trigger").bounding_box()
-    for close in ("icon", "scrim", "escape", "button"):
+    for close in ("icon", "escape", "enter"):
         _open_picker(page)
+        assert page.locator(".cal-picker-close").count() == 0, close
         if close == "icon":
             page.mouse.click(icon["x"] + icon["width"] / 2, icon["y"] + icon["height"] / 2)
-        elif close == "scrim":
-            page.mouse.click(195, 700)   # 달력 아래의 뒤 가림
         elif close == "escape":
             page.keyboard.press("Escape")
-        else:
-            hidden = page.evaluate("document.querySelector('.cal-picker-close').getBoundingClientRect().width")
-            assert hidden <= 1, hidden   # 포커스가 없으면 보이지 않는다
-            page.locator(".cal-picker-close").focus()
-            assert_sheet_close_button(page, ".cal-picker-close")
+        else:   # 키보드로 아이콘에 가서 다시 누른다. 상단 바는 막히지 않는다
+            page.evaluate("document.querySelector('.cal-picker-trigger').focus({ preventScroll: true })")
             page.keyboard.press("Enter")
         page.wait_for_timeout(500)
         assert _picker(page) is None, close
         assert page.evaluate("document.activeElement.classList.contains('cal-picker-trigger')"), close
-        assert page.evaluate("document.activeElement.matches(':focus-visible')") is (close in ("escape", "button")), close
+        if close != "enter":
+            assert page.evaluate("document.activeElement.matches(':focus-visible')") is (close == "escape"), close
         assert page.get_attribute(".cal-picker-trigger", "aria-expanded") == "false", close
         assert page.evaluate("scrollY") == y, close
         assert page.url == f"{BASE}/calendar/list/2026-12-15", close
+        assert abs(_row_top_under_head(page, "2026-12-15")) <= 2, close
+    _open_picker(page)
+    page.evaluate("document.querySelector('li[data-date=\"2026-12-16\"] a').focus({ preventScroll: true })")
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(500)
+    assert _picker(page) is None
+    assert page.evaluate("document.activeElement.closest('li')?.dataset.date") == "2026-12-16"
 
 
 def test_dropped_calendar_slides_down_and_up_unless_motion_is_reduced(mobile_context):
@@ -1947,8 +2232,8 @@ def test_dropped_calendar_slides_down_and_up_unless_motion_is_reduced(mobile_con
     page.wait_for_selector(".cal-picker:not([hidden])")
     names = lambda: page.evaluate("""() => { const p = document.querySelector('.cal-picker');
         return [p.getAnimations().map(a => a.animationName), [...p.children].map(c => c.getAnimations().map(a => a.animationName).join())]; }""")
-    assert names() == [["cal-picker-in-down"], ["cal-picker-slide-in"] * 3]
-    # 움직이는 동안 보이는 위 끝이 상단 바의 아래 끝에 있다. 바를 덮지 않고(코드 리뷰 2026-11-26), 바와 판 사이에 뒤 가림이 비치는 틈도 없다.
+    assert names() == [["cal-picker-in-down"], ["cal-picker-slide-in"] * 2]
+    # 움직이는 동안 보이는 위 끝이 상단 바의 아래 끝에 있다. 바를 덮지 않고(코드 리뷰 2026-11-26), 바와 판 사이에 틈도 없다.
     # 판은 옮기지 않아(transform 없음) 위 끝이 판의 움직임에 기대지 않는다. 아이폰 Safari는 옮기기를 자르기보다 앞서 움직여, 판째로 옮기던 때는
     # 그 틈이 어두운 선으로 보였다(사용자 보고 2026-11-28). 그래서 안의 내용이 판보다 앞서 움직여도 위 끝이 같은지 본다
     visible_top = """(t) => { const p = document.querySelector('.cal-picker'); const own = p.getAnimations();
@@ -1965,7 +2250,7 @@ def test_dropped_calendar_slides_down_and_up_unless_motion_is_reduced(mobile_con
         assert -1 < r["gap"] <= 0.5 and not r["moved"], (t, r)
     page.wait_for_timeout(500)
     page.keyboard.press("Escape")
-    assert names() == [["cal-picker-out-up"], ["cal-picker-slide-out"] * 3]
+    assert names() == [["cal-picker-out-up"], ["cal-picker-slide-out"] * 2]
     for t in (0.25, 0.5, 0.75, 1):
         r = page.evaluate(visible_top, t)
         assert -1 < r["gap"] <= 0.5 and not r["moved"], (t, r)
@@ -1982,9 +2267,112 @@ def test_dropped_calendar_slides_down_and_up_unless_motion_is_reduced(mobile_con
     page.emulate_media(reduced_motion="reduce")
     _press(page, ".cal-picker-trigger")
     page.wait_for_selector(".cal-picker:not([hidden])")
-    assert names() == [[], [""] * 3]
+    assert names() == [[], [""] * 2]
     page.keyboard.press("Escape")
     assert page.evaluate("document.querySelector('.cal-picker').hidden") is True
+
+
+def test_the_list_moves_with_the_unfolding_calendar_and_never_shows_what_was_under_the_bar(mobile_context):
+    """목록은 달력이 펼쳐지고 접히는 것과 같은 시간에 밀려나고 올라온다(ADR-058 §3). 밀려나는 동안 상단 바 아래로 나온 자리(상단 바에 가려져 있던 줄)는
+    펼쳐지는 달력과 그 뒤의 바탕이 덮는다. 아이폰 Safari는 옮기기(목록)를 자르기(달력)보다 앞서 움직이므로(design-system.md pitfalls §44), 목록이 앞서도
+    바탕의 아래 끝은 목록의 위 끝에 있다. 움직임을 줄인 설정에서는 목록이 바로 밀려나고 바로 올라온다."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2026-12-15")
+    _press(page, ".cal-picker-trigger")
+    page.wait_for_selector(".cal-picker:not([hidden])")
+    at = """([t, lead]) => { const p = document.querySelector('.cal-picker'); const app = document.getElementById('app');
+        const back = document.querySelector('.cal-picker-backing'); const own = p.getAnimations({ subtree: true });
+        const push = [...app.getAnimations(), ...back.getAnimations()]; [...own, ...push].forEach(a => a.pause());
+        const d = own[0].effect.getTiming().duration; own.forEach(a => { a.currentTime = d * t; });
+        push.forEach(a => { a.currentTime = Math.min(d * (t + lead), d); });
+        const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
+        const moved = new DOMMatrixReadOnly(getComputedStyle(app).transform).m42;
+        const toks = (getComputedStyle(p).clipPath.match(/^inset\\((.*)\\)$/)?.[1] ?? '0px').split(' ');
+        const r = p.getBoundingClientRect(); const bottom = toks[2] ?? toks[0];
+        const cut = bottom.endsWith('%') ? r.height * parseFloat(bottom) / 100 : parseFloat(bottom) || 0;
+        const out = { pushes: push.length, moved, panelBottom: r.bottom - cut - (bar + moved), backing: back.getBoundingClientRect().bottom - (bar + moved) };
+        [...own, ...push].forEach(a => a.play()); return out; }"""
+    for t in (0.25, 0.5, 0.75):
+        r = page.evaluate(at, [t, 0])
+        assert r["pushes"] == 2 and 0 < r["moved"], (t, r)
+        assert r["panelBottom"] >= -1 and abs(r["backing"]) <= 1, (t, r)   # 달력이 목록의 위 끝까지 덮는다
+        r = page.evaluate(at, [t, 0.15])   # 목록이 달력보다 앞서도 바탕이 덮는다
+        assert abs(r["backing"]) <= 1, (t, r)
+    page.wait_for_timeout(500)
+    page.keyboard.press("Escape")
+    assert page.evaluate("document.getElementById('app').getAnimations().length") == 1   # 목록도 함께 올라온다
+    page.wait_for_selector(".cal-picker", state="hidden")
+    page.wait_for_timeout(100)
+    assert page.evaluate("""[getComputedStyle(document.getElementById('app')).transform,
+        document.querySelector('.cal-picker-backing').getBoundingClientRect().height]""") == ["none", 0]
+    page.emulate_media(reduced_motion="reduce")
+    _press(page, ".cal-picker-trigger")
+    page.wait_for_selector(".cal-picker:not([hidden])")
+    state = page.evaluate("""() => ({ anims: document.getElementById('app').getAnimations().length,
+        moved: new DOMMatrixReadOnly(getComputedStyle(document.getElementById('app')).transform).m42,
+        h: document.querySelector('.cal-picker').getBoundingClientRect().height })""")
+    assert state["anims"] == 0 and abs(state["moved"] - state["h"]) < 0.5, state
+    page.keyboard.press("Escape")
+    assert page.evaluate("getComputedStyle(document.getElementById('app')).transform") == "none"
+
+
+def test_the_list_follows_the_calendar_height_with_the_same_motion(mobile_context):
+    """판을 바꾸거나 달을 옮겨 달력의 높이가 바뀌면 목록도 달력이 펼쳐질 때와 같은 움직임으로 그만큼 따라가, 움직임이 끝나면 맨 위 줄이 달력
+    바로 아래에 있다(ADR-058 §3, 사용자 결정 2026-11-28. 그전에는 움직임 없이 튀었다)."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2026-12-15")
+    _open_picker(page)
+    gap = lambda: _under_calendar(page, "2026-12-15")
+    first = gap()
+    moving = "() => document.getElementById('app').getAnimations().some((a) => a.playState === 'running')"
+    _press(page, ".cal-picker button.cal-picker-title")   # 날 판(다섯 주)에서 달 판(세 줄)으로
+    page.wait_for_timeout(40)
+    assert page.evaluate(moving)
+    page.wait_for_timeout(400)
+    assert abs(gap() - first) <= 1
+    _press(page, ".cal-picker button[data-month='1']")   # 2026년 1월은 다섯 주, 2월은 네 주다
+    page.wait_for_timeout(400)
+    _press(page, ".cal-picker .cal-picker-step >> nth=1")
+    page.wait_for_timeout(40)
+    assert page.evaluate(moving)
+    page.wait_for_timeout(400)
+    assert abs(gap() - first) <= 1
+
+
+def test_the_dropped_calendar_fills_the_first_and_last_weeks_with_faded_neighbouring_days(mobile_context, desktop_context):
+    """작은 화면의 달력은 첫 주와 마지막 주의 빈 칸을 앞뒤 달의 날로 흐리게 채우고, 누르면 그날로 간다(ADR-058 §3, 사용자 결정 2026-11-28).
+    이름은 그날의 달로 읽는다. 누르면 목록이 그날의 줄을 달력 바로 아래에 두고 달력은 그 달로 넘어간다. 큰 화면의 팝오버는 그 칸을 비운다."""
+    page = mobile_context.new_page()
+    _freeze_today(page)
+    _open_list(page, "calendar/list/2027-02-10")
+    length = page.evaluate("() => history.length")
+    _open_picker(page)
+    outside = page.evaluate("""() => [...document.querySelectorAll('.cal-picker .cal-picker-day.is-outside')].map((a) => [a.dataset.date, a.getAttribute('aria-label')])""")
+    assert outside[0] == ["2027-01-31", "1월 31일 일요일, 녹색"], outside
+    assert [o[0] for o in outside[1:]] == [f"2027-03-0{d}" for d in range(1, 7)], outside
+    look = page.evaluate("""() => { const a = document.querySelector('.cal-picker a[data-date="2027-03-01"]'), b = document.querySelector('.cal-picker a[data-date="2027-02-27"]');
+        const tertiary = getComputedStyle(document.documentElement).getPropertyValue('--text-tertiary').trim();
+        const probe = document.createElement('span'); probe.style.color = tertiary; document.body.append(probe); const want = getComputedStyle(probe).color; probe.remove();
+        return { num: getComputedStyle(a.querySelector('.cal-picker-num')).color, want, inMonth: getComputedStyle(b.querySelector('.cal-picker-num')).color,
+                 bars: getComputedStyle(a.querySelector('.cal-picker-bars')).opacity }; }""")
+    assert look["num"] == look["want"] and look["inMonth"] != look["want"] and float(look["bars"]) < 1, look
+    _press(page, ".cal-picker a[data-date='2027-01-31']")   # 앞 달의 날(1월의 첫 줄이 아니라 달 이름 아래가 아니다)
+    page.wait_for_url(f"{BASE}/calendar/list/2027-01-31")
+    page.wait_for_timeout(500)
+    state = _picker(page)
+    assert state["title"] == "2027년 1월" and state["current"] == "/calendar/list/2027-01-31", state
+    assert abs(_under_calendar(page, "2027-01-31")) <= 2
+    assert page.evaluate("() => history.length") == length
+
+    big = desktop_context.new_page()
+    _freeze_today(big)
+    _open_list(big, "calendar/list/2027-02-10")
+    _press(big, ".cal-picker-trigger")
+    big.wait_for_selector(".cal-picker:not([hidden])")
+    assert big.evaluate("() => document.querySelectorAll('.cal-picker .cal-picker-day.is-outside').length") == 0
+    assert big.evaluate("() => document.querySelectorAll('.cal-picker .cal-picker-day').length") == 28
 
 
 @pytest.mark.only_browser("chromium")
@@ -2138,8 +2526,7 @@ def test_picker_steps_stop_at_the_ends_of_the_calendar(desktop_context):
 
 
 def test_picker_works_with_the_keyboard(desktop_context):
-    """키보드로 제목 단추를 열면 지금 보는 칸에 포커스가 가고, Tab과 Shift+Tab은 판 안에서만 돈다. 팝오버에서는 숨긴 「닫기」를 건너뛰고 끝에서
-    처음으로 돌아온다. 이번 달은 날짜 없이 `/calendar`다. Enter로 고르면 그 달로 가고 제목 단추에 포커스가 돌아온다."""
+    """키보드로 제목 단추를 열면 지금 보는 칸에 포커스가 가고, Tab과 Shift+Tab은 판 안에서만 돈다. 끝에서 처음으로 돌아온다. 이번 달은 날짜 없이 `/calendar`다. Enter로 고르면 그 달로 가고 제목 단추에 포커스가 돌아온다."""
     page = desktop_context.new_page()
     _freeze_today(page)
     _open(page, "calendar/2026-11")

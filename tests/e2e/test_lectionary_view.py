@@ -25,8 +25,8 @@ from pathlib import Path
 import pytest
 
 from .conftest import (
-    CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, SHOW_ALT_READINGS, emulate_status_bar, open_settings, press_center, pseudo_session,
-    style_in_state,
+    CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, RECORD_FRAMES, SHOW_ALT_READINGS, assert_calendar_folds_over_the_new_screen, emulate_status_bar,
+    open_settings, press_center, pseudo_session, style_in_state,
 )
 
 BASE = "http://localhost:8080"
@@ -2591,10 +2591,35 @@ def _picker_state(page):
     }""")
 
 
+def test_settings_from_another_device_redraw_the_lectionary_under_the_open_calendar(mobile_context):
+    """작은 화면의 전례독서에서 달력을 연 채 다른 기기에서 받은 설정이 독서를 바꾸면, 전례독서는 다시 그리고 달력은 열린 채로 둔다. 다시 그린 상단 바의
+    아이콘이 달력의 단추라 펼쳐져 있다고 알리고, 누르면 달력이 닫힌다(ADR-058 §3, 코드 리뷰 2026-11-28)."""
+    page = mobile_context.new_page()
+    page.clock.set_fixed_time(datetime.datetime(2026, 11, 17, 12))
+    _open(page, "lectionary/2026-11-29")
+    btn = "#page-title button.title-view-btn"
+    press_center(page, btn)
+    page.wait_for_selector(".cal-picker:not([hidden])")
+    page.wait_for_timeout(400)
+    page.evaluate("() => { window.__mark = document.querySelector(\"#page-title button.title-view-btn\"); }")
+    page.evaluate("() => { localStorage.setItem('bible-lectionary-alt-show', '1'); window.redrawIfSyncedSettingsChanged(); }")
+    page.wait_for_function("() => !window.__mark.isConnected && document.querySelector('#page-title button.title-view-btn')")
+    page.wait_for_timeout(400)
+    assert page.evaluate("""() => { const p = document.querySelector('.cal-picker'); return !p.hidden && !p.classList.contains('cal-picker-closing'); }""")
+    assert page.evaluate("document.documentElement.classList.contains('cal-drop')")
+    assert page.get_attribute(btn, "aria-expanded") == "true"
+    press_center(page, btn)
+    page.wait_for_timeout(500)
+    assert page.evaluate("() => document.querySelector('.cal-picker').hidden")
+    assert page.get_attribute(btn, "aria-expanded") == "false"
+    assert page.evaluate("getComputedStyle(document.getElementById('app')).transform") == "none"
+
+
 def test_title_icon_drops_the_month_calendar_and_a_day_opens_its_lectionary(mobile_context):
     """작은 화면의 전례독서에서 오른쪽 아이콘은 캘린더와 같은 월간 달력을 내린다(ADR-058 §3). 그달의 날 판이 상단 바 아래로 내려오고 지금 보는 날이
-    골라져 있다. 날을 고르면 그날의 전례독서가 열리고(고른 전례일과 독서 세트는 남기지 않는다), 포커스는 새 화면의 아이콘으로 돌아온다. 오늘은
-    날짜 없이 /lectionary다."""
+    골라져 있다. 뒤를 가리지 않고 전례독서를 달력의 높이만큼 밀어 낸다(사용자 결정 2026-11-28). 날을 고르면 그날의 전례독서가 열리고(고른
+    전례일과 독서 세트는 남기지 않는다), 새 화면은 처음부터 제자리에 그리며 달력만 그 위에서 접혀 올라간다. 포커스는 새 화면의 아이콘으로 돌아온다. 오늘은 날짜 없이
+    /lectionary다. 달력이 열린 동안 아이콘을 다시 누르면 닫힌다."""
     page = mobile_context.new_page()
     page.clock.set_fixed_time(datetime.datetime(2026, 11, 17, 12))
     _open(page, "lectionary/2027-05-02")
@@ -2608,19 +2633,97 @@ def test_title_icon_drops_the_month_calendar_and_a_day_opens_its_lectionary(mobi
     assert _picker_state(page) == {"name": "날짜 고르기", "title": "2027년 5월", "current": "/lectionary/2027-05-02",
                                    "focus": "/lectionary/2027-05-02"}, _picker_state(page)
     assert page.get_attribute(btn, "aria-expanded") == "true"
+    pushed = page.evaluate("""() => ({ scrim: document.querySelectorAll('.cal-picker-scrim').length, inert: document.getElementById('app').inert,
+        push: new DOMMatrixReadOnly(getComputedStyle(document.getElementById('app')).transform).m42 - document.querySelector('.cal-picker').offsetHeight })""")
+    assert pushed["scrim"] == 0 and pushed["inert"] is False and abs(pushed["push"]) < 0.5, pushed
+    page.evaluate(RECORD_FRAMES)
     press_center(page, ".cal-picker a[href='/lectionary/2027-05-10']")
     page.wait_for_url(f"{BASE}/lectionary/2027-05-10")
     page.wait_for_selector("#page-title .lect-date time[datetime='2027-05-10']")
-    page.wait_for_timeout(300)
+    assert_calendar_folds_over_the_new_screen(page, "/lectionary/2027-05-10")
     assert _picker_state(page) is None
     assert page.evaluate("s => document.activeElement === document.querySelector(s)", btn)
     assert page.get_attribute(btn, "aria-expanded") == "false"
+    assert page.evaluate("getComputedStyle(document.getElementById('app')).transform") == "none"
+    press_center(page, btn)
+    page.wait_for_selector(".cal-picker:not([hidden])")
+    page.wait_for_timeout(400)
+    press_center(page, btn)   # 다시 누르면 닫힌다
+    page.wait_for_timeout(400)
+    assert _picker_state(page) is None
+    assert page.get_attribute(btn, "aria-expanded") == "false"
+    assert page.evaluate("getComputedStyle(document.getElementById('app')).transform") == "none"
     # 오늘은 날짜 없는 주소다
     _open(page, "lectionary/2026-11-20")
     press_center(page, btn)
     page.wait_for_selector(".cal-picker:not([hidden])")
     page.wait_for_timeout(400)
     assert page.locator(".cal-picker a[href='/lectionary']").get_attribute("aria-label").startswith("오늘, 11월 17일")
+
+
+def test_keyboard_focus_with_the_calendar_open_neither_jumps_nor_hides(mobile_context):
+    """작은 화면에서 달력을 연 채 키보드로 움직인다. Shift+Tab으로 상단 바의 단추에 가도 읽던 자리가 그대로이고, Tab으로 밀려난 전례독서에 들어가면
+    포커스를 받은 요소가 달력에 가리지 않고 그 아래에 보인다(ADR-058 §3, 코드 리뷰 2026-11-28). 달력의 높이를 더한 위쪽 스크롤 여백은 포커스가
+    밀려난 화면 안에 있을 때만 쓴다. 늘 쓰면 상단 바의 단추를 여백에 가려진 것으로 보고 그만큼 스크롤했다(known-issues §56)."""
+    page = mobile_context.new_page()
+    page.clock.set_fixed_time(datetime.datetime(2026, 11, 28, 12))
+    _open(page, "lectionary/2026-11-29")
+    page.wait_for_selector("#launch-screen", state="detached", timeout=5_000)
+    page.evaluate("() => window.scrollTo(0, 900)")
+    page.wait_for_timeout(200)
+    y = page.evaluate("scrollY")
+    page.evaluate("() => document.querySelector('#page-title button.title-view-btn').focus({ preventScroll: true })")
+    page.keyboard.press("Enter")
+    page.wait_for_selector(".cal-picker:not([hidden])")
+    page.wait_for_timeout(500)
+    assert page.evaluate("document.querySelector('.cal-picker').contains(document.activeElement)")
+    for _ in range(60):   # 판의 칸들을 거슬러 상단 바까지
+        page.keyboard.press("Shift+Tab")
+        if page.evaluate("document.getElementById('page-title').contains(document.activeElement)"):
+            break
+    assert page.evaluate("document.getElementById('page-title').contains(document.activeElement)")
+    for _ in range(3):   # 상단 바의 단추들
+        page.wait_for_timeout(600)
+        assert page.evaluate("scrollY") == y, page.evaluate("[scrollY, document.activeElement.className]")
+        page.keyboard.press("Shift+Tab")
+    page.evaluate("() => document.querySelector('.cal-picker a.is-selected, .cal-picker a[aria-current]').focus({ preventScroll: true })")
+    for _ in range(60):   # 판을 지나 밀려난 전례독서로
+        page.keyboard.press("Tab")
+        if page.evaluate("document.getElementById('app').contains(document.activeElement)"):
+            break
+    page.wait_for_timeout(1200)   # 문서의 스크롤은 부드럽게 움직인다(scroll-behavior: smooth)
+    seen = page.evaluate("""() => { const r = document.activeElement.getBoundingClientRect();
+        return { inApp: document.getElementById('app').contains(document.activeElement), top: r.top, bottom: r.bottom,
+                 below: document.querySelector('.cal-picker').getBoundingClientRect().bottom, h: innerHeight }; }""")
+    assert seen["inApp"] and seen["top"] >= seen["below"] - 1 and seen["bottom"] <= seen["h"], seen
+
+
+def test_today_always_opens_todays_lectionary_from_the_top(mobile_context):
+    """「오늘」을 누르면 오늘의 전례독서를 보고 있었든, 캘린더 목록에서 왔든 늘 오늘 전례독서의 맨 위부터 보인다(ADR-038 §3, 사용자 결정 2026-11-28).
+    자료가 이미 있는 기기에서는 새 화면이 뼈대보다 먼저 들어와, 뼈대가 스크롤을 맨 위로 눌러 주지 않는다. 문서 높이를 고정해 그 경우를 만든다."""
+    page = mobile_context.new_page()
+    page.clock.set_fixed_time(datetime.datetime(2026, 11, 28, 12))
+    pin = "() => { document.documentElement.style.minHeight = '30000px'; }"
+    _open(page, "lectionary")
+    page.mouse.move(195, 500)
+    page.mouse.wheel(0, 1500)
+    page.wait_for_timeout(400)
+    assert page.evaluate("scrollY") > 1000
+    page.evaluate(pin)
+    press_center(page, "#page-title a[data-focus-key='today']")   # 오늘을 보다가
+    page.wait_for_timeout(800)
+    assert page.evaluate("[location.pathname, scrollY]") == ["/lectionary", 0]
+    page.mouse.wheel(0, 1500)
+    page.wait_for_timeout(400)
+    press_center(page, "#tab-bar a[data-tab='calendar']")
+    page.wait_for_selector(".cal-list li[data-date]")
+    page.wait_for_timeout(600)
+    assert page.evaluate("scrollY") > 1000
+    page.evaluate(pin)
+    press_center(page, "#page-title a[data-focus-key='today']")   # 캘린더 목록에서
+    page.wait_for_selector(".lectionary")
+    page.wait_for_timeout(800)
+    assert page.evaluate("[location.pathname, scrollY]") == ["/lectionary", 0]
 
 
 def test_title_date_opens_the_picker_as_a_popover_on_desktop(desktop_context):
@@ -2644,7 +2747,9 @@ def test_title_date_opens_the_picker_as_a_popover_on_desktop(desktop_context):
         const t = document.querySelector(s).getBoundingClientRect();
         return { gap: p.top - t.bottom, mid: (p.left + p.right) / 2 - (t.left + t.right) / 2 }; }""", btn)
     assert 0 < box["gap"] <= 12 and abs(box["mid"]) <= 1, box
-    assert page.locator(".cal-picker-scrim").is_hidden()
+    # 팝오버는 뒤를 막고 화면을 밀어 내지 않는다
+    assert page.evaluate("""() => [getComputedStyle(document.getElementById('app')).transform, getComputedStyle(document.querySelector('.cal-picker-backing')).display,
+        document.getElementById('app').inert, document.querySelector('.cal-picker').getAttribute('aria-modal')]""") == ["none", "none", True, "true"]
     page.keyboard.press("Escape")
     page.wait_for_timeout(200)
     assert _picker_state(page) is None
