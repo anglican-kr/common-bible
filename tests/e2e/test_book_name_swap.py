@@ -246,3 +246,46 @@ def test_gospel_chapter_header_swaps_on_iphone(browser):
     assert state["ariaLabel"] == "마태오의 복음서 1장"
 
     ctx.close()
+
+
+# ── Resume pill (small layout): the short name where the full one does not fit ──
+
+def _resume_pill_state(page) -> dict:
+    return page.evaluate(
+        """
+        () => {
+          const ban = document.querySelector('.resume-banner');
+          const link = ban.querySelector('.resume-banner-link');
+          const shown = [...link.querySelectorAll('span')].find((s) => getComputedStyle(s).display !== 'none');
+          return {
+            visible: shown ? shown.textContent : '',
+            compact: ban.classList.contains('compact'),
+            ariaLabel: link.getAttribute('aria-label'),
+            position: getComputedStyle(ban).position,
+          };
+        }
+        """
+    )
+
+
+def test_resume_pill_swaps_to_the_short_name_on_a_small_layout(browser):
+    """The portrait resume pill on the small layout (ADR-030, ADR-050) is narrower than the strip it replaced (the ×
+    takes 60px). A phone shows the short name by the touch media query; a mouse window of the same size measures the
+    link and adds `.compact` when the full name does not fit. Screen readers keep the full name either way."""
+    for options in ({"is_mobile": True, "has_touch": True, "user_agent": _IPHONE_UA}, {}):
+        ctx = browser.new_context(viewport={"width": 390, "height": 844}, **options)
+        ctx.add_init_script(
+            "localStorage.setItem('bible-last-read', JSON.stringify({bookId: '2thess', chapter: 3}));"
+            "localStorage.setItem('bible-startup', 'home');"
+        )
+        page = ctx.new_page()
+        page.goto(f"{BASE}/")
+        page.wait_for_selector(".resume-banner")
+        page.wait_for_timeout(150)  # the ResizeObserver re-measure is debounced 50ms
+        state = _resume_pill_state(page)
+        assert state["position"] == "fixed", state
+        assert state["visible"] == "이어읽기: 2데살로니카 3장", (options, state)
+        assert state["ariaLabel"] == "이어읽기: 데살로니카인들에게 보낸 둘째 편지 3장"
+        if not options:
+            assert state["compact"] is True
+        ctx.close()
