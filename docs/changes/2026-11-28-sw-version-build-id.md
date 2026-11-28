@@ -1,4 +1,5 @@
 ---
+pr: 683
 date: 2026-11-28
 branch: fix/sw-version-build-id
 title: "fix: 같은 버전의 새 앱 빌드를 기기가 업데이트로 알아보게"
@@ -6,7 +7,7 @@ title: "fix: 같은 버전의 새 앱 빌드를 기기가 업데이트로 알아
 
 ## 요약
 
-- 배포 빌드의 `sw-version.js` 사본에서 `APP_VERSION`을 빌드 식별자(`X.Y.Z-<앱 커밋>`)로 바꾼다. 바꾸는 일은 서버 저장소의 `build-deploy.sh`가 한다(common-bible-server PR). 이 저장소는 ADR과 문서, 주석만 고친다.
+- 배포 빌드의 `sw-version.js` 사본에서 `APP_VERSION`을 빌드 식별자(`X.Y.Z-<앱 커밋>`)로 바꾼다. 바꾸는 일은 서버 저장소의 `build-deploy.sh`가 한다(common-bible-server#8). 이 저장소는 ADR과 문서, 주석만 고친다.
 - 같은 버전에 앱 수정을 더해 다시 낸 pre-release를 dev.anglican.kr의 기기가 업데이트로 알아본다. 업데이트 알림이 뜨고 셸 캐시가 `shell-X.Y.Z-<앱 커밋>`으로 바뀐다. 데이터만 낸 배포는 앱 커밋이 그대로라 업데이트로 보지 않는다.
 
 ## 확정 · 근거
